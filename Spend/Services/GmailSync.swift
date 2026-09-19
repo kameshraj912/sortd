@@ -58,8 +58,12 @@ enum GmailSync {
     static func disconnect(_ account: GmailAccount, deletePurchases: Bool, in context: ModelContext) async {
         await GoogleAuth.disconnect(account.email)
         accounts.removeAll { $0.email == account.email }
-        guard deletePurchases else { return }
         let email = account.email
+        for r in (try? context.fetch(FetchDescriptor<ImportedRecord>(predicate: #Predicate { $0.account == email }))) ?? [] {
+            context.delete(r)
+        }
+        try? context.save()
+        guard deletePurchases else { return }
         let mine = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.sourceAccount == email }))) ?? []
         for t in mine where t.seenIn == [.email] { context.delete(t) }
         try? context.save()
@@ -75,14 +79,18 @@ enum GmailSync {
             do {
                 let s = try await sync(list[i], in: context)
                 total.added += s.added; total.merged += s.merged; total.refunds += s.refunds
-                list[i].lastSync = .now
-                list[i].lastResult = s.text
+                // A sync that hit the cap doesn't move the window forward, so
+                // the next one carries on with the older emails.
+                if !s.incomplete { list[i].lastSync = .now }
+                list[i].lastResult = s.incomplete ? s.text + " · more next sync" : s.text
             } catch {
                 list[i].lastResult = error.localizedDescription
                 log.error("Gmail sync failed for \(list[i].email): \(error.localizedDescription)")
             }
         }
-        accounts = list
+        // Accounts may have been connected or disconnected during the sync:
+        // update only the ones that are still there.
+        accounts = accounts.map { a in list.first { $0.email == a.email } ?? a }
         if total.added + total.merged + total.refunds > 0 { await FXService.backfill(in: context) }
         return total
     }
@@ -98,7 +106,7 @@ enum GmailSync {
         #endif
         let window = since.map { "after:\($0)" } ?? "newer_than:\(firstSyncDays)d"
         let search = "((\(EmailParsers.gmailQuery)) OR (\(GenericReceipts.gmailQuery))) \(window)"
-        let ids = try await listMessages(query: search, token: token)
+        let (ids, truncated) = try await listMessages(query: search, token: token)
 
         #if DEBUG
         if ProcessInfo.processInfo.environment["SPEND_GMAIL_RESET"] == "1" {
@@ -108,8 +116,14 @@ enum GmailSync {
             try? context.save()
         }
         #endif
-        let done = Set(((try? context.fetch(FetchDescriptor<ImportedRecord>())) ?? []).map { $0.id.components(separatedBy: "-").first ?? $0.id })
-        let fresh = ids.filter { !done.contains($0) }
+        // Gmail ids are hex (never contain "-"). "-none" rows only count for
+        // the current reader version, so a reader fix re-reads old misses.
+        let done = Set(((try? context.fetch(FetchDescriptor<ImportedRecord>())) ?? []).compactMap { r -> String? in
+            if r.id.contains("-none") && !r.id.hasSuffix("-none-v\(readerVersion)") { return nil }
+            return r.id.components(separatedBy: "-").first
+        })
+        // Oldest first, so a purchase is in before its refund.
+        let fresh = Array(ids.filter { !done.contains($0) }.reversed())
 
         // 20 at a time, saving after each batch: a pause or error keeps what
         // was already read, and the next sync carries on from there.
@@ -121,8 +135,12 @@ enum GmailSync {
             for m in messages {
                 let found = await read(m)
                 records += found
-                // Not a receipt: remember it so it's never downloaded again.
-                if found.isEmpty { context.insert(ImportedRecord(id: "\(m.id)-none")) }
+                // Not a receipt: remember it so it isn't downloaded again —
+                // but only when the best reader for it actually ran.
+                let bestRan = EmailParsers.knowsSender(m.from) || ReceiptAI.isAvailable
+                if found.isEmpty && bestRan && !m.body.isEmpty {
+                    context.insert(ImportedRecord(id: "\(m.id)-none-v\(readerVersion)", account: account.email))
+                }
                 #if DEBUG
                 let layer = EmailParsers.knowsSender(m.from) ? "rule" : (ReceiptAI.isAvailable ? "ai" : "fallback")
                 let got = found.map { "\($0.kind) \($0.merchant) \($0.currency) \($0.amount)" }
@@ -140,6 +158,7 @@ enum GmailSync {
         print("GMAILDEBUG found=\(ids.count) fresh=\(fresh.count) checked=\(summary.checked) added=\(summary.added) ai=\(ReceiptAI.isAvailable)")
         #endif
         log.info("Gmail sync: \(ids.count) found, \(fresh.count) new, \(summary.added) added")
+        summary.incomplete = truncated
         return summary
     }
 
@@ -167,7 +186,10 @@ enum GmailSync {
     }
 
     /// Message ids matching the search, newest first (capped at 500).
-    nonisolated private static func listMessages(query: String, token: String) async throws -> [String] {
+    /// Bump when a reader improves, so emails it missed are read again.
+    static let readerVersion = 2
+
+    nonisolated private static func listMessages(query: String, token: String) async throws -> ([String], Bool) {
         var ids: [String] = []
         var page: String?
         repeat {
@@ -181,8 +203,8 @@ enum GmailSync {
             let r: ListResponse = try await get(url.url!, token: token)
             ids += (r.messages ?? []).map(\.id)
             page = r.nextPageToken
-        } while page != nil && ids.count < 300
-        return ids
+        } while page != nil && ids.count < 1000
+        return (ids, page != nil)
     }
 
     nonisolated struct MessageResponse: Decodable {
@@ -234,7 +256,7 @@ enum GmailSync {
 
     nonisolated private static func find(_ part: MessageResponse.Part, _ type: String) -> String? {
         if part.mimeType == type, let d = part.body?.data, let data = Data(base64URL: d) {
-            return String(data: data, encoding: .utf8)
+            return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
         }
         for p in part.parts ?? [] { if let hit = find(p, type) { return hit } }
         return nil

@@ -160,7 +160,8 @@ nonisolated enum EmailParsers {
 
     static func stripe(_ msg: Message) -> [EmailRecord] {
         let text = normalize(msg.body)
-        let fallback = "AUD"
+        // A bare "$" means the reader's own dollar (Stripe shows local currency).
+        let fallback = Money.home
         if let m = first(#"Refund from (.+?) Receipt #([\d-]+) Refunded ([A-Z]{0,2}\$|[A-Z]{3} ?)([\d,]+\.\d{2})"#, in: text) {
             let to = first(#"Refunded to - (\d{4})"#, in: text)
             return [record(msg, 0, kind: "refund", merchant: tidyCompany(m[1]), raw: m[1], platform: nil,

@@ -14,8 +14,8 @@ struct EmailAccount: Codable, Identifiable, Hashable {
 }
 
 /// A record as the Apps Script returns it (see apps-script/Parsers.js).
-nonisolated struct EmailRecord: Decodable, Equatable, Sendable {
-    struct Subscription: Decodable, Equatable, Sendable {
+nonisolated struct EmailRecord: Codable, Equatable, Sendable {
+    struct Subscription: Codable, Equatable, Sendable {
         var name: String?
         var period: String?
         var renews: String?
@@ -47,6 +47,8 @@ enum EmailSync {
         var skipped = 0
         /// Receipt emails looked at in this sync (Gmail connect only).
         var checked = 0
+        /// More emails are waiting than one sync reads.
+        var incomplete = false
 
         var text: String {
             var parts = ["\(added) new"]
@@ -150,7 +152,10 @@ enum EmailSync {
         let isoPlain = ISO8601DateFormatter()
 
         // Purchases first, then refunds, so a refund can find its purchase.
-        let ordered = records.filter { $0.kind == "purchase" } + records.filter { $0.kind == "refund" }
+        // Refunds that found nothing last time are tried again too.
+        let waiting = pendingRefunds.filter { p in !records.contains { $0.id == p.id } }
+        let ordered = records.filter { $0.kind == "purchase" } + records.filter { $0.kind == "refund" } + waiting
+        var stillWaiting: [EmailRecord] = []
         for r in ordered where !done.contains(r.id) {
             guard let amount = Decimal(string: r.amount), amount > 0,
                   let date = iso.date(from: r.date) ?? isoPlain.date(from: r.date) else {
@@ -165,7 +170,12 @@ enum EmailSync {
                 // No match yet (the purchase may come from the other Gmail
                 // account on a later sync): leave it unmarked so it's retried.
                 guard markRefunded(amount: amount, currency: r.currency, card: card, merchant: r.rawMerchant ?? r.merchant,
-                                   platform: r.platform, before: date, in: context) else { continue }
+                                   platform: r.platform, before: date, in: context) else {
+                    // Keep it for 30 days: its purchase may arrive in a later
+                    // batch, sync or Gmail account.
+                    if date > Date.now.addingTimeInterval(-30 * 86400) { stillWaiting.append(r) }
+                    continue
+                }
                 summary.refunds += 1
             } else {
                 var purchase = IncomingPurchase(date: date, merchant: r.merchant, amount: amount,
@@ -186,6 +196,17 @@ enum EmailSync {
                     let byName = Categorizer.category(for: r.merchant, learned: learned)
                     purchase.category = byName != .other ? byName : (r.subscription != nil ? .subscriptions : .entertainment)
                 }
+                // DoorDash re-sends the confirmation when an order is changed:
+                // update the earlier purchase instead of adding a second one.
+                if r.platform == "doordash", (r.note ?? "").contains("order adjusted"),
+                   let earlier = try adjustedOriginal(merchant: r.merchant, near: date, in: context) {
+                    earlier.amount = amount
+                    earlier.audAmount = r.currency == Money.home ? amount : nil
+                    earlier.note = r.note ?? earlier.note
+                    summary.merged += 1
+                    context.insert(ImportedRecord(id: r.id, account: account))
+                    continue
+                }
                 let outcome = try TransactionLogger.log(purchase, in: context)
                 if outcome.transaction.sourceAccount == nil { outcome.transaction.sourceAccount = account }
                 switch outcome {
@@ -197,11 +218,32 @@ enum EmailSync {
                     outcome.transaction.renewsOn = sub.renews.flatMap(Self.renewalDate)
                 }
             }
-            context.insert(ImportedRecord(id: r.id))
+            context.insert(ImportedRecord(id: r.id, account: account))
         }
+        pendingRefunds = stillWaiting
         try context.save()
         CardBook.shared.adoptLegacy(usedIds: Set(records.map(\.card)))
         return summary
+    }
+
+    private static let pendingKey = "pendingRefunds"
+
+    /// Refund emails whose purchase hasn't been found yet.
+    static var pendingRefunds: [EmailRecord] {
+        get {
+            guard let d = UserDefaults.standard.data(forKey: pendingKey) else { return [] }
+            return (try? JSONDecoder().decode([EmailRecord].self, from: d)) ?? []
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: pendingKey) }
+    }
+
+    /// The first DoorDash purchase from this restaurant in the 2 days before.
+    private static func adjustedOriginal(merchant: String, near date: Date, in context: ModelContext) throws -> Transaction? {
+        let from = date.addingTimeInterval(-2 * 86400)
+        let key = MerchantName.key(merchant)
+        return try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= date },
+                                                               sortBy: [SortDescriptor(\.date, order: .reverse)]))
+            .first { $0.platform == "doordash" && MerchantName.key($0.merchant) == key }
     }
 
     /// "15 September 2027" (Apple's format) → date.

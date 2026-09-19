@@ -72,7 +72,8 @@ nonisolated enum GenericReceipts {
     /// The best "total" amount: grand totals beat plain totals, and the last
     /// one wins (receipts list subtotals first).
     static func total(in text: String) -> (currency: String, amount: String)? {
-        let money = #"(A\$|AU\$|S\$|US\$|NZ\$|C\$|HK\$|RM|Rp|₹|£|€|¥|\$|[A-Z]{3})\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})"#
+        // Currency codes must be real uppercase codes: "Total GST 4.09" is a tax line, not money in "GST".
+        let money = #"(A\$|AU\$|S\$|US\$|NZ\$|C\$|HK\$|RM|Rp|₹|£|€|¥|\$|(?-i:[A-Z]{3}))\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})"#
         let tiers = [
             #"(?:grand total|total charged|amount charged|amount paid|total paid|you paid|payment of|purchase of|charged)"#,
             #"(?:order total|total amount|total due|amount due|total \(incl[^)]*\))"#,
@@ -83,8 +84,10 @@ nonisolated enum GenericReceipts {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
             let ns = text as NSString
             let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
-            if let m = matches.last {
+            // Last valid match wins (receipts list subtotals first).
+            for m in matches.reversed() {
                 let symbol = ns.substring(with: m.range(at: 1))
+                if symbol.count == 3, symbol.allSatisfy(\.isLetter), !Locale.commonISOCurrencyCodes.contains(symbol) { continue }
                 let value = ns.substring(with: m.range(at: 2)).replacingOccurrences(of: ",", with: "")
                 guard let d = Decimal(string: value), d > 0 else { continue }
                 return (currencyCode(symbol), value)
@@ -153,6 +156,11 @@ nonisolated enum GenericReceipts {
     /// without a thousands comma. Used to reject any invented amount.
     static func appears(_ amount: String, in text: String) -> Bool {
         guard let d = Decimal(string: amount) else { return false }
+        // Whole number, not part of a bigger one: "5.00" must not match "$15.00".
+        func standalone(_ s: String) -> Bool {
+            let p = #"(?<![\d.,])"# + NSRegularExpression.escapedPattern(for: s) + #"(?![\d])"#
+            return text.range(of: p, options: .regularExpression) != nil
+        }
         let plain = String(format: "%.2f", NSDecimalNumber(decimal: d).doubleValue)
         let f = NumberFormatter()
         f.locale = Locale(identifier: "en_US")
@@ -161,7 +169,13 @@ nonisolated enum GenericReceipts {
         f.minimumFractionDigits = 2
         f.maximumFractionDigits = 2
         let grouped = f.string(from: NSDecimalNumber(decimal: d)) ?? plain
-        return text.contains(plain) || text.contains(grouped)
+        let n = NSDecimalNumber(decimal: d)
+        let isWhole = n.doubleValue == n.doubleValue.rounded()
+        let whole = isWhole ? String(Int(n.doubleValue)) : nil
+        f.minimumFractionDigits = 0
+        let groupedWhole = isWhole ? f.string(from: n) : nil
+        let oneDecimal = String(format: "%.1f", NSDecimalNumber(decimal: d).doubleValue)
+        return [plain, grouped, whole, groupedWhole, oneDecimal].compactMap { $0 }.contains(where: standalone)
     }
 
     private static let iso: ISO8601DateFormatter = {
@@ -216,7 +230,9 @@ enum ReceiptAI {
             let amount = fields.total.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
             guard fields.isReceipt, let d = Decimal(string: amount), d > 0,
                   GenericReceipts.appears(amount, in: text) else { return nil }
-            let currency = fields.currency.count == 3 ? fields.currency.uppercased() : GenericReceipts.total(in: text)?.currency ?? Money.home
+            // Only trust the model's currency if it's written in the email.
+            let code = fields.currency.uppercased()
+            let currency = code.count == 3 && text.contains(code) ? code : GenericReceipts.total(in: text)?.currency ?? Money.home
             let merchant = fields.merchant.isEmpty ? GenericReceipts.merchant(from: msg.from, subject: msg.subject) : fields.merchant
             let digits = fields.cardLast4.filter(\.isNumber)
             let f = ISO8601DateFormatter()

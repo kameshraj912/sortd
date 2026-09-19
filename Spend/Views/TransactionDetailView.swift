@@ -32,7 +32,7 @@ struct TransactionDetailView: View {
                     ForEach(Self.currencies, id: \.self) { Text($0).tag($0) }
                 }
                 if transaction.currencyCode != Money.home {
-                    LabeledContent("In AUD") {
+                    LabeledContent("In \(Money.home)") {
                         Text(transaction.needsRate ? "Waiting for rate" : Money.format(transaction.audValue, Money.home))
                             .monospacedDigit()
                     }
@@ -138,11 +138,11 @@ struct TransactionDetailView: View {
             steps.append(.init(title: "Amount missing", detail: "Apple Pay didn’t send one. Type it in above.", state: .current))
         } else if t.currencyCode != Money.home {
             if t.needsRate {
-                steps.append(.init(title: "Converting to AUD", detail: "Waiting for that day’s exchange rate", state: .current))
-            } else {
-                let rate = (t.audValue / t.amount).rounded(4)
+                steps.append(.init(title: "Converting to \(Money.home)", detail: "Waiting for that day’s exchange rate", state: .current))
+            } else if !t.refunded, t.amount > 0, let converted = t.audAmount {
+                let rate = (converted / t.amount).rounded(4)
                 steps.append(.init(title: "Converted to \(Money.format(t.audValue, Money.home))",
-                                   detail: "1 \(t.currencyCode) = \(rate) AUD (ECB rate)", state: .done))
+                                   detail: "1 \(t.currencyCode) = \(rate) \(Money.home) (ECB rate)", state: .done))
             }
         }
         steps.append(.init(title: "Filed under \(t.category.name)", detail: "Change it above; Sortd learns for next time", state: .done))

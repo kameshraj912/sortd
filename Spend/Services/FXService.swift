@@ -27,6 +27,13 @@ enum FXService {
     }
 
     static func rebase(to home: String, in context: ModelContext) async {
+        let old = UserDefaults.standard.string(forKey: convertedKey) ?? Money.home
+        // The monthly budget was set in the old currency: convert it too.
+        if old != home, UserDefaults.standard.double(forKey: "monthlyBudget") > 0,
+           let rate = try? await latestRate(from: old, to: home) {
+            let b = UserDefaults.standard.double(forKey: "monthlyBudget") * rate
+            UserDefaults.standard.set((b / 10).rounded() * 10, forKey: "monthlyBudget")
+        }
         UserDefaults.standard.set(home, forKey: Money.homeKey)
         UserDefaults.standard.set(home, forKey: convertedKey)
         for t in (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] {
@@ -51,6 +58,8 @@ enum FXService {
                 guard let earliest = txns.map(\.date).min() else { continue }
                 // Start a few days early so a Monday purchase can use Friday's rate.
                 try await fetchRates(currency: currency, to: home, from: earliest.addingTimeInterval(-5 * 86400), in: context)
+                // Home currency changed while waiting: these rates are for the old one.
+                guard Money.home == home else { return }
                 for t in txns {
                     if let rate = try rate(currency: currency, to: home, on: t.date, in: context) {
                         t.audAmount = (t.amount * rate).rounded(2)
@@ -82,6 +91,15 @@ enum FXService {
 
     /// Rate for that day, or the most recent earlier day (weekends, holidays,
     /// and today before the ECB publishes).
+    private struct Latest: Decodable { let rates: [String: Double] }
+
+    /// Today's rate, for converting settings like the budget.
+    static func latestRate(from: String, to: String) async throws -> Double? {
+        let url = URL(string: "https://api.frankfurter.dev/v1/latest?base=\(from)&symbols=\(to)")!
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode(Latest.self, from: data).rates[to]
+    }
+
     /// Old keys ("SGD-2026-09-18") were always to AUD; keep reading them.
     private static func rateKey(_ from: String, _ to: String, _ day: String) -> String {
         to == "AUD" ? "\(from)-\(day)" : "\(from)>\(to)-\(day)"

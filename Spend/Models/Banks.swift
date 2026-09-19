@@ -107,11 +107,15 @@ extension CardBook {
     /// For Apple Pay taps: the matching card, or a new one named after the
     /// card in Wallet, so nobody has to add cards by hand first.
     func matchOrCreate(_ walletName: String?) -> Card {
-        let found = match(walletName)
+        var found = match(walletName)
         let name = (walletName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // "CommBank Credit" must not land on the CommBank debit card.
+        let lower = name.lowercased()
+        if let info = self.info(found), (lower.contains("credit") && !info.isCredit) || (lower.contains("debit") && info.isCredit) {
+            found = .other
+        }
         guard found == .other, name.count >= 2 else { return found }
         let bank = BankPreset.match(name)
-        let lower = name.lowercased()
         let info = CardInfo(
             name: name, shortName: String(name.prefix(18)), bank: bank?.name ?? "",
             isCredit: lower.contains("credit"),

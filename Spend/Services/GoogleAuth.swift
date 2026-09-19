@@ -70,7 +70,7 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
             s.presentationContextProvider = self
             s.prefersEphemeralWebBrowserSession = false
             session = s
-            s.start()
+            if !s.start() { cont.resume(throwing: AuthError.noCode) }
         }
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard items.first(where: { $0.name == "state" })?.value == state,
@@ -162,8 +162,10 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
-            let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-            return scene?.keyWindow ?? ASPresentationAnchor(windowScene: scene!)
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            if let window = scenes.compactMap(\.keyWindow).first { return window }
+            // A sign-in can only start from an open window, so a scene exists.
+            return ASPresentationAnchor(windowScene: scenes[0])
         }
     }
 }

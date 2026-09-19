@@ -172,6 +172,7 @@ struct SettingsView: View {
             .brandedTitle("Settings")
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions) }
+            .onChange(of: transactions.count) { _, n in csvFile = n == 0 ? nil : CSVExport.file(transactions) }
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
                     DataReset.deleteEverything(in: context)

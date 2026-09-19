@@ -34,6 +34,10 @@ enum Deduper {
             // (two $5 coffees at two cafes on one day are two purchases).
             let needed = old.source == new.source ? 0.8 : 0.3
             guard nameScore >= needed else { continue }
+            // Same source, same shop, same amount on different days is two
+            // purchases (a coffee on Monday and Tuesday); only near-identical
+            // times are a re-send.
+            if old.source == new.source, abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
 
             let timeScore = 1 - abs(old.date.timeIntervalSince(new.date)) / window
             let score = nameScore + timeScore
