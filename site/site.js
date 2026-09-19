@@ -1,7 +1,7 @@
 // Sortd Money website: light/dark switch and gentle scroll-in. Loaded in <head> so the
 // chosen theme is applied before the page paints (no flash).
 (function () {
-  try { console.log("%csortd", "font:800 28px -apple-system,sans-serif;letter-spacing:-1px", "\nReading the source? Respect.\nNo trackers in here, promise. Check the Network tab.\nWe're not hiring (it's one person), but say hi: support@sortd.page"); } catch (e) {}
+  try { console.log("%csortd", "font:800 28px -apple-system,sans-serif;letter-spacing:-1px", "\nReading the source? Respect.\nNo trackers in here, promise. Check the Network tab.\nWe're not hiring yet, but say hi: support@sortd.page"); } catch (e) {}
   var root = document.documentElement;
   var key = "sortd-theme";
   function saved() { try { return localStorage.getItem(key); } catch (e) { return null; } }
