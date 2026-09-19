@@ -6,6 +6,7 @@ import SwiftData
 struct InsightsView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var selectedCategory: SpendCategory?
+    @State private var limits: [SpendCategory: Double] = [:]
 
     private var thisMonth: [Transaction] {
         let start = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
@@ -39,6 +40,10 @@ struct InsightsView: View {
                 CategoryDetailView(category: category)
             }
         }
+        .onCategoryLimitsChange {
+            let now = CategoryBudgets.all()
+            if now != limits { limits = now }
+        }
     }
 
     // MARK: Category breakdown
@@ -59,6 +64,7 @@ struct InsightsView: View {
             SectionHeader(title: "Categories this month")
             VStack(spacing: 0) {
                 ForEach(rows, id: \.category) { row in
+                    let progress = limits[row.category].map { CategoryBudgets.progress(spent: row.total.double, limit: $0) }
                     Button { selectedCategory = row.category } label: {
                         HStack(spacing: 12) {
                             CategoryIcon(category: row.category, size: 36)
@@ -67,19 +73,31 @@ struct InsightsView: View {
                                     Text(row.category.name)
                                         .font(.body)
                                     Spacer()
-                                    Text(Money.format(row.total, Money.home))
-                                        .font(.body)
-                                        .monospacedDigit()
+                                    if let progress {
+                                        Text("\(Money.format(row.total, Money.home, cents: false)) of \(Money.format(Decimal(progress.limit), Money.home, cents: false))")
+                                            .font(.body)
+                                            .monospacedDigit()
+                                            .foregroundStyle(progress.status == .over ? Color.down : Color.ink)
+                                    } else {
+                                        Text(Money.format(row.total, Money.home))
+                                            .font(.body)
+                                            .monospacedDigit()
+                                    }
                                 }
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
                                         Capsule().fill(Color(.systemGray5))
-                                        Capsule().fill(row.category.color)
-                                            .frame(width: Swift.max(6, geo.size.width * row.total.double / max))
+                                        if let progress {
+                                            Capsule().fill(progress.status.color(row.category))
+                                                .frame(width: Swift.max(6, geo.size.width * Swift.min(1, progress.fraction)))
+                                        } else {
+                                            Capsule().fill(row.category.color)
+                                                .frame(width: Swift.max(6, geo.size.width * row.total.double / max))
+                                        }
                                     }
                                 }
                                 .frame(height: 6)
-                                Text("\(Int((row.total.double / Swift.max(total, 1) * 100).rounded()))% · \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
+                                Text("\(limitNote(progress) ?? "\(Int((row.total.double / Swift.max(total, 1) * 100).rounded()))%") · \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -90,12 +108,20 @@ struct InsightsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home)), \(row.count) purchases")
+                    .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) purchases")
                     .accessibilityHint("Shows these purchases")
                 }
             }
             .surface()
         }
+    }
+
+    private func limitNote(_ progress: CategoryBudgets.Progress?) -> String? {
+        guard let progress else { return nil }
+        if progress.status == .over {
+            return "\(Money.format(Decimal(-progress.left), Money.home, cents: false)) over limit"
+        }
+        return "\(Money.format(Decimal(progress.left), Money.home, cents: false)) left"
     }
 }
 
@@ -103,6 +129,8 @@ struct InsightsView: View {
 struct CategoryDetailView: View {
     let category: SpendCategory
     @Query(sort: \Transaction.date, order: .reverse) private var all: [Transaction]
+    @State private var limit: Double?
+    @State private var editingLimit = false
 
     var body: some View {
         let items = all.filter { $0.category == category }
@@ -124,6 +152,28 @@ struct CategoryDetailView: View {
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
             }
+            Section {
+                Button { editingLimit = true } label: {
+                    HStack {
+                        Text("Monthly limit")
+                        Spacer()
+                        if let limit {
+                            let p = CategoryBudgets.progress(spent: month.audTotal.double, limit: limit)
+                            Text("\(Money.format(month.audTotal, Money.home, cents: false)) of \(Money.format(Decimal(limit), Money.home, cents: false))")
+                                .monospacedDigit()
+                                .foregroundStyle(p.status == .ok ? Color.secondary : p.status.color(category))
+                        } else {
+                            Text("None").foregroundStyle(.secondary)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(limit == nil ? "Set a monthly limit" : "Change or remove the monthly limit")
+            }
             Section(bold: "All Purchases") {
                 ForEach(items) { t in
                     NavigationLink {
@@ -138,5 +188,10 @@ struct CategoryDetailView: View {
         .background(Color.page)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $editingLimit) { CategoryLimitSheet(category: category) }
+        .onCategoryLimitsChange {
+            let now = CategoryBudgets.limit(for: category)
+            if now != limit { limit = now }
+        }
     }
 }

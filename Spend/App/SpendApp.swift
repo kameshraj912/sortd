@@ -177,6 +177,7 @@ struct RootView: View {
             await FXService.backfill(in: context)
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())
+            await Reminders.checkCategoryLimits(all)
         }
     }
 }
