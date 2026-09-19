@@ -287,7 +287,7 @@ struct HomeView: View {
     private var categories: some View {
         let rows = Array(Self.categoryRows(cardItems).prefix(4))
         if rows.isEmpty {
-            Text("Nothing on this card this month.")
+            Text(focusedCard == nil ? "No purchases this month." : "Nothing on this card this month.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 60)
@@ -407,8 +407,10 @@ struct SectionHeader: View {
             if let action {
                 Button(action: action) {
                     Text("See all").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        .frame(minHeight: 44).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("See all, \(title)")
             }
         }
     }
@@ -456,7 +458,7 @@ struct RoundIconButton: View {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.onBrand)
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background(Color.brand, in: .circle)
         }
         .buttonStyle(.plain)
@@ -539,12 +541,13 @@ struct WalletCard: View {
         let n = transactions.count
         guard n > 0 else { return "Not used this month" }
         let count = "\(n) \(n == 1 ? "purchase" : "purchases")"
-        // Like Wise: show the local-currency spend on SGD cards.
-        guard card != nil else { return count }
-        let sgd = transactions.filter { $0.currencyCode == "SGD" }
-        guard !sgd.isEmpty else { return count }
-        let local = sgd.reduce(Decimal(0)) { $0 + $1.amount }
-        return "\(count) · \(Money.format(local, "SGD"))"
+        // Like Wise: a card billed in another currency also shows what was
+        // spent in that currency.
+        guard let card, card.homeCurrency != Money.home else { return count }
+        let own = transactions.filter { $0.currencyCode == card.homeCurrency }
+        guard !own.isEmpty else { return count }
+        let local = own.reduce(Decimal(0)) { $0 + $1.amount }
+        return "\(count) · \(Money.format(local, card.homeCurrency))"
     }
 }
 
@@ -624,7 +627,7 @@ struct SpendChart: View {
         var byDay: [Int: Double] = [:]
         for t in transactions {
             let offset = cal.dateComponents([.day], from: start, to: cal.startOfDay(for: t.date)).day ?? -1
-            if offset >= 0 && offset < days { byDay[offset, default: 0] += t.audValue.double }
+            if offset >= 0 && offset < days, t.category != .transfers { byDay[offset, default: 0] += t.audValue.double }
         }
         var running = 0.0
         return (0..<days).compactMap { i in

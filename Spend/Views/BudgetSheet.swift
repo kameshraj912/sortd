@@ -40,7 +40,7 @@ struct BudgetSheet: View {
 
             VStack(spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("$")
+                    Text(Money.symbol(Money.home))
                         .font(.title.weight(.bold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $text)

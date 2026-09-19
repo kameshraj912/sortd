@@ -88,7 +88,12 @@ final class Transaction {
         }
     }
 
-    var audValue: Decimal { refunded ? 0 : (audAmount ?? amount) }
+    var audValue: Decimal {
+        // Not converted yet (offline, or a currency without daily rates):
+        // leave it out of totals rather than count it one-for-one.
+        if audAmount == nil, currencyCode != Money.home { return 0 }
+        return refunded ? 0 : (audAmount ?? amount)
+    }
     var needsRate: Bool { audAmount == nil }
     /// A tap that arrived without an amount.
     var needsReview: Bool { amount == 0 }
@@ -115,8 +120,13 @@ final class MerchantRule {
 final class ImportedRecord {
     @Attribute(.unique) var id: String = ""
     var importedAt: Date = Date.now
+    /// Gmail account it came from, so disconnecting can forget it.
+    var account: String?
 
-    init(id: String) { self.id = id }
+    init(id: String, account: String? = nil) {
+        self.id = id
+        self.account = account
+    }
 }
 
 /// Cached SGD→AUD (etc.) rate for one day.

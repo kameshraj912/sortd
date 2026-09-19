@@ -85,6 +85,10 @@ enum DataReset {
         let gmail = GmailSync.accounts
         GmailSync.accounts = []
         Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }
+        Keychain.deleteAll()
+        // The exported spreadsheet, if one was made.
+        for f in (try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
+        where f.pathExtension == "csv" { try? FileManager.default.removeItem(at: f) }
         CardBook.shared.replaceAll([])
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         if let domain = Bundle.main.bundleIdentifier {

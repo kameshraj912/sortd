@@ -581,3 +581,62 @@ struct GenericReceiptTests {
         #expect(!EmailParsers.knowsSender("Fresh Mart <orders@freshmart.example>"))
     }
 }
+
+/// Bugs found in the Sep 2026 code review — each test fails on the old code.
+@MainActor
+struct ReviewRegressionTests {
+    private let cal = Calendar(identifier: .gregorian)
+    private func day(_ s: String) -> Date {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        return f.date(from: s)!
+    }
+
+    @Test func aiAmountMustNotMatchInsideABiggerNumber() {
+        #expect(!GenericReceipts.appears("5.00", in: "Total $15.00"))
+        #expect(GenericReceipts.appears("1200", in: "Total ¥1,200"))
+        #expect(GenericReceipts.appears("42.5", in: "Paid $42.5"))
+    }
+
+    @Test func gstIsNotACurrency() {
+        let t = GenericReceipts.total(in: "Subtotal $40.00 Total $44.09 Total GST 4.09")
+        #expect(t?.amount == "44.09")
+    }
+
+    @Test func sameShopOnTwoDaysIsTwoPurchases() {
+        let a = Deduper.Candidate(date: day("2026-09-14"), merchant: "Coffee Club", amount: 5.5, currency: "SGD", card: .scDebit, source: .email)
+        let b = Deduper.Candidate(date: day("2026-09-15"), merchant: "Coffee Club", amount: 5.5, currency: "SGD", card: .scDebit, source: .email)
+        #expect(Deduper.match(b, in: [a]) == nil)
+    }
+
+    @Test func twoShopVisitsAreNotAMonthlyBill() {
+        func c(_ d: String, _ a: Decimal) -> RecurringDetector.Charge {
+            .init(date: day(d), merchant: "Kmart", amount: a, currency: "AUD", audAmount: a, category: .shopping,
+                  card: .nab, renewsOn: nil, billingPeriod: nil)
+        }
+        #expect(RecurringDetector.detect([c("2026-08-01", 40), c("2026-08-31", 45)], now: day("2026-09-10"), calendar: cal).isEmpty)
+    }
+
+    @Test func monthEndBillKeepsItsDay() {
+        func c(_ d: String) -> RecurringDetector.Charge {
+            .init(date: day(d), merchant: "Rent Co", amount: 900, currency: "AUD", audAmount: 900, category: .housing,
+                  card: .nab, renewsOn: nil, billingPeriod: nil)
+        }
+        let found = RecurringDetector.detect([c("2026-11-30"), c("2026-12-31"), c("2027-01-31")], now: day("2027-03-05"), calendar: cal)
+        #expect(found.first?.nextDate == day("2027-03-31"))
+    }
+
+    @Test func creditTapDoesNotLandOnTheDebitCard() {
+        let book = CardBook(defaults: UserDefaults(suiteName: "cards-\(UUID().uuidString)")!)
+        book.upsert(BankPreset.all.first { $0.name == "CommBank" }!.card(credit: false))
+        let card = book.matchOrCreate("CommBank Credit")
+        #expect(book.info(card)?.isCredit == true)
+        #expect(book.active.count == 2)
+    }
+
+    @Test func unconvertedForeignAmountIsNotCountedOneForOne() {
+        let t = Transaction(date: .now, merchant: "Pho", amount: 500000, currencyCode: "VND", card: .other,
+                            category: .eatingOut, source: .manual)
+        #expect(t.audAmount == nil)
+        #expect(t.audValue == 0)
+    }
+}

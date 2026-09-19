@@ -92,7 +92,7 @@ struct RecurringView: View {
         return VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text(Money.format(Decimal(subs), Money.home, cents: false))
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .monospacedDigit()
                 Text("a month on subscriptions · \(Money.format(Decimal(subs * 12), Money.home, cents: false)) a year")
                     .font(.subheadline)
@@ -234,6 +234,7 @@ struct UpcomingSection: View {
                         Text("Coming up").font(.title3.weight(.bold)).foregroundStyle(Color.ink)
                         Spacer()
                         Text("See all").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                            .accessibilityLabel("See all, coming up")
                     }
                 }
                 .buttonStyle(.plain)
