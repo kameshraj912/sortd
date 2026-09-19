@@ -626,3 +626,9 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 /* Pop-up text: split long messages into even lines, keep short ones on one line */
 .toast { text-wrap: balance; max-width: min(320px, calc(100vw - 40px)); }
 .egg::after { text-wrap: balance; }
+
+/* Laptop polish */
+.also-grid .cell b { white-space: nowrap; flex: none; }
+.also-grid .cell span:last-child { text-wrap: balance; }
+.note-card { margin-left: auto; margin-right: auto; }
+.cta-band p { text-wrap: balance; }
