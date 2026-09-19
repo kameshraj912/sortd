@@ -14,20 +14,9 @@ struct SetupGuideView: View {
 
     /// iOS 27: automations are shortcuts that start with a trigger.
     /// Checked step by step on iOS 27.0 (Sep 2026).
-    private static let steps27: [Step] = [
-        Step(id: 1, symbol: "square.stack.3d.up", title: "Open Shortcuts and tap +",
-             detail: "The + is at the bottom. Then tap Edit at the top right (skip the “Describe a shortcut” box)."),
-        Step(id: 2, symbol: "wallet.pass", title: "Add the Wallet trigger",
-             detail: "First tap the blue Automation chip under the search box, then type wallet and tap Wallet — “When I tap a Wallet Card or Pass”. (Not the Wallet app: that only shows Wallet actions.) The shortcut now starts “When Any Card is tapped”."),
-        Step(id: 3, symbol: "plus.square.on.square", title: "Add Sortd's Log Purchase",
-             detail: "In the search box at the bottom, type Sortd and tap Log Purchase. It reads “Log Amount at Merchant on Card or Pass”."),
-        Step(id: 4, symbol: "arrow.triangle.branch", title: "Fill in the three blue words",
-             detail: "Tap Amount → Select Variable → Transaction. Then tap the blue Transaction and pick Amount. Do the same for Merchant (pick Merchant) and Card (pick Card or Pass)."),
-        Step(id: 5, symbol: "bolt", title: "Check it runs by itself",
-             detail: "Tap the arrow next to “tapped”. Automation should be on. Turn Notify off if you don't want a banner."),
-        Step(id: 6, symbol: "checkmark.seal", title: "Tap back, then pay for something",
-             detail: "It saves by itself. Your next Apple Pay tap shows up in Sortd within a few seconds."),
-    ]
+    private static let steps27: [Step] = WalletSetupGuide.pages.map {
+        Step(id: $0.id + 1, symbol: "", title: $0.title, detail: $0.detail)
+    }
 
     private static var currentSteps: [Step] {
         if #available(iOS 27.0, *) { return steps27 }
@@ -45,9 +34,9 @@ struct SetupGuideView: View {
         Step(id: 4, symbol: "bolt", title: "Tap “Run Immediately”, then Next",
              detail: "Turn off Notify When Run if you don't want a banner each time."),
         Step(id: 5, symbol: "plus.square.on.square", title: "Tap “Create New Shortcut”",
-             detail: "Then type Sortd in the search box at the bottom and tap Log Purchase."),
-        Step(id: 6, symbol: "arrow.triangle.branch", title: "Fill in Amount, Merchant and Card",
-             detail: "Tap the blue word Amount. Above the keyboard, tap Shortcut Input. Then tap the new Shortcut Input and pick Amount. Do the same for Merchant (pick Merchant) and Card (pick Card or Pass)."),
+             detail: "Then type Sortd in the search box at the bottom and tap Log Wallet Tap."),
+        Step(id: 6, symbol: "arrow.triangle.branch", title: "Fill in Transaction",
+             detail: "Tap the word Transaction. Above the keyboard, tap Shortcut Input. That's the only one."),
         Step(id: 7, symbol: "checkmark.seal", title: "Tap Done, then pay for something",
              detail: "It shows up in Sortd within a few seconds."),
     ]
@@ -70,6 +59,11 @@ struct SetupGuideView: View {
             }
             .listRowBackground(Color.clear)
 
+            if #available(iOS 27.0, *) {
+                Section(bold: "Steps") {
+                    WalletSetupGuide().padding(.vertical, 8)
+                }
+            } else {
             Section(bold: "Steps") {
                 ForEach(Self.currentSteps) { step in
                     HStack(alignment: .top, spacing: 14) {
@@ -93,6 +87,7 @@ struct SetupGuideView: View {
                     .accessibilityLabel("Step \(step.id). \(step.title). \(step.detail)")
                 }
             }
+            }
 
             Section {
                 Button {
@@ -106,6 +101,16 @@ struct SetupGuideView: View {
                 .controlSize(.large)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+            }
+
+            if let last = UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) {
+                Section {
+                    Text(last).font(.footnote.monospaced()).textSelection(.enabled)
+                } header: {
+                    BoldHeader("Last Tap Received")
+                } footer: {
+                    Text("Exactly what Apple Pay sent Sortd. Useful if a tap shows the wrong shop, amount or card.")
+                }
             }
 
             Section(bold: "Good to Know") {

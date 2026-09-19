@@ -27,7 +27,7 @@ struct OnboardingView: View {
     @State private var forward = true
     @State private var showingGuide = false
     @State private var customBudget = ""
-    @State private var showAllBanks = false
+    @State private var bankCountry: String = Locale.current.region?.identifier ?? "AU"
     @State private var editing: CardInfo?
     @State private var connectingGmail = false
     @State private var gmail = GmailSync.accounts
@@ -184,6 +184,8 @@ struct OnboardingView: View {
                 .resizable()
                 .frame(width: 64, height: 64)
                 .clipShape(.rect(cornerRadius: 15, style: .continuous))
+                // The icon is black: an edge keeps its shape on a dark page.
+                .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1))
                 .padding(.top, 32)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 10) {
@@ -232,7 +234,7 @@ struct OnboardingView: View {
             header("Your currency", "Totals and budgets are shown in this. Purchases in other currencies are converted at that day's rate.")
             VStack(spacing: 0) {
                 currencyRow(Money.detectedHome, note: "From your iPhone")
-                ForEach(["AUD", "SGD", "USD", "GBP", "EUR", "MYR", "NZD"].filter { $0 != Money.detectedHome }, id: \.self) {
+                ForEach(["AUD", "SGD", "INR", "USD", "GBP", "EUR", "MYR", "NZD"].filter { $0 != Money.detectedHome }, id: \.self) {
                     Divider().padding(.leading, 16)
                     currencyRow($0, note: nil)
                 }
@@ -276,64 +278,182 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Tap the banks you pay with. Have two cards from one bank? Tap it twice. Debit or credit comes next.")
+            header("Your cards", "Pick the bank for each card you pay with. Two cards from one bank? Add it twice. Debit or credit comes next.")
+            countryPicker.padding(.bottom, 14)
+            bankGrid(bankCountry)
+            // Below the grid, so adding a card never moves the buttons.
             if !book.active.isEmpty {
-                // What's picked so far, as removable chips.
-                FlowLayout(spacing: 8) {
-                    ForEach(book.active) { info in
-                        HStack(spacing: 6) {
-                            Text(info.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Button {
-                                let id = info.id
-                                let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
-                                book.remove(info, hasPurchases: used)
-                            } label: {
-                                Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
-                                    .frame(width: 44, height: 44).contentShape(.rect)
-                            }
-                            .padding(.vertical, -12)
-                            .accessibilityLabel("Remove \(info.name)")
-                        }
-                        .padding(.leading, 12)
-                        .padding(.trailing, 10)
-                        .padding(.vertical, 8)
-                        .background(Color.card, in: .capsule)
-                    }
-                }
-                .padding(.bottom, 20)
-            }
-            // Only the user's own countries: the phone's region and the
-            // currency picked on the step before. Everything else is one tap away.
-            ForEach(myCountries, id: \.self) { country in
-                bankGroup(Locale.current.localizedString(forRegionCode: country) ?? country,
-                          BankPreset.all.filter { $0.country == country })
-            }
-            bankGroup("Works anywhere", BankPreset.all.filter { $0.country.isEmpty })
-            if showAllBanks {
-                ForEach(otherCountries, id: \.self) { country in
-                    bankGroup(Locale.current.localizedString(forRegionCode: country) ?? country,
-                              BankPreset.all.filter { $0.country == country })
-                }
-            } else if !otherCountries.isEmpty {
-                Button("Banks in other countries") { withAnimation(.snappy) { showAllBanks = true } }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.ink)
-                    .frame(minHeight: 44)
+                Text("Added (\(book.active.count))").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    .padding(.top, 24).padding(.bottom, 8)
+                pickedCards
             }
         }
+        .onAppear {
+            // A phone set to a country we have no banks for starts on the first one we do.
+            if !allBankCountries.contains(bankCountry) { bankCountry = myCountries.first ?? "" }
+        }
+    }
+
+    /// Cards added so far: one row each, with where it's from.
+    private var pickedCards: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(book.active.enumerated()), id: \.element.id) { i, info in
+                if i > 0 { Divider().padding(.leading, 60) }
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.brandPalette[i % 4].gradient)
+                        .frame(width: 34, height: 22)
+                        .overlay(alignment: .bottomTrailing) {
+                            Text(CardInfo.flag(for: info.country)).font(.system(size: 10)).padding(2)
+                        }
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(info.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(countryName(info.country) + " · " + info.currency)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Button {
+                        let id = info.id
+                        let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
+                        withAnimation(.snappy) { book.remove(info, hasPurchases: used) }
+                    } label: {
+                        Image(systemName: "minus.circle.fill").font(.title3)
+                            .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44).contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove \(info.name)")
+                }
+                .padding(.leading, 14).padding(.trailing, 4)
+                .frame(minHeight: 54)
+            }
+        }
+        .surface(radius: 16)
+    }
+
+    /// One country at a time, so the list stays short. "" = works anywhere.
+    private var countryPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(allBankCountries, id: \.self) { c in
+                    let picked = book.active.filter { $0.country == c && !$0.bank.isEmpty }.count
+                    Button { withAnimation(.snappy) { bankCountry = c } } label: {
+                        HStack(spacing: 6) {
+                            Text(c.isEmpty ? "🌐" : CardInfo.flag(for: c))
+                            Text(c.isEmpty ? "Anywhere" : countryName(c)).font(.subheadline.weight(.medium))
+                            if picked > 0 {
+                                Text("\(picked)").font(.caption2.weight(.bold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Color.brandPalette[0], in: .capsule)
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .chip(selected: bankCountry == c)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(bankCountry == c ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollClipDisabled()
+    }
+
+    /// Banks in the chosen country, two per row. Each tap adds one card.
+    private func bankGrid(_ country: String) -> some View {
+        let banks = BankPreset.all.filter { $0.country == country }
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(banks) { bank in
+                let count = book.active.filter { $0.bank == bank.name }.count
+                Button { addCard(from: bank) } label: {
+                    HStack(spacing: 8) {
+                        Text(bank.name).font(.subheadline.weight(.medium)).lineLimit(2).multilineTextAlignment(.leading)
+                        Spacer(minLength: 2)
+                        if count > 0 {
+                            Text(count > 1 ? "\(count)" : "").font(.caption.weight(.bold))
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.up)
+                        } else {
+                            Image(systemName: "plus.circle").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.card, in: .rect(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(count > 0 ? Color.ink : .clear, lineWidth: 1.5)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(count > 0 ? "\(bank.name), \(count) added. Add another" : "Add \(bank.name)")
+            }
+            // Not listed: a plain card named after the country; renamed next page.
+            Button {
+                var card = CardInfo(name: "Card", shortName: "Card",
+                                    currency: country.isEmpty ? home : (BankPreset.all.first { $0.country == country }?.currency ?? home),
+                                    country: country.isEmpty ? region : country)
+                let n = book.active.filter { $0.bank.isEmpty && $0.name.hasPrefix("Card") }.count
+                if n > 0 { card.name = "Card \(n + 1)"; card.shortName = card.name }
+                withAnimation(.snappy) { book.upsert(card) }
+            } label: {
+                Label("Other bank", systemImage: "plus")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    }
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Every tap adds one more card from this bank, named "DBS", "DBS 2"…
+    /// Debit or credit is chosen on the next page, with the digits.
+    private func addCard(from bank: BankPreset) {
+        let mine = book.active.filter { $0.bank == bank.name }
+        let next = (mine.compactMap { Int($0.name.split(separator: " ").last ?? "") }.max() ?? (mine.isEmpty ? 0 : 1)) + 1
+        var card = bank.card(credit: false)
+        card.name = next > 1 ? "\(bank.shortName) \(next)" : bank.shortName
+        card.shortName = card.name
+        withAnimation(.snappy) { book.upsert(card) }
+    }
+
+    private func countryName(_ code: String) -> String {
+        code.isEmpty ? "Anywhere" : (Locale.current.localizedString(forRegionCode: code) ?? code)
+    }
+
+    /// The user's countries first (phone, home currency, cards added), then
+    /// the rest, then banks that work anywhere.
+    private var allBankCountries: [String] {
+        myCountries + otherCountries + [""]
     }
 
     /// "Add digits for 2 more cards" — says how many are left, since the
     /// missing one may be further down the list.
     private var missingDigitsText: String {
-        let n = book.active.filter { $0.last4.isEmpty }.count
+        let n = book.active.filter { !Self.digitsComplete($0, in: book.active) }.count
         return n == 1 ? "Add digits for 1 more card" : "Add digits for \(n) more cards"
     }
 
     /// Every card has its card-number digits: that's how bank emails and
     /// receipts find it.
     private var detailsComplete: Bool {
-        book.active.allSatisfy { !$0.last4.isEmpty }
+        book.active.allSatisfy { Self.digitsComplete($0, in: book.active) }
+    }
+
+    /// Two cards from one bank look the same to Apple Pay except for the
+    /// Apple Pay number, so then it's needed too.
+    static func needsApplePayDigits(_ info: CardInfo, in cards: [CardInfo]) -> Bool {
+        !info.bank.isEmpty && cards.filter { $0.bank == info.bank }.count > 1
+    }
+
+    static func digitsComplete(_ info: CardInfo, in cards: [CardInfo]) -> Bool {
+        !info.last4.isEmpty && (!needsApplePayDigits(info, in: cards) || !(info.applePayLast4 ?? []).isEmpty)
     }
 
     private var cardDetails: some View {
@@ -341,7 +461,7 @@ struct OnboardingView: View {
             header("Card details", "The last 4 digits are how Sortd matches bank emails and receipts to the right card. Only the last 4 — never the full number.")
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
-                    CardDetailForm(info: info)
+                    CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
                 }
             }
         }
@@ -373,6 +493,8 @@ struct OnboardingView: View {
     private var myCountries: [String] {
         var list = [region]
         if let fromCurrency = CardEditor.country(for: home), !list.contains(fromCurrency) { list.append(fromCurrency) }
+        // Countries of cards already added.
+        for c in book.active.map(\.country) where !list.contains(c) { list.append(c) }
         return list.filter { c in BankPreset.all.contains { $0.country == c } }
     }
 
@@ -384,42 +506,6 @@ struct OnboardingView: View {
         return seen
     }
 
-    private func bankGroup(_ title: String, _ banks: [BankPreset]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            FlowLayout(spacing: 8) {
-                ForEach(banks) { bank in
-                    let count = book.active.filter { $0.bank == bank.name }.count
-                    let added = count > 0
-                    Button {
-                        // Every tap adds one more card from this bank, named
-                        // "DBS", "DBS 2", "DBS 3"… Debit or credit is chosen on
-                        // the next page, with the digits and a nickname.
-                        let mine = book.active.filter { $0.bank == bank.name }
-                        let next = (mine.compactMap { Int($0.name.split(separator: " ").last ?? "") }.max() ?? (mine.isEmpty ? 0 : 1)) + 1
-                        var card = bank.card(credit: false)
-                        card.name = next > 1 ? "\(bank.shortName) \(next)" : bank.shortName
-                        card.shortName = card.name
-                        book.upsert(card)
-                    } label: {
-                        HStack(spacing: 6) {
-                            if added { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
-                            Text(bank.name).font(.subheadline.weight(.medium))
-                            if count > 1 { Text("×\(count)").font(.caption.weight(.bold)) }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .chip(selected: added)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(added ? .isSelected : [])
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 18)
-    }
-
     /// The first purchase that came from an Apple Pay tap.
     private var firstTap: Transaction? { transactions.first { $0.seenIn.contains(.tap) } }
     private var tapConnected: Bool { firstTap != nil }
@@ -427,44 +513,20 @@ struct OnboardingView: View {
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay taps", "A one-time setup in Apple's Shortcuts app. Apple doesn't let apps do this part for you, so it takes about two minutes.")
-            if #available(iOS 27.0, *) { describeCard }
-            if let link = ShortcutLink.url {
-                // Easy way: add the ready-made shortcut, then point the automation at it.
+            if #available(iOS 27.0, *) {
+                WalletSetupGuide()
+                    .padding(16)
+                    .surface(radius: 16)
+            } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    Button { openURL(link) } label: {
-                        Label("Add the Sortd shortcut", systemImage: "plus.circle.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                            .foregroundStyle(Color.onBrand)
-                            .background(Color.brand, in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                    miniStep(1, "Tap Add Shortcut", "Shortcuts opens with “Log to Sortd” ready to add.")
-                    miniStep(2, "Open it in Shortcuts", "Check Automation is on under “When Any Card is tapped”.")
-                    miniStep(3, "Pay with Apple Pay", "Your next tap shows up in Sortd. That's it.")
+                    miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
+                    miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
+                    miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
+                    actionMock.padding(.leading, 38)
                 }
                 .padding(16)
                 .surface(radius: 16)
-                .padding(.bottom, 14)
-                Text("Or set it up by hand").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.bottom, 8)
             }
-            if #available(iOS 27.0, *) {
-                Text("Or set it up by hand").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.bottom, 8)
-            }
-            VStack(alignment: .leading, spacing: 16) {
-                if #available(iOS 27.0, *) {
-                    miniStep(1, "Shortcuts → + → Edit", "Tap the blue Automation chip, then type wallet and tap “When I tap a Wallet Card or Pass”.")
-                    miniStep(2, "Add Sortd's Log Purchase", "Search Sortd at the bottom and tap it.")
-                    miniStep(3, "Fill the 3 blue words", "Tap each → Select Variable → Transaction, then tap it again and pick Amount, Merchant, or Card or Pass. It should look like this:")
-                } else {
-                    miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
-                    miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Purchase.")
-                    miniStep(3, "Fill the 3 blue words", "Tap each one, pick Shortcut Input, then tap it again and pick the same name. It should look like this:")
-                }
-                actionMock.padding(.leading, 38)
-            }
-            .padding(16)
-            .surface(radius: 16)
 
             HStack(spacing: 10) {
                 Button {
@@ -514,81 +576,26 @@ struct OnboardingView: View {
         }
     }
 
-    /// Sentence for iOS 27's "Describe a shortcut" (Apple Intelligence builds
-    /// the Wallet trigger + Log Purchase with all three fields from it).
-    static let describeSentence = "When I tap any Wallet card, log the purchase in Sortd using the transaction's amount, merchant and card or pass."
-
-    @State private var copiedSentence = false
-
-    /// iOS 27 quick way: copy a sentence, paste it into Shortcuts.
-    private var describeCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles").foregroundStyle(Color.brandPalette[2])
-                Text("Quick way").font(.headline)
-                Text("Apple Intelligence").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            }
-            Text("“\(Self.describeSentence)”")
-                .font(.subheadline)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
-                .textSelection(.enabled)
-            HStack(spacing: 10) {
-                Button {
-                    UIPasteboard.general.string = Self.describeSentence
-                    copiedSentence = true
-                } label: {
-                    Label(copiedSentence ? "Copied" : "Copy", systemImage: copiedSentence ? "checkmark" : "doc.on.doc")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.onBrand)
-                        .background(Color.brand, in: .capsule)
-                }
-                Button {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
-                } label: {
-                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.ink)
-                        .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
-                }
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: copiedSentence)
-            Text("In Shortcuts tap +, paste into “Describe a shortcut”, and send. Check it reads “When Any Card is tapped → Log Amount at Merchant on Card or Pass”, with all three words dark blue. If not, use the steps below.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .surface(radius: 16)
-        .padding(.bottom, 14)
-    }
-
     /// What the finished Shortcuts action looks like, so people can check theirs.
     private var actionMock: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image("BrandIcon").resizable().frame(width: 20, height: 20)
                     .clipShape(.rect(cornerRadius: 5, style: .continuous))
-                Text("Log Purchase").font(.footnote.weight(.semibold))
+                Text("Log Wallet Tap").font(.footnote.weight(.semibold))
             }
             // Same wording as the real action in Shortcuts.
             FlowLayout(spacing: 4) {
                 Text("Log").font(.footnote)
-                token("Amount")
-                Text("at").font(.footnote)
-                token("Merchant")
-                Text("on").font(.footnote)
-                token("Card or Pass")
+                token("Shortcut Input")
+                Text("in Sortd").font(.footnote)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Log Amount at Merchant on Card or Pass")
+        .accessibilityLabel("Log Shortcut Input in Sortd")
     }
 
     /// A Shortcuts variable token (blue, like in the Shortcuts app).
@@ -849,7 +856,10 @@ struct CardDetailForm: View {
     @State private var payDigits: String
     @State private var showHelp = false
 
-    init(info: CardInfo) {
+    var needsPay = false
+
+    init(info: CardInfo, needsPay: Bool = false) {
+        self.needsPay = needsPay
         self.info = info
         _name = State(initialValue: info.name)
         _isCredit = State(initialValue: info.isCredit)
@@ -893,7 +903,7 @@ struct CardDetailForm: View {
             Divider().padding(.leading, 14)
             digitRow("Card number", text: $digits, required: true)
             Divider().padding(.leading, 14)
-            digitRow("Apple Pay number", text: $payDigits, required: false)
+            digitRow("Apple Pay number", text: $payDigits, required: needsPay)
 
             Button {
                 withAnimation(.snappy) { showHelp.toggle() }
@@ -956,9 +966,9 @@ struct CardDetailForm: View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                Text(required ? "Required" : "Optional")
+                Text(required ? (title == "Apple Pay number" ? "Required — tells same-bank cards apart" : "Required") : "Recommended")
                     .font(.caption)
-                    .foregroundStyle(required && missing ? Color.orange : Color.secondary)
+                    .foregroundStyle(required && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
             }
             Spacer()
             TextField("Last 4", text: text)

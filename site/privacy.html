@@ -37,7 +37,11 @@
   <p>We don't run a server, so none of this is sent to us. If you back up your iPhone to iCloud or a computer, Sortd's data is included in that backup like other app data, under Apple's terms.</p>
 
   <h2>Logging Apple Pay taps</h2>
-  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the merchant, amount and card name to Sortd's "Log Purchase" action. This happens on your iPhone. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
+  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the transaction (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. Sortd keeps a copy of the last tap it received, on your iPhone, so you can check the setup. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
+  <p><strong>Card digits:</strong> you can give Sortd the last 4 digits of each card and of its Apple Pay number (the Device Account Number). Sortd uses them only to match purchases to the right card. They stay on your iPhone. Sortd never asks for or stores a full card number.</p>
+
+  <h2>Receipt scanning (optional)</h2>
+  <p>If you tap "Scan Receipt", Sortd asks for camera access, or lets you pick one photo. It reads the text on the receipt on your iPhone using Apple's built-in text recognition and, on iPhones with Apple Intelligence, Apple's on-device model. The photo is not saved by Sortd and is not sent anywhere. Sortd keeps only what you confirm on the review screen: the shop, amount, currency, date and category. On iPhones without Apple Intelligence, the text is read with simple rules instead.</p>
 
   <h2>Gmail (optional)</h2>
   <p>If you tap "Connect Gmail", you sign in to Google in Apple's secure sign-in window. Sortd never sees your Google password.</p>
@@ -76,7 +80,7 @@
   <p>Because we don't hold any of your data, we can't see, change or delete it for you. You are in control of it on your iPhone.</p>
 
   <h2>Children</h2>
-  <p>Sortd is not meant for children under 13, and we don't knowingly collect information from them. Sortd doesn't collect personal information from anyone.</p>
+  <p>Sortd is a budgeting tool for adults and isn't aimed at children. It doesn't collect personal information from anyone, children included.</p>
 
   <h2>Changes to this policy</h2>
   <p>If we change this policy, we'll update this page and the "Last updated" date.</p>

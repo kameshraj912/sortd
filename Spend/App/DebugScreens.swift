@@ -20,7 +20,6 @@ struct DebugScreenHost: View {
             case "card-editor": Color.page.sheet(isPresented: .constant(true)) { CardEditor(original: nil) }
             case "add": Color.page.sheet(isPresented: .constant(true)) { AddTransactionView() }
             case "budget": Color.page.sheet(isPresented: .constant(true)) { BudgetSheet(budget: $budget) }
-            case "gmail": Color.page.sheet(isPresented: .constant(true)) { AddEmailAccountSheet() }
             case "setup": SetupGuideView()
             case "privacy": PrivacyView()
             case "card": CardDetailView(card: Card.mine.first ?? .other)

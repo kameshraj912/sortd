@@ -1,19 +1,7 @@
 import Foundation
 import SwiftData
 
-/// One Gmail account running the Spend Apps Script. The web-app URL is kept
-/// in UserDefaults; the secret key lives in the Keychain.
-struct EmailAccount: Codable, Identifiable, Hashable {
-    var id: UUID = UUID()
-    var label: String
-    var url: URL
-    var lastSync: Date?
-    var lastResult: String?
-
-    var keychainKey: String { "email-sync-\(id.uuidString)" }
-}
-
-/// A record as the Apps Script returns it (see apps-script/Parsers.js).
+/// One purchase, refund or subscription read from an email.
 nonisolated struct EmailRecord: Codable, Equatable, Sendable {
     struct Subscription: Codable, Equatable, Sendable {
         var name: String?
@@ -37,8 +25,6 @@ nonisolated struct EmailRecord: Codable, Equatable, Sendable {
 }
 
 enum EmailSync {
-    private static let accountsKey = "emailAccounts"
-    private static let minimumGap: TimeInterval = 5 * 60
 
     struct Summary: Equatable {
         var added = 0
@@ -57,88 +43,6 @@ enum EmailSync {
             if refunds > 0 { parts.append("\(refunds) refund\(refunds == 1 ? "" : "s")") }
             return parts.joined(separator: " · ")
         }
-    }
-
-    enum SyncError: LocalizedError {
-        case unauthorised, badResponse(Int), missingKey
-
-        var errorDescription: String? {
-            switch self {
-            case .unauthorised: "The key doesn’t match this Gmail script."
-            case .badResponse(let code): "The Gmail script answered with an error (\(code))."
-            case .missingKey: "No key saved for this account."
-            }
-        }
-    }
-
-    // MARK: Accounts
-
-    static var accounts: [EmailAccount] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: accountsKey) else { return [] }
-            return (try? JSONDecoder().decode([EmailAccount].self, from: data)) ?? []
-        }
-        set {
-            UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: accountsKey)
-        }
-    }
-
-    static func add(label: String, url: URL, key: String) {
-        let account = EmailAccount(label: label, url: url)
-        Keychain.set(key, for: account.keychainKey)
-        accounts.append(account)
-    }
-
-    static func remove(_ account: EmailAccount) {
-        Keychain.delete(account.keychainKey)
-        accounts.removeAll { $0.id == account.id }
-    }
-
-    // MARK: Sync
-
-    /// Pulls every account. `force` ignores the 5-minute gap between syncs.
-    @discardableResult
-    static func syncAll(in context: ModelContext, force: Bool = false) async -> Summary {
-        var total = Summary()
-        var list = accounts
-        for i in list.indices {
-            if !force, let last = list[i].lastSync, Date.now.timeIntervalSince(last) < minimumGap { continue }
-            do {
-                let records = try await fetch(list[i])
-                let s = try importRecords(records, in: context)
-                total.added += s.added; total.merged += s.merged; total.refunds += s.refunds
-                list[i].lastSync = .now
-                list[i].lastResult = s.text
-            } catch {
-                list[i].lastResult = error.localizedDescription
-                log.error("Email sync failed for \(list[i].label): \(error.localizedDescription)")
-            }
-        }
-        accounts = list
-        if total.added + total.merged + total.refunds > 0 { await FXService.backfill(in: context) }
-        return total
-    }
-
-    static func fetch(_ account: EmailAccount) async throws -> [EmailRecord] {
-        guard let key = Keychain.get(account.keychainKey) else { throw SyncError.missingKey }
-        var request = URLRequest(url: account.url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Key in the body, not the URL, so it never lands in logs or history.
-        var body: [String: String] = ["key": key]
-        if let last = account.lastSync {
-            body["since"] = ISO8601DateFormatter().string(from: last.addingTimeInterval(-3 * 86400))
-        }
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200 else { throw SyncError.badResponse(code) }
-
-        struct Payload: Decodable { var error: String?; var records: [EmailRecord]? }
-        let payload = try JSONDecoder().decode(Payload.self, from: data)
-        if payload.error != nil { throw SyncError.unauthorised }
-        return payload.records ?? []
     }
 
     /// Turns records into purchases. Already-imported ids are skipped, so this

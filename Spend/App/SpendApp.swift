@@ -28,7 +28,20 @@ struct SpendApp: App {
         Appearance.apply(appearance)
     }
 
+    /// Early test builds linked Gmail through a Google Apps Script with a
+    /// secret key. That link is gone; clear its saved key and settings once.
+    private static func removeAppsScriptLink() {
+        let key = "emailAccounts"
+        guard let data = UserDefaults.standard.data(forKey: key) else { return }
+        let list = (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        for account in list {
+            if let id = account["id"] as? String { Keychain.delete("email-sync-\(id)") }
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     init() {
+        Self.removeAppsScriptLink()
         let context = SpendStore.container.mainContext
         let used = Set(((try? context.fetch(FetchDescriptor<Transaction>())) ?? []).map(\.cardRaw))
         CardBook.shared.adoptLegacy(usedIds: used)
@@ -48,19 +61,12 @@ struct SpendApp: App {
             }
         }
         #if DEBUG
-        if ProcessInfo.processInfo.environment["SPEND_SAMPLE_DATA"] == "1" {
-            SampleData.load(into: SpendStore.container.mainContext)
-        }
         let env = ProcessInfo.processInfo.environment
         if env["SPEND_DEMO"] == "1" {
             DemoData.load(in: SpendStore.container.mainContext)
             UserDefaults.standard.set(true, forKey: OnboardingView.doneKey)
         }
         if let style = env["SPEND_STYLE"] { UserDefaults.standard.set(style, forKey: "cardStyle") }
-        if let paths = ProcessInfo.processInfo.environment["SPEND_IMPORT_JSON"] {
-            SampleData.importJSON(paths.split(separator: ":").map(String.init),
-                                  into: SpendStore.container.mainContext)
-        }
         #endif
     }
 
@@ -164,7 +170,6 @@ struct RootView: View {
             guard scenePhase == .active else { return }
             try? TransactionLogger.refreshUncategorised(in: context)
             await FXService.ensureConverted(in: context)
-            await EmailSync.syncAll(in: context)
             #if DEBUG
             await GmailSync.syncAll(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")
             #else
