@@ -1,0 +1,24 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Secrets — never commit
+.env
+.env.*
+Secrets.xcconfig
+*.p12
+*.mobileprovision
+apps-script/.clasprc.json
+
+# Misc
+.DS_Store
+.venv
+__pycache__
+node_modules
+.claude/settings.local.json
