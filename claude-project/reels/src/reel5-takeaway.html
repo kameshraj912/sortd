@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Reel 5 – takeaway</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  #zoom { position: absolute; inset: 0; transform-origin: 50% 42%; }
+  .dim { background: rgba(0,0,0,.6); }
+  .ring { position: absolute; left: 22px; top: 520px; width: 496px; height: 98px; border-radius: 22px; border: 4px solid var(--orange);
+    box-shadow: 0 0 0 2000px rgba(0,0,0,.62), 0 0 30px rgba(240,100,61,.5); }
+  .pill.glass { background: rgba(17,17,19,.88); }
+</style></head>
+<body data-duration="15"><div id="stage">
+
+  <div id="zoom"><img class="shot" id="shot" src="assets/insights-dark.jpg" alt=""></div>
+  <div class="layer dim" id="dim"></div>
+  <div class="ring" id="ring"></div>
+
+  <div class="cap lg" id="c0" style="top:330px"><span class="pill glass" style="padding:18px 24px">POV: it's the 15th and you're already over.</span></div>
+  <div class="cap md" id="c1" style="top:690px"><span class="pill light">Sortd shows this month next to last month, day by day.</span></div>
+  <div class="cap md" id="c2" style="top:170px"><span class="pill light">So you know which category did it.</span></div>
+  <div class="cap lg" id="c3" style="top:170px"><span class="pill light">It was takeaway.</span></div>
+  <div class="cap lg" id="c4" style="top:670px"><span class="pill light">It's always takeaway.</span></div>
+
+</div>
+<script src="engine.js"></script>
+<script>
+  // Screenshot is 600x1304, shown at 540 wide (x0.9). Food Delivery row: y 815-910 -> 733-819, minus 213 scroll.
+  show('#c0', .1, 2.2, 'pop');
+  tw('#dim', 2.2, 2.6, { o: 0 }, { o: 1 }, 'lin');
+  tw('#zoom', 2.4, 3.6, { s: 1.32 }, { s: 1 }, 'inout');
+  show('#c1', 2.9, 6.0, 'pop');
+  tw('#zoom', 6.0, 7.0, { s: 1 }, {}, 'inout');
+  tw('#shot', 6.3, 7.5, { y: -213 }, { y: 0 }, 'inout');
+  show('#c2', 7.2, 9.0, 'pop');
+  tw('#ring', 9.0, 9.5, { o: 1, s: 1 }, { o: 0, s: 1.08 }, 'back');
+  show('#c3', 9.3, null, 'pop');
+  show('#c4', 10.8, null, 'pop');
+  endCard(12.6, "Halfway through the month. Still time to cook. (Probably won't.)");
+  seek(0);
+</script>
+</body></html>

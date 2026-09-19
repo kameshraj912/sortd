@@ -4,6 +4,17 @@ Everything to paste into Google Cloud for the restricted-scope review. Project: 
 Written 19 Sep 2026. Check Google's current form before submitting; field names can change:
 https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification
 
+## Status (20 Sep 2026)
+
+- [x] Domain bought (sortd.page), site live, support@sortd.page forwarding set up
+- [x] Search Console: domain verified (DNS TXT), sitemap submitted, home page indexing requested
+- [x] Branding page saved: name, logo, links, authorised domain, support email (Google Group), contacts
+- [x] Data Access: gmail.readonly (restricted) + email + openid
+- [x] Audience: Testing, 2 test users
+- [ ] Click Cloudflare's verification email so support@sortd.page forwards to Gmail
+- [ ] Record demo video, upload unlisted
+- [ ] Audience → Publish app, then submit scope reason + video
+
 ## Order
 
 1. Buy `sortd.page`. Set up email forwarding: `support@sortd.page` → your Gmail.
@@ -24,7 +35,7 @@ https://developers.google.com/identity/protocols/oauth2/production-readiness/res
 | Field | Value |
 |---|---|
 | App name | Sortd |
-| User support email | support@sortd.page |
+| User support email | sortd-support@googlegroups.com (Google Group you own; keeps your Gmail off the consent screen) |
 | App logo | `Brand/google-oauth-logo-120.png` (120×120) |
 | App home page | https://sortd.page/ |
 | Privacy policy | https://sortd.page/privacy.html |

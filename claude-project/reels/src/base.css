@@ -1,0 +1,57 @@
+/* Sortd Reels. Stage is 540x960 CSS px, rendered at 2x = 1080x1920.
+   Instagram safe zone (middle 1080x1350) = CSS y 143 to 817. */
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&display=block");
+:root {
+  --ink: #111113; --page: #f6f6f8; --card: #fff; --muted: #5c5c63; --faint: #8e8e93; --line: #e3e3e6;
+  --orange: #f0643d; --amber: #f5a623; --violet: #7b6bf0; --green: #2bb07a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 540px; height: 960px; overflow: hidden; background: #111113; }
+body { font-family: "Inter Tight", -apple-system, "SF Pro Display", sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+#stage { position: relative; width: 540px; height: 960px; overflow: hidden; }
+.layer { position: absolute; inset: 0; }
+.abs { position: absolute; }
+.center { left: 0; right: 0; text-align: center; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* Captions */
+.cap { position: absolute; left: 24px; right: 24px; text-align: center; font-weight: 800; letter-spacing: -0.035em; line-height: 1.08; text-wrap: balance; }
+.cap.xl { font-size: 50px; } .cap.lg { font-size: 40px; } .cap.md { font-size: 31px; } .cap.sm { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.pill { display: inline-block; background: #111113; color: #fff; padding: 12px 20px 13px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.pill.light { background: #fff; color: #111113; }
+.muted { color: rgba(255,255,255,.62); }
+
+/* Wordmark bars: sorted, longest first */
+.wbars { display: flex; gap: 3px; justify-content: center; margin-top: 4px; }
+.wbars i { height: 6px; border-radius: 0; }
+.wbars i:nth-child(1) { width: 64px; background: var(--orange); }
+.wbars i:nth-child(2) { width: 48px; background: var(--amber); }
+.wbars i:nth-child(3) { width: 32px; background: var(--violet); }
+.wbars i:nth-child(4) { width: 19px; background: var(--green); border-radius: 0 3px 3px 0; }
+.wbars i:nth-child(1) { border-radius: 3px 0 0 3px; }
+.bars4 { display: flex; gap: 4px; }
+.bars4 i { width: 16px; height: 4px; border-radius: 2px; }
+.bars4 i:nth-child(1) { background: var(--orange); } .bars4 i:nth-child(2) { background: var(--amber); }
+.bars4 i:nth-child(3) { background: var(--violet); } .bars4 i:nth-child(4) { background: var(--green); }
+
+/* Notification banner */
+.banner { position: absolute; left: 14px; right: 14px; top: 150px; z-index: 20; display: flex; gap: 12px; align-items: center;
+  padding: 14px 16px; border-radius: 26px; background: rgba(242,242,247,.96); color: #111113; box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+.banner img { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+.banner .meta { display: flex; justify-content: space-between; font-size: 13px; color: #6b6b70; font-weight: 700; letter-spacing: .02em; }
+.banner p { font-size: 16px; line-height: 1.3; margin-top: 2px; font-weight: 500; }
+.banner p b { font-weight: 700; }
+
+/* Full-bleed app screenshot */
+.shot { position: absolute; left: 0; top: 0; width: 540px; }
+
+/* End card */
+.end { position: absolute; inset: 0; z-index: 50; background: #111113; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 40px; overflow: hidden; }
+.end .glow { position: absolute; inset: auto -30% -25% -30%; height: 70%;
+  background: radial-gradient(40% 55% at 22% 50%, rgba(240,100,61,.45), transparent 70%), radial-gradient(40% 55% at 50% 55%, rgba(123,107,240,.4), transparent 70%), radial-gradient(40% 55% at 78% 50%, rgba(43,176,122,.38), transparent 70%); }
+.end > *:not(.glow) { position: relative; }
+.end .e-icon { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); margin-bottom: 22px; }
+.end .e-word b { font-size: 76px; font-weight: 800; letter-spacing: -0.06em; line-height: .9; display: block; }
+.end .e-line { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin-top: 34px; max-width: 420px; text-wrap: balance; }
+.end .e-cta { margin-top: 26px; font-size: 18px; font-weight: 700; color: #111113; background: #e8e8ea; padding: 12px 22px; border-radius: 999px; }
+.end .e-url { margin-top: 14px; font-size: 15px; color: rgba(255,255,255,.55); font-weight: 600; }
