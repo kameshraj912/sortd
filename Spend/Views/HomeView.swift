@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var showingAdd = false
     @State private var showingSetup = false
     @State private var showingBudget = false
+    @State private var limits: [SpendCategory: Double] = [:]
     @AppStorage(DemoData.activeKey) private var demo = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @AppStorage(OnboardingView.doneKey) private var onboarded = true
@@ -63,6 +64,10 @@ struct HomeView: View {
                 NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
             }
             .sheet(isPresented: $showingBudget) { BudgetSheet(budget: $budget) }
+        }
+        .onCategoryLimitsChange {
+            let now = CategoryBudgets.all()
+            if now != limits { limits = now }
         }
     }
 
@@ -179,7 +184,32 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Edit your monthly budget")
+            if let line = overLimitLine {
+                Button { tab = .insights } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                        Text(line)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.down)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Shows your categories")
+            }
         }
+    }
+
+    /// One line about categories over their limit, this month only.
+    private var overLimitLine: String? {
+        guard isCurrentMonth, !limits.isEmpty else { return nil }
+        let over = CategoryBudgets.progress(for: monthItems, limits: limits)
+            .filter { $0.value.status == .over }
+            .sorted { $0.value.left < $1.value.left }
+        guard let worst = over.first else { return nil }
+        if over.count == 1 {
+            return "\(worst.key.name) is \(Money.format(Decimal(-worst.value.left), Money.home, cents: false)) over its limit"
+        }
+        return "\(worst.key.name) and \(over.count - 1) more are over their limits"
     }
 
     private func budgetLine(spent: Double) -> String {
