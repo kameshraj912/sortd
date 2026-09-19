@@ -11,9 +11,13 @@ https://developers.google.com/identity/protocols/oauth2/production-readiness/res
 - [x] Branding page saved: name, logo, links, authorised domain, support email (Google Group), contacts
 - [x] Data Access: gmail.readonly (restricted) + email + openid
 - [x] Audience: Testing, 2 test users
-- [ ] Click Cloudflare's verification email so support@sortd.page forwards to Gmail
-- [ ] Record demo video, upload unlisted
-- [ ] Audience → Publish app, then submit scope reason + video
+- [x] support@sortd.page forwarding verified (Cloudflare)
+- [x] Demo video (unlisted): https://youtu.be/Lflj8rfZDwI (file in docs/demo/, not in git)
+- [x] Branding verified and published by Google
+- [x] Published to production; submitted for restricted-scope review 20 Sep 2026
+      (use: Email reporting and monitoring; justification as below; CASA question asked in notes)
+- [ ] Watch kamesh.raj1129@gmail.com / support@sortd.page for Google's emails and reply fast
+- [ ] CASA security assessment when Google asks (paid, yearly; see below)
 
 ## Order
 
