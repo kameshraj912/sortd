@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortd Support</title>
+<meta name="description" content="Help with setting up and using Sortd.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <a class="wordmark" href="index.html">sortd<span class="bar" aria-hidden="true"><span></span><span></span><span></span><span></span></span></a>
+  <nav><a href="index.html">Home</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
+</header>
+<main>
+  <h1>Support</h1>
+  <p>Answers to common questions. If yours isn't here, email [CONTACT EMAIL].</p>
+
+  <h2>How do I log Apple Pay taps automatically?</h2>
+  <p>You set up an automation in Apple's Shortcuts app once. It takes about two minutes. Sortd also shows these steps in the app.</p>
+  <ol>
+    <li>Open the Shortcuts app, go to Automation, and tap New Automation (or + at the top).</li>
+    <li>Choose "Wallet". On older iOS it's called "Transaction".</li>
+    <li>Select every card you pay with. Leave categories and merchants on Any.</li>
+    <li>Choose "Run Immediately". Turn off "Notify When Run" if you don't want a banner. Tap Next.</li>
+    <li>Choose New Blank Automation, search for Sortd, and add the "Log Purchase" action.</li>
+    <li>Fill in the three fields: tap Merchant and pick Shortcut Input › Merchant. Do the same for Amount › Amount, and Card › Card or Pass.</li>
+    <li>Tap Done. Next time you pay with Apple Pay, the purchase shows up in Sortd within a second or two.</li>
+  </ol>
+  <p class="note">Only in-store Apple Pay taps trigger this automation. Online and in-app purchases can come in from your email receipts if you connect Gmail. If Apple Pay sends a purchase without an amount, Sortd still saves it and marks it "Add amount".</p>
+
+  <h2>How do I connect Gmail?</h2>
+  <p>Gmail is optional. In Sortd, go to Settings › Email Receipts › Connect Gmail, read the short explanation, and tap "Continue with Google". Sign in and allow Sortd to read your email. Sortd can only read; it can't send, delete or change anything.</p>
+  <p>Sortd then searches for receipts and bank alerts from the last 120 days and adds them. After that it checks for new ones when you open the app, or when you tap Sync Now.</p>
+
+  <h3>Google says the app isn't verified</h3>
+  <p>While Sortd is being reviewed by Google, Google shows a warning that the app hasn't been verified. During this testing period:</p>
+  <ul>
+    <li>Only Gmail accounts added as testers can connect.</li>
+    <li>To continue past the warning, tap "Advanced", then the link to go on to Sortd.</li>
+    <li>Google may end access after 7 days. If Sortd says Google access has ended, disconnect that Gmail and connect it again.</li>
+  </ul>
+
+  <h2>Why was a receipt missed?</h2>
+  <ul>
+    <li><strong>No amount in the email.</strong> Sortd only adds a purchase when it can find the total in the email text. It never guesses an amount.</li>
+    <li><strong>The receipt is only a link.</strong> Some emails just say "view your receipt" and link to a website. Sortd reads the email itself, not linked pages, so there's nothing to read.</li>
+    <li><strong>It didn't look like a receipt.</strong> Sortd searches for emails Gmail files under Purchases, or with subjects like "receipt", "invoice", "order confirmation", "payment received" or "refund". Emails in Gmail's Promotions or Social tabs, and marketing subjects (sales, discounts, newsletters), are skipped.</li>
+    <li><strong>It's too old.</strong> The first sync looks back 120 days.</li>
+  </ul>
+  <p>You can always add a purchase by hand.</p>
+
+  <h2>Which last 4 digits should I enter for a card?</h2>
+  <p>Sortd matches bank emails and receipts to a card by its last 4 digits. There can be two numbers:</p>
+  <ul>
+    <li><strong>Card number:</strong> the last 4 digits printed on your card or shown in your bank's app. Bank emails usually show this one.</li>
+    <li><strong>Apple Pay number (Device Account Number):</strong> Apple Pay pays with its own number, so receipts for Apple Pay purchases often show this instead. Find it in Wallet › your card › ••• › Card Details › Device Account Number.</li>
+  </ul>
+  <p>Add both in Settings › Cards so every receipt finds the right card. Sortd only ever asks for the last 4 digits, never the full number. Apple Pay taps from the Shortcuts automation are matched by the card's name in Wallet instead.</p>
+
+  <h2>How do currencies work?</h2>
+  <ul>
+    <li><strong>Purchase currency</strong> follows your iPhone's time zone, so spending while you travel is recorded in the local currency.</li>
+    <li><strong>Totals</strong> are shown in your home currency. Change it in Settings › Currency › "Totals shown in".</li>
+    <li>Purchases in other currencies are converted using that day's European Central Bank rate, downloaded from frankfurter.dev. On weekends and holidays the most recent earlier rate is used. Tap Update Exchange Rates if a conversion is missing.</li>
+  </ul>
+  <p>Converted amounts are estimates. Your bank's rate and fees may differ.</p>
+
+  <h2>How do I delete my data?</h2>
+  <ul>
+    <li><strong>Everything:</strong> Settings › Your Data › Delete All Data. This removes every purchase, card, budget and setting from your iPhone and disconnects Gmail. It can't be undone.</li>
+    <li><strong>One Gmail account:</strong> Settings › Email Receipts, tap the account, then Disconnect. You can also delete the purchases only that account added.</li>
+    <li><strong>A copy first:</strong> Settings › Your Data › Export Purchases (CSV).</li>
+  </ul>
+  <p>Your data is only on your iPhone, so we can't delete it for you, and we can't restore it after you delete it.</p>
+
+  <h2>Contact</h2>
+  <p>Email [CONTACT EMAIL]. Please say which iPhone and iOS version you have. Don't send screenshots showing full card numbers or bank details.</p>
+</main>
+<footer>
+  <p><a href="index.html">Home</a> · <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Use</a></p>
+  <p>Sortd is made by [DEVELOPER / COMPANY NAME].</p>
+</footer>
+</body>
+</html>
