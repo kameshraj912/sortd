@@ -54,7 +54,7 @@ struct OnboardingView: View {
         }
         .background(Color.page)
         .sheet(item: $editing) { CardEditor(original: $0) }
-        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
+        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }

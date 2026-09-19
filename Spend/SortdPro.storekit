@@ -1,0 +1,122 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : "https://sortd.page/privacy"
+      }
+    ]
+  },
+  "identifier" : "5B6D2E1A",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "99.99",
+      "familyShareable" : true,
+      "internalID" : "6755000003",
+      "localizations" : [
+        {
+          "description" : "Every Pro feature, paid once.",
+          "displayName" : "Sortd Pro Lifetime",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.kameshraj.spend.pro.lifetime",
+      "referenceName" : "Sortd Pro Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6755000000",
+    "_developerTeamID" : "7CLGYQ9P3L",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500000",
+      "localizations" : [
+        {
+          "description" : "",
+          "displayName" : "Sortd Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "Sortd Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "49.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "6755000002",
+          "introductoryOffer" : {
+            "internalID" : "6755000102",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P2W"
+          },
+          "localizations" : [
+            {
+              "description" : "Every Pro feature, billed yearly.",
+              "displayName" : "Sortd Pro Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.kameshraj.spend.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Sortd Pro Yearly",
+          "subscriptionGroupID" : "21500000",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "6.99",
+          "familyShareable" : true,
+          "groupNumber" : 2,
+          "internalID" : "6755000001",
+          "localizations" : [
+            {
+              "description" : "Every Pro feature, billed monthly.",
+              "displayName" : "Sortd Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.kameshraj.spend.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Sortd Pro Monthly",
+          "subscriptionGroupID" : "21500000",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
