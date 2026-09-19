@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Reel 2 – PSA</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .psa { background: #0a0a0b; }
+  .frame { position: absolute; left: 34px; right: 34px; top: 170px; bottom: 170px; border: 1.5px solid rgba(255,255,255,.35); }
+  .frame::before { content: ""; position: absolute; inset: 6px; border: 1px solid rgba(255,255,255,.18); }
+  .serif { font-family: Georgia, "Times New Roman", serif; font-weight: 400; letter-spacing: 0; }
+  .ttl { top: 390px; font-size: 25px; letter-spacing: .22em; line-height: 1.6; }
+  .ttl small { display: block; font-size: 14px; letter-spacing: .3em; opacity: .6; margin-top: 10px; }
+  .p1 { top: 330px; left: 60px; right: 60px; font-size: 36px; line-height: 1.25; }
+  .p2 { top: 560px; left: 60px; right: 60px; font-size: 25px; font-style: italic; opacity: .7; }
+  .dim { background: #000; }
+  .banner { top: 160px; }
+  .banner p { font-size: 17px; }
+  .under { text-decoration: underline; text-decoration-color: var(--orange); text-decoration-thickness: 4px; text-underline-offset: 5px; }
+</style></head>
+<body data-duration="17"><div id="stage">
+
+  <div class="layer" id="rec">
+    <img class="shot" id="shot" src="assets/recurring-light.jpg" alt="">
+    <div class="layer dim" id="dim"></div>
+    <div class="cap md" id="c1" style="top:640px"><span class="pill">Sortd finds anything that repeats, and what it costs you a month.</span></div>
+    <div class="cap md" id="c2" style="top:660px"><span class="pill">A heads-up the day <span class="under">before</span> it charges.</span></div>
+  </div>
+  <div class="banner" id="banner"><img src="assets/AppIcon.png" alt="">
+    <div style="flex:1"><div class="meta"><span>SORTD</span><span>9:00</span></div>
+    <p><b>Netflix tomorrow</b><br>$18.99 on your card</p></div></div>
+
+  <div class="layer psa" id="psa">
+    <div class="layer" id="psaIn">
+      <div class="frame"></div>
+      <p class="cap serif ttl" id="t0">A PUBLIC SERVICE<br>ANNOUNCEMENT<small>PLEASE STAND BY</small></p>
+      <p class="cap serif p1" id="t1">Somewhere, a subscription you forgot about is charging you.</p>
+      <p class="cap serif p2" id="t2">(You have at least one. Everyone does.)</p>
+    </div>
+  </div>
+
+</div>
+<script src="engine.js"></script>
+<script>
+  // 1. The PSA
+  show('#psa', 0, 7.0, 'cut', 'cut');
+  tw('#psaIn', 0, 7, { s: 1.06 }, { s: 1 }, 'lin');
+  show('#t0', .15, 2.2, 'fade');
+  show('#t1', 2.5, null, 'fade');
+  show('#t2', 4.6, null, 'fade');
+  // 2. The app
+  tw('#shot', 7.3, 11.2, { y: -213 }, { y: 0 }, 'inout');
+  show('#c1', 7.4, 11.4, 'pop');
+  tw('#dim', 11.6, 12.0, { o: .35 }, { o: 0 }, 'lin');
+  tw('#banner', 11.9, 12.5, { y: 0, s: 1, o: 1 }, { y: -190, s: .92, o: 0 }, 'back');
+  show('#c2', 12.5, null, 'pop');
+  // 3. End
+  endCard(14.6, "This announcement was paid for by nobody. We don't have a budget.");
+  seek(0);
+</script>
+</body></html>

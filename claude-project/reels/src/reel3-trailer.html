@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Reel 3 – trailer</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .trailer { background: #000; }
+  .paper { position: absolute; left: 145px; top: 250px; width: 250px; background: #f3efe6; color: #222; font-family: Menlo, ui-monospace, monospace; font-size: 13px;
+    padding: 20px 18px 26px; display: grid; gap: 6px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+  .paper b { text-align: center; font-size: 20px; font-family: inherit; }
+  .paper > span { text-align: center; color: #777; font-size: 11px; }
+  .paper hr { border: 0; border-top: 1px dashed #aaa; margin: 4px 0; }
+  .paper div { display: flex; justify-content: space-between; }
+  .paper .tot { font-weight: 700; }
+  .crumple { position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(115deg, transparent 30%, rgba(0,0,0,.12) 31%, transparent 40%), linear-gradient(60deg, transparent 55%, rgba(0,0,0,.1) 56%, transparent 66%),
+                linear-gradient(170deg, rgba(255,255,255,.25), transparent 50%, rgba(0,0,0,.15)); }
+  .vig { background: radial-gradient(60% 45% at 50% 45%, transparent, rgba(0,0,0,.92)); }
+  .big { font-family: Georgia, serif; font-weight: 400; font-size: 30px; letter-spacing: .16em; line-height: 1.35; top: 430px; text-shadow: 0 2px 20px #000; }
+  .flash { background: #fff; }
+  .scan { background: #0d0d0f; }
+  .cam { position: absolute; left: 0; right: 0; top: 0; height: 530px; background: radial-gradient(120% 80% at 50% 45%, #3a3530, #151412 70%); overflow: hidden; }
+  .cam .paper { left: 150px; top: 150px; width: 240px; transform: rotate(-4deg); }
+  .corners { position: absolute; left: 120px; right: 120px; top: 120px; height: 370px; border-radius: 12px;
+    background:
+      linear-gradient(#f5a623,#f5a623) left top/22% 4px, linear-gradient(#f5a623,#f5a623) left top/4px 16%,
+      linear-gradient(#f5a623,#f5a623) right top/22% 4px, linear-gradient(#f5a623,#f5a623) right top/4px 16%,
+      linear-gradient(#f5a623,#f5a623) left bottom/22% 4px, linear-gradient(#f5a623,#f5a623) left bottom/4px 16%,
+      linear-gradient(#f5a623,#f5a623) right bottom/22% 4px, linear-gradient(#f5a623,#f5a623) right bottom/4px 16%;
+    background-repeat: no-repeat; background-color: rgba(245,166,35,.07); }
+  .beam { position: absolute; left: 120px; right: 120px; top: 120px; height: 3px; background: #f5a623; box-shadow: 0 0 18px 5px rgba(245,166,35,.6); }
+  .found { position: absolute; left: 0; right: 0; bottom: 0; height: 470px; background: #f2f2f7; color: #111113; border-radius: 30px 30px 0 0; padding: 26px 26px 0; }
+  .fh { font-size: 15px; font-weight: 700; color: #8e8e93; margin-bottom: 10px; }
+  .fr { display: flex; justify-content: space-between; padding: 14px 0; border-top: .5px solid rgba(128,128,136,.35); font-size: 19px; font-weight: 600; }
+  .fr span { color: #8e8e93; font-weight: 500; }
+  .dot { display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #e5579a; margin-right: 7px; }
+</style></head>
+<body data-duration="16"><div id="stage">
+
+  <div class="layer scan" id="scan">
+    <div class="cam">
+      <div class="paper"><b>KMART</b><span>Melbourne Central</span><hr>
+        <div><span>Storage box</span><span>18.00</span></div><div><span>Desk lamp</span><span>20.00</span></div><hr>
+        <div class="tot"><span>TOTAL</span><span>38.00</span></div><div><span>VISA ••1111</span><span>21/09</span></div></div>
+      <div class="corners" id="corners"></div>
+      <div class="beam" id="beam"></div>
+    </div>
+    <div class="found" id="found">
+      <p class="fh">Found on the receipt</p>
+      <div class="fr" id="f1"><span>Shop</span>Kmart</div>
+      <div class="fr" id="f2"><span>Total</span>$38.00</div>
+      <div class="fr" id="f3"><span>Date</span>21 Sep</div>
+      <div class="fr" id="f4"><span>Card</span>Everyday ••1111</div>
+      <div class="fr" id="f5"><span>Category</span><em style="font-style:normal"><i class="dot"></i>Shopping</em></div>
+    </div>
+    <div class="cap md" id="c1" style="top:160px"><span class="pill">…just reads them.</span></div>
+    <div class="cap md" id="c2" style="top:160px"><span class="pill">Shop, total, date, card. Filled in for you to check.</span></div>
+  </div>
+
+  <div class="layer trailer" id="tr">
+    <div class="layer" id="push">
+      <div class="paper" style="transform: rotate(-9deg) skewY(2deg); filter: brightness(.55) contrast(1.2)"><b>KMART</b><span>Melbourne Central</span><hr>
+        <div><span>Storage box</span><span>18.00</span></div><div><span>Desk lamp</span><span>20.00</span></div><hr>
+        <div class="tot"><span>TOTAL</span><span>38.00</span></div><div><span>VISA ••1111</span><span>21/09</span></div><div class="crumple"></div></div>
+    </div>
+    <div class="layer vig"></div>
+    <p class="cap big" id="w1">IN A WORLD…</p>
+    <p class="cap big" id="w2">WHERE NO ONE<br>KEEPS THEIR<br>RECEIPTS…</p>
+    <p class="cap big" id="w3">ONE APP…</p>
+  </div>
+
+  <div class="layer" id="after" style="background:#111113">
+    <p class="cap lg" id="a1" style="top:330px">The photo isn't saved.</p>
+    <p class="cap md muted" id="a2" style="top:420px">We're not building a shrine to your Kmart runs.</p>
+  </div>
+
+  <div class="layer flash" id="flash"></div>
+
+</div>
+<script src="engine.js"></script>
+<script>
+  // 1. Trailer
+  show('#tr', 0, 4.75, 'cut', 'cut');
+  tw('#push', 0, 4.75, { s: 1.3, y: 20 }, { s: 1, y: 0 }, 'lin');
+  show('#w1', .3, 1.7, 'fade'); show('#w2', 1.9, 3.2, 'fade'); show('#w3', 3.4, null, 'fade');
+  tw('#flash', 4.7, 4.75, { o: 1 }, { o: 0 }, 'lin'); tw('#flash', 4.75, 5.2, { o: 0 }, {}, 'out');
+  // 2. The scan
+  show('#c1', 4.9, 6.9, 'pop');
+  tw('#corners', 5.0, 6.8, { s: 1, o: 1 }, { s: 1.08, o: .5 }, 'inout');
+  tw('#beam', 5.1, 6.6, { y: 366 }, { y: 0 }, 'inout'); tw('#beam', 6.6, 6.8, { o: 0 }, {}, 'lin');
+  tw('#found', 6.7, 7.2, { y: 0 }, { y: 470 }, 'out');
+  ['#f1','#f2','#f3','#f4','#f5'].forEach((s, i) => show(s, 7.2 + i * .18, null, 'up'));
+  show('#c2', 7.3, null, 'pop');
+  // 3. The photo
+  show('#after', 10.8, null, 'cut');
+  show('#a1', 10.9, null, 'up'); show('#a2', 11.6, null, 'up');
+  // 4. End
+  endCard(13.5, 'Sortd. Not in cinemas.');
+  seek(0);
+</script>
+</body></html>
