@@ -601,3 +601,11 @@ sup { font-size: .6em; }
   .site-footer .wrap { flex-direction: column; }
 }
 .swipe-hint { display: none; font-size: 13px; color: var(--faint); margin: -28px 0 18px; }
+
+/* Easter-egg pop-ups: small, centred, scale with the screen */
+.toast { width: max-content; max-width: min(360px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 16px;
+  font-size: clamp(13px, 3.4vw, 14px); line-height: 1.35; font-weight: 600; bottom: max(20px, env(safe-area-inset-bottom)); }
+.egg::after { white-space: normal; width: max-content; max-width: min(240px, 70vw); text-align: center; font-size: 12.5px; }
+@media (max-width: 700px) { .confetti { width: 10px; height: 4px; } }
+
+@media (hover: none) { .egg::after { display: none; } }

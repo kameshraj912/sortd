@@ -52,12 +52,16 @@
       setTimeout(function () { t.classList.remove("show"); setTimeout(function () { t.remove(); }, 500); }, 3200);
     }
     var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Hover notes: on touch screens a tap shows them as a pop-up instead.
+    document.querySelectorAll(".egg").forEach(function (el) {
+      el.addEventListener("click", function () { if (window.matchMedia("(hover: none)").matches) toast(el.dataset.egg); });
+    });
     // Tap the logo five times.
     var taps = 0, tapTimer;
     var logo = document.querySelector(".site-header .brand");
     if (logo) logo.addEventListener("click", function (e) {
       taps++; clearTimeout(tapTimer); tapTimer = setTimeout(function () { taps = 0; }, 1500);
-      if (taps >= 5) { e.preventDefault(); taps = 0; toast("Five taps. That's more than you've checked your budget this month."); }
+      if (taps >= 5) { e.preventDefault(); taps = 0; toast("Five taps. More than you've checked your budget this month."); }
       else if (taps > 1) e.preventDefault();
     });
     // ↑ ↑ ↓ ↓ ← → ← → B A
@@ -66,7 +70,7 @@
       var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       pos = k === code[pos] ? pos + 1 : (k === code[0] ? 1 : 0);
       if (pos === code.length) {
-        pos = 0; toast("Cheat code accepted. Your spending is still your spending.");
+        pos = 0; toast("Cheat code accepted. Your spending is still real.");
         if (calm) return;
         var colours = ["#f0643d", "#f5a623", "#7b6bf0", "#2bb07a"];
         for (var i = 0; i < 90; i++) {
@@ -81,7 +85,7 @@
     // "Coming soon" button.
     var soon = document.querySelector(".soon-btn"), soonHits = 0;
     if (soon) {
-      var soonLines = ["It's not out yet. Clicking harder won't help.", "Still not out. We checked.", "Okay, now you're just clicking for fun. Join the beta instead."];
+      var soonLines = ["It's not out yet. Clicking harder won't help.", "Still not out. We checked.", "Now you're just clicking for fun. Join the beta."];
       var hitSoon = function () { toast(soonLines[Math.min(soonHits++, soonLines.length - 1)]); };
       soon.addEventListener("click", hitSoon);
       soon.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hitSoon(); } });
@@ -101,7 +105,7 @@
     document.addEventListener("keydown", function (e) {
       if (e.key.length !== 1 || /input|textarea/i.test(e.target.tagName)) return;
       typed = (typed + e.key.toLowerCase()).slice(-6);
-      if (typed === "coffee") toast("☕ $5.50 logged. (Not really. This is a website.)");
+      if (typed === "coffee") toast("☕ $5.50 logged. (Not really. It's a website.)");
     });
     // Tap the receipt total.
     var total = document.querySelector(".receipt .total");
@@ -119,13 +123,13 @@
     // Flip the theme too many times.
     var flips = 0;
     if (btn) btn.addEventListener("click", function () {
-      if (++flips === 8) toast("Light, dark, light, dark. Now you know how our subscriptions feel.");
+      if (++flips === 8) toast("Light, dark, light, dark. Pick one.");
     });
     // Scroll all the way down.
     var bottomSaid = false;
     window.addEventListener("scroll", function () {
       if (!bottomSaid && window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) {
-        bottomSaid = true; toast("You scrolled to the bottom. That's more commitment than most gym memberships get.");
+        bottomSaid = true; toast("You made it to the bottom. More commitment than a gym membership.");
       }
     }, { passive: true });
 
