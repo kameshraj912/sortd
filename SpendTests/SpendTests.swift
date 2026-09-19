@@ -581,3 +581,25 @@ struct GenericReceiptTests {
         #expect(!EmailParsers.knowsSender("Fresh Mart <orders@freshmart.example>"))
     }
 }
+
+struct AppLockTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func locksAfterMoreThanAMinute() {
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-61), now: now, enabled: true))
+    }
+
+    @Test func staysOpenAfterThirtySeconds() {
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-30), now: now, enabled: true))
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-60), now: now, enabled: true))
+    }
+
+    @Test func locksOnLaunch() {
+        #expect(AppLock.shouldLock(lastActive: nil, now: now, enabled: true))
+    }
+
+    @Test func neverLocksWhenOff() {
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3600), now: now, enabled: false))
+        #expect(!AppLock.shouldLock(lastActive: nil, now: now, enabled: false))
+    }
+}

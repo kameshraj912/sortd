@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var confirmingDelete = false
     @State private var csvFile: URL?
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
+    @AppStorage(AppLock.enabledKey) private var lockEnabled = false
 
     var body: some View {
         NavigationStack {
@@ -136,6 +137,27 @@ struct SettingsView: View {
                     } label: {
                         LabeledContent("Learned Categories", value: "\(rules.count)")
                     }
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { lockEnabled },
+                        set: { on in
+                            guard on else { lockEnabled = false; return }
+                            // Check it works before turning it on.
+                            Task {
+                                if await AppLock.authenticate(reason: "Turn on the lock for Sortd.") {
+                                    lockEnabled = true
+                                }
+                            }
+                        }
+                    )) {
+                        Label("Require \(AppLock.methodName)", systemImage: AppLock.methodSymbol)
+                    }
+                } header: {
+                    BoldHeader("Security")
+                } footer: {
+                    Text("Sortd locks when you open it, and when you come back after more than a minute.")
                 }
 
                 Section {
