@@ -21,6 +21,8 @@ struct DebugScreenHost: View {
             case "add": Color.page.sheet(isPresented: .constant(true)) { AddTransactionView() }
             case "budget": Color.page.sheet(isPresented: .constant(true)) { BudgetSheet(budget: $budget) }
             case "setup": SetupGuideView()
+            case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
+            case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()
             case "card": CardDetailView(card: Card.mine.first ?? .other)
             case "category": CategoryDetailView(category: .housing)

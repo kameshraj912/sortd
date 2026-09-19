@@ -67,6 +67,7 @@ struct SpendApp: App {
             UserDefaults.standard.set(true, forKey: OnboardingView.doneKey)
         }
         if let style = env["SPEND_STYLE"] { UserDefaults.standard.set(style, forKey: "cardStyle") }
+        if let budget = env["SPEND_BUDGET"].flatMap(Double.init) { UserDefaults.standard.set(budget, forKey: "monthlyBudget") }
         #endif
     }
 
