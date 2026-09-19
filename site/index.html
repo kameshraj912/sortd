@@ -2,35 +2,393 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sortd</title>
-<meta name="description" content="Sortd is an iPhone app that keeps track of what you spend.">
-<link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sortd Money – Apple Pay spending tracker for iPhone</title>
+<meta name="description" content="Sortd Money is an iPhone app that logs your Apple Pay taps and email receipts for you, sorts your spending into categories, tracks subscriptions and works with 30+ currencies. No bank login.">
+<link rel="canonical" href="https://sortd.page/">
+<meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sortd Money">
+<meta property="og:title" content="Sortd Money – Apple Pay spending tracker for iPhone">
+<meta property="og:description" content="Pay with Apple Pay and the purchase shows up in Sortd by itself. Receipts, subscriptions and every currency in one list, stored on your iPhone.">
+<meta property="og:url" content="https://sortd.page/">
+<meta property="og:image" content="https://sortd.page/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css?v=5">
+<script src="site.js?v=6"></script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebSite","name":"Sortd Money","alternateName":"Sortd","url":"https://sortd.page/"},
+ {"@type":"MobileApplication","name":"Sortd Money","alternateName":"Sortd","operatingSystem":"iOS 26 or later","applicationCategory":"FinanceApplication","description":"An iPhone spending tracker that logs Apple Pay taps and email receipts by itself, tracks subscriptions and converts 30+ currencies. Data stays on the device.","url":"https://sortd.page/","image":"https://sortd.page/img/og.png","author":{"@type":"Person","name":"Kameshraj Gnanaprakasam"}},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"Does Sortd connect to my bank?","acceptedAnswer":{"@type":"Answer","text":"No. Purchases come from your Apple Pay taps, email receipts if you connect Gmail, receipt photos, or what you add yourself."}},
+  {"@type":"Question","name":"How does Sortd log Apple Pay purchases automatically?","acceptedAnswer":{"@type":"Answer","text":"You set up one automation in Apple's Shortcuts app. After that, every in-store Apple Pay tap is sent to Sortd with the shop, amount and card."}},
+  {"@type":"Question","name":"Does it work with more than one currency?","acceptedAnswer":{"@type":"Answer","text":"Yes. Purchases keep their own currency and are converted to your home currency at that day's European Central Bank rate."}}
+ ]}
+]}
+</script>
 </head>
 <body>
-<header>
-  <a class="wordmark" href="index.html">sortd<span class="bar" aria-hidden="true"><span></span><span></span><span></span><span></span></span></a>
-  <nav><a href="privacy.html">Privacy</a><a href="support.html">Support</a><a href="terms.html">Terms</a></nav>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Sortd Money home"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
+    <nav aria-label="Main">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#privacy">Privacy</a>
+      <a class="hide-sm" href="#pricing">Pricing</a>
+      <a class="hide-sm" href="support">Support</a>
+      <a class="nav-cta" href="mailto:support@sortd.page?subject=Sortd%20beta">Join the beta</a>
+      <button class="theme-btn" type="button" data-mode="system" aria-label="Theme: match device">
+        <svg class="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </nav>
+  </div>
 </header>
-<main>
-  <h1>See where your money goes.</h1>
-  <p>Sortd is an iPhone app that keeps a list of what you spend and sorts it into categories.</p>
 
-  <h2>What it does</h2>
-  <ul>
-    <li><strong>Logs Apple Pay taps.</strong> You set up a short automation in Apple's Shortcuts app once. After that, each in-store Apple Pay tap is added to Sortd, even when the app is closed.</li>
-    <li><strong>Reads receipts from Gmail, if you want.</strong> Sortd can search your Gmail for receipts and bank alerts and add them as purchases. The emails are read on your iPhone. Gmail is optional.</li>
-    <li><strong>Handles many currencies.</strong> Purchases in other currencies are converted to your home currency using that day's European Central Bank rate.</li>
-    <li><strong>Spots repeat payments.</strong> Sortd notices payments that repeat, like subscriptions, and shows when the next one is due. It can remind you the day before.</li>
-  </ul>
-  <p>Your data stays on your iPhone. There's no account to make and no Sortd server.</p>
+<main id="main">
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow"><span class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></span>SPENDING TRACKER FOR IPHONE</p>
+        <h1>Your spending, logged by itself.</h1>
+        <p class="lead">Tap to pay. Sortd writes it down: the shop, the amount, the card. You were never going to type in that <span class="egg" tabindex="0" data-egg="It was a flat white. We checked.">$5.50 coffee</span> anyway. (Nobody does. That's why most budgets die by February.)</p>
+        <div class="cta">
+          <span class="btn btn-primary soon-btn" role="button" tabindex="0" aria-disabled="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.59 1.1 8.75.73 1.05 1.6 2.24 2.73 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.33-3.52zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.08 1.96-.49 2.56-1.21z"/></svg>Coming soon on the App Store</span>
+          <a class="btn btn-ghost" href="mailto:support@sortd.page?subject=Sortd%20beta">Join the beta</a>
+        </div>
+        <p class="small-note">No bank login. No account. Your data stays on your phone (we don't even have a server to put it on).</p>
+      </div>
 
-  <h2>Coming to the App Store</h2>
-  <p>Sortd is not on the App Store yet. This page will link to it when it is.</p>
+      <figure class="demo" style="margin:0 auto">
+        <div class="iphone lg">
+          <span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power anim"></span><span class="side camera"></span>
+          <div class="scr" role="img" aria-label="Animation: someone pays with Apple Pay, a Sortd notification says the coffee was logged, and the purchase appears at the top of Sortd's list.">
+            <span class="island"></span>
+            <div class="layer app anim">
+              <div class="status"><span>9:41</span><span class="icons"><svg viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.6" y="5" width="3" height="6" rx="1"/><rect x="9.2" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.8" y="0" width="3" height="11" rx="1"/></svg><svg viewBox="0 0 18 13" aria-hidden="true"><path d="M9 2.6c2.4 0 4.6.9 6.3 2.5l1.3-1.3A10.6 10.6 0 0 0 9 .8 10.6 10.6 0 0 0 1.4 3.8l1.3 1.3A8.8 8.8 0 0 1 9 2.6zm0 3.6c1.4 0 2.8.5 3.8 1.5l1.3-1.3A7.2 7.2 0 0 0 9 4.4 7.2 7.2 0 0 0 3.9 6.4l1.3 1.3c1-1 2.4-1.5 3.8-1.5zm0 3.6c.5 0 1 .2 1.3.5L9 12.6 7.7 10.3c.3-.3.8-.5 1.3-.5z"/></svg><svg viewBox="0 0 27 13" aria-hidden="true"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="20" height="9" rx="2"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" opacity=".45"/></svg></span></div>
+              <h4>Activity</h4>
+              <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+              <div class="day"><span>Today</span><span>$43.10</span></div>
+              <div class="rows">
+                <div class="row new anim"><div class="ic" style="background:#fdebe4">☕️</div><div class="t"><b>Seven Seeds Coffee</b><span>Eating Out · Everyday</span></div><div class="a">-$5.50</div></div>
+                <div class="row"><div class="ic" style="background:#fdebe4">🥡</div><div class="t"><b>Uber Eats</b><span>Food Delivery · Rewards</span></div><div class="a">-$31.40</div></div>
+                <div class="row"><div class="ic" style="background:#e3f5ec">🛒</div><div class="t"><b>Woolworths</b><span>Groceries · Everyday</span></div><div class="a">-$6.20</div></div>
+              </div>
+              <div class="day"><span>Yesterday</span><span>$100.45</span></div>
+              <div class="rows">
+                <div class="row"><div class="ic" style="background:#fdebe4">🍜</div><div class="t"><b>DoorDash</b><span>Food Delivery · Rewards</span></div><div class="a">-$42.15</div></div>
+                <div class="row"><div class="ic" style="background:#e3f5ec">🛒</div><div class="t"><b>Coles</b><span>Groceries · Everyday</span></div><div class="a">-$58.30</div></div>
+                <div class="row"><div class="ic" style="background:#ebe8fd">🎬</div><div class="t"><b>Hoyts</b><span>Entertainment · Rewards</span></div><div class="a">-$24.50</div></div>
+              </div>
+            </div>
+            <div class="layer lock anim">
+              <div class="status"><span></span><span class="icons"><svg viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.6" y="5" width="3" height="6" rx="1"/><rect x="9.2" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.8" y="0" width="3" height="11" rx="1"/></svg><svg viewBox="0 0 18 13" aria-hidden="true"><path d="M9 2.6c2.4 0 4.6.9 6.3 2.5l1.3-1.3A10.6 10.6 0 0 0 9 .8 10.6 10.6 0 0 0 1.4 3.8l1.3 1.3A8.8 8.8 0 0 1 9 2.6zm0 3.6c1.4 0 2.8.5 3.8 1.5l1.3-1.3A7.2 7.2 0 0 0 9 4.4 7.2 7.2 0 0 0 3.9 6.4l1.3 1.3c1-1 2.4-1.5 3.8-1.5zm0 3.6c.5 0 1 .2 1.3.5L9 12.6 7.7 10.3c.3-.3.8-.5 1.3-.5z"/></svg><svg viewBox="0 0 27 13" aria-hidden="true"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="20" height="9" rx="2"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" opacity=".45"/></svg></span></div>
+              <div class="date">Monday 21 September</div>
+              <div class="time">9:41</div>
+              <div class="hint">Double-click the side button to pay</div>
+              <div class="pay anim">
+                <div class="applepay"><svg viewBox="0 0 24 24"  aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.59 1.1 8.75.73 1.05 1.6 2.24 2.73 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.33-3.52zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.08 1.96-.49 2.56-1.21z"/></svg>Pay</div>
+                <div class="cardart anim"><b>Everyday</b><i>•••• 4821</i></div>
+                <div class="state">
+                  <div class="hold anim"><svg class="nfc anim" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 0 7M12 6a8.5 8.5 0 0 1 0 12M15.5 3.5a12 12 0 0 1 0 17"/></svg>Hold Near Reader</div>
+                  <div class="done anim" style="opacity:0"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20"/><path class="anim" d="M12 20.5l5.5 5.5L28.5 14"/></svg>Done</div>
+                </div>
+              </div>
+            </div>
+            <div class="banner anim">
+              <img src="img/favicon.png" alt="">
+              <div style="flex:1;min-width:0"><div class="meta"><span>SORTD</span><span>now</span></div><p><b>Logged $5.50</b> at Seven Seeds Coffee · Eating Out</p></div>
+            </div>
+            <div class="finger anim"></div>
+          </div>
+        </div>
+        <figcaption><ol class="demo-steps" aria-label="What happens when you pay"><li>1 · You pay</li><li>2 · Sortd logs it</li><li>3 · It's in your list</li></ol></figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap receipt-row">
+      <div class="reveal">
+        <div class="bars" style="margin-bottom:16px" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <h2>Everything ends up in one list.</h2>
+        <p class="lead" style="max-width:42ch;margin-bottom:0">If a tap and its email receipt are the same coffee, Sortd counts it once. (Your spreadsheet never figured that out.)</p>
+        <div class="sources">
+          <div class="source" style="--c:var(--orange)"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 0 7M12 6a8.5 8.5 0 0 1 0 12M15.5 3.5a12 12 0 0 1 0 17"/></svg></div><div><b>Apple Pay taps</b><span>Logged by themselves within a few seconds.</span></div></div>
+          <div class="source" style="--c:var(--violet)"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg></div><div><b>Email receipts</b><span>Uber Eats, DoorDash, app stores and bank alerts, read from Gmail if you connect it.</span></div></div>
+          <div class="source" style="--c:var(--green)"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.5" r="3.5"/></svg></div><div><b>Paper receipts</b><span>Take a photo. Sortd reads the shop and total.</span></div></div>
+        </div>
+      </div>
+      <div class="receipt-wrap reveal d1">
+        <div class="receipt" aria-label="Example: four purchases from today and where each one came from">
+          <div class="head"><b>sortd</b><div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div>MON 21 SEP · TODAY</div></div>
+          <hr>
+          <div class="line" style="--c:var(--orange)"><b>Seven Seeds Coffee</b><span>5.50</span><em>Apple Pay tap</em></div>
+          <div class="line" style="--c:var(--violet)"><b>Uber Eats</b><span>31.40</span><em>Gmail receipt</em></div>
+          <div class="line" style="--c:var(--green)"><b>Kmart</b><span>38.00</span><em>Photo of receipt</em></div>
+          <div class="line" style="--c:var(--amber)"><b>Spotify</b><span>13.99</span><em>Monthly · next one 10 Oct</em></div>
+          <hr>
+          <div class="total" role="button" tabindex="0" title="Go on, tap it"><span>TOTAL</span><span>$88.89</span></div>
+          <div class="thanks">Nothing typed by hand</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>Everything it does.</h2>
+        <p>Seven jobs you were never going to do yourself. Tap through them.</p>
+      </div>
+      <div class="tour reveal d1">
+        <div class="tabs" role="tablist" aria-label="Features">
+<button type="button" role="tab" id="tab-applepay" aria-controls="panel-applepay" aria-selected="true">Apple Pay</button>
+<button type="button" role="tab" id="tab-gmail" aria-controls="panel-gmail" aria-selected="false" tabindex="-1">Gmail receipts</button>
+<button type="button" role="tab" id="tab-camera" aria-controls="panel-camera" aria-selected="false" tabindex="-1">Receipt camera</button>
+<button type="button" role="tab" id="tab-subs" aria-controls="panel-subs" aria-selected="false" tabindex="-1">Subscriptions</button>
+<button type="button" role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false" tabindex="-1">Budgets</button>
+<button type="button" role="tab" id="tab-insights" aria-controls="panel-insights" aria-selected="false" tabindex="-1">Insights</button>
+<button type="button" role="tab" id="tab-cards" aria-controls="panel-cards" aria-selected="false" tabindex="-1">Cards & currencies</button>
+        </div>
+      <div class="panel" role="tabpanel" id="panel-applepay" aria-labelledby="tab-applepay">
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--orange)">Apple Pay</p>
+          <h3 class="panel-title">Pay. It's logged.</h3>
+          <p>Set up one Shortcuts automation, once, with a picture for every step. After that every tap with your iPhone or Apple Watch lands in Sortd with the shop, amount and card. Even when the app is closed. (Yes, really. No, you don't have to open it.)</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Works with every card in Apple Wallet</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Two cards from one bank? Told apart by their Apple Pay number</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Pressing ▶ in Shortcuts is just a test. It saves nothing</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/setup-light.jpg" alt="Setup screen showing the Shortcuts step to tap, circled" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/setup-dark.jpg" alt="Setup screen showing the Shortcuts step to tap, circled" width="600" height="1304" loading="lazy"></div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-gmail" aria-labelledby="tab-gmail" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--violet)">Gmail receipts</p>
+          <h3 class="panel-title">Your inbox, finally useful.</h3>
+          <p>Connect Gmail and Sortd finds your receipts and bank alerts: Uber Eats, DoorDash, app stores, online shops. It reads them on your phone and ignores the rest of your email (including the newsletters you keep meaning to unsubscribe from).</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Read-only. It can't send, change or delete anything</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Only receipts and bank alerts are opened</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>A tap and its email receipt count as one purchase</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/gmail-light.jpg" alt="The Connect Gmail screen explaining that only receipts are read, on the iPhone, read-only" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/gmail-dark.jpg" alt="The Connect Gmail screen explaining that only receipts are read, on the iPhone, read-only" width="600" height="1304" loading="lazy"></div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-camera" aria-labelledby="tab-camera" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--green)">Receipt camera</p>
+          <h3 class="panel-title">Paper receipts, handled.</h3>
+          <p>Point the camera at a receipt. Sortd reads the shop, total, date and card and fills them in for you to check. The photo isn't saved anywhere. We're not building a shrine to your Kmart runs.</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Or pick a photo you already took</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Read on your iPhone, not in the cloud</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Uses Apple Intelligence when your iPhone has it</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr scan-demo" role="img" aria-label="Animation: the camera finds a Kmart receipt and Sortd fills in the shop, total and date.">
+  <span class="island"></span>
+  <div class="cam">
+    <div class="paper"><b>KMART</b><span>Melbourne Central</span><hr><div><span>Storage box</span><span>18.00</span></div><div><span>Desk lamp</span><span>20.00</span></div><hr><div class="tot"><span>TOTAL</span><span>38.00</span></div><span>VISA ••1111</span></div>
+    <span class="corners"></span><span class="beam"></span>
+  </div>
+  <div class="found">
+    <p class="fh">Found on the receipt</p>
+    <div class="fr"><span>Shop</span><b>Kmart</b></div>
+    <div class="fr"><span>Total</span><b>$38.00</b></div>
+    <div class="fr"><span>Card</span><b>Everyday ••1111</b></div>
+    <div class="fr"><span>Category</span><b>Shopping</b></div>
+  </div>
+</div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-subs" aria-labelledby="tab-subs" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--amber)">Subscriptions</p>
+          <h3 class="panel-title">Find the subscriptions you forgot about.</h3><p class="aside">(You have at least one. Everyone does.)</p>
+          <p>Sortd spots anything that repeats and shows what's due in the next 30 days, and what it all costs you a month. Turn on reminders and you hear about Netflix the day before it charges you, not after.</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Flags price rises</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Catches charges after you cancelled</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Works out weekly, monthly and yearly bills</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/recurring-light.jpg" alt="Recurring screen with monthly subscription cost and payments due in the next 30 days" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/recurring-dark.jpg" alt="Recurring screen with monthly subscription cost and payments due in the next 30 days" width="600" height="1304" loading="lazy"><div class="remind"><img src="img/favicon.png" alt=""><div><small>SORTD · 9:00</small><p><b>Netflix tomorrow</b> $18.99 on your card</p></div></div></div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-budget" aria-labelledby="tab-budget" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--orange)">Budgets</p>
+          <h3 class="panel-title">A budget that knows rent is coming.</h3>
+          <p>Set one number for the month. Sortd shows what's left and what you can spend each day, after the bills that haven't charged yet. Add limits for categories like eating out if you want to. Unlike your last spreadsheet, it actually updates itself.</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Left to spend, per day</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Bills still to come are counted</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Optional limits per category</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/home-light.jpg" alt="Home screen: $321 left of an $800 budget, $29 a day" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/home-dark.jpg" alt="Home screen: $321 left of an $800 budget, $29 a day" width="600" height="1304" loading="lazy"></div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-insights" aria-labelledby="tab-insights" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--violet)">Insights</p>
+          <h3 class="panel-title">This month vs last month.</h3>
+          <p>A day-by-day chart of this month next to last month. By the middle of the month you already know if you're heading over, and which category did it. (It was takeaway. It's always takeaway.)</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Spending by category</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Compare with last month</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Week, month or three months</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/insights-light.jpg" alt="Insights screen comparing this month with last month" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/insights-dark.jpg" alt="Insights screen comparing this month with last month" width="600" height="1304" loading="lazy"></div></div></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-cards" aria-labelledby="tab-cards" hidden>
+        <div class="panel-text">
+          <p class="kicker" style="--c:var(--green)">Cards & currencies</p>
+          <h3 class="panel-title">Two countries. Five cards. One app.</h3>
+          <p>Every card gets its own page. Purchases keep their own currency and convert to your home currency at that day's European Central Bank rate. Built by someone with an Australian card and a Singapore card, so it had no choice but to work.</p>
+          <ul class="checks"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>30+ currencies</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Banks in Singapore, Australia, India, Malaysia, the US and UK</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Any other bank works too</span></li></ul>
+        </div>
+        <div class="panel-visual"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/card-light.jpg" alt="A card's own page with spending, top category and recent purchases" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/card-dark.jpg" alt="A card's own page with spending, top category and recent purchases" width="600" height="1304" loading="lazy"></div></div></div>
+      </div>
+      </div>
+      <div class="also reveal">
+        <p class="group-title">Also in Sortd</p>
+        <div class="group also-grid">
+<div class="cell"><b>Face ID lock</b><span>For when a friend grabs your phone to “just check something”</span></div>
+<div class="cell"><b>Ask Siri</b><span>“How much have I spent this week?”</span></div>
+<div class="cell"><b>Categories that learn</b><span>Fix one purchase and that shop stays fixed</span></div>
+<div class="cell"><b>Refunds matched</b><span>Money back is linked to what you bought</span></div>
+<div class="cell"><b>No double counting</b><span>A tap and its receipt become one purchase</span></div>
+<div class="cell"><b>Export anytime</b><span>Every purchase as a spreadsheet</span></div>
+<div class="cell"><b>Light and dark</b><span>Follows your iPhone</span></div>
+<div class="cell"><b>Delete everything</b><span>One tap. Gone. No “are you sure you’re sure” emails</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>Knows your bank.</h2>
+        <p>Pick your bank during setup and Sortd recognises its cards. Not listed? Add it as “Other bank”. It still works, it just doesn't get a shout-out here.</p>
+      </div>
+      <div class="banks reveal d1">
+        <div class="bank-group"><p class="bg-label">🇸🇬 Singapore</p><div class="bg-chips"><span class="chip">DBS</span><span class="chip">POSB</span><span class="chip">OCBC</span><span class="chip">UOB</span><span class="chip">Standard Chartered</span><span class="chip">Citibank</span><span class="chip">HSBC</span><span class="chip">Trust</span><span class="chip">GXS</span><span class="chip">YouTrip</span></div></div>
+        <div class="bank-group"><p class="bg-label">🇦🇺 Australia</p><div class="bg-chips"><span class="chip">NAB</span><span class="chip">CommBank</span><span class="chip">ANZ</span><span class="chip">Westpac</span><span class="chip">ING</span><span class="chip">Macquarie</span><span class="chip">Up</span><span class="chip">ubank</span></div></div>
+        <div class="bank-group"><p class="bg-label">🇮🇳 India</p><div class="bg-chips"><span class="chip">HDFC Bank</span><span class="chip">ICICI Bank</span><span class="chip">SBI</span><span class="chip">Axis Bank</span><span class="chip">Kotak</span><span class="chip">IDFC First</span></div></div>
+        <div class="bank-group"><p class="bg-label">🌐 Anywhere</p><div class="bg-chips"><span class="chip">Wise</span><span class="chip">Revolut</span><span class="chip">American Express</span><span class="chip" style="color:var(--muted)">+ Malaysia, US, UK and more</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>Three minutes to set up.</h2>
+        <p>The app shows a picture for every step. If you can order a coffee, you can do this.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/cards-light.jpg" alt="Setup: picking banks by country" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/cards-dark.jpg" alt="Setup: picking banks by country" width="600" height="1304" loading="lazy"></div></div><div><span class="num">1</span><h3>Add your cards</h3><p>Pick a country, tap your bank. Two cards from the same bank? We don't judge. Sortd only asks for the last 4 digits.</p></div></div>
+        <div class="step reveal d1"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/setup-light.jpg" alt="Setup: the Shortcuts step with the button to tap circled" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/setup-dark.jpg" alt="Setup: the Shortcuts step with the button to tap circled" width="600" height="1304" loading="lazy"></div></div><div><span class="num">2</span><h3>Connect Apple Pay</h3><p>One automation in Apple's Shortcuts app. Sortd shows you every screen with the right button circled.</p></div></div>
+        <div class="step reveal d2"><div class="iphone sm"><span class="side action"></span><span class="side vol-up"></span><span class="side vol-down"></span><span class="side power"></span><span class="side camera"></span><div class="scr"><span class="island"></span><img class="light-only" src="img/activity-light.jpg" alt="Activity: purchases listed by day" width="600" height="1304" loading="lazy"><img class="dark-only" src="img/activity-dark.jpg" alt="Activity: purchases listed by day" width="600" height="1304" loading="lazy"></div></div><div><span class="num">3</span><h3>Pay like you normally do</h3><p>Each tap shows up within seconds, even when Sortd is closed. That's it. That's the routine.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>We can't sell your data. We don't have it.</h2>
+        <p>Most free money apps pay for themselves with your data. Sortd keeps everything on your iPhone, so there's nothing to sell, leak or hand over. Hackers would be very disappointed. <a href="privacy">Read the privacy policy</a></p>
+      </div>
+      <div class="pgrid reveal d1">
+        <div class="label-card">
+          <p class="lc-title">App Privacy</p>
+          <p class="lc-sub">Sortd's privacy label on the App Store</p>
+          <div class="lc-box">
+            <div class="lc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></svg></div>
+            <b>Data Not Collected</b>
+            <span>The developer does not collect any data from this app.</span>
+          </div>
+        </div>
+          <div class="pblock"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg></div><h3>Stored on your iPhone</h3><p>Your purchases, cards and settings stay on your phone. We don't have a server to send them to, even if we wanted to.</p></div>
+          <div class="pblock"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h3"/></svg></div><h3>No bank login</h3><p>Sortd never asks for your bank password. It only keeps the last 4 digits of a card, to know which card you used.</p></div>
+          <div class="pblock"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg></div><h3>Read-only Gmail</h3><p>Optional. Sortd can't send, change or delete email, and receipts are read on your phone.</p></div>
+          <div class="pblock"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></div><h3>No ads, no tracking</h3><p>No analytics, no ad networks, no “partners”. Nobody is watching you buy coffee.</p></div>
+          <div class="pblock"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/></svg></div><h3>Take it with you</h3><p>Export every purchase as a spreadsheet, or delete everything, in Settings › Your Data.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" style="padding-top:0">
+    <div class="wrap">
+      <div class="faq-head reveal">
+        <h2>Pay with money, not your data.</h2>
+        <p>No ads and no data sales means the people who use Sortd pay for it. Radical, we know. It also doesn't pay a middleman to read your bank account, so it costs about half what the big budgeting apps charge. (We checked. Twice.)</p>
+      </div>
+      <div class="plans reveal d1">
+        <div class="plan"><p class="pname">Monthly</p><p class="price">$6.99<small>/month</small></p><p class="pnote">Cancel any time in the App Store.</p></div>
+        <div class="plan best"><p class="ptag">Launch offer</p><p class="pname">Yearly</p><p class="price"><s>$49.99</s> $29.99<small>first year</small></p><p class="pnote">Then $49.99 a year. 14 days free first.</p></div>
+        <div class="plan"><p class="pname">Lifetime</p><p class="price">$99.99<small>once</small></p><p class="pnote">Pay once. Never hear from us about it again.</p></div>
+      </div>
+      <ul class="plan-includes reveal d2">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Every feature in every plan</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>14-day free trial on yearly</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Family Sharing</li>
+      </ul>
+      <p class="plan-foot reveal d2">Prices in US dollars. The App Store shows yours in your own currency.</p>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="note-card reveal">
+        <p class="note-label">Why I made Sortd</p>
+        <p>I split my time between Melbourne and Singapore, which means two currencies, several cards, and absolutely no idea where my money went each month.</p>
+        <p>Subscriptions were the worst. A few dollars here, a few dollars there, from companies I'd half forgotten about, spread across different cards, accounts and app stores. When I finally added them up, I was paying for more than I thought. Some of it I'd stopped using months ago. (Looking at you, free trial that wasn't.)</p>
+        <p>So I built Sortd for myself. Every Apple Pay tap and receipt lands in one list without me typing a thing, and every subscription shows up before it renews. I still spend too much on coffee. At least now I know exactly how much.</p>
+        <div class="sig"><span class="av">K</span><span><b>Kameshraj Gnanaprakasam</b>Founder of Sortd</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" style="padding-top:0">
+    <div class="wrap">
+      <div class="faq-head reveal">
+        <h2>Questions.</h2>
+        <p>Can't find yours? See <a href="support">Help and Support</a> or email <a href="mailto:support@sortd.page">support@sortd.page</a>. A human reads it (hi).</p>
+      </div>
+      <div class="faq reveal d1">
+        <details open><summary>Does Sortd connect to my bank?<span class="pm" aria-hidden="true"></span></summary><p>No. It never asks for your bank password, and it never will. Purchases come from your Apple Pay taps, your email receipts if you connect Gmail, receipt photos, or what you type in yourself. (Other apps want the keys to your bank. We'd rather not.)</p></details>
+        <details><summary>Which purchases are logged automatically?<span class="pm" aria-hidden="true"></span></summary><p>In-store Apple Pay taps with your iPhone or Apple Watch. Online and in-app purchases come in through email receipts if you connect Gmail.</p></details>
+        <details><summary>How does it find my subscriptions?<span class="pm" aria-hidden="true"></span></summary><p>It looks for payments that repeat, like Netflix every month or a phone bill every four weeks, and reads renewal dates from subscription receipts. Then it shows what's due and what they cost you a month.</p></details>
+        <details><summary>Why the Shortcuts app?<span class="pm" aria-hidden="true"></span></summary><p>Because in most countries Apple doesn't let apps read Wallet directly. We asked. (We didn't ask.) An automation in Shortcuts is Apple's own way to pass each tap to an app, on your phone, with your permission. You set it up once and forget it exists.</p></details>
+        <details><summary>Why not Android?<span class="pm" aria-hidden="true"></span></summary><p>Short version: Sortd hears about your taps through Apple's Shortcuts app, and Android doesn't have one. Long version: see short version. If enough of you ask, we'll build it. (Asking nicely helps.)</p></details>
+        <details><summary>Does it work when I travel?<span class="pm" aria-hidden="true"></span></summary><p>Yes. Purchases are saved in the local currency and converted to your home currency at that day's European Central Bank rate.</p></details>
+        <details><summary>What if I have two cards from the same bank?<span class="pm" aria-hidden="true"></span></summary><p>Add the last 4 digits of each card and its Apple Pay number. That's how Sortd tells them apart.</p></details>
+        <details><summary>How much does it cost?<span class="pm" aria-hidden="true"></span></summary><p>US$6.99 a month, US$49.99 a year, or US$99.99 once. At launch the first year is US$29.99, with a 14-day free trial before that. Every plan has every feature, and the App Store shows the price in your currency.</p></details>
+        <details><summary>Which iPhones does it work on?<span class="pm" aria-hidden="true"></span></summary><p>Any iPhone on iOS 26 or later. Reading receipts with on-device AI needs an iPhone with Apple Intelligence. Other iPhones use simpler rules, which work fine for most receipts.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" style="padding-top:24px">
+    <div class="wrap">
+      <div class="cta-band reveal">
+        <img src="img/icon-256.png" alt="" width="84" height="84">
+        <div class="cta-text">
+          <h2>Try it before your friends do.</h2>
+          <p>The beta is on TestFlight. Email us and we'll send an invite. Bragging rights not included, but strongly implied.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-light" href="mailto:support@sortd.page?subject=Sortd%20beta">Join the beta</a>
+          <span class="soon">Coming soon on the App Store</span>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
-<footer>
-  <p><a href="privacy.html">Privacy Policy</a> · <a href="support.html">Support</a> · <a href="terms.html">Terms of Use</a></p>
-  <p>Sortd is made by [DEVELOPER / COMPANY NAME].</p>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
+      <p>Made by Kameshraj Gnanaprakasam.</p>
+      <p>© 2026. Apple Pay, iPhone and Apple Watch are trademarks of Apple Inc. Gmail is a trademark of Google LLC.</p>
+      <p class="footer-joke">No receipts were harmed in the making of this website. (Some were scanned.)</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="privacy">Privacy Policy</a>
+      <a href="terms">Terms of Use</a>
+      <a href="support">Support</a>
+      <a href="mailto:support@sortd.page">Contact</a>
+    </nav>
+  </div>
 </footer>
 </body>
 </html>

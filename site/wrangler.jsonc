@@ -1,0 +1,15 @@
+// Deploys this folder to https://sortd.page (Cloudflare Workers static assets).
+// Update the site: cd site && npx wrangler deploy
+{
+  "name": "sortd",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [
+    { "pattern": "sortd.page", "custom_domain": true },
+    { "pattern": "www.sortd.page", "custom_domain": true }
+  ]
+}

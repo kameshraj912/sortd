@@ -34,7 +34,7 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
-                            if demo { demoBanner }
+                            if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
                             UpcomingSection(recurring: recurring)
@@ -72,6 +72,13 @@ struct HomeView: View {
     }
 
     /// Shown while the sample data is in: one tap removes it and reopens setup.
+    /// Debug: SPEND_HIDE_DEMO_BANNER=1 for website and App Store screenshots.
+    #if DEBUG
+    static let hideDemoBanner = ProcessInfo.processInfo.environment["SPEND_HIDE_DEMO_BANNER"] == "1"
+    #else
+    static let hideDemoBanner = false
+    #endif
+
     private var demoBanner: some View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
