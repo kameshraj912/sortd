@@ -128,6 +128,8 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(OnboardingView.doneKey) private var onboarded = false
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppLock.enabledKey) private var lockEnabled = false
+    @State private var lock = AppLock()
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -148,6 +150,16 @@ struct RootView: View {
         }
         // The tab bar stays at the bottom, under the keyboard, like the system one.
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .overlay {
+            if lock.isLocked {
+                LockView(lock: lock)
+            } else if lockEnabled, onboarded, !Self.forceSetup, scenePhase != .active {
+                PrivacyCover()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
+        }
         .fullScreenCover(isPresented: .constant(!onboarded || Self.forceSetup)) {
             OnboardingView()
         }
