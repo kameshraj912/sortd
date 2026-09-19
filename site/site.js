@@ -61,7 +61,7 @@
     var logo = document.querySelector(".site-header .brand");
     if (logo) logo.addEventListener("click", function (e) {
       taps++; clearTimeout(tapTimer); tapTimer = setTimeout(function () { taps = 0; }, 1500);
-      if (taps >= 5) { e.preventDefault(); taps = 0; toast("Five taps. More than you've checked your budget this month."); }
+      if (taps >= 5) { e.preventDefault(); taps = 0; toast("Five taps. More than you've checked your budget this\u00a0month."); }
       else if (taps > 1) e.preventDefault();
     });
     // ↑ ↑ ↓ ↓ ← → ← → B A
@@ -70,7 +70,7 @@
       var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       pos = k === code[pos] ? pos + 1 : (k === code[0] ? 1 : 0);
       if (pos === code.length) {
-        pos = 0; toast("Cheat code accepted. Your spending is still real.");
+        pos = 0; toast("Cheat code accepted. Your spending is still\u00a0real.");
         if (calm) return;
         var colours = ["#f0643d", "#f5a623", "#7b6bf0", "#2bb07a"];
         for (var i = 0; i < 90; i++) {
@@ -85,7 +85,7 @@
     // "Coming soon" button.
     var soon = document.querySelector(".soon-btn"), soonHits = 0;
     if (soon) {
-      var soonLines = ["It's not out yet. Clicking harder won't help.", "Still not out. We checked.", "Now you're just clicking for fun. Join the beta."];
+      var soonLines = ["It's not out yet. Clicking harder won't\u00a0help.", "Still not out. We\u00a0checked.", "Now you're just clicking for fun. Join the\u00a0beta."];
       var hitSoon = function () { toast(soonLines[Math.min(soonHits++, soonLines.length - 1)]); };
       soon.addEventListener("click", hitSoon);
       soon.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hitSoon(); } });
@@ -97,7 +97,7 @@
     });
     // Sit still for a minute.
     var idle, idleSaid = false;
-    function poke() { clearTimeout(idle); if (!idleSaid) idle = setTimeout(function () { idleSaid = true; toast("Still here? Your coffee's getting cold."); }, 60000); }
+    function poke() { clearTimeout(idle); if (!idleSaid) idle = setTimeout(function () { idleSaid = true; toast("Still here? Your coffee's getting\u00a0cold."); }, 60000); }
     ["mousemove", "keydown", "scroll", "touchstart"].forEach(function (ev) { window.addEventListener(ev, poke, { passive: true }); });
     poke();
     // Type "coffee".
@@ -105,14 +105,14 @@
     document.addEventListener("keydown", function (e) {
       if (e.key.length !== 1 || /input|textarea/i.test(e.target.tagName)) return;
       typed = (typed + e.key.toLowerCase()).slice(-6);
-      if (typed === "coffee") toast("☕ $5.50 logged. (Not really. It's a website.)");
+      if (typed === "coffee") toast("☕ $5.50 logged. (Not\u00a0really. It's a\u00a0website.)");
     });
     // Tap the receipt total.
     var total = document.querySelector(".receipt .total");
     if (total) {
       var printed = false;
       var guilt = function () {
-        if (printed) { toast("One guilt line per customer."); return; }
+        if (printed) { toast("One guilt line per\u00a0customer."); return; }
         printed = true;
         var g = document.createElement("div"); g.className = "guilt"; g.innerHTML = "<span>Guilt</span><span>priceless</span>";
         total.insertAdjacentElement("afterend", g);
@@ -123,13 +123,13 @@
     // Flip the theme too many times.
     var flips = 0;
     if (btn) btn.addEventListener("click", function () {
-      if (++flips === 8) toast("Light, dark, light, dark. Pick one.");
+      if (++flips === 8) toast("Light, dark, light, dark. Pick\u00a0one.");
     });
     // Scroll all the way down.
     var bottomSaid = false;
     window.addEventListener("scroll", function () {
       if (!bottomSaid && window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) {
-        bottomSaid = true; toast("You made it to the bottom. More commitment than a gym membership.");
+        bottomSaid = true; toast("You made it to the bottom. More commitment than a\u00a0gym\u00a0membership.");
       }
     }, { passive: true });
 
