@@ -9,7 +9,11 @@ let log = Logger(subsystem: "com.kameshraj.spend", category: "app")
 enum SpendStore {
     static let container: ModelContainer = {
         let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        #if DEBUG
         let inMemory = ProcessInfo.processInfo.environment["SPEND_IN_MEMORY"] == "1"
+        #else
+        let inMemory = false
+        #endif
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         do {
             return try ModelContainer(for: schema, configurations: [config])

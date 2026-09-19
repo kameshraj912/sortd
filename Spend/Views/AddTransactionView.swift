@@ -17,6 +17,7 @@ struct AddTransactionView: View {
     @State private var saved = 0
     @State private var showingCategories = false
     @FocusState private var amountFocused: Bool
+    @State private var saveError: String?
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -102,6 +103,9 @@ struct AddTransactionView: View {
                 amountFocused = true
             }
             .sensoryFeedback(.success, trigger: saved)
+            .alert("Not saved", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
         }
     }
 
@@ -182,6 +186,7 @@ struct AddTransactionView: View {
             dismiss()
         } catch {
             log.error("Manual add failed: \(error.localizedDescription)")
+            saveError = "Couldn't save this purchase. Please try again."
         }
     }
 }

@@ -27,7 +27,12 @@ struct SpendApp: App {
         CardBook.shared.adoptLegacy(usedIds: used)
         // Only the original install (purchases on the cards the app shipped
         // with) predates setup and home currency; its values are in AUD.
+        // Once only: an install from before setup existed (purchases on the
+        // original card ids, and setup never finished).
         let legacy = !used.isDisjoint(with: CardInfo.legacy.map(\.id))
+            && !UserDefaults.standard.bool(forKey: "legacyChecked")
+            && UserDefaults.standard.object(forKey: OnboardingView.doneKey) == nil
+        UserDefaults.standard.set(true, forKey: "legacyChecked")
         if legacy {
             UserDefaults.standard.set(true, forKey: OnboardingView.doneKey)
             if UserDefaults.standard.string(forKey: Money.homeKey) == nil {

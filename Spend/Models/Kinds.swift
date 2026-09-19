@@ -184,7 +184,9 @@ final class CardBook {
             var score = 0
             // "debit", "credit", "visa"… say nothing about which bank; the
             // debit/credit tie-break below handles them.
-            for w in c.walletWords where !w.isEmpty && !Self.genericWords.contains(w) {
+            for raw in c.walletWords {
+                let w = raw.trimmingCharacters(in: .whitespaces)
+                guard !w.isEmpty, !Self.genericWords.contains(w) else { continue }
                 let needle = w.count <= 3 ? " \(w) " : w   // "sc" must be a word
                 if name.contains(needle) { score += 2 }
             }

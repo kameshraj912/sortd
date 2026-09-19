@@ -34,6 +34,11 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
+    /// Every item Sortd stored, including ones from an earlier install.
+    static func deleteAll() {
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary)
+    }
+
     static func delete(_ account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

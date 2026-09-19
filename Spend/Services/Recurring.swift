@@ -48,6 +48,17 @@ enum Cadence: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// `date` moved forward by `n` cycles, counted from `date` itself.
+    func advance(_ date: Date, by n: Int, calendar: Calendar = .current) -> Date {
+        switch self {
+        case .weekly: calendar.date(byAdding: .day, value: 7 * n, to: date)!
+        case .fortnightly: calendar.date(byAdding: .day, value: 14 * n, to: date)!
+        case .monthly: calendar.date(byAdding: .month, value: n, to: date)!
+        case .quarterly: calendar.date(byAdding: .month, value: 3 * n, to: date)!
+        case .yearly: calendar.date(byAdding: .year, value: n, to: date)!
+        }
+    }
+
     func next(after date: Date, calendar: Calendar = .current) -> Date {
         switch self {
         case .weekly: calendar.date(byAdding: .day, value: 7, to: date)!
@@ -154,7 +165,10 @@ enum RecurringDetector {
             // is fine: a 61-day gap is two monthly cycles).
             if cadence == nil, list.count >= 2 {
                 let gaps = zip(list, list.dropFirst()).map { $1.date.timeIntervalSince($0.date) / 86400 }
-                if let c = bestCadence(gaps), c != .weekly || list.count >= 3 {
+                // Two charges is enough only for subscriptions and bills; a shop
+                // visited twice a month apart isn't a monthly bill.
+                let billLike = [.subscriptions, .bills, .housing].contains(last.category)
+                if let c = bestCadence(gaps), list.count >= (c == .weekly || !billLike ? 3 : 2) {
                     cadence = c
                     next = c.next(after: last.date, calendar: calendar)
                 }
@@ -169,8 +183,12 @@ enum RecurringDetector {
             if overdue > max(3, cadence.days / 2) {
                 status = .lapsed
             }
-            while nextDate < calendar.startOfDay(for: now), status == .active {
-                nextDate = cadence.next(after: nextDate, calendar: calendar)
+            // Step from the last real charge each time, so a bill on the 31st
+            // goes 28 Feb → 31 Mar, not 28 Feb → 28 Mar.
+            var step = 1
+            while nextDate < calendar.startOfDay(for: now), status == .active, step < 400 {
+                step += 1
+                nextDate = cadence.advance(last.date, by: step, calendar: calendar)
             }
 
             var chargedAfterCancel = false

@@ -283,9 +283,15 @@ struct OnboardingView: View {
                     ForEach(book.active) { info in
                         HStack(spacing: 6) {
                             Text(info.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Button { book.remove(info, hasPurchases: false) } label: {
+                            Button {
+                                let id = info.id
+                                let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
+                                book.remove(info, hasPurchases: used)
+                            } label: {
                                 Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44).contentShape(.rect)
                             }
+                            .padding(.vertical, -12)
                             .accessibilityLabel("Remove \(info.name)")
                         }
                         .padding(.leading, 12)
@@ -895,9 +901,9 @@ struct CardDetailForm: View {
         c.last4 = CardEditor.fours(digits)
         let pay = CardEditor.fours(payDigits)
         c.applePayLast4 = pay.isEmpty ? nil : pay
-        // Recognise the card by its current name only (not every half-typed one).
-        c.walletWords.removeAll { $0 == info.name.lowercased() }
-        if !c.walletWords.contains(c.name.lowercased()) { c.walletWords.append(c.name.lowercased()) }
+        // Nicknames are for the user; Wallet matching keeps the bank's words.
+        let bankWords = Set(BankPreset.match(info.bank)?.words ?? [])
+        c.walletWords.removeAll { $0 == info.name.lowercased() && !bankWords.contains($0) }
         CardBook.shared.upsert(c)
     }
 }
