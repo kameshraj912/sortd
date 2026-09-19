@@ -82,6 +82,7 @@ struct SettingsView: View {
                     } label: {
                         Label("Appearance", systemImage: "circle.lefthalf.filled")
                     }
+                    .onChange(of: appearance) { _, value in Appearance.apply(value) }
                     NavigationLink {
                         CardStyleView()
                     } label: {
