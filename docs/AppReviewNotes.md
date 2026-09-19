@@ -18,10 +18,12 @@ remove it and go back to setup.
 
 **Logging Apple Pay taps (needs a Shortcuts automation)**
 Sortd can't read Apple Wallet by itself. The user creates a personal automation in the
-Shortcuts app: Automation › New Automation › Wallet (called "Transaction" on older iOS) › pick
-cards › Run Immediately › add Sortd's "Log Purchase" action (an App Intent) and map Merchant,
-Amount and Card from the Shortcut Input. After that, each in-store Apple Pay tap is logged, even
-with the app closed. The steps are in the app at Settings › Apple Pay Auto-Logging.
+Shortcuts app. On iOS 27: Shortcuts › + › Edit › Automation › Wallet ("When I tap a Wallet
+Card or Pass") › add Sortd's "Log Wallet Tap" action (an App Intent) and set its one field to
+the Transaction. (On iOS 26: Automation tab › Wallet › Run Immediately.) After that, each
+in-store Apple Pay tap is logged, even with the app closed. Setup shows each step with a picture;
+it's also at Settings › Apple Pay Auto-Logging. Pressing ▶ in Shortcuts is a test run: Sortd
+replies "connected" and saves nothing.
 This needs a real device with a card in Wallet, so it can't be tried in the simulator. A short
 screen recording of the setup and a tap being logged is attached: [VIDEO LINK].
 Without the automation, the user can still add purchases by hand.
@@ -46,6 +48,12 @@ then continue to Sortd. The test account above is on the allowed tester list.]
 - Payment reminders are local notifications, off until the user turns them on.
 - On devices with Apple Intelligence, receipts from unknown senders may be read by the on-device
   model (Foundation Models). Nothing is sent off the device for this.
+- Receipt scanning (Add › Scan Receipt): uses the camera or one picked photo. Text is read on the
+  device (Vision, plus the on-device model where available). The photo isn't stored or sent. The
+  user checks and edits the result before it's saved. Without Apple Intelligence, simple text
+  rules are used instead.
+- Card digits: only the last 4 of each card and of its Apple Pay number, used to match purchases
+  to cards. Never a full card number.
 - Settings › Your Data has Export Purchases (CSV) and Delete All Data.
 - No tracking, ads or analytics. Privacy policy: [PRIVACY POLICY URL]
 

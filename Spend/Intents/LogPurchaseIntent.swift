@@ -39,6 +39,8 @@ struct LogPurchaseIntent: AppIntent {
         let merged: Bool
     }
 
+    static let lastTapKey = "lastTapReceived"
+
     /// The whole tap-handling logic, callable from tests.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
@@ -51,23 +53,47 @@ struct LogPurchaseIntent: AppIntent {
         // Nothing at all came in: a test run (the ▶ button in Shortcuts),
         // not a Wallet tap. Don't save an empty purchase.
         let cardName = (card ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty && parsed == nil && cardName.isEmpty {
-            return Outcome(message: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
+        // Keep exactly what arrived, for checking the setup (Settings shows it).
+        let seen = "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
+        UserDefaults.standard.set("\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", forKey: lastTapKey)
+        UserDefaults.standard.synchronize()
+        // No amount and no shop: a test run (the ▶ button in Shortcuts), not a
+        // shop tap — a real tap always has an amount. Nothing is saved.
+        if name.isEmpty && parsed == nil {
+            let extra = cardName.isEmpty ? "" : " (it did send the card: \(cardName))"
+            return Outcome(message: "Sortd is connected\(extra). Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
                            transaction: nil, merged: false)
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
+        let refund = AmountParser.isNegative(amount ?? "")
+        let cardID = book.matchOrCreate(card)
+        // A second tap with no amount at the same shop within 2 minutes is the
+        // same purchase (the Deduper can't match on a missing amount).
+        if missingAmount {
+            let since = now.addingTimeInterval(-120)
+            let shop = name.isEmpty ? "Unknown merchant" : name
+            let recent = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))) ?? []
+            if let same = recent.first(where: { $0.amount == 0 && $0.merchant == shop && $0.card == cardID }) {
+                return Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount", transaction: same, merged: true)
+            }
+        }
         let purchase = IncomingPurchase(
             date: now,
             merchant: name.isEmpty ? "Unknown merchant" : name,
             amount: parsed?.amount ?? 0,
             currency: parsed?.currency ?? LocalCurrency.current(),
-            card: book.matchOrCreate(card),
+            card: cardID,
             source: .tap,
-            note: missingAmount ? "Apple Pay sent no amount (got “\(amount ?? "nothing")”). Tap to fix." : ""
+            note: missingAmount ? "Apple Pay sent no amount (\(seen)). Tap to fix." : (refund ? "Refund to your card" : "")
         )
 
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
+        if refund, !t.refunded {
+            t.refunded = true
+            try? context.save()
+            return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false)
+        }
         await FXService.backfill(in: context)
 
         if missingAmount {
@@ -90,6 +116,12 @@ struct SpendShortcuts: AppShortcutsProvider {
             phrases: ["Log a purchase in \(.applicationName)", "Add spending to \(.applicationName)"],
             shortTitle: "Log Purchase",
             systemImageName: "creditcard"
+        )
+        AppShortcut(
+            intent: LogWalletTapIntent(),
+            phrases: ["Log a Wallet tap in \(.applicationName)"],
+            shortTitle: "Log Wallet Tap",
+            systemImageName: "wallet.pass"
         )
         AppShortcut(
             intent: SpentThisPeriodIntent(),

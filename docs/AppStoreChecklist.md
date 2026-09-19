@@ -17,27 +17,52 @@ OAuth docs. "Done" means built and tested in the simulator.
 - [x] Debug-only tools are inside `#if DEBUG` and don't ship in release builds
 
 ## Needs you (can't be done in code)
-- [ ] Apple Developer Program ($149 AUD/yr) — decide individual vs company (company hides your
-      home address on the EU listing but needs a D-U-N-S number)
+- [ ] Apple Developer Program ($149 AUD/yr) — decide individual vs company. **Leaning company:**
+      Guideline 5.1.1(ix) says apps in financial services or that "require sensitive user
+      information" should be from a legal entity; reading Gmail could count. A company account
+      (KV Engineering or another entity) needs a D-U-N-S number (free, ~5 business days).
+      If you stay individual, explain in the review notes that Sortd doesn't move or hold money.
+- [ ] Decide Gmail for v1: while Google verification is pending, public users would hit the
+      "unverified app" wall (fails 2.1). Options: ship v1 without Gmail (remove the feature, not
+      just hide it — 2.3.1(a)), or wait for Google verification before the App Store release.
+      TestFlight with Gmail is fine (up to 100 Google test users).
 - [ ] A website with a **privacy policy** and **support page** (Apple and Google both need the URLs)
 - [ ] Trademark check on "Sortd" (see Brand/README.md)
 - [ ] EU Digital Services Act trader status in App Store Connect
-- [ ] Age rating questionnaire (expected 4+)
+- [ ] Age rating questionnaire (expected 4+; the privacy policy says it isn't aimed at children,
+      which fits 4+). Read Apple's note on Texas SB2420 before submitting:
+      https://developer.apple.com/news/?id=2ezb6jhj
+- [ ] Accessibility Nutrition Labels in App Store Connect (optional now, required later): claim only
+      what's tested — VoiceOver, Larger Text, Dark Interface, Sufficient Contrast.
 - [ ] Screenshots: 6.9" iPhone (1320×2868), 1–10 of them
 - [ ] Review notes: explain the Shortcuts automation, attach a short video, say sample data is available
 
-## When Gmail connect is added (stage 4b)
-- [ ] Ask for Gmail only when the user taps Connect, with a plain explanation first (5.1.1)
-- [ ] "Disconnect Gmail" that revokes access and deletes imported data (5.1.1(v))
-- [ ] Declare Google Sign-In's User ID + IP address in the App Privacy label; use GoogleSignIn 7.1.0+
+## Gmail connect (built)
+- [x] Ask for Gmail only when the user taps Connect, with a plain explanation first (5.1.1)
+- [x] "Disconnect Gmail" that revokes access and deletes imported data (5.1.1(v))
+- [x] App Privacy label: "Data Not Collected". Sortd doesn't use the GoogleSignIn SDK (own OAuth via
+      ASWebAuthenticationSession) and nothing reaches the developer or a partner.
+- [ ] CASA security assessment: Google requires it for apps that reach data "from or through a
+      third-party server". Sortd has no server (phone ↔ Google only). Say so in the verification
+      form and ask Google to confirm before paying for an assessment.
 - [ ] Google verification for `gmail.readonly`: homepage, privacy policy with Google's "Limited Use"
       wording, verified domain, demo video, a few weeks. Describe it as receipt "reporting".
 - [ ] Until verified: max 100 test users, and they must reconnect every 7 days
 - [ ] Give App Review a test Gmail account
 
-## When receipt scanning is added (stage 5)
-- [ ] Clear camera / photo library permission text
-- [ ] Works on phones without Apple Intelligence (fall back to text reading only)
+## Receipt scanning (built)
+- [x] Clear camera permission text; photo picker needs no permission
+- [x] Works on phones without Apple Intelligence (falls back to text rules)
+- [x] Covered in the privacy policy and review notes
+- [x] AI in finance (Apple's Foundation Models rules): the user confirms scanned receipts before
+      saving; Gmail purchases read by the model are marked "Read by on-device AI. Check…"
+
+## Apple Pay taps (built)
+- [x] One-field "Log Wallet Tap" action + picture guide in setup
+- [x] Apple Pay number (Device Account Number) matches taps and receipts to the right card;
+      required when two cards are from the same bank
+- [x] ▶ test runs save nothing; unreadable taps are still saved and flagged
+- [x] Old Apps Script email link removed; its saved key is cleared from phones once
 
 ## When charging money
 - [ ] In-App Purchase only; subscription terms and Terms of Use + privacy links in the app and listing

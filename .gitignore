@@ -14,7 +14,6 @@ xcuserdata/
 Secrets.xcconfig
 *.p12
 *.mobileprovision
-apps-script/.clasprc.json
 
 # Misc
 .DS_Store

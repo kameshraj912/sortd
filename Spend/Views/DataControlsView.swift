@@ -81,7 +81,6 @@ enum DataReset {
         try? context.delete(model: ImportedRecord.self)
         try? context.delete(model: FXRate.self)
         try? context.save()
-        for account in EmailSync.accounts { EmailSync.remove(account) }
         let gmail = GmailSync.accounts
         GmailSync.accounts = []
         Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }

@@ -40,8 +40,6 @@ struct SettingsView: View {
                 }
 
                 GmailSection()
-                // The older Apps Script link, only for accounts already set up that way.
-                if !EmailSync.accounts.isEmpty { EmailSyncSection() }
 
                 Section {
                     NavigationLink {

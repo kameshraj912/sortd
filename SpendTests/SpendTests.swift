@@ -404,8 +404,7 @@ struct CSVExportTests {
     }
 }
 
-/// The same cases as apps-script/test/parsers.test.js, so the on-phone
-/// parsers and the Apps Script parsers can't drift apart.
+/// Real-world email layouts for each known sender.
 struct EmailParserTests {
     private func msg(_ id: String, _ from: String, _ subject: String, _ body: String, _ date: Date = .now) -> EmailParsers.Message {
         .init(id: id, from: from, subject: subject, body: body, date: date)
@@ -988,6 +987,14 @@ struct ApplePayTapTests {
         #expect(book.cards.isEmpty)
     }
 
+    @Test func cardOnlyRunSavesNothing() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
+        #expect(r.transaction == nil)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
+        #expect(r.message.contains("connected"))
+    }
+
     @Test func missingAmountIsSavedAndFlagged() async throws {
         let (ctx, book) = try setup(cards: [nab])
         let r = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
@@ -1021,5 +1028,221 @@ struct ApplePayTapTests {
         // The next tap on the same card uses it, not a new one.
         _ = try await LogPurchaseIntent.handle(merchant: "Coles", amount: "$30.00", card: "CommBank Debit", in: ctx, book: book)
         #expect(book.active.count == 1)
+    }
+}
+
+@MainActor
+struct WalletTapTextTests {
+    @Test func oneFieldPerLine() {
+        let p = WalletTapText.parse("Seven Seeds Coffee\nA$4.50\nNAB Visa Debit")
+        #expect(p == .init(amount: "A$4.50", merchant: "Seven Seeds Coffee", card: "NAB Visa Debit"))
+    }
+    @Test func labelledFields() {
+        let p = WalletTapText.parse("Name: Transaction\nMerchant: Toast Box\nAmount: S$6.20\nCard: DBS Card")
+        #expect(p == .init(amount: "S$6.20", merchant: "Toast Box", card: "DBS Card"))
+    }
+    @Test func emptyText() {
+        #expect(WalletTapText.parse("") == .init())
+    }
+    @Test func tapLogsThroughOneField() async throws {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let ctx = ModelContext(container)
+        let book = CardBook(defaults: UserDefaults(suiteName: "wallet-tap-\(UUID())")!)
+        let r = try await LogWalletTapIntent.handle("Grill'd\n$18.90\nNAB Visa Debit", in: ctx, book: book)
+        #expect(r.transaction?.merchant == "Grill'd")
+        #expect(r.transaction?.amount == Decimal(string: "18.90"))
+        let empty = try await LogWalletTapIntent.handle(nil, in: ctx, book: book)
+        #expect(empty.transaction == nil)
+    }
+}
+
+/// The Apple Pay number (Device Account Number) asked for in setup must
+/// decide which card a tap belongs to.
+@MainActor
+struct ApplePayDigitsTests {
+    private func book(_ cards: [CardInfo]) -> CardBook {
+        let b = CardBook(defaults: UserDefaults(suiteName: "digits-\(UUID().uuidString)")!)
+        cards.forEach(b.upsert)
+        return b
+    }
+    private func nab(_ name: String, pay: String?, last4: String = "", credit: Bool = false) -> CardInfo {
+        var c = BankPreset.all.first { $0.name == "NAB" }!.card(credit: credit)
+        c.id = UUID().uuidString
+        c.name = name
+        c.last4 = last4.isEmpty ? [] : [last4]
+        c.applePayLast4 = pay.map { [$0] }
+        return c
+    }
+
+    @Test func digitGroupsAreWholeFourDigitRuns() {
+        #expect(CardBook.digitGroups(in: "NAB Visa Debit •••• 4821") == ["4821"])
+        #expect(CardBook.digitGroups(in: "…4821") == ["4821"])
+        #expect(CardBook.digitGroups(in: "Card 123456") == [])
+        #expect(CardBook.digitGroups(in: nil) == [])
+    }
+
+    @Test func twoSameBankCardsSplitByApplePayDigits() {
+        let a = nab("NAB Debit", pay: "4821"), b2 = nab("NAB Debit 2", pay: "7730")
+        let b = book([a, b2])
+        #expect(b.matchOrCreate("NAB Visa Debit •••• 7730") == b2.card)
+        #expect(b.matchOrCreate("NAB Visa Debit •••• 4821") == a.card)
+        #expect(b.cards.count == 2)
+    }
+
+    @Test func digitsBeatTheWordCredit() {
+        let debit = nab("NAB Debit", pay: "4821")
+        let credit = nab("NAB Credit", pay: "9001", credit: true)
+        let b = book([debit, credit])
+        #expect(b.matchOrCreate("NAB Credit Card ••4821") == debit.card)
+    }
+
+    @Test func printedCardDigitsAlsoMatch() {
+        let a = nab("NAB Debit", pay: "4821", last4: "1111")
+        let b = book([a, nab("NAB Debit 2", pay: "7730")])
+        #expect(b.matchOrCreate("NAB ••1111") == a.card)
+    }
+
+    @Test func unknownDigitsMakeOneNewCardThatIsReused() {
+        let b = book([nab("NAB Debit", pay: "4821"), nab("NAB Debit 2", pay: "7730")])
+        let first = b.matchOrCreate("DBS Visa Debit •••• 5555")
+        let again = b.matchOrCreate("DBS Visa Debit •••• 5555")
+        #expect(first == again)
+        #expect(b.cards.count == 3)
+        #expect(b.info(first)?.applePayLast4 == ["5555"])
+        #expect(b.info(first)?.name == "DBS Visa Debit")
+    }
+
+    @Test func singleCardLearnsItsApplePayDigits() {
+        let a = nab("NAB Debit", pay: nil)
+        let b = book([a])
+        #expect(b.matchOrCreate("NAB Visa Debit •••• 4821") == a.card)
+        #expect(b.info(a.card)?.applePayLast4 == ["4821"])
+    }
+
+    @Test func twoSameBankCardsNeverGuessDigits() {
+        let a = nab("NAB Debit", pay: nil), c = nab("NAB Debit 2", pay: nil)
+        let b = book([a, c])
+        _ = b.matchOrCreate("NAB Visa Debit •••• 4821")
+        #expect(b.info(a.card)?.applePayLast4 == nil)
+        #expect(b.info(c.card)?.applePayLast4 == nil)
+    }
+
+    @Test func emailReceiptMatchesByApplePayDigits() {
+        let a = nab("NAB Debit", pay: "4821", last4: "1111")
+        let b = book([a])
+        #expect(b.card(last4: "4821") == a.card)
+        #expect(b.card(last4: "1111") == a.card)
+    }
+
+    @Test func oneFieldTapFindsCardByDigits() async throws {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let second = nab("NAB Debit 2", pay: "7730")
+        let b = book([nab("NAB Debit", pay: "4821"), second])
+        let r = try await LogWalletTapIntent.handle("Seven Seeds\nA$5.50\nNAB Visa Debit •••• 7730",
+                                                    in: ModelContext(container), book: b)
+        #expect(r.transaction?.card == second.card)
+    }
+}
+
+/// Cases from the code review: odd layouts of the Wallet text, refunds,
+/// unknown digits with two same-bank cards.
+@MainActor
+struct WalletTapEdgeTests {
+    private func store() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        return ModelContext(container)
+    }
+    private func book(_ cards: [CardInfo] = []) -> CardBook {
+        let b = CardBook(defaults: UserDefaults(suiteName: "edge-\(UUID().uuidString)")!)
+        cards.forEach(b.upsert)
+        return b
+    }
+    private func nab(_ name: String, pay: String?) -> CardInfo {
+        var c = BankPreset.all.first { $0.name == "NAB" }!.card(credit: false)
+        c.id = UUID().uuidString; c.name = name; c.applePayLast4 = pay.map { [$0] }
+        return c
+    }
+
+    @Test func singleLineWithEverything() {
+        let p = WalletTapText.parse("Seven Seeds A$4.50 NAB Visa Debit")
+        #expect(p.amount == "A$4.50")
+        #expect(p.merchant == "Seven Seeds")
+        #expect(p.card == "NAB Visa Debit")
+    }
+    @Test func commaSeparatedLine() {
+        let p = WalletTapText.parse("Toast Box, S$6.20, DBS Visa Debit")
+        #expect(p == .init(amount: "S$6.20", merchant: "Toast Box", card: "DBS Visa Debit"))
+    }
+    @Test func merchantWithNumberIsNotTheCard() {
+        let p = WalletTapText.parse("Hotel 1888\nA$4.50\nNAB Visa Debit")
+        #expect(p == .init(amount: "A$4.50", merchant: "Hotel 1888", card: "NAB Visa Debit"))
+    }
+    @Test func cardinalCoffeeIsAShop() {
+        let p = WalletTapText.parse("Cardinal Coffee\n$3.80\nANZ Visa")
+        #expect(p.merchant == "Cardinal Coffee")
+        #expect(p.card == "ANZ Visa")
+    }
+    @Test func merchantWithSmallNumberIsNotTheAmount() {
+        let p = WalletTapText.parse("Cafe 21\nA$4.50\nNAB Visa Debit")
+        #expect(p.amount == "A$4.50")
+        #expect(p.merchant == "Cafe 21")
+    }
+    @Test func dateLineIsIgnored() {
+        let p = WalletTapText.parse("19 Sep 2026 at 10:42\nGrill'd\n$18.90\nNAB Visa Debit ••4821")
+        #expect(p == .init(amount: "$18.90", merchant: "Grill'd", card: "NAB Visa Debit ••4821"))
+    }
+    @Test func currencyAfterNumber() {
+        #expect(WalletTapText.parse("Ya Kun\n6.20 SGD\nDBS").amount == "6.20 SGD")
+    }
+    @Test func moreCurrencies() {
+        #expect(AmountParser.parse("₹250.00")?.currency == "INR")
+        #expect(AmountParser.parse("JPY 500")?.currency == "JPY")
+        #expect(AmountParser.parse("THB 120.00")?.currency == "THB")
+        #expect(AmountParser.parse("$4.50")?.currency == nil)
+    }
+    @Test func unreadableTextIsStillSaved() async throws {
+        let ctx = try store()
+        let r = try await LogWalletTapIntent.handle("something odd", in: ctx, book: book())
+        #expect(r.transaction != nil)
+        #expect(r.transaction?.amount == 0)
+    }
+    @Test func refundIsMarked() async throws {
+        let ctx = try store()
+        let r = try await LogPurchaseIntent.handle(merchant: "Kmart", amount: "-A$5.00", card: "NAB Visa Debit", in: ctx, book: book())
+        #expect(r.transaction?.refunded == true)
+        #expect(r.transaction?.amount == 5)
+    }
+    @Test func repeatedMissingAmountTapIsKeptOnce() async throws {
+        let ctx = try store(), b = book()
+        _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        let again = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b,
+                                                       now: .now.addingTimeInterval(30))
+        #expect(again.merged)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+    }
+    @Test func unknownDigitsWithTwoSameBankCardsMakeANewCard() {
+        let a = nab("NAB Debit", pay: "4821"), c = nab("NAB Debit 2", pay: "7730")
+        let b = book([a, c])
+        let got = b.matchOrCreate("NAB Visa Debit •••• 5555")
+        #expect(got != a.card && got != c.card)
+        #expect(b.info(got)?.name == "NAB Visa Debit ••5555")
+        #expect(b.matchOrCreate("NAB Visa Debit •••• 5555") == got)
+    }
+    @Test func watchDigitsJoinTheOnlyMatchingCard() {
+        let a = nab("NAB Debit", pay: "4821")
+        let b = book([a])
+        #expect(b.matchOrCreate("NAB Visa Debit •••• 5555") == a.card)
+        #expect(b.info(a.card)?.applePayLast4 == ["4821", "5555"])
+    }
+    @Test func handAddedCardsWithoutBankDontGuess() {
+        var x = CardInfo(name: "Everyday", shortName: "Everyday", walletWords: ["everyday"]); x.id = "x"
+        var y = CardInfo(name: "Everyday Two", shortName: "Everyday 2", walletWords: ["everyday"]); y.id = "y"
+        let b = book([x, y])
+        _ = b.matchOrCreate("Everyday ••1234")
+        #expect(b.info(x.card)?.applePayLast4 == nil)
+        #expect(b.info(y.card)?.applePayLast4 == nil)
     }
 }
