@@ -48,8 +48,8 @@
     function toast(msg) {
       var old = document.querySelector(".toast"); if (old) old.remove();
       var t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg;
-      document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("show"); });
-      setTimeout(function () { t.classList.remove("show"); setTimeout(function () { t.remove(); }, 500); }, 3200);
+      document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("is-on"); });
+      setTimeout(function () { t.classList.remove("is-on"); setTimeout(function () { t.remove(); }, 500); }, 3200);
     }
     var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Hover notes: on touch screens a tap shows them as a pop-up instead.
