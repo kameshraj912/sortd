@@ -751,5 +751,95 @@ struct AppLockTests {
     @Test func neverLocksWhenOff() {
         #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3600), now: now, enabled: false))
         #expect(!AppLock.shouldLock(lastActive: nil, now: now, enabled: false))
+
+struct CategoryBudgetTests {
+    typealias CB = CategoryBudgets
+
+    @Test func progressMath() {
+        let p = CB.progress(spent: 120, limit: 200)
+        #expect(p.left == 80)
+        #expect(p.fraction == 0.6)
+        #expect(p.status == .ok)
+    }
+
+    @Test func nearAtEightyPercent() {
+        #expect(CB.progress(spent: 159.99, limit: 200).status == .ok)
+        #expect(CB.progress(spent: 160, limit: 200).status == .near)
+        #expect(CB.progress(spent: 200, limit: 200).status == .near)
+    }
+
+    @Test func overPastTheLimit() {
+        let p = CB.progress(spent: 242, limit: 200)
+        #expect(p.status == .over)
+        #expect(p.left == -42)
+        #expect(p.fraction == 1.21)
+    }
+
+    @Test func zeroLimitIsSafe() {
+        let p = CB.progress(spent: 0, limit: 0)
+        #expect(p.fraction == 0)
+        #expect(p.status == .ok)
+    }
+
+    @Test func storesAndRemoves() {
+        let d = UserDefaults(suiteName: "CategoryBudgetTests-\(UUID().uuidString)")!
+        CB.set(200, for: .foodDelivery, d)
+        CB.set(50, for: .transport, d)
+        #expect(CB.all(d) == [.foodDelivery: 200, .transport: 50])
+        CB.remove(.transport, d)
+        #expect(CB.limit(for: .transport, d) == nil)
+        CB.set(0, for: .foodDelivery, d)
+        #expect(CB.all(d).isEmpty)
+    }
+
+    @Test func alertsFireOncePerThreshold() {
+        let month = "2026-09"
+        var sent: Set<String> = []
+
+        var r = CB.dueAlerts([.foodDelivery: CB.progress(spent: 100, limit: 200)], month: month, sent: sent)
+        #expect(r.alerts.isEmpty)
+        sent = r.sent
+
+        r = CB.dueAlerts([.foodDelivery: CB.progress(spent: 170, limit: 200)], month: month, sent: sent)
+        #expect(r.alerts.map(\.threshold) == [.near])
+        sent = r.sent
+
+        // Same state again: nothing new.
+        r = CB.dueAlerts([.foodDelivery: CB.progress(spent: 180, limit: 200)], month: month, sent: sent)
+        #expect(r.alerts.isEmpty)
+        sent = r.sent
+
+        r = CB.dueAlerts([.foodDelivery: CB.progress(spent: 210, limit: 200)], month: month, sent: sent)
+        #expect(r.alerts.map(\.threshold) == [.over])
+        sent = r.sent
+
+        r = CB.dueAlerts([.foodDelivery: CB.progress(spent: 260, limit: 200)], month: month, sent: sent)
+        #expect(r.alerts.isEmpty)
+    }
+
+    @Test func jumpingPastBothSendsOnlyOver() {
+        let r = CB.dueAlerts([.shopping: CB.progress(spent: 300, limit: 200)], month: "2026-09", sent: [])
+        #expect(r.alerts.map(\.threshold) == [.over])
+        #expect(r.sent == ["2026-09|shopping|80", "2026-09|shopping|100"])
+    }
+
+    @Test func newMonthStartsFresh() {
+        let old: Set<String> = ["2026-08|shopping|80", "2026-08|shopping|100"]
+        let r = CB.dueAlerts([.shopping: CB.progress(spent: 170, limit: 200)], month: "2026-09", sent: old)
+        #expect(r.alerts.map(\.threshold) == [.near])
+        #expect(r.sent == ["2026-09|shopping|80"])
+    }
+
+    @Test func sentRecordRoundTrips() {
+        let d = UserDefaults(suiteName: "CategoryBudgetTests-\(UUID().uuidString)")!
+        CB.saveSentAlerts(["2026-09|groceries|80"], d)
+        #expect(CB.sentAlerts(d) == ["2026-09|groceries|80"])
+    }
+
+    @Test func monthKeyIsYearMonth() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Australia/Melbourne")!
+        let date = cal.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+        #expect(CB.monthKey(date, calendar: cal) == "2026-03")
     }
 }
