@@ -609,3 +609,16 @@ sup { font-size: .6em; }
 @media (max-width: 700px) { .confetti { width: 10px; height: 4px; } }
 
 @media (hover: none) { .egg::after { display: none; } }
+
+/* Nicer line breaks: no single stranded words, balanced headings */
+p, li, .lead, summary, .cell span { text-wrap: pretty; }
+h1, h2, h3, .panel-title { text-wrap: balance; }
+
+/* Small phones (iPhone SE and similar) */
+.btn { white-space: nowrap; }
+@media (max-width: 360px) {
+  .btn { font-size: 15px; padding: 0 16px; }
+  .eyebrow { font-size: 12px; white-space: nowrap; }
+  h1 { font-size: 38px; }
+  .site-header .nav-cta { padding: 6px 10px; font-size: 12.5px; }
+}
