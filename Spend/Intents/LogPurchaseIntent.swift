@@ -32,6 +32,12 @@ struct LogPurchaseIntent: AppIntent {
         // save it with amount 0 and flag it so Raj can fill it in.
         let parsed = AmountParser.parse(amount ?? "")
         let name = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Nothing at all came in: this is a test run (the ▶ button in
+        // Shortcuts), not a Wallet tap. Don't save an empty purchase.
+        let cardName = (card ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty && parsed == nil && cardName.isEmpty {
+            return .result(dialog: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.")
+        }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let purchase = IncomingPurchase(
             date: .now,

@@ -427,6 +427,7 @@ struct OnboardingView: View {
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay taps", "A one-time setup in Apple's Shortcuts app. Apple doesn't let apps do this part for you, so it takes about two minutes.")
+            if #available(iOS 27.0, *) { describeCard }
             if let link = ShortcutLink.url {
                 // Easy way: add the ready-made shortcut, then point the automation at it.
                 VStack(alignment: .leading, spacing: 16) {
@@ -447,9 +448,12 @@ struct OnboardingView: View {
                 .padding(.bottom, 14)
                 Text("Or set it up by hand").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.bottom, 8)
             }
+            if #available(iOS 27.0, *) {
+                Text("Or set it up by hand").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.bottom, 8)
+            }
             VStack(alignment: .leading, spacing: 16) {
                 if #available(iOS 27.0, *) {
-                    miniStep(1, "Shortcuts → + → Edit", "Tap Automation, search wallet, tap Wallet.")
+                    miniStep(1, "Shortcuts → + → Edit", "Tap the blue Automation chip, then type wallet and tap “When I tap a Wallet Card or Pass”.")
                     miniStep(2, "Add Sortd's Log Purchase", "Search Sortd at the bottom and tap it.")
                     miniStep(3, "Fill the 3 blue words", "Tap each → Select Variable → Transaction, then tap it again and pick Amount, Merchant, or Card or Pass. It should look like this:")
                 } else {
@@ -508,6 +512,58 @@ struct OnboardingView: View {
             .animation(.snappy, value: tapConnected)
             .sensoryFeedback(.success, trigger: tapConnected)
         }
+    }
+
+    /// Sentence for iOS 27's "Describe a shortcut" (Apple Intelligence builds
+    /// the Wallet trigger + Log Purchase with all three fields from it).
+    static let describeSentence = "When I tap any Wallet card, log the purchase in Sortd using the transaction's amount, merchant and card or pass."
+
+    @State private var copiedSentence = false
+
+    /// iOS 27 quick way: copy a sentence, paste it into Shortcuts.
+    private var describeCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").foregroundStyle(Color.brandPalette[2])
+                Text("Quick way").font(.headline)
+                Text("Apple Intelligence").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            Text("“\(Self.describeSentence)”")
+                .font(.subheadline)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
+                .textSelection(.enabled)
+            HStack(spacing: 10) {
+                Button {
+                    UIPasteboard.general.string = Self.describeSentence
+                    copiedSentence = true
+                } label: {
+                    Label(copiedSentence ? "Copied" : "Copy", systemImage: copiedSentence ? "checkmark" : "doc.on.doc")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(Color.onBrand)
+                        .background(Color.brand, in: .capsule)
+                }
+                Button {
+                    if let url = URL(string: "shortcuts://") { openURL(url) }
+                } label: {
+                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(Color.ink)
+                        .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
+                }
+            }
+            .buttonStyle(.plain)
+            .sensoryFeedback(.success, trigger: copiedSentence)
+            Text("In Shortcuts tap +, paste into “Describe a shortcut”, and send. Check it reads “When Any Card is tapped → Log Amount at Merchant on Card or Pass”, with all three words dark blue. If not, use the steps below.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .surface(radius: 16)
+        .padding(.bottom, 14)
     }
 
     /// What the finished Shortcuts action looks like, so people can check theirs.
