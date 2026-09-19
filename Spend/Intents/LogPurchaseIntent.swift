@@ -27,42 +27,58 @@ struct LogPurchaseIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let result = try await Self.handle(merchant: merchant, amount: amount, card: card,
+                                           in: SpendStore.container.mainContext, book: .shared)
+        return .result(dialog: IntentDialog(stringLiteral: result.message))
+    }
+
+    /// What happened to one tap. `transaction` is nil for an empty test run.
+    struct Outcome {
+        let message: String
+        let transaction: Transaction?
+        let merged: Bool
+    }
+
+    /// The whole tap-handling logic, callable from tests.
+    @MainActor
+    static func handle(merchant: String?, amount: String?, card: String?,
+                       in context: ModelContext, book: CardBook, now: Date = .now) async throws -> Outcome {
         // Shortcuts sometimes hands intents an empty merchant or amount
-        // (developer.apple.com/forums/thread/797233). Never drop the tap:
-        // save it with amount 0 and flag it so Raj can fill it in.
+        // (developer.apple.com/forums/thread/797233). Never drop a real tap:
+        // save it with amount 0 and flag it so it can be filled in.
         let parsed = AmountParser.parse(amount ?? "")
         let name = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        // Nothing at all came in: this is a test run (the ▶ button in
-        // Shortcuts), not a Wallet tap. Don't save an empty purchase.
+        // Nothing at all came in: a test run (the ▶ button in Shortcuts),
+        // not a Wallet tap. Don't save an empty purchase.
         let cardName = (card ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty && parsed == nil && cardName.isEmpty {
-            return .result(dialog: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.")
+            return Outcome(message: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
+                           transaction: nil, merged: false)
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let purchase = IncomingPurchase(
-            date: .now,
+            date: now,
             merchant: name.isEmpty ? "Unknown merchant" : name,
             amount: parsed?.amount ?? 0,
             currency: parsed?.currency ?? LocalCurrency.current(),
-            card: CardBook.shared.matchOrCreate(card),
+            card: book.matchOrCreate(card),
             source: .tap,
             note: missingAmount ? "Apple Pay sent no amount (got “\(amount ?? "nothing")”). Tap to fix." : ""
         )
 
-        let context = SpendStore.container.mainContext
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
         await FXService.backfill(in: context)
 
         if missingAmount {
-            return .result(dialog: "Logged a purchase at \(t.merchant) — amount missing, open Sortd to fix")
+            return Outcome(message: "Logged a purchase at \(t.merchant) — amount missing, open Sortd to fix", transaction: t, merged: false)
         }
         let money = Money.format(t.amount, t.currencyCode)
         switch outcome {
         case .added:
-            return .result(dialog: "Logged \(money) at \(t.merchant) · \(t.category.name)")
+            return Outcome(message: "Logged \(money) at \(t.merchant) · \(t.category.name)", transaction: t, merged: false)
         case .merged:
-            return .result(dialog: "\(money) at \(t.merchant) was already logged")
+            return Outcome(message: "\(money) at \(t.merchant) was already logged", transaction: t, merged: true)
         }
     }
 }
