@@ -581,3 +581,96 @@ struct GenericReceiptTests {
         #expect(!EmailParsers.knowsSender("Fresh Mart <orders@freshmart.example>"))
     }
 }
+
+/// Reading text from a scanned paper receipt (the pure rules, no camera).
+struct ReceiptScannerTests {
+    /// 20 Sep 2026, midday, so the receipts below are in the past.
+    private let now: Date = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .current
+        return c.date(from: DateComponents(year: 2026, month: 9, day: 20, hour: 12))!
+    }()
+
+    private func ymd(_ date: Date?) -> [Int]? {
+        guard let date else { return nil }
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .current
+        let d = c.dateComponents([.year, .month, .day], from: date)
+        return [d.year!, d.month!, d.day!]
+    }
+
+    @Test func supermarketReceipt() {
+        let text = """
+            WOOLWORTHS METRO
+            Tax Invoice ABN 88 000 014 675
+            123 Swanston St Melbourne
+            19/09/2026 14:32
+            Bananas 3.20
+            Milk 2L 3.10
+            Bread 4.50
+            SUBTOTAL 10.80
+            TOTAL $10.80
+            EFTPOS $10.80
+            Card ************4242
+            """
+        let r = ReceiptScanner.extract(from: text, now: now)
+        #expect(r.merchant == "Woolworths Metro")
+        #expect(r.amount == "10.80")
+        #expect(r.last4 == "4242")
+        #expect(ymd(r.date) == [2026, 9, 19])
+    }
+
+    @Test func cafeReceiptIgnoresGSTLine() {
+        let text = """
+            Little Bean Cafe
+            ABN 12 345 678 901
+            Flat White 5.00
+            Banana Bread 6.50
+            TOTAL A$11.50
+            GST included in total A$1.05
+            Paid by card ending 1234
+            Sep 18, 2026
+            """
+        let r = ReceiptScanner.extract(from: text, now: now)
+        #expect(r.merchant == "Little Bean Cafe")
+        #expect(r.amount == "11.50")
+        #expect(r.currency == "AUD")
+        #expect(r.last4 == "1234")
+        #expect(ymd(r.date) == [2026, 9, 18])
+    }
+
+    @Test func totalWithoutCurrencySign() {
+        #expect(ReceiptScanner.total(in: "Soup 7.00\nTOTAL 12.50\nCASH 20.00\nCHANGE 7.50")?.amount == "12.50")
+    }
+
+    @Test func cardEndingDigits() {
+        #expect(ReceiptScanner.extract(from: "VISA XXXXXXXXXXXX9876\nTOTAL S$4.20", now: now).last4 == "9876")
+        #expect(ReceiptScanner.extract(from: "Mastercard **** 5555", now: now).last4 == "5555")
+    }
+
+    @Test(arguments: ["19/09/2026", "19 Sep 2026", "Sep 19, 2026", "2026-09-19", "Date: 19-09-26"])
+    func parsesDates(text: String) {
+        #expect(ymd(ReceiptScanner.date(in: text, now: now)) == [2026, 9, 19])
+    }
+
+    @Test func futureOrMissingDateIgnored() {
+        #expect(ReceiptScanner.date(in: "01/10/2026", now: now) == nil)
+        #expect(ReceiptScanner.date(in: "No date here", now: now) == nil)
+        #expect(ReceiptScanner.date(in: "20/09/2026", now: now) == now)
+    }
+
+    @Test func noTotalGivesNoAmount() {
+        let r = ReceiptScanner.extract(from: "Thanks for visiting\nSee you soon", now: now)
+        #expect(r.amount == nil)
+        #expect(ReceiptScanner.total(in: "Thanks for visiting\nSee you soon") == nil)
+    }
+
+    @Test func joinsPiecesOnTheSameRow() {
+        let pieces = [
+            ReceiptScanner.Piece(text: "$12.50", box: CGRect(x: 0.7, y: 0.40, width: 0.2, height: 0.03)),
+            ReceiptScanner.Piece(text: "CORNER CAFE", box: CGRect(x: 0.3, y: 0.90, width: 0.4, height: 0.04)),
+            ReceiptScanner.Piece(text: "TOTAL", box: CGRect(x: 0.1, y: 0.405, width: 0.2, height: 0.03)),
+        ]
+        #expect(ReceiptScanner.lines(from: pieces) == ["CORNER CAFE", "TOTAL $12.50"])
+    }
+}
