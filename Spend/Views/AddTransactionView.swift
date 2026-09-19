@@ -16,6 +16,9 @@ struct AddTransactionView: View {
     @State private var note = ""
     @State private var saved = 0
     @State private var showingCategories = false
+    @State private var showingScanner = false
+    /// True once fields were filled from a scanned receipt.
+    @State private var scanned = false
     @FocusState private var amountFocused: Bool
     @State private var saveError: String?
 
@@ -30,6 +33,7 @@ struct AddTransactionView: View {
             Form {
                 Section {
                     amountField
+                    scanButton
                 }
                 .listRowBackground(Color.clear)
 
@@ -92,6 +96,9 @@ struct AddTransactionView: View {
                         .opacity(isValid ? 1 : 0.3)
                 }
             }
+            .sheet(isPresented: $showingScanner) {
+                ReceiptScanView(onRead: apply)
+            }
             .sheet(isPresented: $showingCategories) {
                 CategoryPickerSheet(selected: category) { picked in
                     category = picked
@@ -150,6 +157,39 @@ struct AddTransactionView: View {
         .padding(.vertical, 16)
     }
 
+    /// "Scan Receipt", or after a scan, a note to check what was filled in.
+    private var scanButton: some View {
+        VStack(spacing: 10) {
+            Button { showingScanner = true } label: {
+                Label(scanned ? "Scan Again" : "Scan Receipt", systemImage: "camera")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .surface(radius: 20)
+            }
+            .buttonStyle(.plain)
+
+            if scanned {
+                Label("Filled from your receipt — check it", systemImage: "doc.text.viewfinder")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Fills in what the scan found. Never saves: Raj checks and taps the tick.
+    private func apply(_ r: ReceiptReading) {
+        if let amount = r.amount { amountText = amount }
+        if let code = r.currency, Self.currencies.contains(code) { currency = code }
+        if let name = r.merchant { merchant = name }   // suggests a category via onChange
+        if let when = r.date { date = min(when, .now) }
+        if let found = CardBook.shared.card(last4: r.last4), Card.mine.contains(found) { card = found }
+        amountFocused = false
+        scanned = true
+    }
+
     private static func symbol(_ code: String) -> String { Money.symbol(code) }
 
     private var parsedAmount: Decimal? {
@@ -160,6 +200,13 @@ struct AddTransactionView: View {
     private var isValid: Bool {
         // Only the amount is needed; a nameless purchase is saved under its category.
         parsedAmount != nil
+    }
+
+    /// Scanned purchases say so in their note.
+    private var noteToSave: String {
+        let typed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard scanned, !typed.localizedCaseInsensitiveContains("Scanned receipt") else { return note }
+        return typed.isEmpty ? "Scanned receipt" : typed + " · Scanned receipt"
     }
 
     private func save() {
@@ -173,7 +220,7 @@ struct AddTransactionView: View {
             card: card,
             source: .manual,
             category: category,
-            note: note
+            note: noteToSave
         )
         do {
             let outcome = try TransactionLogger.log(purchase, in: context)
