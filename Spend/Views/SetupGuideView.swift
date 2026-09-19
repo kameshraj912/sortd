@@ -18,7 +18,7 @@ struct SetupGuideView: View {
         Step(id: 1, symbol: "square.stack.3d.up", title: "Open Shortcuts and tap +",
              detail: "The + is at the bottom. Then tap Edit at the top right (skip the “Describe a shortcut” box)."),
         Step(id: 2, symbol: "wallet.pass", title: "Add the Wallet trigger",
-             detail: "Tap Automation, type wallet, and tap Wallet (“When I tap a Wallet Card or Pass”). It starts as Any Card, which is what you want."),
+             detail: "First tap the blue Automation chip under the search box, then type wallet and tap Wallet — “When I tap a Wallet Card or Pass”. (Not the Wallet app: that only shows Wallet actions.) The shortcut now starts “When Any Card is tapped”."),
         Step(id: 3, symbol: "plus.square.on.square", title: "Add Sortd's Log Purchase",
              detail: "In the search box at the bottom, type Sortd and tap Log Purchase. It reads “Log Amount at Merchant on Card or Pass”."),
         Step(id: 4, symbol: "arrow.triangle.branch", title: "Fill in the three blue words",
