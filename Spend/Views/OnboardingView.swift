@@ -427,10 +427,36 @@ struct OnboardingView: View {
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay taps", "A one-time setup in Apple's Shortcuts app. Apple doesn't let apps do this part for you, so it takes about two minutes.")
+            if let link = ShortcutLink.url {
+                // Easy way: add the ready-made shortcut, then point the automation at it.
+                VStack(alignment: .leading, spacing: 16) {
+                    Button { openURL(link) } label: {
+                        Label("Add the Sortd shortcut", systemImage: "plus.circle.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .foregroundStyle(Color.onBrand)
+                            .background(Color.brand, in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    miniStep(1, "Tap Add Shortcut", "Shortcuts opens with “Log to Sortd” ready to add.")
+                    miniStep(2, "Open it in Shortcuts", "Check Automation is on under “When Any Card is tapped”.")
+                    miniStep(3, "Pay with Apple Pay", "Your next tap shows up in Sortd. That's it.")
+                }
+                .padding(16)
+                .surface(radius: 16)
+                .padding(.bottom, 14)
+                Text("Or set it up by hand").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.bottom, 8)
+            }
             VStack(alignment: .leading, spacing: 16) {
-                miniStep(1, "In Shortcuts, open Automation", "Tap New Automation, then choose Wallet.")
-                miniStep(2, "Pick your cards, then Run Immediately", "Leave categories and merchants on Any.")
-                miniStep(3, "Add Sortd's Log Purchase action", "Tap each blue field and pick the matching Wallet value. It should look like this:")
+                if #available(iOS 27.0, *) {
+                    miniStep(1, "Shortcuts → + → Edit", "Tap Automation, search wallet, tap Wallet.")
+                    miniStep(2, "Add Sortd's Log Purchase", "Search Sortd at the bottom and tap it.")
+                    miniStep(3, "Fill the 3 blue words", "Tap each → Select Variable → Transaction, then tap it again and pick Amount, Merchant, or Card or Pass. It should look like this:")
+                } else {
+                    miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
+                    miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Purchase.")
+                    miniStep(3, "Fill the 3 blue words", "Tap each one, pick Shortcut Input, then tap it again and pick the same name. It should look like this:")
+                }
                 actionMock.padding(.leading, 38)
             }
             .padding(16)
@@ -492,14 +518,13 @@ struct OnboardingView: View {
                     .clipShape(.rect(cornerRadius: 5, style: .continuous))
                 Text("Log Purchase").font(.footnote.weight(.semibold))
             }
-            HStack(spacing: 4) {
+            // Same wording as the real action in Shortcuts.
+            FlowLayout(spacing: 4) {
                 Text("Log").font(.footnote)
                 token("Amount")
                 Text("at").font(.footnote)
                 token("Merchant")
-            }
-            HStack(spacing: 4) {
-                Text("Card").font(.footnote).foregroundStyle(.secondary)
+                Text("on").font(.footnote)
                 token("Card or Pass")
             }
         }
@@ -507,12 +532,14 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Log Amount at Merchant, Card: Card or Pass")
+        .accessibilityLabel("Log Amount at Merchant on Card or Pass")
     }
 
     /// A Shortcuts variable token (blue, like in the Shortcuts app).
     private func token(_ text: String) -> some View {
         Text(text)
+            .lineLimit(1)
+            .fixedSize()
             .font(.caption.weight(.semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 6)
