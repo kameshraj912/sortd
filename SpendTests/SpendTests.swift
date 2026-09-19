@@ -1,4 +1,5 @@
 import Testing
+import SwiftData
 import Foundation
 @testable import Spend
 
@@ -945,5 +946,80 @@ struct ReceiptScannerTests {
             ReceiptScanner.Piece(text: "TOTAL", box: CGRect(x: 0.1, y: 0.405, width: 0.2, height: 0.03)),
         ]
         #expect(ReceiptScanner.lines(from: pieces) == ["CORNER CAFE", "TOTAL $12.50"])
+    }
+}
+
+/// Apple Pay taps as the Wallet automation hands them to Log Purchase.
+@MainActor
+struct ApplePayTapTests {
+    private func setup(cards: [CardInfo] = []) throws -> (ModelContext, CardBook) {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let book = CardBook(defaults: UserDefaults(suiteName: "tap-\(UUID().uuidString)")!)
+        cards.forEach(book.upsert)
+        return (ModelContext(container), book)
+    }
+    private var nab: CardInfo { BankPreset.all.first { $0.name == "NAB" }!.card(credit: false) }
+
+    @Test func normalTapIsLogged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let r = try await LogPurchaseIntent.handle(merchant: "Seven Seeds Coffee", amount: "A$5.50", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.amount == Decimal(string: "5.50")); #expect(t.currencyCode == "AUD")
+        #expect(t.card == book.active[0].card); #expect(t.source == .tap)
+        #expect(t.category == .eatingOut)
+        #expect(r.message.hasPrefix("Logged"))
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+    }
+
+    @Test func singaporeTapKeepsSGD() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "Toast Box", amount: "S$6.20", card: "DBS Visa Debit", in: ctx, book: book)
+        #expect(r.transaction?.currencyCode == "SGD")
+        #expect(r.transaction?.amount == Decimal(string: "6.20"))
+    }
+
+    @Test func emptyTestRunSavesNothing() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: nil, amount: nil, card: nil, in: ctx, book: book)
+        #expect(r.transaction == nil)
+        #expect(r.message.contains("connected"))
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
+        #expect(book.cards.isEmpty)
+    }
+
+    @Test func missingAmountIsSavedAndFlagged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let r = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
+        #expect(r.transaction?.needsReview == true)
+        #expect(r.message.contains("amount missing"))
+    }
+
+    @Test func sameTapTwiceIsLoggedOnce() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let now = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit", in: ctx, book: book, now: now)
+        let second = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit", in: ctx, book: book, now: now.addingTimeInterval(20))
+        #expect(second.merged)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+    }
+
+    @Test func twoCoffeesAnHourApartAreTwoPurchases() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let now = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "$5.50", card: "NAB Visa Debit", in: ctx, book: book, now: now)
+        _ = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "$5.50", card: "NAB Visa Debit", in: ctx, book: book, now: now.addingTimeInterval(3600))
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 2)
+    }
+
+    @Test func unknownCardIsAddedOnFirstTap() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "Kmart", amount: "$12.00", card: "CommBank Debit", in: ctx, book: book)
+        #expect(book.active.count == 1)
+        #expect(book.active.first?.bank == "CommBank")
+        #expect(r.transaction?.card == book.active.first?.card)
+        // The next tap on the same card uses it, not a new one.
+        _ = try await LogPurchaseIntent.handle(merchant: "Coles", amount: "$30.00", card: "CommBank Debit", in: ctx, book: book)
+        #expect(book.active.count == 1)
     }
 }
