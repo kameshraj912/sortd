@@ -6,7 +6,7 @@ import SwiftData
 struct LogPurchaseIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Purchase"
     static let description = IntentDescription(
-        "Adds a purchase to Sortd. Pair it with the Wallet “Transaction” automation so every Apple Pay tap is logged.",
+        "Adds a purchase to Sortd. Use it in a Wallet automation so every Apple Pay tap is logged.",
         categoryName: "Spending"
     )
     static let openAppWhenRun = false
@@ -17,13 +17,12 @@ struct LogPurchaseIntent: AppIntent {
     @Parameter(title: "Amount", description: "In the automation, pick the Amount variable. Text like “A$4.50” is fine.")
     var amount: String?
 
-    @Parameter(title: "Card", description: "In the automation, pick the Card or Pass variable.")
+    @Parameter(title: "Card", description: "In the automation, pick the Wallet transaction, then Card or Pass.")
     var card: String?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Log \(\.$amount) at \(\.$merchant)") {
-            \.$card
-        }
+        // All three on one line, so none is hidden under "Show More".
+        Summary("Log \(\.$amount) at \(\.$merchant) on \(\.$card)")
     }
 
     @MainActor
