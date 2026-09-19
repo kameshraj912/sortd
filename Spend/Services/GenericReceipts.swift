@@ -231,4 +231,34 @@ enum ReceiptAI {
             return nil
         }
     }
+
+    /// Reads the text of a paper receipt (from the camera) with the on-device
+    /// model. Same guardrail as for emails: the total must appear in the text,
+    /// or no amount is returned. Returns nil when the model can't run or fails.
+    /// The date is left to `ReceiptScanner.date(in:)`.
+    static func read(text: String) async -> ReceiptReading? {
+        guard isAvailable, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let session = LanguageModelSession(instructions: """
+            You read the text of one paper receipt, taken with a phone camera, and extract the purchase. \
+            Only use facts written in the text. If a detail isn't there, leave it empty. Never guess an amount. \
+            The total is the final amount paid, not a subtotal, tax (GST) or change.
+            """)
+        do {
+            let fields = try await session.respond(to: String(text.prefix(3500)), generating: ReceiptFields.self,
+                                                   options: GenerationOptions(temperature: 0)).content
+            let amount = fields.total.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
+            let checked = (Decimal(string: amount) ?? 0) > 0 && GenericReceipts.appears(amount, in: text)
+            let merchant = fields.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+            let digits = fields.cardLast4.filter(\.isNumber)
+            return ReceiptReading(
+                merchant: merchant.isEmpty ? nil : merchant,
+                amount: checked ? amount : nil,
+                currency: checked && fields.currency.count == 3 ? fields.currency.uppercased() : nil,
+                last4: digits.count == 4 && text.contains(digits) ? digits : nil,
+                date: nil)
+        } catch {
+            log.error("On-device receipt scan reading failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
 }
