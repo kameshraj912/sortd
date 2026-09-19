@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Reel 4 – server</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .zero { top: 330px; font-size: 200px; font-weight: 800; letter-spacing: -.06em; line-height: 1; }
+  .label { position: absolute; left: 50px; right: 50px; top: 360px; background: #fff; color: #111113; border-radius: 26px; padding: 26px; }
+  .label h5 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+  .label .sub { font-size: 15px; color: #5c5c63; margin: 2px 0 18px; }
+  .label .box { background: #f6f6f8; border-radius: 18px; padding: 22px 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .label .box b { font-size: 21px; }
+  .label .box span { font-size: 15px; color: #5c5c63; }
+  .list { position: absolute; left: 70px; right: 40px; top: 290px; display: grid; gap: 22px; }
+  .list div { display: flex; gap: 16px; align-items: center; font-size: 40px; font-weight: 800; letter-spacing: -.035em; }
+  .ck { width: 40px; height: 40px; border-radius: 50%; background: var(--green); display: grid; place-items: center; flex: none; }
+</style></head>
+<body data-duration="17"><div id="stage">
+
+  <div class="layer" id="s1">
+    <p class="cap lg" id="a" style="top:250px">Our server budget is</p>
+    <p class="cap zero num" id="zero">$0</p>
+    <div class="abs center" style="top:560px; display:flex; justify-content:center"><div class="wbars" id="zb"><i></i><i></i><i></i><i></i></div></div>
+  </div>
+
+  <div class="layer" id="s2">
+    <p class="cap xl" id="b1" style="top:320px">Because we don't have a server.</p>
+    <p class="cap sm muted" id="b2" style="top:470px">(Or an office. Or a second employee.)</p>
+  </div>
+
+  <div class="layer" id="s3">
+    <p class="cap md" id="d0" style="top:220px">Your spending stays on your iPhone.</p>
+    <div class="label" id="lab">
+      <h5>App Privacy</h5><p class="sub">What Sortd collects about you</p>
+      <div class="box">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#2bb07a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+        <b>Data Not Collected</b><span>The developer does not collect any data from this app.</span></div>
+    </div>
+  </div>
+
+  <div class="layer" id="s4">
+    <div class="list">
+      <div id="l1"><span class="ck"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>No account.</div>
+      <div id="l2"><span class="ck"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>No bank login.</div>
+      <div id="l3"><span class="ck"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>No ads.</div>
+      <div id="l4"><span class="ck"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>No tracking.</div>
+    </div>
+  </div>
+
+  <div class="layer" id="s5">
+    <p class="cap xl" id="e1" style="top:320px">We can't sell your data.</p>
+    <p class="cap xl" id="e2" style="top:450px; color:#2bb07a">We don't have it.</p>
+  </div>
+
+</div>
+<script src="engine.js"></script>
+<script>
+  const z = document.getElementById('zero');
+  onFrame(t => {
+    // Count down from $9,999 to $0 between 0.5 s and 1.7 s
+    const k = Math.min(1, Math.max(0, (t - .5) / 1.2)), e = 1 - Math.pow(1 - k, 3);
+    z.textContent = '$' + Math.round(9999 * (1 - e)).toLocaleString('en-AU');
+  });
+  show('#s1', 0, 2.6, 'cut'); show('#a', .1, null, 'up'); show('#zero', .3, null, 'pop'); show('#zb', 1.7, null, 'pop');
+  show('#s2', 2.8, 5.2, 'cut'); show('#b1', 2.8, null, 'up'); show('#b2', 3.9, null, 'up');
+  show('#s3', 5.4, 9.1, 'cut'); show('#d0', 5.5, null, 'up'); show('#lab', 5.9, null, 'pop');
+  show('#s4', 9.3, 12.6, 'cut'); ['#l1','#l2','#l3','#l4'].forEach((s, i) => show(s, 9.4 + i * .7, null, 'pop'));
+  show('#s5', 12.8, null, 'cut'); show('#e1', 12.85, null, 'up'); show('#e2', 13.7, null, 'pop');
+  endCard(14.9, 'Hackers would be very disappointed.');
+  seek(0);
+</script>
+</body></html>
