@@ -145,7 +145,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab(value: AppTab.home) { HomeView(tab: $tab).hideSystemTabBar() }
             Tab(value: AppTab.activity) { ActivityView().hideSystemTabBar() }
-            Tab(value: AppTab.insights) { InsightsView().hideSystemTabBar() }
+            Tab(value: AppTab.insights) { ProGate(feature: .insights) { InsightsView() }.hideSystemTabBar() }
             Tab(value: AppTab.settings) { SettingsView().hideSystemTabBar() }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {

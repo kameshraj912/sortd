@@ -13,11 +13,29 @@ struct SettingsView: View {
     @State private var csvFile: URL?
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
+    @State private var showingPaywall = false
+    @State private var pro = ProStore.shared
 
     var body: some View {
         NavigationStack {
             List {
                 ListPageTitle(title: "Settings")
+                Section {
+                    Button { showingPaywall = true } label: {
+                        HStack(spacing: 12) {
+                            Image("BrandIcon").resizable().frame(width: 30, height: 30)
+                                .clipShape(.rect(cornerRadius: 7, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sortd Pro").foregroundStyle(Color.ink)
+                                Text(pro.isPro ? "Active. Thank you." : "Gmail, receipt camera, insights and more")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: pro.isPro ? "checkmark.seal.fill" : "chevron.right")
+                                .foregroundStyle(pro.isPro ? Color.up : Color.secondary)
+                        }
+                    }
+                }
                 Section {
                     NavigationLink {
                         SetupGuideView()
@@ -43,7 +61,7 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        RecurringView()
+                        ProGate(feature: .recurring) { RecurringView() }
                     } label: {
                         Label("Subscriptions & Bills", systemImage: "arrow.triangle.2.circlepath")
                     }
@@ -51,6 +69,7 @@ struct SettingsView: View {
                         Label("Remind Me the Day Before", systemImage: "bell")
                     }
                     .onChange(of: reminders) { _, on in
+                        if on, !ProStore.shared.isPro { reminders = false; showingPaywall = true; return }
                         Task {
                             if on, !(await Reminders.requestPermission()) { reminders = false }
                             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
@@ -194,6 +213,7 @@ struct SettingsView: View {
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions) }
             .onChange(of: transactions.count) { _, n in csvFile = n == 0 ? nil : CSVExport.file(transactions) }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
                     DataReset.deleteEverything(in: context)
