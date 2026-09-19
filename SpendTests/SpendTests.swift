@@ -638,5 +638,98 @@ struct ReviewRegressionTests {
                             category: .eatingOut, source: .manual)
         #expect(t.audAmount == nil)
         #expect(t.audValue == 0)
+
+@MainActor
+struct SpendSummaryTests {
+    private let cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Australia/Melbourne")!
+        return c
+    }()
+    private let home = Money.home
+    private var now: Date { day("2026-09-19", hour: 12) }
+
+    private func day(_ s: String, hour: Int = 10) -> Date {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH"; f.timeZone = cal.timeZone
+        return f.date(from: "\(s) \(hour)")!
+    }
+    private func buy(_ d: String, _ merchant: String, _ amount: Decimal,
+                     _ cat: SpendCategory = .shopping, refunded: Bool = false) -> SpendSummary.Purchase {
+        .init(date: day(d), merchant: merchant, amount: amount, currency: home, category: cat, refunded: refunded)
+    }
+    private func m(_ v: Decimal) -> String { Money.format(v, home, cents: false) }
+
+    private var sample: [SpendSummary.Purchase] {
+        [buy("2026-09-02", "Rent", 1000, .housing),
+         buy("2026-09-10", "Woolworths", 200, .groceries),
+         buy("2026-09-19", "Coles", 40, .groceries),
+         buy("2026-09-05", "YouTrip top-up", 500, .transfers),
+         buy("2026-09-12", "Myer", 80, refunded: true),
+         buy("2026-08-30", "Last month", 999)]
+    }
+
+    @Test func monthTotalWithBudget() {
+        let r = SpendSummary.spent(sample, period: .month, budget: 2000, currency: home, now: now, calendar: cal)
+        #expect(r.total == 1240)
+        #expect(r.text == "You've spent \(m(1240)) this month, \(m(760)) left of your \(m(2000)) budget.")
+    }
+
+    @Test func todayLeavesOutBudget() {
+        let r = SpendSummary.spent(sample, period: .today, budget: 2000, currency: home, now: now, calendar: cal)
+        #expect(r.total == 40)
+        #expect(r.text == "You've spent \(m(40)) today.")
+    }
+
+    @Test func overBudgetWording() {
+        let r = SpendSummary.spent(sample, period: .month, budget: 1000, currency: home, now: now, calendar: cal)
+        #expect(r.text.hasSuffix("\(m(240)) over your \(m(1000)) budget."))
+        let left = SpendSummary.budgetLeft(sample, budget: 1000, currency: home, now: now, calendar: cal)
+        #expect(left.left == -240)
+        #expect(left.text == "You're \(m(240)) over your \(m(1000)) budget this month.")
+    }
+
+    @Test func budgetLeftUnderAndUnset() {
+        let r = SpendSummary.budgetLeft(sample, budget: 2000, currency: home, now: now, calendar: cal)
+        #expect(r.left == 760)
+        #expect(r.text == "You have \(m(760)) left of your \(m(2000)) budget this month.")
+        #expect(SpendSummary.budgetLeft(sample, budget: 0, currency: home, now: now, calendar: cal).text.contains("haven't set"))
+    }
+
+    @Test func categoryFilter() {
+        let r = SpendSummary.spent(sample, period: .month, category: .groceries, budget: 2000,
+                                   currency: home, now: now, calendar: cal)
+        #expect(r.total == 240)
+        #expect(r.text == "You've spent \(m(240)) on Groceries this month.")
+        let none = SpendSummary.spent(sample, period: .month, category: .travel, currency: home, now: now, calendar: cal)
+        #expect(none.total == 0)
+        #expect(none.text == "You haven't spent anything on Travel this month.")
+    }
+
+    @Test func emptyData() {
+        #expect(SpendSummary.spent([], period: .month, budget: 2000, currency: home, now: now, calendar: cal).text == "No purchases yet.")
+        #expect(SpendSummary.lastPurchase([], now: now, calendar: cal) == "No purchases yet.")
+        #expect(SpendSummary.upcomingBills([], hasPurchases: false, now: now, calendar: cal) == "No purchases yet.")
+        #expect(SpendSummary.budgetLeft([], budget: 500, currency: home, now: now, calendar: cal).left == 500)
+    }
+
+    @Test func lastPurchaseSkipsRefundsAndTransfers() {
+        let items = sample + [buy("2026-09-19", "Refunded", 30, refunded: true)]
+        #expect(SpendSummary.lastPurchase(items, now: now, calendar: cal)
+                == "Your last purchase was \(Money.format(40, home)) at Coles today.")
+    }
+
+    @Test func upcomingBillsWithinTwoWeeks() {
+        func bill(_ name: String, _ next: String, status: Recurring.Status = .active) -> Recurring {
+            Recurring(key: name, merchant: name, category: .subscriptions, card: .nab, cadence: .monthly,
+                      amount: 10, currency: home, audAmount: 10, lastDate: day("2026-08-20"),
+                      nextDate: day(next), charges: 3, previousAmount: nil, status: status, chargedAfterCancel: false)
+        }
+        let bills = [bill("Later", "2026-10-20"), bill("Spotify", "2026-09-20"), bill("Gym", "2026-09-25"),
+                     bill("Phone", "2026-09-30"), bill("Rent", "2026-10-02"), bill("Old", "2026-09-21", status: .cancelled)]
+        let text = SpendSummary.upcomingBills(bills, hasPurchases: true, now: now, calendar: cal)
+        #expect(text.hasPrefix("Your next 3 bills are: Spotify \(Money.format(10, home)) tomorrow, Gym"))
+        #expect(!text.contains("Rent") && !text.contains("Later") && !text.contains("Old"))
+        #expect(SpendSummary.upcomingBills([bill("Later", "2026-10-20")], hasPurchases: true, now: now, calendar: cal)
+                == "No bills due in the next 14 days.")
     }
 }
