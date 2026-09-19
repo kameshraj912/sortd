@@ -21,6 +21,17 @@ struct SpendApp: App {
         default: nil
         }
     }
+    private func applyAppearance() {
+        let style: UIUserInterfaceStyle = switch scheme {
+        case .light: .light
+        case .dark: .dark
+        default: .unspecified
+        }
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows { window.overrideUserInterfaceStyle = style }
+        }
+    }
+
     init() {
         let context = SpendStore.container.mainContext
         let used = Set(((try? context.fetch(FetchDescriptor<Transaction>())) ?? []).map(\.cardRaw))
@@ -73,7 +84,11 @@ struct SpendApp: App {
             #endif
             }
             .foregroundStyle(Color.ink)
-            .preferredColorScheme(scheme)
+            // Set on the windows directly: SwiftUI's preferredColorScheme
+            // doesn't always repaint when going back to "System" (needed a
+            // restart). The window override applies at once, sheets included.
+            .onChange(of: appearance, initial: true) { applyAppearance() }
+            .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { _ in applyAppearance() }
         }
         .modelContainer(SpendStore.container)
 

@@ -70,5 +70,46 @@ struct SpendShortcuts: AppShortcutsProvider {
             shortTitle: "Log Purchase",
             systemImageName: "creditcard"
         )
+        AppShortcut(
+            intent: SpentThisPeriodIntent(),
+            phrases: [
+                "How much have I spent in \(.applicationName)",
+                "How much have I spent \(\.$period) in \(.applicationName)",
+                "What have I spent \(\.$period) in \(.applicationName)",
+                "Ask \(.applicationName) how much I spent \(\.$period)",
+            ],
+            shortTitle: "Amount Spent",
+            systemImageName: "chart.bar"
+        )
+        AppShortcut(
+            intent: BudgetLeftIntent(),
+            phrases: [
+                "How much budget is left in \(.applicationName)",
+                "What's left of my budget in \(.applicationName)",
+                "Ask \(.applicationName) how much budget I have left",
+            ],
+            shortTitle: "Budget Left",
+            systemImageName: "gauge.with.dots.needle.33percent"
+        )
+        AppShortcut(
+            intent: UpcomingBillsIntent(),
+            phrases: [
+                "What bills are coming up in \(.applicationName)",
+                "Show upcoming bills in \(.applicationName)",
+                "Ask \(.applicationName) what bills are due",
+            ],
+            shortTitle: "Upcoming Bills",
+            systemImageName: "calendar"
+        )
+        AppShortcut(
+            intent: LastPurchaseIntent(),
+            phrases: [
+                "What was my last purchase in \(.applicationName)",
+                "Show my last purchase in \(.applicationName)",
+                "Ask \(.applicationName) what I bought last",
+            ],
+            shortTitle: "Last Purchase",
+            systemImageName: "clock.arrow.circlepath"
+        )
     }
 }
