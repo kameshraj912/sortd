@@ -174,12 +174,35 @@ final class CardBook {
         return cards.first { $0.allLast4.contains(last4) }?.card
     }
 
+    /// Every group of exactly 4 digits in the text ("•••• 4821", "…4821").
+    nonisolated static func digitGroups(in text: String?) -> [String] {
+        guard let text else { return [] }
+        return text.split(whereSeparator: { !$0.isASCII || !$0.isNumber })
+            .filter { $0.count == 4 }.map(String.init)
+    }
+
+    /// The one card whose saved digits (card or Apple Pay) appear in the text.
+    func card(digitsIn text: String?) -> Card? {
+        let groups = Set(Self.digitGroups(in: text))
+        guard !groups.isEmpty else { return nil }
+        let hits = active.filter { !groups.isDisjoint(with: $0.allLast4) }
+        return hits.count == 1 ? hits[0].card : nil
+    }
+
     /// Scores each card by how many of its Wallet words appear in the name;
     /// "debit"/"credit" in the name breaks ties between cards of one bank.
     func match(_ walletName: String?) -> Card {
         let name = " " + (walletName ?? "").lowercased() + " "
         guard name.trimmingCharacters(in: .whitespaces).count > 0 else { return .other }
-        var best: (card: Card, score: Int)?
+        // Card digits are proof: Apple Pay's own number or the card's.
+        if let card = card(digitsIn: walletName) { return card }
+        return candidates(walletName).first?.card ?? .other
+    }
+
+    /// Cards whose Wallet words appear in the name, best first.
+    func candidates(_ walletName: String?) -> [CardInfo] {
+        let name = " " + (walletName ?? "").lowercased() + " "
+        var scored: [(CardInfo, Int)] = []
         for c in active {
             var score = 0
             // "debit", "credit", "visa"… say nothing about which bank; the
@@ -190,19 +213,21 @@ final class CardBook {
                 let needle = w.count <= 3 ? " \(w) " : w   // "sc" must be a word
                 if name.contains(needle) { score += 2 }
             }
-            if let digits = c.allLast4.first(where: { name.contains($0) }), !digits.isEmpty { score += 5 }
             guard score > 0 else { continue }
             if name.contains("credit") { score += c.isCredit ? 1 : -1 }
             if name.contains("debit") { score += c.isCredit ? -1 : 1 }
-            if score > (best?.score ?? 0) { best = (c.card, score) }
+            if score > 0 { scored.append((c, score)) }
         }
-        return best?.card ?? .other
+        return scored.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
     private static let genericWords: Set<String> = ["debit", "credit", "card", "visa", "mastercard", "atm", "platinum"]
 
     private func save() {
         if let data = try? JSONEncoder().encode(cards) { defaults.set(data, forKey: Self.key) }
+        // Apple Pay taps run in the background and the app is closed right
+        // after: write now, or a card made by a tap is lost.
+        defaults.synchronize()
     }
 }
 

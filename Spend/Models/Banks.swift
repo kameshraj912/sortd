@@ -107,21 +107,51 @@ extension CardBook {
     /// For Apple Pay taps: the matching card, or a new one named after the
     /// card in Wallet, so nobody has to add cards by hand first.
     func matchOrCreate(_ walletName: String?) -> Card {
+        // Saved digits settle it, even if the name says otherwise.
+        if let byDigits = card(digitsIn: walletName) { return byDigits }
         var found = match(walletName)
-        let name = (walletName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var ambiguous = false
+        let digits = Self.digitGroups(in: walletName)
+        // Keep the name without the digits and dots ("NAB Visa Debit ••4821").
+        let name = (walletName ?? "")
+            .split(separator: " ")
+            // Drop the number part: "••••", "4821", "…4821".
+            .filter { word in !word.contains(where: \.isNumber) && !word.allSatisfy { "•·….*-".contains($0) } }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "•·…-*")))
         // "CommBank Credit" must not land on the CommBank debit card.
         let lower = name.lowercased()
         if let info = self.info(found), (lower.contains("credit") && !info.isCredit) || (lower.contains("debit") && info.isCredit) {
             found = .other
         }
-        guard found == .other, name.count >= 2 else { return found }
+        if found != .other, let d = digits.last {
+            // Digits no card owns. With one possible card, it's that card's
+            // Apple Pay number: remember it. With several (two NAB cards, or a
+            // new device like a Watch), don't guess: make a card for the digits.
+            // (One card can have several: iPhone and Watch each get their own.)
+            let possible = candidates(walletName)
+            if possible.count == 1, var info = self.info(found) {
+                if (info.applePayLast4 ?? []).count < 4 {
+                    info.applePayLast4 = (info.applePayLast4 ?? []) + [d]
+                    upsert(info)
+                }
+                return found
+            }
+            found = .other
+            ambiguous = true
+        }
+        if found != .other { return found }
+        guard name.count >= 2 else { return found }
         let bank = BankPreset.match(name)
-        let info = CardInfo(
-            name: name, shortName: String(name.prefix(18)), bank: bank?.name ?? "",
+        // Two cards could fit: name the new one by its digits so it's easy to tell apart.
+        let label = ambiguous ? "\(name) ••\(digits.last ?? "")" : name
+        var info = CardInfo(
+            name: label, shortName: String(label.prefix(18)), bank: bank?.name ?? "",
             isCredit: lower.contains("credit"),
             currency: (bank?.currency).flatMap { $0.isEmpty ? nil : $0 } ?? LocalCurrency.current(),
             country: (bank?.country).flatMap { $0.isEmpty ? nil : $0 } ?? (Locale.current.region?.identifier ?? "AU"),
             walletWords: [lower] + (bank?.words ?? []))
+        if let d = digits.last { info.applePayLast4 = [d] }
         upsert(info)
         return info.card
     }

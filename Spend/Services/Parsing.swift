@@ -13,14 +13,37 @@ enum AmountParser {
         ("USD", "USD"), ("US$", "USD"),
         ("SGD", "SGD"), ("S$", "SGD"),
         ("AUD", "AUD"), ("AU$", "AUD"), ("A$", "AUD"),
+        ("NZD", "NZD"), ("NZ$", "NZD"),
+        ("HKD", "HKD"), ("HK$", "HKD"),
+        ("CAD", "CAD"), ("C$", "CAD"),
         ("MYR", "MYR"), ("RM", "MYR"),
+        ("INR", "INR"), ("₹", "INR"), ("RS.", "INR"),
         ("EUR", "EUR"), ("€", "EUR"),
         ("GBP", "GBP"), ("£", "GBP"),
+        ("JPY", "JPY"), ("¥", "JPY"),
     ]
+
+    private static let isoCodes = Set(Locale.commonISOCurrencyCodes)
+
+    /// The currency the text names, if any: a known symbol, or any ISO code
+    /// written on its own ("THB 120").
+    static func currency(in text: String) -> String? {
+        let upper = text.uppercased()
+        if let m = markers.first(where: { upper.contains($0.0) }) { return m.1 }
+        return upper.split(whereSeparator: { !$0.isLetter })
+            .first { $0.count == 3 && isoCodes.contains(String($0)) }
+            .map(String.init)
+    }
+
+    /// True when the text starts with a minus: money coming back (a refund).
+    static func isNegative(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        return t.hasPrefix("-") || t.hasPrefix("−") || (t.hasPrefix("(") && t.hasSuffix(")"))
+    }
 
     static func parse(_ text: String) -> Result? {
         let upper = text.uppercased()
-        let currency = markers.first { upper.contains($0.0) }?.1
+        let currency = currency(in: text)
 
         // Keep digits, separators and a leading minus.
         var cleaned = upper.filter { $0.isNumber || $0 == "." || $0 == "," || $0 == "-" }

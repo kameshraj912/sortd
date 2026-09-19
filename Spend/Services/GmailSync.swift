@@ -168,7 +168,12 @@ enum GmailSync {
         if EmailParsers.knowsSender(m.from) { return EmailParsers.parse(m) }
         // The model first; if it finds nothing, the plain rule gets a try
         // (both skip shipping updates, declined payments and so on).
-        if ReceiptAI.isAvailable, let r = await ReceiptAI.read(m) { return [r] }
+        if ReceiptAI.isAvailable, var r = await ReceiptAI.read(m) {
+            // Apple's rules for AI in finance: the person checks what the model read.
+            r.note = [r.note, "Read by on-device AI. Check the amount and shop."]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+            return [r]
+        }
         return GenericReceipts.parse(m).map { [$0] } ?? []
     }
 

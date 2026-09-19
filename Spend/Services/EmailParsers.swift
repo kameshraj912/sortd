@@ -1,8 +1,8 @@
 import Foundation
 
 /// Turns receipt and bank-alert emails into purchase records, on the phone.
-/// A line-for-line port of apps-script/Parsers.js so both give the same
-/// results (the same test cases run against both). Pure: no network, no clock.
+/// Exact rules for known senders, each tested against real layouts.
+/// Pure: no network, no clock.
 ///
 /// If a sender changes its wording, its parser returns [] rather than guessing.
 nonisolated enum EmailParsers {
