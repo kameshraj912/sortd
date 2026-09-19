@@ -17,15 +17,12 @@ OAuth docs. "Done" means built and tested in the simulator.
 - [x] Debug-only tools are inside `#if DEBUG` and don't ship in release builds
 
 ## Needs you (can't be done in code)
-- [ ] Apple Developer Program ($149 AUD/yr) — decide individual vs company. **Leaning company:**
-      Guideline 5.1.1(ix) says apps in financial services or that "require sensitive user
-      information" should be from a legal entity; reading Gmail could count. A company account
-      (KV Engineering or another entity) needs a D-U-N-S number (free, ~5 business days).
-      If you stay individual, explain in the review notes that Sortd doesn't move or hold money.
-- [ ] Decide Gmail for v1: while Google verification is pending, public users would hit the
-      "unverified app" wall (fails 2.1). Options: ship v1 without Gmail (remove the feature, not
-      just hide it — 2.3.1(a)), or wait for Google verification before the App Store release.
-      TestFlight with Gmail is fine (up to 100 Google test users).
+- [ ] Apple Developer Program ($149 AUD/yr) — **decided 19 Sep 2026: individual for now.** If App
+      Review cites 5.1.1(ix), switch to a company account (needs a D-U-N-S number) and resubmit.
+      Review notes already say Sortd doesn't move, hold or manage money.
+- [ ] Gmail for v1 — **decided 19 Sep 2026:** App Store v1 ships without Gmail; TestFlight keeps
+      it (up to 100 Google test users) while Google verifies. Steps in docs/GoogleVerification.md.
+      Before the App Store build: remove Gmail from that build (not just hide it — 2.3.1(a)).
 - [ ] A website with a **privacy policy** and **support page** (Apple and Google both need the URLs)
 - [ ] Trademark check on "Sortd" (see Brand/README.md)
 - [ ] EU Digital Services Act trader status in App Store Connect
