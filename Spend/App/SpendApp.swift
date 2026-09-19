@@ -22,14 +22,10 @@ struct SpendApp: App {
         }
     }
     private func applyAppearance() {
-        let style: UIUserInterfaceStyle = switch scheme {
-        case .light: .light
-        case .dark: .dark
-        default: .unspecified
-        }
-        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-            for window in scene.windows { window.overrideUserInterfaceStyle = style }
-        }
+        #if DEBUG
+        if let forced = ProcessInfo.processInfo.environment["SPEND_APPEARANCE"] { Appearance.apply(forced); return }
+        #endif
+        Appearance.apply(appearance)
     }
 
     init() {
@@ -226,5 +222,23 @@ struct FlatTabBar: View {
 private extension View {
     func hideSystemTabBar() -> some View {
         toolbarVisibility(.hidden, for: .tabBar)
+    }
+}
+
+
+/// Light / Dark / System, set on the app's windows. Called from Settings the
+/// moment it changes and whenever the app opens. (SwiftUI's
+/// preferredColorScheme missed the change back to System until a restart.)
+@MainActor
+enum Appearance {
+    static func apply(_ value: String) {
+        let style: UIUserInterfaceStyle = switch value {
+        case "light": .light
+        case "dark": .dark
+        default: .unspecified
+        }
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows { window.overrideUserInterfaceStyle = style }
+        }
     }
 }
