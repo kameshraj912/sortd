@@ -16,12 +16,12 @@ struct CompedProTests {
     @Test func aRealCodeUnlocksPro() {
         let d = scratch()
         #expect(!CompedPro.isActive(d))
-        #expect(CompedPro.redeem("maximumeffort", d) == .unlocked("maximum effort"))
+        #expect(CompedPro.redeem("iamtheonewhobudgets", d) == .unlocked("the one who budgets"))
         #expect(CompedPro.isActive(d))
     }
 
     @Test func codesIgnoreCaseSpacesAndDashes() {
-        for written in ["Maximum Effort", "MAXIMUM-EFFORT", "  maximum   effort  ", "maximum_effort"] {
+        for written in ["Greed Is Good", "GREED-IS-GOOD", "  greed   is  good  ", "greed_is_good"] {
             let d = scratch()
             #expect(CompedPro.redeem(written, d).isSuccess, "\(written) should work")
             #expect(CompedPro.isActive(d))
@@ -29,7 +29,9 @@ struct CompedProTests {
     }
 
     @Test func everyCodeWorks() {
-        for code in ["maximumeffort", "chimichangas", "sortdsortd"] {
+        for code in ["iamtheonewhobudgets", "thereisnobudget", "wedontalkaboutbrunch",
+                     "ihavenomoneyandimustscream", "greedisgood", "whatsinthebox",
+                     "latestagecapitalism", "sortdbyraj"] {
             let d = scratch()
             #expect(CompedPro.redeem(code, d).isSuccess, "\(code) should work")
         }
@@ -45,14 +47,14 @@ struct CompedProTests {
 
     @Test func redeemingTwiceSaysSoRatherThanPretendingItIsNew() {
         let d = scratch()
-        #expect(CompedPro.redeem("chimichangas", d).isSuccess)
-        #expect(CompedPro.redeem("chimichangas", d) == .alreadyUnlocked)
+        #expect(CompedPro.redeem("greedisgood", d).isSuccess)
+        #expect(CompedPro.redeem("greedisgood", d) == .alreadyUnlocked)
         #expect(CompedPro.isActive(d))
     }
 
     @Test func deletingEverythingTakesProBack() {
         let d = scratch()
-        CompedPro.redeem("maximumeffort", d)
+        CompedPro.redeem("greedisgood", d)
         #expect(CompedPro.isActive(d))
         CompedPro.clear(d)
         #expect(!CompedPro.isActive(d))
@@ -60,10 +62,10 @@ struct CompedProTests {
 
     @Test func theCodesAreNotStoredInPlainText() {
         // The lookup is by hash, so a real code and its hash differ.
-        #expect(CompedPro.hash("maximumeffort") != "maximumeffort")
-        #expect(CompedPro.hash("maximumeffort").count == 64)
+        #expect(CompedPro.hash("greedisgood") != "greedisgood")
+        #expect(CompedPro.hash("greedisgood").count == 64)
         // And the same input always gives the same hash, or nothing works.
-        #expect(CompedPro.hash("Maximum Effort") == CompedPro.hash("maximumeffort"))
+        #expect(CompedPro.hash("Greed Is Good") == CompedPro.hash("greedisgood"))
     }
 
     @Test func knockingFiveTimesOpensTheDoor() async {
