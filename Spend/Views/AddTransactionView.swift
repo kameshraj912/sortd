@@ -21,11 +21,54 @@ struct AddTransactionView: View {
     @State private var scanned = false
     @FocusState private var amountFocused: Bool
     @State private var saveError: String?
+    @State private var quick = ""
+    @FocusState private var quickFocused: Bool
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
         let first = [Money.home, LocalCurrency.current()]
         return Array(NSOrderedSet(array: first + Money.supported)) as! [String]
+    }
+
+    /// One line instead of four fields. Whatever it works out goes into the
+    /// fields below for checking rather than straight into the store — a
+    /// wrong guess should cost a glance, not a wrong total.
+    private var quickField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "text.cursor")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("coffee 5.50", text: $quick)
+                .focused($quickFocused)
+                .submitLabel(.done)
+                .autocorrectionDisabled()
+                .onSubmit(applyQuick)
+            if !quick.isEmpty {
+                Button("Fill", action: applyQuick)
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.ink)
+            }
+        }
+        .accessibilityLabel("Quick entry")
+        .accessibilityHint("Type a name and an amount, like coffee 5.50")
+    }
+
+    private func applyQuick() {
+        guard let reading = QuickEntry.read(quick) else { return }
+        merchant = reading.merchant
+        // Decimal prints 5.50 as "5.5", which looks like a different number
+        // on a money screen.
+        let number = NSDecimalNumber(decimal: reading.amount).doubleValue
+        amountText = number == number.rounded()
+            ? String(Int(number))
+            : String(format: "%.2f", number)
+        if let code = reading.currency { currency = code }
+        if reading.daysAgo > 0 {
+            date = Calendar.current.date(byAdding: .day, value: -reading.daysAgo, to: .now) ?? date
+        }
+        quick = ""
+        quickFocused = false
     }
 
     var body: some View {
@@ -36,6 +79,12 @@ struct AddTransactionView: View {
                     scanButton
                 }
                 .listRowBackground(Color.clear)
+
+                Section {
+                    quickField
+                } footer: {
+                    Text("Type it the way you'd say it: \u{201C}seven seeds coffee 5.50\u{201D}.")
+                }
 
                 Section {
                     TextField("Merchant", text: $merchant)
