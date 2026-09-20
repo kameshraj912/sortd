@@ -76,25 +76,109 @@ nonisolated enum SortdVoice {
     static func topCategory(_ name: String, share: Double) -> String? {
         guard share >= 0.4 else { return nil }
         let percent = Int((share * 100).rounded())
-        return switch name.lowercased() {
+        let lines = categoryLines(name.lowercased(), percent: percent, name: name)
+        return stable(lines, seed: today &+ percent)
+    }
+
+    /// Several per category, picked by the day, so the same joke doesn't
+    /// greet you every time you open Insights.
+    ///
+    /// The test each one has to pass: would you say it to a friend who just
+    /// showed you their spending? Teasing the habit is fine. Telling someone
+    /// they're irresponsible, broke, greedy or stupid is not, and none of
+    /// these do. Housing and health get gentle ones on purpose — nobody
+    /// chooses rent, and nobody needs a joke about a medical bill.
+    private static func categoryLines(_ key: String, percent: Int, name: String) -> [String] {
+        switch key {
         case "eating out":
-            "Eating out took \(percent)% of the month. Your kitchen is right there. It has always been right there."
+            [
+                "Eating out took \(percent)% of the month. Your kitchen is right there. It has always been right there.",
+                "\(percent)% on eating out. Someone else did the washing up, at least.",
+                "Eating out: \(percent)%. A strong month for restaurants.",
+                "\(percent)% of the month was somebody else's cooking. Worth it, probably.",
+            ]
         case "food delivery":
-            "\(percent)% of your month arrived at the door. You didn't even have to stand up."
+            [
+                "\(percent)% of your month arrived at the door. You didn't even have to stand up.",
+                "Food delivery took \(percent)%. The rider knows. The rider has always known.",
+                "\(percent)% on delivery. Convenience has a price, and this is it.",
+                "Delivery: \(percent)%. Your front door is doing a lot of work.",
+            ]
         case "groceries":
-            "Groceries at \(percent)%. Annoyingly responsible of you."
+            [
+                "Groceries at \(percent)%. Annoyingly responsible of you.",
+                "\(percent)% on groceries. The boring answer, and the right one.",
+                "Groceries took \(percent)%. Nothing to see here. Genuinely.",
+                "\(percent)% on actual food from an actual shop. Look at you.",
+            ]
         case "shopping":
-            "Shopping took \(percent)%. You needed all of it, obviously."
+            [
+                "Shopping took \(percent)%. You needed all of it, obviously.",
+                "\(percent)% on shopping. Every single item was essential.",
+                "Shopping: \(percent)%. The parcels are a coincidence.",
+                "\(percent)% shopping. It was on sale, so really you saved money.",
+            ]
         case "transport":
-            "\(percent)% on getting places. At least you left the house."
+            [
+                "\(percent)% on getting places. At least you left the house.",
+                "Transport took \(percent)%. Movement isn't free, it turns out.",
+                "\(percent)% on transport. You went somewhere. That's something.",
+                "Transport: \(percent)%. The city is charging you rent to move around it.",
+            ]
         case "subscriptions":
-            "Subscriptions took \(percent)% without asking once. Admirable, really."
-        case "rent & housing", "housing":
-            "Housing at \(percent)%. Nothing funny about that one."
+            [
+                "Subscriptions took \(percent)% without asking once. Admirable, really.",
+                "\(percent)% on subscriptions. They renewed while you slept.",
+                "Subscriptions: \(percent)%. Quietly, monthly, forever.",
+                "\(percent)% went to things that bill themselves. Efficient.",
+            ]
         case "entertainment":
-            "Entertainment took \(percent)%. Money well spent, probably, allegedly."
+            [
+                "Entertainment took \(percent)%. Money well spent, allegedly.",
+                "\(percent)% on having a good time. Hard to argue with.",
+                "Entertainment: \(percent)%. You were entertained, so it worked.",
+                "\(percent)% on fun. The system works.",
+            ]
+        case "rent & housing", "housing":
+            [
+                "Housing at \(percent)%. Nothing funny about that one.",
+                "\(percent)% on having somewhere to live. Non-negotiable.",
+                "Housing took \(percent)%. That's just the number.",
+            ]
+        case "health":
+            [
+                "Health took \(percent)%. Worth every cent.",
+                "\(percent)% on health. Good.",
+            ]
+        case "bills":
+            [
+                "Bills took \(percent)%. They're very consistent, bills.",
+                "\(percent)% on bills. Nobody has ever enjoyed this number.",
+                "Bills: \(percent)%. The least fun money you'll spend.",
+            ]
+        case "travel":
+            [
+                "Travel took \(percent)%. You'll remember this one, at least.",
+                "\(percent)% on travel. Expensive, and completely worth it.",
+                "Travel: \(percent)%. The photos had better be good.",
+            ]
+        case "education":
+            [
+                "Education took \(percent)%. An investment, genuinely this time.",
+                "\(percent)% on learning things. Hard to complain about.",
+                "Education: \(percent)%. Future you says thanks.",
+            ]
+        case "transfers":
+            [
+                "Transfers took \(percent)%. Money moving sideways.",
+                "\(percent)% moved somewhere else. It still counts.",
+            ]
         default:
-            "\(name) took \(percent)% of the month. Make of that what you will."
+            [
+                "\(name) took \(percent)% of the month. Make of that what you will.",
+                "\(percent)% went to \(name). Now you know.",
+                "\(name): \(percent)%. Filed under 'worth knowing'.",
+            ]
         }
     }
 

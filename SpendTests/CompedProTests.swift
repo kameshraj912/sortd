@@ -29,9 +29,28 @@ struct CompedProTests {
     }
 
     @Test func everyCodeWorks() {
-        for code in ["iamtheonewhobudgets", "ihavenomoneyandimustscream", "spendnowcrylater",
-                     "futuremeproblem", "denialisabudget", "itwasonsale", "ineedthisactually",
-                     "deathandtaxes", "latestagecapitalism", "sortdbyraj"] {
+        for code in [
+            "spendnowcrylater",
+            "futuremeproblem",
+            "denialisabudget",
+            "itwasonsale",
+            "ineedthisactually",
+            "iamtheonewhobudgets",
+            "ihavenomoneyandimustscream",
+            "deathandtaxes",
+            "latestagecapitalism",
+            "treatyourselftodebt",
+            "thebankdisagrees",
+            "itsaninvestment",
+            "moneyhasleftthechat",
+            "paydayisamyth",
+            "brokebutaesthetic",
+            "onelastcoffee",
+            "thealgorithmmademedoit",
+            "roundingerror",
+            "cashisamemory",
+            "sortdbyraj",
+        ] {
             let d = scratch()
             #expect(CompedPro.redeem(code, d).isSuccess, "\(code) should work")
         }
@@ -50,6 +69,39 @@ struct CompedProTests {
         #expect(CompedPro.redeem("itwasonsale", d).isSuccess)
         #expect(CompedPro.redeem("itwasonsale", d) == .alreadyUnlocked)
         #expect(CompedPro.isActive(d))
+    }
+
+    @Test func theCodeUsedIsRememberedSoYouKnowWhoIsWho() {
+        let d = scratch()
+        #expect(CompedPro.source(d) == nil)
+        CompedPro.redeem("thebankdisagrees", d)
+        #expect(CompedPro.source(d) == "the bank disagrees")
+
+        // Different person, different code, different name.
+        let other = scratch()
+        CompedPro.redeem("onelastcoffee", other)
+        #expect(CompedPro.source(other) == "one last coffee")
+    }
+
+    @Test func everyCodeHasItsOwnName() {
+        // Twenty codes are no use for telling people apart if two of them
+        // say the same thing.
+        var names: Set<String> = []
+        for code in ["spendnowcrylater", "futuremeproblem", "denialisabudget", "itwasonsale",
+                     "ineedthisactually", "iamtheonewhobudgets", "ihavenomoneyandimustscream",
+                     "deathandtaxes", "latestagecapitalism", "treatyourselftodebt",
+                     "thebankdisagrees", "itsaninvestment", "moneyhasleftthechat",
+                     "paydayisamyth", "brokebutaesthetic", "onelastcoffee",
+                     "thealgorithmmademedoit", "roundingerror", "cashisamemory", "sortdbyraj"] {
+            let d = scratch()
+            guard case .unlocked(let name) = CompedPro.redeem(code, d) else {
+                Issue.record("\(code) did not unlock")
+                continue
+            }
+            #expect(!names.contains(name), "\(name) is used by more than one code")
+            names.insert(name)
+        }
+        #expect(names.count == 20)
     }
 
     @Test func deletingEverythingTakesProBack() {

@@ -257,13 +257,22 @@ struct SettingsView: View {
                         .contentShape(.rect)
                         .onTapGesture { knock.knock() }
                         .accessibilityHint("Tapped five times, opens a code screen")
+                    // The flat tab bar sits over the last row otherwise, and
+                    // the last row is the one with the hidden door in it.
+                    Color.clear
+                        .frame(height: 1)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityHidden(true)
                 } header: {
                     BoldHeader("About")
                 } footer: {
                     if let hint = knock.hint {
                         Text(hint).foregroundStyle(.secondary)
-                    } else if CompedPro.isActive() {
-                        Text("Pro is on the house. Don't tell anyone.")
+                    } else if let source = CompedPro.source() {
+                        // Named so a tester can say which code they used —
+                        // the app has no server and reports nothing.
+                        Text("Pro is on the house, via \(source). Don't tell anyone.")
                             .foregroundStyle(.secondary)
                     }
                 }
