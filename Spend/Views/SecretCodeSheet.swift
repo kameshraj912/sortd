@@ -75,7 +75,7 @@ struct SecretCodeSheet: View {
     private func message(for result: CompedPro.Result) -> String {
         switch result {
         case .unlocked:
-            "Pro unlocked. Maximum effort."
+            "Pro unlocked. Go on then."
         case .alreadyUnlocked:
             "You already have it. Enthusiasm noted."
         case .notACode:
