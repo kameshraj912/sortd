@@ -165,6 +165,9 @@ nonisolated enum BankAlerts {
             #"(?:merchant|payee)\s*[:\-]\s*([^\n\.]{2,60})"#,
             #"\bat\s+([^\n\.]{2,60}?)(?=\s+(?:on|using|with|from|for|via)\b|[\.\n]|$)"#,
             #"\bto\s+([^\n\.]{2,60}?)(?=\s+(?:on|using|with|from|for|via)\b|[\.\n]|$)"#,
+            // Refunds run the other way: "a refund of $38.00 from KMART".
+            // Last, so a purchase's "at" or "to" always wins.
+            #"\bfrom\s+([^\n\.]{2,60}?)(?=\s+(?:on|using|with|to|for|via|has|was)\b|[\.\n]|$)"#,
         ]
         for pattern in patterns {
             guard let m = match(pattern, text) else { continue }
