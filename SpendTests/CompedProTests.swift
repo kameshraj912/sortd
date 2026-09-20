@@ -75,12 +75,12 @@ struct CompedProTests {
         let d = scratch()
         #expect(CompedPro.source(d) == nil)
         CompedPro.redeem("thebankdisagrees", d)
-        #expect(CompedPro.source(d) == "the bank disagrees")
+        #expect(CompedPro.source(d) == "thebankdisagrees")
 
         // Different person, different code, different name.
         let other = scratch()
         CompedPro.redeem("onelastcoffee", other)
-        #expect(CompedPro.source(other) == "one last coffee")
+        #expect(CompedPro.source(other) == "onelastcoffee")
     }
 
     @Test func everyCodeHasItsOwnName() {

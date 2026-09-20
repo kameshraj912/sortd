@@ -111,7 +111,9 @@ nonisolated enum CompedPro {
         guard let name = accepted[hash(code)] else { return .notACode }
         if isActive(defaults) { return .alreadyUnlocked }
         defaults.set(true, forKey: key)
-        defaults.set(name, forKey: sourceKey)
+        // The code itself, not its nickname: "via the bank disagrees" reads
+        // like a typo, and the code is the thing that identifies who.
+        defaults.set(normalise(code), forKey: sourceKey)
         return .unlocked(name)
     }
 
