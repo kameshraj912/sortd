@@ -23,12 +23,13 @@ nonisolated enum EmailParsers {
         "(from:noreply@you.co subject:\"Summary of your recent\")",
         "from:stripe.com",
         "from:invoice+statements@mail.anthropic.com",
-    ].joined(separator: " OR ")
+    ].joined(separator: " OR ") + " OR " + BankAlerts.gmailTerms.joined(separator: " OR ")
 
     /// Senders with exact rules. Their emails never go to the general reader:
     /// if a rule finds nothing (a DoorDash promo), there's nothing to find.
     static func knowsSender(_ from: String) -> Bool {
         let f = from.lowercased()
+        if BankAlerts.bank(for: f) != nil { return true }
         return ["sc.com", "doordash.com", "apple.com", "you.co", "stripe.com", "mail.anthropic.com"].contains { f.contains($0) }
     }
 
@@ -40,6 +41,7 @@ nonisolated enum EmailParsers {
         if from.contains("apple.com") { return apple(msg) }
         if from.contains("you.co") { return youTrip(msg) }
         if from.contains("stripe.com") || from.contains("mail.anthropic.com") { return stripe(msg) }
+        if let bank = BankAlerts.bank(for: from) { return bankAlert(msg, bank) }
         return []
     }
 
@@ -62,6 +64,24 @@ nonisolated enum EmailParsers {
                            date: sgtDate(m[4], m[5]) ?? msg.date, note: "Reversed by the bank")]
         }
         return []
+    }
+
+    // MARK: - Bank alerts
+
+    /// "You just spent $58.30 at WOOLWORTHS on your card ending 1234."
+    ///
+    /// The card spending nobody emails you a receipt for, and the only
+    /// source that ever tells you about a refund. See `BankAlerts` for why
+    /// this is deliberately cautious about what counts as a purchase.
+    static func bankAlert(_ msg: Message, _ bank: BankAlerts.Bank) -> [EmailRecord] {
+        guard let reading = BankAlerts.read(subject: msg.subject, body: msg.body, bank: bank) else { return [] }
+        let d = cleanDescriptor(reading.merchant)
+        return [record(msg, 0,
+                       kind: reading.isRefund ? "refund" : "purchase",
+                       merchant: d.merchant, raw: reading.merchant, platform: d.platform,
+                       amount: reading.amount, currency: reading.currency,
+                       last4: reading.last4, date: msg.date,
+                       note: reading.isRefund ? "Reversed by the bank" : "")]
     }
 
     // MARK: - DoorDash order confirmations
