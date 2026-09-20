@@ -48,6 +48,32 @@ enum Sortd {
             : .white
     })
 
+    // MARK: Colours resolved against a known scheme
+    //
+    // `containerBackground` is read outside the view it decorates, so an
+    // adaptive colour there ignores a forced Light or Dark and stays on the
+    // system setting — which produced a dark widget's text on a white card,
+    // i.e. nothing readable at all. These take the scheme explicitly so the
+    // background can never disagree with the content sitting on it.
+
+    static func card(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 0.118, green: 0.118, blue: 0.129) : .white
+    }
+
+    static func ink(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 0.910, green: 0.910, blue: 0.918)
+            : Color(red: 0.086, green: 0.086, blue: 0.102)
+    }
+
+    static func onInk(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .black : .white
+    }
+
+    static func track(_ scheme: ColorScheme) -> Color {
+        Color(white: scheme == .dark ? 0.24 : 0.90)
+    }
+
     // MARK: Category colour — the app's palette, by raw value
 
     static func color(forCategory raw: String) -> Color {

@@ -75,17 +75,23 @@ struct SortdProvider: TimelineProvider {
     }
 }
 
-/// Applies a forced light or dark look, and leaves the system alone for
-/// Automatic. `preferredColorScheme` isn't available to widgets, so the
-/// environment value is set directly.
-private extension View {
-    @ViewBuilder
-    func colorScheme(_ look: SortdLook) -> some View {
-        if let scheme = look.colorScheme {
-            environment(\.colorScheme, scheme)
-        } else {
-            self
-        }
+/// Dresses a widget in the chosen look.
+///
+/// This has to set the content's scheme and the card behind it from the same
+/// value. `containerBackground` is read outside the view it decorates, so
+/// setting only the environment gave a dark widget a white card — black
+/// text on black, white text on white, depending which half you looked at.
+private struct Chrome<Content: View>: View {
+    var look: SortdLook
+    @Environment(\.colorScheme) private var systemScheme
+    @ViewBuilder var content: Content
+
+    private var scheme: ColorScheme { look.colorScheme ?? systemScheme }
+
+    var body: some View {
+        content
+            .environment(\.colorScheme, scheme)
+            .containerBackground(Sortd.card(scheme), for: .widget)
     }
 }
 
@@ -381,10 +387,10 @@ struct SortdSpendingWidget: Widget {
         AppIntentConfiguration(kind: "SortdSpending",
                                intent: SpendingConfiguration.self,
                                provider: SpendingProvider()) { entry in
-            SpendingView(entry: entry)
-                .colorScheme(entry.configuration.look)
-                .containerBackground(Sortd.card, for: .widget)
-                .widgetURL(SortdLink.home)
+            Chrome(look: entry.configuration.look) {
+                SpendingView(entry: entry)
+            }
+            .widgetURL(SortdLink.home)
         }
         .configurationDisplayName("Spending")
         .description("Today, this week or this month — against what you have to spend, in your category colours.")
@@ -467,9 +473,9 @@ struct SortdQuickAddWidget: Widget {
         AppIntentConfiguration(kind: "SortdQuickAdd",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            QuickAddView(entry: entry)
-                .colorScheme(entry.configuration.look)
-                .containerBackground(Sortd.card, for: .widget)
+            Chrome(look: entry.configuration.look) {
+                QuickAddView(entry: entry)
+            }
         }
         .configurationDisplayName("Quick Add")
         .description("Log a purchase, scan a receipt or import a statement in one tap.")
@@ -515,10 +521,10 @@ struct SortdBillsWidget: Widget {
         AppIntentConfiguration(kind: "SortdBills",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            BillsView(entry: entry)
-                .colorScheme(entry.configuration.look)
-                .containerBackground(Sortd.card, for: .widget)
-                .widgetURL(SortdLink.bills)
+            Chrome(look: entry.configuration.look) {
+                BillsView(entry: entry)
+            }
+            .widgetURL(SortdLink.bills)
         }
         .configurationDisplayName("Bills")
         .description("Subscriptions and bills about to charge, so none of them surprise you.")

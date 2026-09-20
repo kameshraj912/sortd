@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var showingPaywall = false
     @State private var pro = ProStore.shared
+    @State private var knock = SecretKnock.shared
 
     var body: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
@@ -108,6 +109,19 @@ struct SettingsView: View {
                             Text(SpendGradient.Style(rawValue: cardStyle)?.name ?? "Satin")
                         } label: {
                             Label("Card Style", systemImage: "paintpalette")
+                        }
+                    }
+                    NavigationLink {
+                        WidgetsGuideView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Widgets")
+                                Text("Home and Lock Screen · light or dark")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "square.grid.2x2")
                         }
                     }
                 } header: {
@@ -240,8 +254,18 @@ struct SettingsView: View {
                     LabeledContent("Purchases", value: "\(transactions.count)")
                     LabeledContent("Stored", value: "On this iPhone only")
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                        .contentShape(.rect)
+                        .onTapGesture { knock.knock() }
+                        .accessibilityHint("Tapped five times, opens a code screen")
                 } header: {
                     BoldHeader("About")
+                } footer: {
+                    if let hint = knock.hint {
+                        Text(hint).foregroundStyle(.secondary)
+                    } else if CompedPro.isActive() {
+                        Text("Pro is on the house. Don't tell anyone.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -256,6 +280,7 @@ struct SettingsView: View {
             .onAppear { refreshFiles() }
             .onChange(of: transactions.count) { _, _ in refreshFiles() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $knock.isOpen) { SecretCodeSheet() }
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
                     DataReset.deleteEverything(in: context)
