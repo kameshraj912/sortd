@@ -85,6 +85,7 @@ enum DataReset {
         GmailSync.accounts = []
         Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }
         Keychain.deleteAll()
+        CompedPro.clear()
         // The exported spreadsheet, if one was made.
         for f in (try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
         where f.pathExtension == "csv" { try? FileManager.default.removeItem(at: f) }
