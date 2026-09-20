@@ -134,11 +134,43 @@
     }, { passive: true });
 
     // Scroll-in for sections marked .reveal.
+    //
+    // These start at opacity 0, so a missed reveal isn't a missing
+    // animation — it's missing content. Two things guard against that.
+    //
+    // threshold 0 rather than 0.12: a section taller than the phone, or one
+    // you flick past quickly, can struggle to get 12% of itself inside the
+    // root. Any pixel is enough.
+    //
+    // And a sweep, in case the observer is never called at all: anything
+    // that has reached the bottom of the screen gets shown regardless.
     var items = document.querySelectorAll(".reveal");
     if (!("IntersectionObserver" in window)) { items.forEach(function (el) { el.classList.add("in"); }); return; }
+
+    function show(el) { el.classList.add("in"); }
+
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
-    }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
+      entries.forEach(function (e) { if (e.isIntersecting) { show(e.target); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0 });
     items.forEach(function (el) { io.observe(el); });
+
+    var sweeping = false;
+    function sweep() {
+      sweeping = false;
+      var limit = window.innerHeight;
+      var left = 0;
+      items.forEach(function (el) {
+        if (el.classList.contains("in")) return;
+        if (el.getBoundingClientRect().top < limit) { show(el); io.unobserve(el); } else { left++; }
+      });
+      if (!left) { window.removeEventListener("scroll", onScroll); }
+    }
+    function onScroll() {
+      if (sweeping) return;
+      sweeping = true;
+      requestAnimationFrame(sweep);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    sweep();
   });
 })();
