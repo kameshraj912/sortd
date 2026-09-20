@@ -6,8 +6,11 @@ import Foundation
 /// checking whether they can afford lunch does not want banter, and somebody
 /// who has just gone over budget wants that even less. So the rule is:
 ///
-/// **Never joke about how much someone spent, and never joke on a screen
-/// they opened because they were worried.** Over budget, category limits,
+/// **Roast the habit, never the person, and never on a screen they opened
+/// because they were worried.**
+///
+/// Being told your takeaway habit is a habit is funny. Being told you're
+/// bad with money while staring at a number you're frightened of is not. Over budget, category limits,
 /// delete, privacy, errors and anything with a number in it stay plain.
 ///
 /// Wit goes where the stakes are zero: empty states nobody is stuck on,
@@ -33,23 +36,23 @@ nonisolated enum SortdVoice {
 
     static var noPurchases: String {
         stable([
-            "Nothing here yet. Enjoy it while it lasts.",
-            "Empty. Either you've been very good or very offline.",
-            "No purchases yet. Suspiciously responsible of you.",
+            "Nothing logged. Either you're broke or you're lying to yourself.",
+            "Empty. Bold move, installing a spending tracker and then not spending.",
+            "No purchases. Give it a Friday.",
         ], seed: today)
     }
 
     static var noInsights: String {
         stable([
-            "Nothing to chart yet. Charts need spending, and spending needs you.",
-            "No patterns yet. Give it a week and there will be patterns.",
+            "Nothing to chart. Charts need spending. You know what to do, unfortunately.",
+            "No patterns yet. There will be. There always are.",
         ], seed: today)
     }
 
     static var noRecurring: String {
         stable([
-            "None found yet. There's always one. Usually two.",
-            "Nothing repeating yet. Give it a month.",
+            "None found yet. They're out there. Waiting. Charging quietly.",
+            "Nothing repeating yet. Give it a month and prepare to be disappointed.",
         ], seed: today)
     }
 
@@ -59,47 +62,57 @@ nonisolated enum SortdVoice {
         "Sortd read the file and found no purchases in it. If it's a statement, the CSV export from your bank usually works best."
     }
 
-    /// One line about the category that ran away with the month. The
-    /// website already does this joke ("It was takeaway. It's always
-    /// takeaway.") and it only lands when the category really is dominant,
-    /// so it stays quiet below a third of the month's spending.
+    /// One dry line about the category that ran away with the month.
     ///
-    /// This is about a category, never about the person — "eating out won"
-    /// rather than "you ate out too much". The difference matters on a
-    /// screen somebody opened because they were worried.
+    /// Deliberately not the website's takeaway joke. That one is already
+    /// on the homepage and in the ads, and a joke you've heard three times
+    /// stops being a joke and starts being a tic. These are observations
+    /// rather than punchlines, and they only appear when one category took
+    /// two fifths of the month, so most months say nothing at all.
+    ///
+    /// Always about the category, never the person — "eating out won"
+    /// rather than "you ate out too much". That line matters on a screen
+    /// somebody opened because they were worried.
     static func topCategory(_ name: String, share: Double) -> String? {
-        guard share >= 0.33 else { return nil }
+        guard share >= 0.4 else { return nil }
+        let percent = Int((share * 100).rounded())
         return switch name.lowercased() {
-        case "eating out", "food delivery":
-            "It was takeaway. It's always takeaway."
+        case "eating out":
+            "Eating out took \(percent)% of the month. Your kitchen is right there. It has always been right there."
+        case "food delivery":
+            "\(percent)% of your month arrived at the door. You didn't even have to stand up."
         case "groceries":
-            "Groceries won. The boring answer is usually the right one."
+            "Groceries at \(percent)%. Annoyingly responsible of you."
         case "shopping":
-            "Shopping took the month. No notes."
+            "Shopping took \(percent)%. You needed all of it, obviously."
         case "transport":
-            "Mostly getting places. Which is at least useful."
+            "\(percent)% on getting places. At least you left the house."
         case "subscriptions":
-            "Subscriptions. Quietly, all month, without being asked."
+            "Subscriptions took \(percent)% without asking once. Admirable, really."
+        case "rent & housing", "housing":
+            "Housing at \(percent)%. Nothing funny about that one."
+        case "entertainment":
+            "Entertainment took \(percent)%. Money well spent, probably, allegedly."
         default:
-            "\(name) took the biggest share this month."
+            "\(name) took \(percent)% of the month. Make of that what you will."
         }
     }
 
     // MARK: Milestones — a one-off, never repeated
 
     /// Shown once, the first time someone passes 100 logged purchases.
-    static let hundredPurchases = "100 purchases logged. That's 100 things you'd otherwise have forgotten about by Thursday."
+    static let hundredPurchases = "100 purchases logged. That's 100 things you'd have sworn you didn't buy."
 
-    static let firstImport = "Imported. Your past is now searchable. Sorry."
+    static let firstImport = "Imported. Your past is now searchable. Sorry about that."
 
     // MARK: Hidden
 
     /// Long press the mark under a title.
     static var brandMarkPress: String {
         stable([
-            "Four colours. We agonised over them.",
-            "You pressed the little stripes. We're not judging. Much.",
-            "That's the logo. It doesn't do anything. Thanks for checking.",
+            "Four colours. We agonised over them. You held them down.",
+            "You long-pressed a logo. On a budgeting app. On purpose.",
+            "It doesn't do anything. You checked anyway. Respect.",
         ], seed: today)
     }
 
