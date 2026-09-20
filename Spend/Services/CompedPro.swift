@@ -23,19 +23,33 @@ nonisolated enum CompedPro {
     /// SHA-256 of each code, lowercased and stripped of spaces and dashes.
     /// Kept as hashes so the codes aren't readable in the app binary.
     ///
-    /// A note on the nods: a phrase someone types in is input, not branding,
-    /// and short phrases aren't copyrightable. Trademark is the thing to
-    /// watch — "Maximum Effort" is a registered mark (it's Ryan Reynolds'
-    /// production company) — so Sortd accepts it and never *shows* it.
-    /// Nothing here goes in the App Store listing, the screenshots or the
-    /// website, which is where a trademark claim would actually have legs.
+    /// A note on the nods. Most of these are riffs rather than quotes —
+    /// "I am the one who budgets" is original wording that only lands if you
+    /// know the line it's playing with, which is parody, not copying. The
+    /// rest are ordinary English ("greed is good", "what's in the box") or
+    /// generic terms. Nothing here is a registered mark being used as one.
+    ///
+    /// The rule that keeps it that way: a code is something a person types
+    /// in, never something Sortd displays, and none of it goes in the App
+    /// Store listing, the screenshots or the website — which is where a
+    /// trademark claim would actually have legs.
     private static let accepted: [String: String] = [
-        // "maximumeffort"
-        "d628b09f0d6531337fa86f049c8060db85cdb72881768319f52cae4a1a9b1bc1": "maximum effort",
-        // "chimichangas"
-        "a698a841b4e5c9d47dbc94e1880f021692b940a8b1128af064ab261a838af7d2": "chimichangas",
-        // "sortdsortd"
-        "784fa9dc58bbc3101826e4dd352d25b4ab2a438bbc0b8fe89e60838db62c46c1": "the long way round",
+        // "iamtheonewhobudgets"
+        "da5ed46eec66ccb2c8d5f094cbdcd72df785089a8682abd28f72b1d2ac900d94": "the one who budgets",
+        // "thereisnobudget"
+        "393d33c00be7732bab500b3228ab528c00f4bef7f6bb8933c5fa65106a90f11a": "no budget",
+        // "wedontalkaboutbrunch"
+        "3683716de922865ee2153ea1305964de8059c51cc8fe3c927d03d91aebb60a6d": "brunch",
+        // "ihavenomoneyandimustscream"
+        "4eb40fc3d71b35fdc6b56380720ebb32ffaccaf2fed9c19d2616dc870b99e8bc": "no money",
+        // "greedisgood"
+        "b0cd76b7d7829362d581b739c0b295abf53182792609078bb17a9dd917ffba7c": "greed",
+        // "whatsinthebox"
+        "34b8b147269cfb1b1a2f2cb4c85b6975a5472151a111b8fe119fc5c7b16cbbfd": "the box",
+        // "latestagecapitalism"
+        "4851ae8433be52645fed98c4c77cea2be97a2500f94aa3d2d1730737b36c6097": "late stage",
+        // "sortdbyraj"
+        "f717ee0ac4a34123173cfc39b82b94f64d0158ebb791174cacd56e7bbfe2a248": "the founder",
     ]
 
     static func normalise(_ code: String) -> String {
