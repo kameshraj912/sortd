@@ -144,6 +144,9 @@ struct RootView: View {
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var lock = AppLock()
     @State private var router = Router.shared
+    /// Set when setup finishes, so the cover closes even when a debug flag
+    /// is forcing it open.
+    @State private var setupFinished = false
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -180,8 +183,8 @@ struct RootView: View {
             tab = router.tab
         }
         .onChange(of: router.tab) { _, new in tab = new }
-        .fullScreenCover(isPresented: .constant(!onboarded || Self.forceSetup)) {
-            OnboardingView()
+        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
+            OnboardingView { setupFinished = true }
         }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.

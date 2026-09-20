@@ -13,6 +13,53 @@ OAuth docs. "Done" means built and tested in the simulator.
 - [ ] Create the three products in App Store Connect and get them to "Ready to Submit".
       Until then `ProStore.load()` returns nothing and the paywall is empty.
 
+## Knowing how it's going, without breaking the privacy promise
+
+Sortd's whole pitch is "no tracking, nothing leaves your phone", and the
+App Privacy label says Data Not Collected. Adding an analytics SDK would
+make the website, the in-app privacy page and that label all false at once,
+and "no tracking" is the thing this category competes on. So: don't.
+
+Everything below comes from Apple, free, with no code and no SDK.
+
+**Turn on (App Store Connect):**
+- [ ] **App Analytics** — active devices, sessions per device, retention by
+      cohort, deletions, crashes, and a territory breakdown. This is
+      "how many, how much, where" and it is already anonymised and
+      aggregated by Apple. It only counts users who left "Share With App
+      Developers" on, so treat it as a trend, not a census.
+- [ ] **Sales and Trends** — units, proceeds and refunds by day and country.
+- [ ] **Payments and Financial Reports** — what actually lands in the bank.
+
+**Watch these three numbers:**
+- [ ] Refund rate. A jump usually means the paywall promised something the
+      app doesn't do.
+- [ ] Day-1 → Day-7 retention. The category's known killer is people giving
+      up on logging, so this is the number that says whether capture works.
+- [ ] Crash-free sessions.
+
+**Fraud, and why there's little to do:**
+StoreKit 2 already verifies every transaction's signature on the device
+(`ProStore.swift` — `case .verified`), drops anything with a
+`revocationDate`, and drops anything expired. That covers forged receipts
+and "refund it but keep using it", which were the two real iOS fraud
+vectors. Nothing to build.
+
+The gap without a server is real-time refund notification (Sortd finds out
+next launch), and that's it. App Store Server Notifications V2 closes it,
+needs a backend, and isn't worth one until there's revenue to protect.
+
+**The one real risk is a comped code leaking publicly.**
+- [ ] Hand out different codes to different people so a leak is traceable.
+      Settings shows which code unlocked that iPhone.
+- [ ] If one leaks, delete it from `CompedPro.accepted` and ship an update.
+      People who already redeemed it keep Pro, which is the fair outcome;
+      new redemptions stop.
+- [ ] There is no cross-device enforcement and there can't be without a
+      server. For anything that genuinely must be single-use, use App Store
+      Connect **Offer Codes** — Apple tracks redemption and each one dies
+      after a single use.
+
 ## Done in the app
 - [x] No empty first launch: guided setup + "Explore with sample data" for reviewers (Guideline 2.1, 4.2)
 - [x] Works fully offline; nothing needs an account
