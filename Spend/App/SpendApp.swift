@@ -143,6 +143,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var lock = AppLock()
+    @State private var router = Router.shared
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -173,6 +174,12 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
         }
+        // A tap on a widget opens the app at what the widget was showing.
+        .onOpenURL { url in
+            router.open(url)
+            tab = router.tab
+        }
+        .onChange(of: router.tab) { _, new in tab = new }
         .fullScreenCover(isPresented: .constant(!onboarded || Self.forceSetup)) {
             OnboardingView()
         }
@@ -190,6 +197,8 @@ struct RootView: View {
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())
             await Reminders.checkCategoryLimits(all)
+            // Leave the widget fresh numbers. Does nothing without an App Group.
+            WidgetBridge.refresh(from: context)
         }
     }
 }

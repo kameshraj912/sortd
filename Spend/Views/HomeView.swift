@@ -60,6 +60,14 @@ struct HomeView: View {
                 CardDetailView(card: card)
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
+            .onChange(of: Router.shared.sheet, initial: true) { _, pending in
+                switch pending {
+                case .add: showingAdd = true
+                case .budget: showingBudget = true
+                case nil: return
+                }
+                Router.shared.clearSheet()
+            }
             .sheet(isPresented: $showingSetup) {
                 NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
             }

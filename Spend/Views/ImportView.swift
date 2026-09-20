@@ -322,6 +322,7 @@ struct ImportView: View {
             }
         }
         try? TransactionLogger.refreshUncategorised(in: context)
+        WidgetBridge.refresh(from: context)
         Task { await FXService.backfill(in: context) }
         busy = false
         done = merged > 0
