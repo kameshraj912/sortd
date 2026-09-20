@@ -262,7 +262,7 @@ struct ImportView: View {
                         ? StatementImport.rows(fromText: reading.text)
                         : StatementImport.rows(fromCSV: reading.text)
                     guard !found.isEmpty else {
-                        error = "Sortd couldn't find any purchases in that. If it's a statement, try the CSV export from your bank."
+                        error = SortdVoice.importFoundNothing
                         busy = false
                         photo = nil
                         return
