@@ -91,6 +91,23 @@ needs a backend, and isn't worth one until there's revenue to protect.
 - [ ] Screenshots: 6.9" iPhone (1320×2868), 1–10 of them
 - [ ] Review notes: explain the Shortcuts automation, attach a short video, say sample data is available
 
+## Bank alerts (built, needs real emails to confirm)
+
+Sortd reads "you just spent $X at Y" emails from 18 banks across AU, SG
+and MY. This covers the card spending no merchant emails a receipt for,
+and it is the only source that reports a refund.
+
+- [x] One reader, not a regex per bank: banks change their wording, and a
+      bespoke pattern per bank breaks silently when they do
+- [x] An alert needs an amount **and** a merchant before it counts, so
+      balances, statements, OTPs and payment-due notices produce nothing
+- [x] Refunds and reversals are recorded as refunds, never as spending
+- [ ] **Check against real emails.** The Standard Chartered parser was
+      written against real alerts. These were written against the shapes
+      alerts take. Forward one real alert from NAB and from StanChart to
+      yourself, run a Gmail sync, and confirm the amount, merchant, card
+      and date all land right before relying on it.
+
 ## Gmail connect (built)
 - [x] Ask for Gmail only when the user taps Connect, with a plain explanation first (5.1.1)
 - [x] "Disconnect Gmail" that revokes access and deletes imported data (5.1.1(v))
