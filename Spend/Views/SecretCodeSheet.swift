@@ -13,6 +13,7 @@ struct SecretCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
     @State private var result: CompedPro.Result?
+    @State private var shown: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -45,7 +46,7 @@ struct SecretCodeSheet: View {
                 }
 
                 Section {
-                    Text("A code unlocks Sortd Pro on this iPhone. It isn't a purchase, there's no subscription, and nothing is charged. Deleting all your data takes it away again.")
+                    Text("Not a purchase, no subscription, nothing charged. Deleting all your data takes it back.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -65,6 +66,11 @@ struct SecretCodeSheet: View {
 
     private func redeem() {
         let outcome = CompedPro.redeem(code)
+        shown = switch outcome {
+        case .unlocked: SortdVoice.proUnlocked
+        case .alreadyUnlocked: SortdVoice.codeAlreadyUsed
+        case .notACode: SortdVoice.notACode
+        }
         withAnimation { result = outcome }
         if outcome.isSuccess {
             code = ""
@@ -72,14 +78,13 @@ struct SecretCodeSheet: View {
         }
     }
 
+    /// Held once it's shown, so a redraw doesn't reshuffle the joke
+    /// mid-sentence.
     private func message(for result: CompedPro.Result) -> String {
         switch result {
-        case .unlocked:
-            "Pro unlocked. Someone gave you a code, which means someone likes you. Enjoy that."
-        case .alreadyUnlocked:
-            "Already unlocked on this iPhone. One code, one phone — passing it on won't do anything."
-        case .notACode:
-            "No. Keep going though, it's fascinating to watch."
+        case .unlocked: shown ?? SortdVoice.proUnlocked
+        case .alreadyUnlocked: shown ?? SortdVoice.codeAlreadyUsed
+        case .notACode: shown ?? SortdVoice.notACode
         }
     }
 }

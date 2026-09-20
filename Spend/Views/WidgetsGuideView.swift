@@ -36,7 +36,7 @@ struct WidgetsGuideView: View {
 
             Section {
                 row("circle.lefthalf.filled", "Light, dark or automatic",
-                    "Touch and hold a Sortd widget, tap Edit Widget, then pick a Look. Automatic follows your iPhone; Light and Dark stay put whatever the phone does.")
+                    "Touch and hold a widget, tap Edit Widget, then pick a Look. Automatic follows your iPhone.")
                 row("calendar", "Today, this week or this month",
                     "The Spending widget can show any of the three. Same place: Edit Widget, then Show.")
             } header: {
@@ -44,7 +44,7 @@ struct WidgetsGuideView: View {
             }
 
             Section {
-                Text("Widgets read a small summary Sortd writes on this iPhone — today's total, what's left, and the next few bills. Nothing is uploaded, and the widget never opens your purchases.")
+                Text("Widgets read a small summary on this iPhone — today's total, what's left, the next few bills. Nothing is uploaded.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } header: {

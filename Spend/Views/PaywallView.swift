@@ -193,7 +193,7 @@ struct PaywallView: View {
     }
 
     private var freeNote: some View {
-        Text("Always free: Apple Pay auto-logging, adding purchases, Home, Activity, cards, export and delete. Your data stays on your iPhone either way.")
+        Text("Free forever: Apple Pay logging, adding by hand, cards, export and delete.")
             .font(.footnote).foregroundStyle(.secondary)
     }
 

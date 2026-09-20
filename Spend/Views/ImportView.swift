@@ -109,7 +109,7 @@ struct ImportView: View {
         } header: {
             BoldHeader("Add From")
         } footer: {
-            Text("Sortd reads the file on this iPhone and shows you what it found. Nothing is uploaded, nothing is saved until you tap Add, and the file itself is not kept.")
+            Text("Read on this iPhone. Nothing uploads, and nothing saves until you tap Add.")
         }
 
         if busy {
@@ -122,7 +122,7 @@ struct ImportView: View {
         }
 
         Section {
-            Text("Export a statement from your bank as CSV or PDF, save it to Files, then pick it here. A screenshot works too — handy where Apple Pay isn't used.")
+            Text("Export a statement from your bank as CSV or PDF, then pick it here. A screenshot of your bank app works too.")
                 .font(.footnote).foregroundStyle(.secondary)
         } header: {
             BoldHeader("How")
@@ -142,7 +142,7 @@ struct ImportView: View {
         } header: {
             BoldHeader("Which Card")
         } footer: {
-            Text("A statement doesn't always say which card. Pick the one this statement is for.")
+            Text("Statements don't always say which card.")
         }
 
         if wasScanned {
@@ -180,7 +180,7 @@ struct ImportView: View {
             } header: {
                 BoldHeader("Money In — Not Added")
             } footer: {
-                Text("Refunds, salary and transfers in aren't spending, so Sortd leaves them out of your totals.")
+                Text("Money in isn't spending, so it's left out of your totals.")
             }
         }
 
@@ -241,7 +241,7 @@ struct ImportView: View {
                 .foregroundStyle(Color.down)
             Button("Cancel") { reset() }.foregroundStyle(.secondary)
         } footer: {
-            Text("Add what's missing keeps everything on this iPhone and fills in the gaps. Replace wipes what's here first — for a phone you've just set up.")
+            Text("Add keeps what's here and fills the gaps. Replace wipes it first — for a new phone.")
         }
     }
 

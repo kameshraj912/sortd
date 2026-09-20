@@ -226,7 +226,7 @@ struct SettingsView: View {
                 } header: {
                     BoldHeader("Backup")
                 } footer: {
-                    Text("Sortd keeps everything on this iPhone, so a backup is the only way to move to a new phone or get your purchases back if this one is lost. Save it to Files or iCloud Drive — it never goes through a Sortd server, because there isn't one.")
+                    Text("Everything stays on this iPhone. A backup is the only way to move phones, or to get your purchases back if you lose this one.")
                 }
 
                 Section {
