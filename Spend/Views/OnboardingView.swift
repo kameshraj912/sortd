@@ -28,6 +28,7 @@ struct OnboardingView: View {
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
+    @State private var showingImport = false
     /// "14 days free", read from the App Store. Nil when there's no trial.
     @State private var trialText: String?
     #else
@@ -65,6 +66,7 @@ struct OnboardingView: View {
         .sheet(item: $editing) { CardEditor(original: $0) }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
         .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
         .task(id: step) {
             guard step == .pro, trialText == nil else { return }
             await pro.load()
@@ -102,7 +104,13 @@ struct OnboardingView: View {
             .opacity(step == .welcome || step == .finish ? 0 : 1)
             .accessibilityHidden(true)
             if step != .welcome && step != .finish && step != .cardDetails {
-                Button("Skip") { go(1) }
+                // Straight to the summary, not one step along. Anything
+                // skipped has a sensible default and is in Settings.
+                Button("Skip setup") {
+                    budgetFocused = false
+                    forward = true
+                    withAnimation(.snappy) { step = .finish }
+                }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 44, minHeight: 44)
@@ -147,13 +155,19 @@ struct OnboardingView: View {
                 .disabled(step == .cardDetails && !detailsComplete)
             }
             if step == .welcome {
-                Button("Explore with sample data") {
-                    DemoData.load(in: context)
-                    finish()
+                Button("I already have spending to bring in") {
+                    showingImport = true
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.ink)
                 .frame(minHeight: 44)
+                Button("Explore with sample data") {
+                    DemoData.load(in: context)
+                    finish()
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 40)
             }
         }
         .padding(.horizontal, 24)
