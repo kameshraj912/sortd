@@ -637,3 +637,40 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
   box-shadow: var(--shadow); transform: translateY(160%); transition: transform .45s cubic-bezier(.25,1.3,.4,1); }
 .toast.is-on { transform: none; }
 @media (max-width: 380px) { .toast { font-size: 13px; } }
+
+
+/* ── Mobile length ────────────────────────────────────────────────────
+   At 375px the page ran to about 15.6 screens. A phone visitor is
+   scrolling with a thumb, and reassurance that reads as thorough on a
+   desktop reads as endless on a phone.
+
+   Nothing is deleted: every cut below is still in the markup for search
+   engines and screen readers, and the detail all lives on pages that
+   already exist (privacy.html, support.html). Desktop is untouched.     */
+@media (max-width: 760px) {
+  /* Privacy: the label card and the three points that matter. Gmail and
+     export are covered in full on the privacy page. */
+  #privacy .pblock:nth-of-type(n+4) { display: none; }
+
+  /* Banks: four country groups of chips is a lot of thumb. One group and
+     a line of text says the same thing. */
+  .banks .bank-group:nth-of-type(n+2) { display: none; }
+  .banks::after {
+    content: "…and banks across Australia, Malaysia, India and the US.";
+    display: block;
+    margin-top: 14px;
+    font-size: .95rem;
+    color: var(--muted);
+  }
+
+  /* Also in Sortd: six is a list, nine is an inventory. */
+  .also .cell:nth-of-type(n+7) { display: none; }
+
+  /* Questions: keep the ones a first-time visitor actually asks. The
+     rest are on the support page. */
+  #faq details:nth-of-type(n+7) { display: none; }
+
+  /* The phone mockup inside the tour is a phone drawn on a phone.
+     Smaller, so it illustrates without taking half the section. */
+  .panel .panel-visual .iphone.sm { max-width: 190px; margin-inline: auto; }
+}
