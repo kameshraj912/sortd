@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance = "system"
     @State private var confirmingDelete = false
     @State private var csvFile: URL?
+    @State private var backupFile: URL?
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var showingPaywall = false
@@ -179,6 +180,42 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if let file = backupFile {
+                        ShareLink(item: file) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Save a Backup")
+                                    Text(lastBackupText)
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "arrow.down.document")
+                            }
+                        }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            UserDefaults.standard.set(Date.now, forKey: Self.lastBackupKey)
+                        })
+                    }
+                    NavigationLink {
+                        ImportView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Import")
+                                Text("A statement, a screenshot, or a backup")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "square.and.arrow.down")
+                        }
+                    }
+                } header: {
+                    BoldHeader("Backup")
+                } footer: {
+                    Text("Sortd keeps everything on this iPhone, so a backup is the only way to move to a new phone or get your purchases back if this one is lost. Save it to Files or iCloud Drive — it never goes through a Sortd server, because there isn't one.")
+                }
+
+                Section {
                     NavigationLink {
                         PrivacyView()
                     } label: {
@@ -211,8 +248,8 @@ struct SettingsView: View {
             .background(Color.page)
             .brandedTitle("Settings")
             .toolbar(.hidden, for: .navigationBar)
-            .onAppear { csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions) }
-            .onChange(of: transactions.count) { _, n in csvFile = n == 0 ? nil : CSVExport.file(transactions) }
+            .onAppear { refreshFiles() }
+            .onChange(of: transactions.count) { _, _ in refreshFiles() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
@@ -222,6 +259,22 @@ struct SettingsView: View {
                 Text("This removes every purchase, card, budget and setting from this iPhone. It can't be undone. Export first if you want a copy.")
             }
         }
+    }
+
+    static let lastBackupKey = "lastBackupSaved"
+
+    /// The share sheet needs a real file, so both are written when the
+    /// screen opens and whenever the number of purchases changes.
+    private func refreshFiles() {
+        csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions)
+        backupFile = try? Backup.file(in: context)
+    }
+
+    private var lastBackupText: String {
+        guard let last = UserDefaults.standard.object(forKey: Self.lastBackupKey) as? Date else {
+            return "You haven't saved one yet"
+        }
+        return "Last saved \(last.formatted(.relative(presentation: .named)))"
     }
 
     private var lastTapText: String {
