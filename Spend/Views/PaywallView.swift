@@ -66,7 +66,7 @@ struct PaywallView: View {
                 .accessibilityHidden(true)
             Text("Sortd Pro").font(.system(.largeTitle, weight: .bold)).padding(.top, 2)
             BrandBar()
-            Text(feature.map { "\($0.title) is part of Sortd Pro." } ?? "Everything Sortd can do, for less than a coffee a month.")
+            Text(feature.map { "\($0.title) is part of Sortd Pro." } ?? subtitle)
                 .font(.body).foregroundStyle(.secondary)
         }
         .padding(.top, 8)
@@ -92,6 +92,16 @@ struct PaywallView: View {
             }
         }
         .surface(radius: 16)
+    }
+
+    /// "Less than a coffee a month" was true of the yearly plan and not the
+    /// monthly one, said as though it covered both. Quotes the real
+    /// per-month figure instead, from whatever the App Store returns.
+    private var subtitle: String {
+        guard let perMonth = displayPlans.first(where: { $0.id == ProStore.ID.yearly })?.perMonth else {
+            return "Everything Sortd can do."
+        }
+        return "Everything Sortd can do, from \(perMonth) a month on the yearly plan."
     }
 
     private var displayPlans: [PlanDisplay] {
