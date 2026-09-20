@@ -22,6 +22,13 @@ nonisolated enum CompedPro {
 
     /// SHA-256 of each code, lowercased and stripped of spaces and dashes.
     /// Kept as hashes so the codes aren't readable in the app binary.
+    ///
+    /// A note on the nods: a phrase someone types in is input, not branding,
+    /// and short phrases aren't copyrightable. Trademark is the thing to
+    /// watch — "Maximum Effort" is a registered mark (it's Ryan Reynolds'
+    /// production company) — so Sortd accepts it and never *shows* it.
+    /// Nothing here goes in the App Store listing, the screenshots or the
+    /// website, which is where a trademark claim would actually have legs.
     private static let accepted: [String: String] = [
         // "maximumeffort"
         "d628b09f0d6531337fa86f049c8060db85cdb72881768319f52cae4a1a9b1bc1": "maximum effort",

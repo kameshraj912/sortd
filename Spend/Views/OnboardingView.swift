@@ -111,15 +111,27 @@ struct OnboardingView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 10) {
-            // The Pro page has its own filled button. Two identical black
-            // pills stacked gives no hierarchy at all — which is the point
-            // of a primary button — so skipping becomes plain text there.
+            // Pro is the one step with two actions. They belong together at
+            // the bottom — buy, the price, then skip — rather than a filled
+            // button stranded up the page with a hole underneath it.
             if step == .pro, !pro.isPro {
+                Button { showingPaywall = true } label: {
+                    Text(trialLine).primaryPill()
+                }
+                .buttonStyle(.plain)
+
+                Text(priceLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+
                 Button(action: primaryAction) {
                     Text(primaryTitle)
-                        .font(.headline)
-                        .foregroundStyle(Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 34)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -769,7 +781,7 @@ struct OnboardingView: View {
     /// part ends.
     private var proPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header(pro.isPro ? "You have Sortd Pro" : "Try Sortd Pro free",
+            header(pro.isPro ? "You have Sortd Pro" : proHeadline,
                    pro.isPro
                    ? "Everything below is unlocked. Thank you."
                    : "Apple Pay logging, adding by hand, your cards, export and delete are free forever. Pro adds the rest.")
@@ -799,31 +811,21 @@ struct OnboardingView: View {
             .padding(.horizontal, 16)
             .surface(radius: 16)
 
-            if !pro.isPro {
-                Button { showingPaywall = true } label: {
-                    Text(trialLine)
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .foregroundStyle(Color.onBrand)
-                        .background(Color.brand, in: .capsule)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 16)
-
-                Text(priceLine)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 8)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
+    }
+
+    /// "Try Sortd Pro free" reads like a typo — free is left dangling. Say
+    /// the actual offer when the App Store has told us what it is, and a
+    /// plain invitation when it hasn't.
+    private var proHeadline: String {
+        guard let trial = trialText else { return "Try Sortd Pro" }
+        return "Sortd Pro, \(trial.lowercased())"
     }
 
     /// Reads the real offer from the App Store when it's there, and stays
     /// vague rather than promising a trial that might not exist.
     private var trialLine: String {
-        trialText.map { "Start \($0.lowercased())" } ?? "See Sortd Pro"
+        trialText.map { "Start \($0.lowercased())" } ?? "See Plans"
     }
 
     private var priceLine: String {

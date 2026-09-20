@@ -77,7 +77,7 @@ struct RecurringView: View {
         .overlay {
             if all.isEmpty {
                 ContentUnavailableView("No Recurring Payments Yet", systemImage: "arrow.triangle.2.circlepath",
-                                       description: Text("Subscriptions and bills show up here after they've charged twice, or once with an App Store receipt."))
+                                       description: Text("Subscriptions and bills show up here after they've charged twice, or once with an App Store receipt. \(SortdVoice.noRecurring)"))
             }
         }
     }
