@@ -7,6 +7,11 @@ import UserNotifications
 /// every step can be skipped, and anything skipped can be done later in
 /// Settings. Apple Pay setup checks itself: it turns green on the first tap.
 struct OnboardingView: View {
+    /// Called when setup is finished. RootView needs this because with
+    /// SPEND_ONBOARD_STEP set it forces the cover open, so watching the
+    /// "done" flag alone left the last button looking broken.
+    var onFinish: () -> Void = {}
+
     static let doneKey = "onboardingDone"
 
     @Environment(\.modelContext) private var context
@@ -187,6 +192,7 @@ struct OnboardingView: View {
     private func finish() {
         Task { await FXService.rebase(to: home, in: context) }
         done = true
+        onFinish()
     }
 
     // MARK: Pages
