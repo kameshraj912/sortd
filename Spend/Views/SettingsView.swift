@@ -18,7 +18,7 @@ struct SettingsView: View {
     @State private var pro = ProStore.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: Bindable(Router.shared).settingsPath) {
             List {
                 ListPageTitle(title: "Settings")
                 Section {
@@ -247,6 +247,11 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.page)
             .brandedTitle("Settings")
+            .navigationDestination(for: Router.Destination.self) { destination in
+                switch destination {
+                case .importing: ImportView()
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { refreshFiles() }
             .onChange(of: transactions.count) { _, _ in refreshFiles() }
