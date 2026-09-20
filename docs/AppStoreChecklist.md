@@ -3,6 +3,16 @@
 Checked 19 Sep 2026 against Apple's App Review Guidelines, App Store Connect Help and Google's
 OAuth docs. "Done" means built and tested in the simulator.
 
+## Before any App Store build — do not skip
+
+- [ ] **Remove `SORTD_BETA`** from `SWIFT_ACTIVE_COMPILATION_CONDITIONS` in the app target's
+      Release config (`Spend.xcodeproj/project.pbxproj`). It gives Pro away free to anything
+      running against the App Store sandbox, which includes TestFlight **and App Review**.
+      Leave it in and reviewers never see the paywall work, and the IAPs go untested.
+      Run `scripts/preflight.sh --appstore` — it fails while the flag is still there.
+- [ ] Create the three products in App Store Connect and get them to "Ready to Submit".
+      Until then `ProStore.load()` returns nothing and the paywall is empty.
+
 ## Done in the app
 - [x] No empty first launch: guided setup + "Explore with sample data" for reviewers (Guideline 2.1, 4.2)
 - [x] Works fully offline; nothing needs an account
