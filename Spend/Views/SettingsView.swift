@@ -272,7 +272,7 @@ struct SettingsView: View {
                     } else if let source = CompedPro.source() {
                         // Named so a tester can say which code they used —
                         // the app has no server and reports nothing.
-                        Text("Pro is on the house, via \(source). Don't tell anyone.")
+                        Text("Pro is on the house. Code: \(source)")
                             .foregroundStyle(.secondary)
                     }
                 }

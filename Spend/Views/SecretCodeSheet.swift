@@ -77,7 +77,7 @@ struct SecretCodeSheet: View {
         case .unlocked:
             "Pro unlocked. Someone gave you a code, which means someone likes you. Enjoy that."
         case .alreadyUnlocked:
-            "You already have it. Reading is free too."
+            "Already unlocked on this iPhone. One code, one phone — passing it on won't do anything."
         case .notACode:
             "No. Keep going though, it's fascinating to watch."
         }
