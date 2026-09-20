@@ -68,6 +68,16 @@ struct SpendApp: App {
         }
         if let style = env["SPEND_STYLE"] { UserDefaults.standard.set(style, forKey: "cardStyle") }
         if let budget = env["SPEND_BUDGET"].flatMap(Double.init) { UserDefaults.standard.set(budget, forKey: "monthlyBudget") }
+        // Screen recordings: SPEND_REEL_TAP=<seconds> runs one real Apple Pay
+        // tap through the same code the Shortcuts automation calls.
+        if let delay = env["SPEND_REEL_TAP"].flatMap(Double.init) {
+            Task {
+                try? await Task.sleep(for: .seconds(delay))
+                _ = try? await LogPurchaseIntent.handle(merchant: "Seven Seeds Coffee", amount: "A$5.50", card: "NAB Visa Debit",
+                                                        in: SpendStore.container.mainContext, book: .shared,
+                                                        now: Calendar.current.date(bySettingHour: 8, minute: 12, second: 0, of: .now) ?? .now)
+            }
+        }
         #endif
     }
 

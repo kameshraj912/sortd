@@ -58,14 +58,45 @@ final class ProStore {
     private(set) var loadError: String?
     private(set) var isLoading = false
 
-    /// Unlocks everything. Also true in DEBUG with SPEND_PRO=1 (screenshots).
+    /// Unlocks everything. Also true in DEBUG with SPEND_PRO=1 (screenshots),
+    /// and in a SORTD_BETA build running in the App Store sandbox, so
+    /// TestFlight testers can reach every feature before the products exist.
     var isPro: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.environment["SPEND_PRO"] == "1" { return true }
         if ProcessInfo.processInfo.environment["SPEND_PRO"] == "0" { return false }
         #endif
+        #if SORTD_BETA
+        if isSandboxBuild { return true }
+        #endif
         return !purchasedIDs.isEmpty
     }
+
+    #if SORTD_BETA
+    /// True when this build runs against the App Store sandbox — TestFlight or
+    /// a local run. Resolved once at launch because the check is async. A real
+    /// App Store purchaser reports `.production`, so this never gives Pro away.
+    ///
+    /// SORTD_BETA is set on Release in the project file. Remove it before the
+    /// App Store build or App Review never sees the paywall work.
+    private(set) var isSandboxBuild = false
+
+    /// `AppTransaction.shared` can need the network the first time it is read,
+    /// so a cold first launch on a plane would otherwise lock a tester out of
+    /// every Pro feature. Retry a few times before giving up.
+    private func resolveEnvironment() async {
+        for attempt in 0..<3 {
+            if let result = try? await AppTransaction.shared,
+               case .verified(let app) = result {
+                isSandboxBuild = app.environment != .production
+                return
+            }
+            if attempt < 2 {
+                try? await Task.sleep(for: .seconds(2 << attempt))
+            }
+        }
+    }
+    #endif
 
     private var updates: Task<Void, Never>?
 
@@ -76,7 +107,13 @@ final class ProStore {
                 await self?.refresh()
             }
         }
-        Task { await refresh(); await load() }
+        Task {
+            #if SORTD_BETA
+            await resolveEnvironment()
+            #endif
+            await refresh()
+            await load()
+        }
     }
 
     func product(_ id: String) -> Product? { products.first { $0.id == id } }
