@@ -20,9 +20,9 @@ struct SecretCodeSheet: View {
             List {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Well, look who reads the fine print.")
+                        Text("Five taps. On a version number.")
                             .font(.headline)
-                        Text("Got a code? Put it in. If you don't, no judgement — you did just tap a version number five times.")
+                        Text("Either someone gave you a code, or you have a lot of time. Both are fine. Only one of them gets you Pro.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -75,11 +75,11 @@ struct SecretCodeSheet: View {
     private func message(for result: CompedPro.Result) -> String {
         switch result {
         case .unlocked:
-            "Pro unlocked. Go on then."
+            "Pro unlocked. Someone gave you a code, which means someone likes you. Enjoy that."
         case .alreadyUnlocked:
-            "You already have it. Enthusiasm noted."
+            "You already have it. Reading is free too."
         case .notACode:
-            "That's not it. Close, maybe. Probably not."
+            "No. Keep going though, it's fascinating to watch."
         }
     }
 }

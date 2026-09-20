@@ -36,16 +36,20 @@ nonisolated enum CompedPro {
     private static let accepted: [String: String] = [
         // "iamtheonewhobudgets"
         "da5ed46eec66ccb2c8d5f094cbdcd72df785089a8682abd28f72b1d2ac900d94": "the one who budgets",
-        // "thereisnobudget"
-        "393d33c00be7732bab500b3228ab528c00f4bef7f6bb8933c5fa65106a90f11a": "no budget",
-        // "wedontalkaboutbrunch"
-        "3683716de922865ee2153ea1305964de8059c51cc8fe3c927d03d91aebb60a6d": "brunch",
         // "ihavenomoneyandimustscream"
-        "4eb40fc3d71b35fdc6b56380720ebb32ffaccaf2fed9c19d2616dc870b99e8bc": "no money",
-        // "greedisgood"
-        "b0cd76b7d7829362d581b739c0b295abf53182792609078bb17a9dd917ffba7c": "greed",
-        // "whatsinthebox"
-        "34b8b147269cfb1b1a2f2cb4c85b6975a5472151a111b8fe119fc5c7b16cbbfd": "the box",
+        "4eb40fc3d71b35fdc6b56380720ebb32ffaccaf2fed9c19d2616dc870b99e8bc": "the scream",
+        // "spendnowcrylater"
+        "223b717bf506de9a06ae1d341dd27a4287062d4bb8b374f1bbbeac4c30fb231a": "cry later",
+        // "futuremeproblem"
+        "9faf31d2f381c06ff740358decf1cb4e64881d76f96676413c66eed3ed5fb5b8": "future me",
+        // "denialisabudget"
+        "a07e69d25da4cbf2ef57fde50d583f7eb9247aa7fbdacc12959c19b3af351687": "denial",
+        // "itwasonsale"
+        "13011659da558d82420f7092afeea5db12a2d4fdb62cf977775683b4222856df": "on sale",
+        // "ineedthisactually"
+        "6e00920bd2bfd53d0d11c0c79ef65906b524117055df5191a7b8f5d1633f3e1c": "need, apparently",
+        // "deathandtaxes"
+        "2677a37b90dac8608ce39194c1732d6ad9a861df1194171262a06ac5a1c81c63": "certainties",
         // "latestagecapitalism"
         "4851ae8433be52645fed98c4c77cea2be97a2500f94aa3d2d1730737b36c6097": "late stage",
         // "sortdbyraj"

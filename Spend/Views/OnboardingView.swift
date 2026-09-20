@@ -811,6 +811,15 @@ struct OnboardingView: View {
             .padding(.horizontal, 16)
             .surface(radius: 16)
 
+            // The hook. Not a hard sell — an accurate prediction, which is
+            // funnier and does the same job.
+            if !pro.isPro {
+                Text("You'll skip this. Then on Thursday you'll try to scan a receipt, find it locked, and come back. We'll wait.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 14)
+            }
         }
     }
 
