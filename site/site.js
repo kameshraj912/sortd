@@ -23,13 +23,16 @@
       var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
       var show = function (msg, field) {
         err.textContent = msg; err.hidden = !msg;
-        [email, gmail].forEach(function (f) { f.removeAttribute("aria-invalid"); });
+        [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { f.removeAttribute("aria-invalid"); });
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
       if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try\u00a0again.");
       form.addEventListener("submit", function (e) {
         e.preventDefault();
-        if (!ok(email.value.trim())) return show("That's not an email address. Try again, we'll\u00a0wait.", email);
+        if (!ok(email.value.trim())) return show("That's not an email. Even your spam folder would reject\u00a0it.", email);
+        if (!form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
+        if (!form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
+        if (!form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
         if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail\u00a0address.", gmail);
         show(""); submit.disabled = true; submit.textContent = "Sending…";
         fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })

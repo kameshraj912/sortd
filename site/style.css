@@ -712,3 +712,4 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 .beta-done strong { color: var(--ink); overflow-wrap: anywhere; }
 @keyframes tick-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .done-tick { animation: none; } }
+.beta-form select[aria-invalid="true"] { border-color: var(--orange); }
