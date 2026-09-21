@@ -64,6 +64,7 @@ enum WidgetBridge {
 
         out.budget = budget > 0 ? Decimal(budget) : nil
         out.style = UserDefaults.standard.string(forKey: "cardStyle") ?? "satin"
+        out.showWhenLocked = UserDefaults.standard.bool(forKey: WidgetSummary.showWhenLockedKey)
 
         // Monday to now. Finance widgets that only show a daily number read
         // as a telling-off on a bad day; a week is easier to live with.
@@ -94,14 +95,8 @@ enum WidgetBridge {
             .map { WidgetSummary.Bill(name: $0.merchant, amount: $0.audAmount,
                                       currency: out.currency, due: $0.nextDate) }
 
-        out.recent = live
-            .sorted { $0.date > $1.date }
-            .prefix(4)
-            .map {
-                WidgetSummary.Item(merchant: $0.merchant, amount: $0.audValue,
-                                   currency: out.currency, category: $0.category.rawValue,
-                                   date: $0.date)
-            }
+        // No recent purchases: no widget shows them, so they aren't written
+        // into the shared file at all.
 
         return out
     }

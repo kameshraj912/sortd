@@ -64,8 +64,8 @@ nonisolated enum BankAlerts {
     ]
 
     static func bank(for sender: String) -> Bank? {
-        let from = sender.lowercased()
-        return known.first { from.contains($0.domain) }
+        let domain = EmailParsers.senderDomain(sender)
+        return known.first { EmailParsers.isDomain(domain, within: $0.domain) }
     }
 
     /// The Gmail search terms for every bank above.

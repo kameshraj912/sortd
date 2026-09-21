@@ -10,13 +10,14 @@ struct SettingsView: View {
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage("appearance") private var appearance = "system"
     @State private var confirmingDelete = false
-    @State private var csvFile: URL?
-    @State private var backupFile: URL?
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
+    @AppStorage(WidgetSummary.showWhenLockedKey) private var widgetShowWhenLocked = false
     @State private var showingPaywall = false
     @State private var pro = ProStore.shared
+    #if DEBUG
     @State private var knock = SecretKnock.shared
+    #endif
 
     var body: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
@@ -187,29 +188,31 @@ struct SettingsView: View {
                     )) {
                         Label("Require \(AppLock.methodName)", systemImage: AppLock.methodSymbol)
                     }
+                    Toggle(isOn: $widgetShowWhenLocked) {
+                        Label("Show Amounts When Locked", systemImage: "lock.rectangle")
+                    }
+                    .onChange(of: widgetShowWhenLocked) { _, _ in WidgetBridge.refresh(from: context) }
                 } header: {
                     BoldHeader("Security")
                 } footer: {
-                    Text("Sortd locks when you open it, and when you come back after more than a minute.")
+                    Text("Sortd locks when you open it, and when you come back after more than a minute. Widgets hide amounts on the Lock Screen and in StandBy unless you turn that on.")
                 }
 
                 Section {
-                    if let file = backupFile {
-                        ShareLink(item: file) {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Save a Backup")
-                                    Text(lastBackupText)
-                                        .font(.footnote).foregroundStyle(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "arrow.down.document")
+                    ShareLink(item: BackupExport(), preview: SharePreview("Sortd backup")) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Save a Backup")
+                                Text(lastBackupText)
+                                    .font(.footnote).foregroundStyle(.secondary)
                             }
+                        } icon: {
+                            Image(systemName: "arrow.down.document")
                         }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            UserDefaults.standard.set(Date.now, forKey: Self.lastBackupKey)
-                        })
                     }
+                    .simultaneousGesture(TapGesture().onEnded {
+                        UserDefaults.standard.set(Date.now, forKey: Self.lastBackupKey)
+                    })
                     NavigationLink {
                         ImportView()
                     } label: {
@@ -235,8 +238,8 @@ struct SettingsView: View {
                     } label: {
                         Label("Privacy", systemImage: "hand.raised")
                     }
-                    if let file = csvFile {
-                        ShareLink(item: file) {
+                    if !transactions.isEmpty {
+                        ShareLink(item: CSVFileExport(), preview: SharePreview("Sortd purchases")) {
                             Label("Export Purchases (CSV)", systemImage: "square.and.arrow.up")
                         }
                     }
@@ -254,9 +257,11 @@ struct SettingsView: View {
                     LabeledContent("Purchases", value: "\(transactions.count)")
                     LabeledContent("Stored", value: "On this iPhone only")
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                        #if DEBUG
                         .contentShape(.rect)
                         .onTapGesture { knock.knock() }
                         .accessibilityHint("Tapped five times, opens a code screen")
+                        #endif
                     // The flat tab bar sits over the last row otherwise, and
                     // the last row is the one with the hidden door in it.
                     Color.clear
@@ -267,6 +272,7 @@ struct SettingsView: View {
                 } header: {
                     BoldHeader("About")
                 } footer: {
+                    #if DEBUG
                     if let hint = knock.hint {
                         Text(hint).foregroundStyle(.secondary)
                     } else if let source = CompedPro.source() {
@@ -275,6 +281,7 @@ struct SettingsView: View {
                         Text("Pro is on the house. Code: \(source)")
                             .foregroundStyle(.secondary)
                     }
+                    #endif
                 }
             }
             .scrollContentBackground(.hidden)
@@ -286,10 +293,11 @@ struct SettingsView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .onAppear { refreshFiles() }
-            .onChange(of: transactions.count) { _, _ in refreshFiles() }
+            .onAppear { Exports.clear() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            #if DEBUG
             .sheet(isPresented: $knock.isOpen) { SecretCodeSheet() }
+            #endif
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
                     DataReset.deleteEverything(in: context)
@@ -301,13 +309,6 @@ struct SettingsView: View {
     }
 
     static let lastBackupKey = "lastBackupSaved"
-
-    /// The share sheet needs a real file, so both are written when the
-    /// screen opens and whenever the number of purchases changes.
-    private func refreshFiles() {
-        csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions)
-        backupFile = try? Backup.file(in: context)
-    }
 
     private var lastBackupText: String {
         guard let last = UserDefaults.standard.object(forKey: Self.lastBackupKey) as? Date else {

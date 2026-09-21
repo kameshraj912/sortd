@@ -46,7 +46,7 @@ struct PrivacyView: View {
 
 /// Every purchase as a CSV file, for Numbers, Excel or another app.
 enum CSVExport {
-    static func file(_ transactions: [Transaction]) -> URL? {
+    static func data(_ transactions: [Transaction]) -> Data {
         let iso = ISO8601DateFormatter()
         var lines = ["date,merchant,amount,currency,amount_\(Money.home.lowercased()),category,card,refunded,note"]
         for t in transactions.sorted(by: { $0.date < $1.date }) {
@@ -55,18 +55,16 @@ enum CSVExport {
                           t.refunded ? "yes" : "no", t.note]
             lines.append(fields.map(escape).joined(separator: ","))
         }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Sortd purchases \(Date.now.formatted(.iso8601.year().month().day())).csv")
-        do {
-            try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-            return url
-        } catch {
-            return nil
-        }
+        return Data(lines.joined(separator: "\n").utf8)
     }
 
-    /// Quotes a field when it has a comma, quote or line break.
+    /// Makes a field safe for a spreadsheet. Merchant names and notes can come
+    /// from emails, so a cell starting with = + - @ (or a tab or return) gets a
+    /// leading ' and can't run as a formula. Then quotes it when it has a comma,
+    /// quote or line break.
     nonisolated static func escape(_ s: String) -> String {
+        var s = s
+        if let first = s.first, "=+-@\t\r".contains(first) { s = "'" + s }
         guard s.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" }) else { return s }
         return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
@@ -83,14 +81,16 @@ enum DataReset {
         try? context.save()
         let gmail = GmailSync.accounts
         GmailSync.accounts = []
-        Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }
+        GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
+        #if DEBUG
         CompedPro.clear()
-        // The exported spreadsheet, if one was made.
-        for f in (try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
-        where f.pathExtension == "csv" { try? FileManager.default.removeItem(at: f) }
+        #endif
+        // Any backup or spreadsheet copies made for sharing.
+        Exports.clear()
         CardBook.shared.replaceAll([])
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         if let domain = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: domain)
         }
@@ -99,5 +99,7 @@ enum DataReset {
         CardBook.shared.replaceAll([])
         UserDefaults.standard.set(false, forKey: DemoData.activeKey)
         UserDefaults.standard.set(false, forKey: OnboardingView.doneKey)
+        // Widgets were showing the old totals until the next app refresh.
+        WidgetBridge.refresh(from: context)
     }
 }
