@@ -286,9 +286,11 @@ nonisolated enum StatementImport {
                                   today: Date = .now) -> (Date, Range<String.Index>)? {
         let ns = line as NSString
         let full = NSRange(location: 0, length: ns.length)
+        // [0-9], not \d: \d also matches full-width (１２) and Arabic (١٢)
+        // digits, which Int() can't read, and the unwraps below would trap.
 
         // yyyy-mm-dd — never ambiguous, so try it first.
-        if let regex = try? NSRegularExpression(pattern: #"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b"#),
+        if let regex = try? NSRegularExpression(pattern: #"\b([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})\b"#),
            let m = regex.firstMatch(in: line, range: full) {
             let y = Int(ns.substring(with: m.range(at: 1)))!
             let mo = Int(ns.substring(with: m.range(at: 2)))!
@@ -300,7 +302,7 @@ nonisolated enum StatementImport {
 
         // 1 Sep 2026 / 1 September 26 / Sep 1, 2026
         if let regex = try? NSRegularExpression(
-            pattern: #"\b(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*(\d{2,4})?\b"#, options: .caseInsensitive),
+            pattern: #"\b([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
            let m = regex.firstMatch(in: line, range: full),
            let month = month(ns.substring(with: m.range(at: 2))) {
             let d = Int(ns.substring(with: m.range(at: 1)))!
@@ -312,7 +314,7 @@ nonisolated enum StatementImport {
             }
         }
         if let regex = try? NSRegularExpression(
-            pattern: #"\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:,)?\s*(\d{2,4})?\b"#, options: .caseInsensitive),
+            pattern: #"\b([A-Za-z]{3,9})\.?\s+([0-9]{1,2})(?:,)?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
            let m = regex.firstMatch(in: line, range: full),
            let month = month(ns.substring(with: m.range(at: 1))) {
             let d = Int(ns.substring(with: m.range(at: 2)))!
@@ -325,7 +327,7 @@ nonisolated enum StatementImport {
         }
 
         // d/m/y or m/d/y, decided by `order`.
-        if let regex = try? NSRegularExpression(pattern: #"\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b"#),
+        if let regex = try? NSRegularExpression(pattern: #"\b([0-9]{1,2})[/\-.]([0-9]{1,2})[/\-.]([0-9]{2,4})\b"#),
            let m = regex.firstMatch(in: line, range: full) {
             let a = Int(ns.substring(with: m.range(at: 1)))!
             let b = Int(ns.substring(with: m.range(at: 2)))!
@@ -389,7 +391,10 @@ nonisolated enum StatementImport {
 
         // Prefer a match with decimals, a currency symbol or a sign: on
         // "MCDONALDS 123 GEORGE ST 12.50" the street number isn't money.
-        let best = matches.last { has($0, "cents") || has($0, "sym") || has($0, "sign") } ?? matches.last!
+        // When a line has two of those, the first is the purchase and the
+        // later one is the running balance ("WOOLWORTHS 12.50 1,034.20").
+        let money = matches.filter { has($0, "cents") || has($0, "sym") || has($0, "sign") }
+        let best = money.first ?? matches.last!
 
         func group(_ name: String) -> String? {
             let r = best.range(withName: name)

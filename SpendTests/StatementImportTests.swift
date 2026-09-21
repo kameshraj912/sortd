@@ -233,6 +233,26 @@ struct StatementImportTests {
         #expect(rows[0].detail.contains("MCDONALDS"))
     }
 
+    @Test func theRunningBalanceOnAPDFLineIsNotTheAmount() {
+        // Bug-hunt M2: the balance at the end of the line was taken as the purchase.
+        let rows = StatementImport.rows(fromText: "02/09/2026  WOOLWORTHS METRO  12.50  1,034.20")
+        #expect(rows.count == 1)
+        #expect(rows[0].amount == Decimal(string: "12.50")!)
+        #expect(rows[0].kind == .spend)
+        let credit = StatementImport.rows(fromText: "02/09/2026  WOOLWORTHS METRO  12.50  1,034.20 CR")
+        #expect(credit.first?.amount == Decimal(string: "12.50")!)
+        #expect(credit.first?.kind == .spend)
+    }
+
+    @Test func fullWidthAndArabicDigitsDoNotCrash() {
+        // Bug-hunt S1: \d matched these, Int() returned nil and the force unwrap trapped.
+        for text in ["２０２６-０９-２１  NTUC FAIRPRICE  22.10",
+                     "٢١/٠٩/٢٠٢٦  NTUC FAIRPRICE  22.10",
+                     "１２ Sep ２０２６  GRAB  14.80"] {
+            _ = StatementImport.rows(fromText: text)
+        }
+    }
+
     @Test func bracketedAmountsAreMoneyOut() {
         let text = "01/09/2026  WOOLWORTHS 3342  (58.30)"
         let rows = StatementImport.rows(fromText: text)

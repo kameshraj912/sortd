@@ -23,6 +23,8 @@ struct LogWalletTapIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let r = try await Self.handle(transaction, in: SpendStore.container.mainContext, book: .shared)
+        // The app may not be running: update the widget before Shortcuts ends.
+        WidgetBridge.refresh(from: SpendStore.container.mainContext)
         return .result(dialog: IntentDialog(stringLiteral: r.message))
     }
 

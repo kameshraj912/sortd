@@ -208,6 +208,13 @@ nonisolated enum Backup {
                         defaults: UserDefaults = .standard) throws -> Result {
         let snapshot = try decode(data)
         var result = Result()
+        // `homeAmount` in the file is in the backup phone's home currency.
+        let backupHome: String? = if case .string(let code)? = snapshot.settings[Money.homeKey] { code } else { nil }
+        // Replace takes the backup's currency with its settings. Merge keeps this
+        // phone's, unless this phone never chose one (then the backup's comes in).
+        let phoneHome = defaults.string(forKey: Money.homeKey)
+        let homeBefore = phoneHome ?? Money.home
+        let homeAfter = mode == .replace ? (backupHome ?? homeBefore) : (phoneHome ?? backupHome ?? homeBefore)
 
         if mode == .replace {
             try? context.delete(model: Transaction.self)
@@ -229,7 +236,10 @@ nonisolated enum Backup {
                 note: row.note
             )
             t.id = row.id
-            t.audAmount = row.homeAmount
+            // Converted in another currency: keep it only if it's already in this
+            // one; otherwise leave it empty for FXService.backfill to convert.
+            t.audAmount = (backupHome ?? homeAfter) == homeAfter ? row.homeAmount
+                : (row.currencyCode == homeAfter ? row.amount : nil)
             t.seenInRaw = row.seenIn
             t.createdAt = row.createdAt
             t.platform = row.platform
@@ -280,6 +290,19 @@ nonisolated enum Backup {
             if mode == .merge, defaults.object(forKey: key) != nil { continue }
             defaults.set(setting.value, forKey: key)
             result.settings += 1
+        }
+        // The restored amounts and budget are already in `homeAfter`. Without this,
+        // FXService.ensureConverted would convert the restored budget a second time
+        // and wipe every converted amount.
+        if mode == .replace || homeAfter != homeBefore {
+            if mode == .merge {
+                // This phone's own purchases were converted to the old currency.
+                for t in try context.fetch(FetchDescriptor<Transaction>()) where existing.contains(t.id) {
+                    t.audAmount = t.currencyCode == homeAfter ? t.amount : nil
+                }
+                try context.save()
+            }
+            defaults.set(homeAfter, forKey: FXService.convertedKey)
         }
 
         return result
