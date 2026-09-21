@@ -41,6 +41,7 @@
   <div class="group" style="margin-bottom:10px">
     <div class="cell"><b>Where your data is kept</b><span>On your iPhone</span></div>
     <div class="cell"><b>Sortd account or server</b><span>None</span></div>
+    <div class="cell"><b>Data protection</b><span><a href="#security">Encrypted on your iPhone</a></span></div>
     <div class="cell"><b>Analytics, ads, tracking</b><span>None</span></div>
     <div class="cell"><b>Data sold or shared</b><span>Never</span></div>
     <div class="cell"><b>Gmail</b><span>Optional, read-only</span></div>
@@ -57,6 +58,21 @@
     <li><strong>Connected Gmail addresses</strong> — the address and when it last synced, if you connect Gmail.</li>
   </ul>
   <p>We don't run a server, so none of this is sent to us. If you back up your iPhone to iCloud or a computer, Sortd's data is included in that backup like other app data, under Apple's terms.</p>
+
+  <h2 id="security">How we protect your data</h2>
+  <p>Some of what Sortd handles is sensitive: your purchases, and, if you connect it, your Gmail. This is how it is kept safe.</p>
+  <ul>
+    <li><strong>Kept on your iPhone only:</strong> Sortd has no server and no Sortd account. Your purchases, cards, settings and Gmail data never reach us or any other company, so there is no copy of them anywhere for anyone to leak.</li>
+    <li><strong>Encrypted on your iPhone:</strong> Sortd's storage is protected by iOS Data Protection. It is encrypted, and after your iPhone restarts it can't be read until you unlock the phone with your passcode or Face&nbsp;ID. Other apps can't read it.</li>
+    <li><strong>Google sign-in key in the Keychain:</strong> the Google refresh token is stored in the iPhone Keychain, which iOS encrypts. It is set to stay on this iPhone only: it is not synced to iCloud Keychain and does not move to another device. Short-lived access keys are kept only in memory and are never written to storage.</li>
+    <li><strong>Secure sign-in:</strong> you sign in to Google in Apple's secure sign-in window, using OAuth&nbsp;2.0 with PKCE. Sortd never sees your Google password, and no secret key is built into the app.</li>
+    <li><strong>Encrypted in transit:</strong> every connection Sortd makes, to Google and to frankfurter.dev, uses HTTPS (TLS). Sortd makes no unencrypted connections.</li>
+    <li><strong>Least access:</strong> Sortd asks Google only for read-only Gmail access. It can't send, change or delete email. It searches only for receipts and bank alerts.</li>
+    <li><strong>Emails are not stored:</strong> an email's text is held in memory only while Sortd reads the purchase from it, then discarded. Sortd keeps the purchase details and the email's ID, not the email.</li>
+    <li><strong>No people, no third parties:</strong> no one at Sortd can see your data, because it never leaves your iPhone. Sortd has no analytics, ads, crash-reporting or tracking tools, and does not share or sell data.</li>
+    <li><strong>Removing access:</strong> Disconnect and Delete All Data ask Google to cancel Sortd's access and delete the key from the Keychain. You can also remove Sortd at any time in your Google Account's security settings.</li>
+  </ul>
+  <p>If you find a security problem in Sortd, please email <a href="mailto:support@sortd.page">support@sortd.page</a>. We will look into it and fix it as fast as we can.</p>
 
   <h2>Logging Apple Pay taps</h2>
   <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the transaction (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. Sortd keeps a copy of the last tap it received, on your iPhone, so you can check the setup. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
