@@ -151,18 +151,6 @@ nonisolated enum Backup {
         return try encoder.encode(try snapshot(in: context, defaults: defaults))
     }
 
-    /// Writes the backup to a temporary file for the share sheet.
-    /// Named by date so two backups don't overwrite each other.
-    @MainActor
-    static func file(in context: ModelContext,
-                     defaults: UserDefaults = .standard) throws -> URL {
-        let day = Date.now.formatted(.iso8601.year().month().day())
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Sortd backup \(day).sortdbackup")
-        try data(in: context, defaults: defaults).write(to: url, options: .atomic)
-        return url
-    }
-
     // MARK: - Reading one back
 
     enum Failure: LocalizedError {

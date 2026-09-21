@@ -34,6 +34,14 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     var style = "satin"
     /// So the widget can say "no purchases yet" rather than "$0".
     var hasAnyPurchases = false
+    /// Settings › "Show Amounts When Locked". Nil or false: amounts are
+    /// hidden on the Lock Screen and in StandBy until the iPhone is unlocked.
+    var showWhenLocked: Bool?
+
+    /// Whether widgets should redact their numbers while the phone is locked.
+    var hidesWhenLocked: Bool { showWhenLocked != true }
+
+    static let showWhenLockedKey = "widgetShowWhenLocked"
 
     /// 0 when there is no budget. Can go past 1 when over.
     var budgetUsed: Double {

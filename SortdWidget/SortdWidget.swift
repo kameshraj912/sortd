@@ -390,6 +390,7 @@ struct SortdSpendingWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 SpendingView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
             .widgetURL(SortdLink.home)
         }
         .configurationDisplayName("Spending")
@@ -476,6 +477,7 @@ struct SortdQuickAddWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 QuickAddView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
         }
         .configurationDisplayName("Quick Add")
         .description("Log a purchase, scan a receipt or import a statement in one tap.")
@@ -524,6 +526,7 @@ struct SortdBillsWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 BillsView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
             .widgetURL(SortdLink.bills)
         }
         .configurationDisplayName("Bills")
@@ -611,6 +614,7 @@ struct SortdLockScreenWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "SortdLockScreen", provider: SortdProvider()) { entry in
             LockScreenView(entry: entry)
+                .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
                 .containerBackground(.clear, for: .widget)
                 .widgetURL(SortdLink.home)
         }
