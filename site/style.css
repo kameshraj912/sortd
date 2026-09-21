@@ -706,3 +706,5 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 
 /* The "You're on the list" box gets focus for screen readers; no ring needed for a message. */
 .beta-done:focus { outline: none; }
+.beta-form .hint, .beta-done p { text-wrap: pretty; }
+.beta-done h2 { text-wrap: balance; }
