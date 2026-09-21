@@ -52,6 +52,12 @@ if grep -q 'sentry-cocoa' "$PBX"; then
   fi
 fi
 
+# 1c. Gmail ships in v1, which only works for the public once Google has verified the scope.
+if grep -q 'SORTD_GMAIL' "$PBX" && [ "$MODE" = "--appstore" ]; then
+  warn "Gmail is on. Submit only after Google has verified gmail.readonly"
+  say "      (docs/GoogleVerification.md). Before that, only 100 test users can connect."
+fi
+
 # 2. Build number must be unique per upload; remind, don't guess.
 warn "Build number is $build. Every upload needs a new one."
 

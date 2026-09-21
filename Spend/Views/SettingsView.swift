@@ -30,7 +30,7 @@ struct SettingsView: View {
                                 .clipShape(.rect(cornerRadius: 7, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Sortd Pro").foregroundStyle(Color.ink)
-                                Text(pro.isPro ? "Active. Thank you." : "Gmail, receipt camera, insights and more")
+                                Text(pro.isPro ? "Active. Thank you." : Features.gmail ? "Gmail, receipt camera, insights and more" : "Receipt camera, insights and more")
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -60,7 +60,7 @@ struct SettingsView: View {
                     Text("Logs in-store Apple Pay taps the moment you pay.")
                 }
 
-                GmailSection()
+                if Features.gmail { GmailSection() }
 
                 Section {
                     NavigationLink {
