@@ -98,15 +98,21 @@ nonisolated enum WalletTapText {
     static func money(in s: String) -> String? {
         let sign = #"(?:-|−)?"#
         let marker = #"(?:[A-Z]{0,2}\$|€|£|¥|₹|RM|Rs\.?|[A-Z]{3})"#
-        let number = #"\d{1,3}(?:[,.\s]?\d{3})*(?:[.,]\d{2})?"#
+        // Grouped thousands ("1,234.50", "1.234,50") or a plain run of digits
+        // ("1234.50" — the old pattern stopped at 3 digits and read A$123).
+        let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+|\d+)(?:[.,]\d{2})?"#
         let patterns = [
             sign + marker + #"\s?"# + number,                  // A$4.50, SGD 6.20, -$5
             sign + number + #"\s?(?:[A-Z]{3})\b"#,             // 6.20 SGD
             sign + #"\d+[.,]\d{2}\b"#,                          // 4.50
         ]
+        let ns = s as NSString
         for p in patterns {
-            if let r = s.range(of: p, options: .regularExpression) {
-                let hit = String(s[r]).trimmingCharacters(in: .whitespaces)
+            guard let regex = try? NSRegularExpression(pattern: p) else { continue }
+            // Every match, not just the first: in "NAB 4821 A$4.50" the first
+            // hit ("NAB 4821") is rejected and the real amount comes after it.
+            for m in regex.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                let hit = ns.substring(with: m.range).trimmingCharacters(in: .whitespaces)
                 // A bare code must be a real currency ("THB 120", not "ABC 12").
                 if let code = hit.uppercased().split(whereSeparator: { !$0.isLetter }).first, code.count == 3,
                    !hit.contains("$"), AmountParser.currency(in: String(code)) == nil { continue }

@@ -1150,6 +1150,16 @@ struct ApplePayDigitsTests {
 /// unknown digits with two same-bank cards.
 @MainActor
 struct WalletTapEdgeTests {
+    @Test func wholeAmountsOverAThousandAreNotCut() {
+        // Bug-hunt U4: "A$1234.50" was read as A$123.
+        #expect(WalletTapText.money(in: "A$1234.50") == "A$1234.50")
+        #expect(WalletTapText.money(in: "SGD 1500.00") == "SGD 1500.00")
+        #expect(WalletTapText.money(in: "A$1,234.50") == "A$1,234.50")
+        #expect(WalletTapText.money(in: "A$4.50") == "A$4.50")
+        // A rejected first hit no longer hides the real amount after it.
+        #expect(WalletTapText.money(in: "NAB 4821 A$4.50") == "A$4.50")
+    }
+
     private func store() throws -> ModelContext {
         let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
@@ -1214,6 +1224,20 @@ struct WalletTapEdgeTests {
         let r = try await LogPurchaseIntent.handle(merchant: "Kmart", amount: "-A$5.00", card: "NAB Visa Debit", in: ctx, book: book())
         #expect(r.transaction?.refunded == true)
         #expect(r.transaction?.amount == 5)
+    }
+    @Test func aLaterRefundTapTakesThePurchaseOffTheTotal() async throws {
+        // Bug-hunt R1: a refund 3 hours later was saved as its own row and the
+        // purchase still counted, while the dialog said "Refund noted".
+        let ctx = try store(), b = book()
+        let buy = Date.now.addingTimeInterval(-3 * 3600)
+        _ = try await LogPurchaseIntent.handle(merchant: "Myer", amount: "A$50.00", card: "NAB Visa Debit",
+                                               in: ctx, book: b, now: buy)
+        let r = try await LogPurchaseIntent.handle(merchant: "Myer", amount: "-A$50.00", card: "NAB Visa Debit",
+                                                   in: ctx, book: b)
+        #expect(r.merged)
+        let all = try ctx.fetch(FetchDescriptor<Transaction>())
+        #expect(all.count == 1)
+        #expect(all.first?.refunded == true)
     }
     @Test func repeatedMissingAmountTapIsKeptOnce() async throws {
         let ctx = try store(), b = book()

@@ -8,6 +8,12 @@ struct GmailAccount: Codable, Identifiable, Hashable {
     var connectedAt: Date = .now
     var lastSync: Date?
     var lastResult: String?
+    /// Catching up past Gmail's 1,000-per-sync cap: only look at emails older
+    /// than this next time. Nil when caught up.
+    var backfillBefore: Date?
+    /// When the catch-up began. Once it's done, `lastSync` becomes this, so
+    /// emails that arrived during the catch-up are still read.
+    var backfillStartedAt: Date?
     var id: String { email }
 }
 
@@ -73,15 +79,26 @@ enum GmailSync {
     @MainActor @discardableResult
     static func syncAll(in context: ModelContext, force: Bool = false) async -> EmailSync.Summary {
         var total = EmailSync.Summary()
+        // Gmail receipts are Pro. A lapsed subscription (or a build without
+        // Gmail) stops reading the inbox; the account stays until disconnected.
+        guard Features.gmail, ProStore.shared.isPro else { return total }
         var list = accounts
         for i in list.indices {
             if !force, let last = list[i].lastSync, Date.now.timeIntervalSince(last) < 300 { continue }
             do {
+                let started = Date.now
                 let s = try await sync(list[i], in: context)
                 total.added += s.added; total.merged += s.merged; total.refunds += s.refunds
-                // A sync that hit the cap doesn't move the window forward, so
-                // the next one carries on with the older emails.
-                if !s.incomplete { list[i].lastSync = .now }
+                if s.incomplete {
+                    // Hit the 1,000 cap: next time, carry on below the oldest
+                    // email reached, rather than listing the same 1,000 again.
+                    if list[i].backfillStartedAt == nil { list[i].backfillStartedAt = started }
+                    if let oldest = s.oldestListed { list[i].backfillBefore = oldest }
+                } else {
+                    list[i].lastSync = list[i].backfillStartedAt ?? started
+                    list[i].backfillBefore = nil
+                    list[i].backfillStartedAt = nil
+                }
                 list[i].lastResult = s.incomplete ? s.text + " · more next sync" : s.text
             } catch {
                 list[i].lastResult = error.localizedDescription
@@ -104,7 +121,8 @@ enum GmailSync {
         #if DEBUG
         if ProcessInfo.processInfo.environment["SPEND_GMAIL_FULL"] == "1" { since = nil }
         #endif
-        let window = since.map { "after:\($0)" } ?? "newer_than:\(firstSyncDays)d"
+        var window = since.map { "after:\($0)" } ?? "newer_than:\(firstSyncDays)d"
+        if let before = account.backfillBefore { window += " before:\(Int(before.timeIntervalSince1970))" }
         let search = "((\(EmailParsers.gmailQuery)) OR (\(GenericReceipts.gmailQuery))) \(window)"
         let (ids, truncated) = try await listMessages(query: search, token: token)
 
@@ -164,6 +182,8 @@ enum GmailSync {
         #endif
         log.info("Gmail sync: \(ids.count) found, \(fresh.count) new, \(summary.added) added")
         summary.incomplete = truncated
+        // Where the next catch-up pass starts: the oldest email in this list.
+        if truncated, let last = ids.last { summary.oldestListed = try? await messageDate(last, token: token) }
         return summary
     }
 
@@ -234,6 +254,15 @@ enum GmailSync {
         let id: String
         let internalDate: String?
         let payload: Part
+    }
+
+    nonisolated private struct DateOnly: Decodable { let internalDate: String? }
+
+    /// When one email arrived, without downloading it.
+    nonisolated private static func messageDate(_ id: String, token: String) async throws -> Date? {
+        let url = URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(id)?format=minimal")!
+        let m: DateOnly = try await get(url, token: token)
+        return m.internalDate.flatMap(Double.init).map { Date(timeIntervalSince1970: $0 / 1000) }
     }
 
     /// Full messages, 4 at a time (kind to Gmail's per-user limits).

@@ -886,6 +886,8 @@ struct OnboardingView: View {
             .accessibilityLabel("Example reminder: Netflix tomorrow")
 
             Button {
+                // Same rule as Settings: reminders are Pro.
+                guard pro.isPro else { showingPaywall = true; return }
                 Task { reminders = await Reminders.requestPermission() }
             } label: {
                 Label(reminders ? "Reminders On" : "Turn On Reminders",

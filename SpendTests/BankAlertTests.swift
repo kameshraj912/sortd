@@ -64,6 +64,18 @@ struct BankAlertTests {
         }
     }
 
+    @Test func aShopNameOrFooterDoesNotHideAPurchase() throws {
+        // Bug-hunt M3: "otp" inside HOTPOT, and footers, threw real alerts away.
+        let r = try #require(read("Transaction alert", "A purchase of $42.00 was made at HOTPOT CITY on your card ending 1234."))
+        #expect(r.merchant.contains("HOTPOT"))
+        let footer = "A purchase of $58.30 was made at COLES 0712 on your card ending 1234.\n\n"
+            + String(repeating: "Thank you for banking with us. ", count: 12)
+            + "Never share your password. Read our privacy policy and terms and conditions."
+        #expect(read("Transaction alert", footer)?.amount == "58.30")
+        // Still rejected when the subject says so.
+        #expect(read("Your one-time password", "Your OTP is 123456. Do not share it.") == nil)
+    }
+
     @Test func readsTheOtherWordingsBanksUse() throws {
         let samples = [
             "You spent A$58.30 at WOOLWORTHS 3342 using card ending 1234.",

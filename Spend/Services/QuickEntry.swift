@@ -75,7 +75,7 @@ nonisolated enum QuickEntry {
     /// wins, because "7 eleven 4.50" is a shop called 7 Eleven and an
     /// amount of 4.50, not the other way round.
     private static func amount(in text: String) -> Money? {
-        let pattern = #"(?:(A\$|S\$|US\$|NZ\$|HK\$|RM|₹|£|€|\$)\s*)?(\d+(?:[.,]\d{1,2})?)\s*(aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur)?"#
+        let pattern = #"(?:(A\$|S\$|US\$|NZ\$|HK\$|RM|₹|£|€|\$)\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur)?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
@@ -87,7 +87,11 @@ nonisolated enum QuickEntry {
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
 
-        let digits = (group(2) ?? "").replacingOccurrences(of: ",", with: ".")
+        // "1,299" is thousands; "4,50" is a decimal comma.
+        let raw = group(2) ?? ""
+        let digits = raw.range(of: #"^\d{1,3}(,\d{3})+"#, options: .regularExpression) != nil
+            ? raw.replacingOccurrences(of: ",", with: "")
+            : raw.replacingOccurrences(of: ",", with: ".")
         guard let value = Decimal(string: digits), value > 0 else { return nil }
 
         let code = group(3)?.uppercased() ?? currency(for: group(1))

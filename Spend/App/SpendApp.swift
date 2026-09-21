@@ -196,6 +196,9 @@ struct RootView: View {
             tab = router.tab
         }
         .onChange(of: router.tab) { _, new in tab = new }
+        // "Clear" on the sample-data banner sets onboarded back to false:
+        // open setup again straight away, not on the next launch.
+        .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
         .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
             OnboardingView { setupFinished = true }
         }

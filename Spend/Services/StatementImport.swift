@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Reads a bank statement and finds the purchases in it.
 ///
@@ -206,6 +207,26 @@ nonisolated enum StatementImport {
     /// Anything without both a date and an amount is skipped, which throws
     /// away headers, page numbers and marketing without needing rules for
     /// each bank.
+    /// Saves chosen rows through `TransactionLogger`. A row may match a
+    /// purchase Sortd already had (the tap), but never another row from this
+    /// same import: two identical lines are two purchases.
+    @MainActor
+    static func save(_ rows: [Row], card: Card, in context: ModelContext) -> (added: Int, merged: Int) {
+        var added = 0, merged = 0
+        var touched: Set<UUID> = []
+        for row in rows {
+            let purchase = IncomingPurchase(date: row.date, merchant: row.detail, amount: row.amount,
+                                            currency: row.currency ?? Spend.Money.home, card: card, source: .csv)
+            guard let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched) else { continue }
+            touched.insert(outcome.transaction.id)
+            switch outcome {
+            case .added: added += 1
+            case .merged: merged += 1
+            }
+        }
+        return (added, merged)
+    }
+
     static func rows(fromText text: String, dateOrder: DateOrder = .auto,
                      today: Date = .now) -> [Row] {
         let lines = text.split(whereSeparator: \.isNewline)
@@ -300,32 +321,6 @@ nonisolated enum StatementImport {
             }
         }
 
-        // 1 Sep 2026 / 1 September 26 / Sep 1, 2026
-        if let regex = try? NSRegularExpression(
-            pattern: #"\b([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
-           let m = regex.firstMatch(in: line, range: full),
-           let month = month(ns.substring(with: m.range(at: 2))) {
-            let d = Int(ns.substring(with: m.range(at: 1)))!
-            let y = m.range(at: 3).location == NSNotFound
-                ? Calendar.current.component(.year, from: today)
-                : year(Int(ns.substring(with: m.range(at: 3)))!)
-            if let date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
-                return (date, r)
-            }
-        }
-        if let regex = try? NSRegularExpression(
-            pattern: #"\b([A-Za-z]{3,9})\.?\s+([0-9]{1,2})(?:,)?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
-           let m = regex.firstMatch(in: line, range: full),
-           let month = month(ns.substring(with: m.range(at: 1))) {
-            let d = Int(ns.substring(with: m.range(at: 2)))!
-            let y = m.range(at: 3).location == NSNotFound
-                ? Calendar.current.component(.year, from: today)
-                : year(Int(ns.substring(with: m.range(at: 3)))!)
-            if let date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
-                return (date, r)
-            }
-        }
-
         // d/m/y or m/d/y, decided by `order`.
         if let regex = try? NSRegularExpression(pattern: #"\b([0-9]{1,2})[/\-.]([0-9]{1,2})[/\-.]([0-9]{2,4})\b"#),
            let m = regex.firstMatch(in: line, range: full) {
@@ -341,11 +336,55 @@ nonisolated enum StatementImport {
             }
         }
 
+        // 1 Sep 2026 / 1 September 26 / Sep 1, 2026. After the numeric form, so
+        // "03/09/2026 CAFE 12 MARKET ST" isn't read as 12 March.
+        if let regex = try? NSRegularExpression(
+            pattern: #"\b([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
+           let m = regex.firstMatch(in: line, range: full),
+           let month = month(ns.substring(with: m.range(at: 2))) {
+            let d = Int(ns.substring(with: m.range(at: 1)))!
+            let noYear = m.range(at: 3).location == NSNotFound
+            let y = noYear
+                ? Calendar.current.component(.year, from: today)
+                : year(Int(ns.substring(with: m.range(at: 3)))!)
+            if var date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
+                // "28 Dec" on a statement read in January is last December.
+                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d) {
+                    date = earlier
+                }
+                return (date, r)
+            }
+        }
+        if let regex = try? NSRegularExpression(
+            pattern: #"\b([A-Za-z]{3,9})\.?\s+([0-9]{1,2})(?:,)?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
+           let m = regex.firstMatch(in: line, range: full),
+           let month = month(ns.substring(with: m.range(at: 1))) {
+            let d = Int(ns.substring(with: m.range(at: 2)))!
+            let noYear = m.range(at: 3).location == NSNotFound
+            let y = noYear
+                ? Calendar.current.component(.year, from: today)
+                : year(Int(ns.substring(with: m.range(at: 3)))!)
+            if var date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
+                // "28 Dec" on a statement read in January is last December.
+                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d) {
+                    date = earlier
+                }
+                return (date, r)
+            }
+        }
+
         return nil
     }
 
+    private static let fullMonthNames = ["january", "february", "march", "april", "may", "june", "july",
+                                         "august", "september", "october", "november", "december"]
+
+    /// "Sep", "Sept" or "September" — the whole word, so MARKET, DECATHLON and
+    /// JUNCTION aren't months.
     private static func month(_ name: String) -> Int? {
-        monthNames[String(name.lowercased().prefix(4))] ?? monthNames[String(name.lowercased().prefix(3))]
+        let word = name.lowercased()
+        if let n = monthNames[word] { return n }
+        return fullMonthNames.firstIndex(of: word).map { $0 + 1 }
     }
 
     /// 26 → 2026, 99 → 1999. Statements are never a century old.

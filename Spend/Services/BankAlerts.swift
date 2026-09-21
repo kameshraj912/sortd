@@ -108,8 +108,11 @@ nonisolated enum BankAlerts {
         let text = tidy(subject + "\n" + body)
 
         // A bank email that isn't about a purchase is very often still full
-        // of numbers, so this check comes first.
-        guard !notAPurchase.contains(where: { contains($0, text) }) else { return nil }
+        // of numbers, so this check comes first. Whole words only ("otp" is
+        // inside "HOTPOT"), and only the subject and opening: a real purchase
+        // alert's footer says "privacy policy" and "never share your password".
+        let head = String(tidy(subject + "\n" + String(body.prefix(300))))
+        guard !notAPurchase.contains(where: { contains(#"\b(?:"# + $0 + #")\b"#, head) }) else { return nil }
 
         guard let money = amount(in: text) else { return nil }
         guard let merchant = merchant(in: text), !merchant.isEmpty else { return nil }

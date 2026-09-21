@@ -68,8 +68,10 @@ enum TransactionLogger {
     }
 
     /// Adds a purchase, or folds it into an existing one from another source.
+    /// `excluding`: purchases this same import already added or matched. Two
+    /// identical lines in one statement are two purchases, never a re-send.
     @discardableResult
-    static func log(_ p: IncomingPurchase, in context: ModelContext) throws -> Outcome {
+    static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = []) throws -> Outcome {
         let learned = try learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
@@ -78,7 +80,7 @@ enum TransactionLogger {
         let to = p.date.addingTimeInterval(Deduper.window)
         let nearby = try context.fetch(FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= from && $0.date <= to }
-        ))
+        )).filter { !excluding.contains($0.id) }
         let candidate = Deduper.Candidate(date: p.date, merchant: p.merchant, amount: p.amount,
                                           currency: p.currency, card: p.card, source: p.source,
                                           platform: p.platform)
