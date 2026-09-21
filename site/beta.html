@@ -10,8 +10,8 @@
 <link rel="icon" type="image/png" href="img/favicon.png">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="canonical" href="https://sortd.page/beta">
-<link rel="stylesheet" href="style.css?v=22">
-<script src="site.js?v=24"></script>
+<link rel="stylesheet" href="style.css?v=23">
+<script src="site.js?v=25"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -35,35 +35,35 @@
   <div id="beta-intro">
   <h1>Join the Sortd beta</h1>
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-  <p>The beta isn't open yet. Leave your email and we'll send you the TestFlight link the day it opens. You'll need an iPhone on iOS&nbsp;26 or later. (Yes, that means finally tapping "Update". You were going to&nbsp;anyway.)</p>
+  <p>The beta isn't open yet. Leave your email and we'll send you the TestFlight link the day it opens. You'll need an iPhone on iOS&nbsp;26 or later. Yes, that means installing the update you've been snoozing since&nbsp;June.</p>
   </div>
 
   <form class="beta-form" id="beta-form" action="/api/beta" method="post" novalidate>
     <div class="field">
       <label for="f-email">Email</label>
       <input id="f-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="254" aria-describedby="f-email-hint">
-      <p class="hint" id="f-email-hint">Where your TestFlight link goes. No newsletters. We can't even write&nbsp;one.</p>
+      <p class="hint" id="f-email-hint">We'll send exactly one email: your TestFlight link. Unlike every other app you've signed up&nbsp;for.</p>
     </div>
     <div class="field">
-      <label for="f-name">First name <span class="opt">optional</span></label>
-      <input id="f-name" name="name" type="text" autocomplete="given-name" maxlength="80">
+      <label for="f-name">First name</label>
+      <input id="f-name" name="name" type="text" autocomplete="given-name" maxlength="80" required>
     </div>
     <div class="field">
-      <label for="f-country">Where do you live? <span class="opt">optional</span></label>
-      <select id="f-country" name="country" aria-describedby="f-country-hint">
+      <label for="f-country">Where do you live?</label>
+      <select id="f-country" name="country" aria-describedby="f-country-hint" required>
         <option value="">Choose one</option>
         <option>Australia</option>
         <option>Singapore</option>
         <option>Malaysia</option>
         <option>Other</option>
       </select>
-      <p class="hint" id="f-country-hint">So we know which banks to test. "Other" is fine. We won't&nbsp;judge.</p>
+      <p class="hint" id="f-country-hint">So we test your bank first. We can't fix their app, but we can work around&nbsp;it.</p>
     </div>
     <fieldset class="field">
-      <legend>Do you pay with Apple Pay? <span class="opt">optional</span></legend>
-      <p class="hint">Be honest. Your card already&nbsp;knows.</p>
+      <legend>Do you pay with Apple Pay?</legend>
+      <p class="hint">Sortd logs every tap by itself. Yes, even the 2am Uber&nbsp;Eats.</p>
       <div class="choices">
-        <label><input type="radio" name="applepay" value="yes"> Yes</label>
+        <label><input type="radio" name="applepay" value="yes" required> Yes</label>
         <label><input type="radio" name="applepay" value="no"> No</label>
         <label><input type="radio" name="applepay" value="not sure"> Not sure</label>
       </div>
@@ -71,7 +71,7 @@
     <div class="field">
       <label for="f-gmail">Gmail address <span class="opt">optional</span></label>
       <input id="f-gmail" name="gmail" type="email" autocomplete="off" inputmode="email" maxlength="254" aria-describedby="f-gmail-hint">
-      <p class="hint" id="f-gmail-hint">Only if you want Sortd to read your receipts for you. Google is still checking us out, so we may need to add your Gmail as a tester&nbsp;first.</p>
+      <p class="hint" id="f-gmail-hint">Only if you want Sortd to find your receipts. They're in there somewhere, under 400 newsletters. Google is still reviewing Sortd, so we'll add you as a tester&nbsp;first.</p>
     </div>
     <div class="hp" aria-hidden="true">
       <label for="f-website">Leave this empty</label>
@@ -79,15 +79,15 @@
     </div>
     <p class="form-error" id="beta-error" role="alert" hidden></p>
     <button class="btn btn-primary" type="submit">Join the beta</button>
-    <p class="hint small">We use this only to send your invite. It reaches us as one email and isn't stored anywhere else. We don't even have a server to lose it&nbsp;on. <a href="privacy#beta">Privacy</a></p>
+    <p class="hint small">We use this only to send your invite. Not stored, not shared, not sold. We're a budgeting app, not a data&nbsp;broker. <a href="privacy#beta">Privacy</a></p>
   </form>
 
   <div class="beta-done" id="beta-done" role="status" hidden>
     <svg class="done-tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="24"/><path d="M14 24.5l7 7 13-14" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <h1>Got it. You're on the&nbsp;list.</h1>
     <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <p>We'll send the TestFlight link to <strong id="beta-done-email">your email</strong> the day the beta opens. Until then, keep buying coffee. Sortd will need something to&nbsp;count.</p>
-    <p class="muted">One email, with the link. No newsletters, no&nbsp;spam.</p>
+    <p>We'll send the TestFlight link to <strong id="beta-done-email">your email</strong> the day the beta opens. Until then, try not to open your banking app. We'll deal with it&nbsp;soon.</p>
+    <p class="muted">One email. No newsletters. No "we noticed you haven't opened the app"&nbsp;guilt&nbsp;trips.</p>
     <a class="btn btn-primary" href="/">OK, back to doomscrolling</a>
   </div>
 
