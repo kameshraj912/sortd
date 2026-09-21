@@ -29,7 +29,7 @@ struct TransactionsScreen: View {
                 ContentUnavailableView(
                     "No Purchases Yet",
                     systemImage: "list.bullet.rectangle.portrait",
-                    description: Text("Purchases you log, or that come in from Apple Pay, show up here.")
+                    description: Text("Purchases you log, or that come in from Apple Pay, show up here. \(SortdVoice.noPurchases)")
                 )
             } else {
                 // The list always shows (title, search box, chips), with a

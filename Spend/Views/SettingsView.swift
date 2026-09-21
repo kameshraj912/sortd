@@ -11,13 +11,15 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance = "system"
     @State private var confirmingDelete = false
     @State private var csvFile: URL?
+    @State private var backupFile: URL?
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var showingPaywall = false
     @State private var pro = ProStore.shared
+    @State private var knock = SecretKnock.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: Bindable(Router.shared).settingsPath) {
             List {
                 ListPageTitle(title: "Settings")
                 Section {
@@ -109,6 +111,19 @@ struct SettingsView: View {
                             Label("Card Style", systemImage: "paintpalette")
                         }
                     }
+                    NavigationLink {
+                        WidgetsGuideView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Widgets")
+                                Text("Home and Lock Screen · light or dark")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "square.grid.2x2")
+                        }
+                    }
                 } header: {
                     BoldHeader("Cards")
                 } footer: {
@@ -179,6 +194,42 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if let file = backupFile {
+                        ShareLink(item: file) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Save a Backup")
+                                    Text(lastBackupText)
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "arrow.down.document")
+                            }
+                        }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            UserDefaults.standard.set(Date.now, forKey: Self.lastBackupKey)
+                        })
+                    }
+                    NavigationLink {
+                        ImportView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Import")
+                                Text("A statement, a screenshot, or a backup")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "square.and.arrow.down")
+                        }
+                    }
+                } header: {
+                    BoldHeader("Backup")
+                } footer: {
+                    Text("Everything stays on this iPhone. A backup is the only way to move phones, or to get your purchases back if you lose this one.")
+                }
+
+                Section {
                     NavigationLink {
                         PrivacyView()
                     } label: {
@@ -203,17 +254,42 @@ struct SettingsView: View {
                     LabeledContent("Purchases", value: "\(transactions.count)")
                     LabeledContent("Stored", value: "On this iPhone only")
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                        .contentShape(.rect)
+                        .onTapGesture { knock.knock() }
+                        .accessibilityHint("Tapped five times, opens a code screen")
+                    // The flat tab bar sits over the last row otherwise, and
+                    // the last row is the one with the hidden door in it.
+                    Color.clear
+                        .frame(height: 1)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityHidden(true)
                 } header: {
                     BoldHeader("About")
+                } footer: {
+                    if let hint = knock.hint {
+                        Text(hint).foregroundStyle(.secondary)
+                    } else if let source = CompedPro.source() {
+                        // Named so a tester can say which code they used —
+                        // the app has no server and reports nothing.
+                        Text("Pro is on the house. Code: \(source)")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Color.page)
             .brandedTitle("Settings")
+            .navigationDestination(for: Router.Destination.self) { destination in
+                switch destination {
+                case .importing: ImportView()
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
-            .onAppear { csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions) }
-            .onChange(of: transactions.count) { _, n in csvFile = n == 0 ? nil : CSVExport.file(transactions) }
+            .onAppear { refreshFiles() }
+            .onChange(of: transactions.count) { _, _ in refreshFiles() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $knock.isOpen) { SecretCodeSheet() }
             .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete Everything", role: .destructive) {
                     DataReset.deleteEverything(in: context)
@@ -222,6 +298,22 @@ struct SettingsView: View {
                 Text("This removes every purchase, card, budget and setting from this iPhone. It can't be undone. Export first if you want a copy.")
             }
         }
+    }
+
+    static let lastBackupKey = "lastBackupSaved"
+
+    /// The share sheet needs a real file, so both are written when the
+    /// screen opens and whenever the number of purchases changes.
+    private func refreshFiles() {
+        csvFile = transactions.isEmpty ? nil : CSVExport.file(transactions)
+        backupFile = try? Backup.file(in: context)
+    }
+
+    private var lastBackupText: String {
+        guard let last = UserDefaults.standard.object(forKey: Self.lastBackupKey) as? Date else {
+            return "You haven't saved one yet"
+        }
+        return "Last saved \(last.formatted(.relative(presentation: .named)))"
     }
 
     private var lastTapText: String {

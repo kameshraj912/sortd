@@ -15,6 +15,42 @@
   root.classList.add("js");
 
   document.addEventListener("DOMContentLoaded", function () {
+    // Beta sign-up: send without leaving the page, then show "You're on the list".
+    var form = document.getElementById("beta-form");
+    if (form) {
+      var err = document.getElementById("beta-error"), done = document.getElementById("beta-done");
+      var email = form.elements.email, gmail = form.elements.gmail, submit = form.querySelector('button[type="submit"]');
+      var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
+      var show = function (msg, field) {
+        err.textContent = msg; err.hidden = !msg;
+        [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { f.removeAttribute("aria-invalid"); });
+        if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
+      };
+      if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try\u00a0again.");
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!ok(email.value.trim())) return show("That's not an email. Even your spam folder would reject\u00a0it.", email);
+        if (!form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
+        if (!form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
+        if (!form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
+        if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail\u00a0address.", gmail);
+        show(""); submit.disabled = true; submit.textContent = "Sending…";
+        fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
+          .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+          .then(function (res) {
+            if (res.ok) {
+              ["beta-intro", "beta-alt"].forEach(function (id) { var n = document.getElementById(id); if (n) n.hidden = true; });
+              document.getElementById("beta-done-email").textContent = email.value.trim();
+              form.hidden = true; done.hidden = false; window.scrollTo(0, 0);
+              var h = done.querySelector("h1"); h.setAttribute("tabindex", "-1"); h.focus();
+            }
+            else show(res.error || "That didn't go through. Please try\u00a0again.");
+          })
+          .catch(function () { show("You seem to be offline. Try again when the Wi-Fi comes\u00a0back."); })
+          .then(function () { submit.disabled = false; submit.textContent = "Join the beta"; });
+      });
+    }
+
     // Theme button cycles System → Light → Dark.
     var btn = document.querySelector(".theme-btn");
     var names = { system: "Theme: match device", light: "Theme: light", dark: "Theme: dark" };
@@ -134,11 +170,43 @@
     }, { passive: true });
 
     // Scroll-in for sections marked .reveal.
+    //
+    // These start at opacity 0, so a missed reveal isn't a missing
+    // animation — it's missing content. Two things guard against that.
+    //
+    // threshold 0 rather than 0.12: a section taller than the phone, or one
+    // you flick past quickly, can struggle to get 12% of itself inside the
+    // root. Any pixel is enough.
+    //
+    // And a sweep, in case the observer is never called at all: anything
+    // that has reached the bottom of the screen gets shown regardless.
     var items = document.querySelectorAll(".reveal");
     if (!("IntersectionObserver" in window)) { items.forEach(function (el) { el.classList.add("in"); }); return; }
+
+    function show(el) { el.classList.add("in"); }
+
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
-    }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
+      entries.forEach(function (e) { if (e.isIntersecting) { show(e.target); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0 });
     items.forEach(function (el) { io.observe(el); });
+
+    var sweeping = false;
+    function sweep() {
+      sweeping = false;
+      var limit = window.innerHeight;
+      var left = 0;
+      items.forEach(function (el) {
+        if (el.classList.contains("in")) return;
+        if (el.getBoundingClientRect().top < limit) { show(el); io.unobserve(el); } else { left++; }
+      });
+      if (!left) { window.removeEventListener("scroll", onScroll); }
+    }
+    function onScroll() {
+      if (sweeping) return;
+      sweeping = true;
+      requestAnimationFrame(sweep);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    sweep();
   });
 })();

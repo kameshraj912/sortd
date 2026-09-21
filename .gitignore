@@ -27,3 +27,6 @@ node_modules
 
 # Demo videos (show real account data)
 docs/demo/
+
+# Ad footage (huge, and regenerated from source)
+claude-project/ads/

@@ -85,6 +85,7 @@ extension Color {
 struct BrandBar: View {
     var width: CGFloat = 18
     var height: CGFloat = 4
+    @State private var quip: String?
 
     var body: some View {
         HStack(spacing: 3) {
@@ -93,6 +94,16 @@ struct BrandBar: View {
             }
         }
         .accessibilityHidden(true)
+        // Nobody needs to find this, which is the point.
+        .onLongPressGesture(minimumDuration: 0.8) {
+            quip = SortdVoice.brandMarkPress
+        }
+        .alert("Sortd", isPresented: Binding(get: { quip != nil },
+                                             set: { if !$0 { quip = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(quip ?? "")
+        }
     }
 }
 
