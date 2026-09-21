@@ -205,6 +205,10 @@ struct RootView: View {
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }
+            // A subscription can expire while the app sits in memory, and
+            // expiry sends no update: check again before anything uses isPro.
+            await ProStore.shared.refresh()
+            await GoogleAuth.retryPendingRevokes()
             try? TransactionLogger.refreshUncategorised(in: context)
             await FXService.ensureConverted(in: context)
             #if DEBUG

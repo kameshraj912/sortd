@@ -13,7 +13,7 @@ final class Router {
 
     /// A screen to push inside Settings.
     enum Destination: Hashable {
-        case importing
+        case importing, recurring
     }
 
     /// A sheet for Home to present.
@@ -47,6 +47,7 @@ final class Router {
             tab = .insights
         case "bills":
             tab = .settings
+            settingsPath = [.recurring]
         case "import":
             tab = .settings
             settingsPath = [.importing]

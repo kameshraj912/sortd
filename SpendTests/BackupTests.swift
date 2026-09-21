@@ -314,6 +314,17 @@ struct BackupTests {
         #expect(result.added == 0)
     }
 
+    @Test func sampleDataIsNeverInABackup() throws {
+        // Bug hunt D6: restored sample purchases had no Clear banner.
+        let from = try store()
+        add(from, "Woolworths", 58.30, "2026-09-01")
+        add(from, "Sample Cafe", 5.50, "2026-09-02").note = DemoData.marker
+        try from.save()
+        let snapshot = try Backup.snapshot(in: from, defaults: scratch())
+        #expect(snapshot.transactions.map(\.merchant) == ["Woolworths"])
+        #expect(!snapshot.cards.contains { DemoData.cardIds.contains($0.id) })
+    }
+
     @Test func mergeDoesNotOverwriteASettingChosenOnThisPhone() throws {
         let fromDefaults = scratch()
         fromDefaults.set(2400.0, forKey: "monthlyBudget")
