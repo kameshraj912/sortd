@@ -36,7 +36,7 @@ struct CardsSettingsView: View {
                     for i in offsets { remove(book.active[i]) }
                 }
             } footer: {
-                Text("Sortd matches a purchase to a card by its last 4 digits (bank emails and receipts) or by its name in Apple Wallet (Apple Pay taps).")
+                Text("Cards are matched by their last 4 digits, or by their Wallet name for taps.")
             } }
 
             let archived = book.cards.filter(\.archived)
@@ -181,7 +181,7 @@ struct CardEditor: View {
                 } header: {
                     BoldHeader("Last 4 digits")
                 } footer: {
-                    Text("Bank emails show the card number. Receipts for Apple Pay purchases often show Apple Pay's own number instead: find it in Wallet › this card › ••• › Card Details › Device Account Number. Add both so every receipt finds this card.")
+                    Text("Bank emails show the card number. Apple Pay receipts often show Wallet's own number instead — Wallet › this card › ••• › Card Details. Add both so every receipt finds this card.")
                 }
 
                 Section {

@@ -68,6 +68,16 @@ struct SpendApp: App {
         }
         if let style = env["SPEND_STYLE"] { UserDefaults.standard.set(style, forKey: "cardStyle") }
         if let budget = env["SPEND_BUDGET"].flatMap(Double.init) { UserDefaults.standard.set(budget, forKey: "monthlyBudget") }
+        // Screen recordings: SPEND_REEL_TAP=<seconds> runs one real Apple Pay
+        // tap through the same code the Shortcuts automation calls.
+        if let delay = env["SPEND_REEL_TAP"].flatMap(Double.init) {
+            Task {
+                try? await Task.sleep(for: .seconds(delay))
+                _ = try? await LogPurchaseIntent.handle(merchant: "Seven Seeds Coffee", amount: "A$5.50", card: "NAB Visa Debit",
+                                                        in: SpendStore.container.mainContext, book: .shared,
+                                                        now: Calendar.current.date(bySettingHour: 8, minute: 12, second: 0, of: .now) ?? .now)
+            }
+        }
         #endif
     }
 
@@ -133,6 +143,10 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var lock = AppLock()
+    @State private var router = Router.shared
+    /// Set when setup finishes, so the cover closes even when a debug flag
+    /// is forcing it open.
+    @State private var setupFinished = false
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -163,8 +177,14 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
         }
-        .fullScreenCover(isPresented: .constant(!onboarded || Self.forceSetup)) {
-            OnboardingView()
+        // A tap on a widget opens the app at what the widget was showing.
+        .onOpenURL { url in
+            router.open(url)
+            tab = router.tab
+        }
+        .onChange(of: router.tab) { _, new in tab = new }
+        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
+            OnboardingView { setupFinished = true }
         }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
@@ -180,6 +200,8 @@ struct RootView: View {
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())
             await Reminders.checkCategoryLimits(all)
+            // Leave the widget fresh numbers. Does nothing without an App Group.
+            WidgetBridge.refresh(from: context)
         }
     }
 }

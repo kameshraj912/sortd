@@ -18,7 +18,7 @@ struct InsightsView: View {
             Group {
                 if transactions.isEmpty {
                     ContentUnavailableView("No Insights Yet", systemImage: "chart.bar.xaxis",
-                                           description: Text("Once a few purchases come in, you'll see where your money goes."))
+                                           description: Text("Once a few purchases come in, you'll see where your money goes. \(SortdVoice.noInsights)"))
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
@@ -60,8 +60,21 @@ struct InsightsView: View {
         let max = rows.first?.total.double ?? 1
         let total = thisMonth.audTotal.double
 
+        // One dry line, and only when a single category really ran away
+        // with the month. Most months it says nothing.
+        let quip = rows.first.flatMap { row -> String? in
+            guard total > 0 else { return nil }
+            return SortdVoice.topCategory(row.category.name, share: row.total.double / total)
+        }
+
         return VStack(alignment: .leading, spacing: 10) {
             SectionHeader(title: "Categories this month")
+            if let quip {
+                Text(quip)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(spacing: 0) {
                 ForEach(rows, id: \.category) { row in
                     let progress = limits[row.category].map { CategoryBudgets.progress(spent: row.total.double, limit: $0) }

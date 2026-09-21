@@ -13,8 +13,27 @@ enum DemoData {
 
     static var isActive: Bool { UserDefaults.standard.bool(forKey: activeKey) }
 
+    /// True when the flag says sample data is loaded *and* it really is.
+    ///
+    /// The flag lives in UserDefaults and the rows live in the database, and
+    /// those two can come apart: restoring an iPhone backup brings
+    /// preferences across, and a store that fails to migrate leaves the flag
+    /// saying "loaded" over an empty app. Checking both means a stuck app
+    /// fixes itself instead of sitting there empty.
+    static func isLoaded(in context: ModelContext) -> Bool {
+        guard isActive else { return false }
+        return hasRows(in: context)
+    }
+
+    static func hasRows(in context: ModelContext) -> Bool {
+        let marker = marker
+        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.note == marker })
+        descriptor.fetchLimit = 1
+        return !((try? context.fetch(descriptor))?.isEmpty ?? true)
+    }
+
     static func load(in context: ModelContext, now: Date = .now) {
-        guard !isActive else { return }
+        guard !isLoaded(in: context) else { return }
         let home = Money.home
         UserDefaults.standard.set(home, forKey: Money.homeKey)
         let region = Locale.current.region?.identifier ?? "AU"
