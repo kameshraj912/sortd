@@ -71,4 +71,32 @@ struct ProStoreTests {
         s.clearTransactions()
         s.timeRate = .realTime
     }
+
+    /// A failed card during Billing Grace Period must keep Pro while Apple retries.
+    @Test func gracePeriodKeepsPro() async throws {
+        let s = try Self.session(); _ = s
+        s.timeRate = .oneRenewalEveryTwoSeconds
+        s.shouldEnterBillingRetryOnRenewal = true
+        s.billingGracePeriodIsEnabled = true
+        defer {
+            s.shouldEnterBillingRetryOnRenewal = false
+            s.billingGracePeriodIsEnabled = false
+            s.clearTransactions()
+            s.timeRate = .realTime
+        }
+        let store = ProStore.shared
+        let monthly = try #require(try await Product.products(for: [ProStore.ID.monthly]).first)
+        #expect(try await store.buy(monthly) == .purchased)
+        // Note: StoreKit Testing enters grace before the old expirationDate passes, so
+        // this can't reproduce the live case (grace running, expiry already past) that
+        // refresh() now handles. It guards against grace locking Pro in general.
+        var state: Product.SubscriptionInfo.RenewalState?
+        for _ in 0..<40 where state != .inGracePeriod {
+            try await Task.sleep(for: .milliseconds(250))
+            state = try await monthly.subscription?.status.first?.state
+        }
+        try #require(state == .inGracePeriod)
+        await store.refresh()
+        #expect(store.isPro)
+    }
 }

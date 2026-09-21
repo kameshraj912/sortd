@@ -26,14 +26,14 @@ struct OnboardingView: View {
     enum Step: Int, CaseIterable { case welcome, currency, cards, cardDetails, applePay, email, budget, reminders, pro, finish }
     #if DEBUG
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
+    #else
+    @State private var step: Step = .welcome
+    #endif
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
     @State private var showingImport = false
     /// "14 days free", read from the App Store. Nil when there's no trial.
     @State private var trialText: String?
-    #else
-    @State private var step: Step = .welcome
-    #endif
     @State private var forward = true
     @State private var showingGuide = false
     @State private var customBudget = ""

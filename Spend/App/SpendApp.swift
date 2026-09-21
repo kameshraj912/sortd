@@ -41,6 +41,7 @@ struct SpendApp: App {
     }
 
     init() {
+        CrashReporting.start()
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
         Exports.clear()
