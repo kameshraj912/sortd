@@ -24,6 +24,8 @@ final class ProStore {
     enum Feature: String, CaseIterable, Identifiable {
         case gmail, camera, insights, recurring, budgets
         var id: String { rawValue }
+        /// What this build offers. Gmail is left out of the App Store build (`Features.gmail`).
+        static var available: [Feature] { allCases.filter { $0 != .gmail || Features.gmail } }
         var title: String {
             switch self {
             case .gmail: "Gmail receipts"
