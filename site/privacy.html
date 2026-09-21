@@ -62,7 +62,7 @@
   <h2 id="security">How we protect your data</h2>
   <p>Some of what Sortd handles is sensitive: your purchases, and, if you connect it, your Gmail. This is how it is kept safe.</p>
   <ul>
-    <li><strong>Kept on your iPhone only:</strong> Sortd has no server and no Sortd account. Your purchases, cards, settings and Gmail data never reach us or any other company, so there is no copy of them anywhere for anyone to leak.</li>
+    <li><strong>Kept on your iPhone only:</strong> Sortd has no server and no Sortd account. Your purchases, cards, settings and Gmail data never reach us or any other company, so we hold no copy for anyone to leak. A backup or spreadsheet file only exists if you choose to share one, and Sortd deletes its own copy afterwards.</li>
     <li><strong>Encrypted on your iPhone:</strong> Sortd's storage is protected by iOS Data Protection. It is encrypted, and after your iPhone restarts it can't be read until you unlock the phone with your passcode or Face&nbsp;ID. Other apps can't read it.</li>
     <li><strong>Google sign-in key in the Keychain:</strong> the Google refresh token is stored in the iPhone Keychain, which iOS encrypts. It is set to stay on this iPhone only: it is not synced to iCloud Keychain and does not move to another device. Short-lived access keys are kept only in memory and are never written to storage.</li>
     <li><strong>Secure sign-in:</strong> you sign in to Google in Apple's secure sign-in window, using OAuth&nbsp;2.0 with PKCE. Sortd never sees your Google password, and no secret key is built into the app.</li>
@@ -131,6 +131,7 @@
     <li><strong>How it reaches us:</strong> as one email, sent through Cloudflare, the company that runs this website. It isn't saved in a database, on this website or anywhere else.</li>
     <li><strong>What we use it for:</strong> sending you the TestFlight link when the beta opens. If you gave a Gmail address, we also add it to Google's tester list so Gmail receipts work for you. Nothing else. No newsletters, no marketing.</li>
     <li><strong>Stopping spam:</strong> to stop bots flooding the form, Cloudflare briefly counts sign-ups from each internet connection. That count isn't kept.</li>
+    <li><strong>"I'm human" check:</strong> the form uses Cloudflare Turnstile to tell people from bots. To do that, Cloudflare sees details like your internet address and browser type. It sets no cookies. See <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Cloudflare's Turnstile privacy policy</a>.</li>
     <li><strong>Who else sees it:</strong> no one. We don't share it or sell it.</li>
     <li><strong>Changed your mind?</strong> Email <a href="mailto:support@sortd.page">support@sortd.page</a> and we'll delete your sign-up.</li>
   </ul>
@@ -142,7 +143,7 @@
   <div class="wrap">
     <div>
       <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
-      <p>© 2026. Apple Pay, iPhone and Apple Watch are trademarks of Apple Inc. Gmail is a trademark of Google LLC.</p>
+      <p>© 2026 Kameshraj Gnanaprakasam. Apple, Apple Pay, Apple Watch, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google and Gmail are trademarks of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
     </div>
     <nav aria-label="Footer">
       <a href="privacy">Privacy Policy</a>

@@ -6,7 +6,8 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 ## App information
 
 - **Name** (30): Sortd Money
-- **Subtitle** (30): Apple Pay spending, logged
+- **Subtitle** (30): Tap-to-pay spending, logged
+  (Not "Apple Pay": Apple's rules (5.2.1, Apple Pay marketing guidelines) keep its marks out of names and subtitles. The description can still say Apple Pay.)
 - **Primary category**: Finance
 - **Secondary category**: Productivity
 - **Age rating**: 4+ (no objectionable content, no user-generated content, no gambling)
@@ -58,7 +59,7 @@ Privacy Policy: https://sortd.page/privacy
 
 ## Keywords (100, comma-separated, no spaces)
 
-budget,expense,tracker,spending,apple pay,receipt,subscription,bills,wallet,finance,currency,travel
+budget,expense,tracker,spending,receipt,subscription,bills,finance,currency,travel,money,expenses
 
 ## What's New (first version)
 
