@@ -54,6 +54,16 @@ struct BankAlertTests {
         #expect(!r.isRefund)
     }
 
+    @Test func aWordBeforeTheAmountIsNotACurrency() throws {
+        // Bug-hunt M1: "for" was read as currency "FOR", so the purchase counted as 0.
+        for body in ["You made a payment for $58.30 at WOOLWORTHS 3342 with card ending 1234.",
+                     "YOU MADE A PAYMENT FOR $58.30 AT WOOLWORTHS 3342 WITH CARD ENDING 1234."] {
+            let r = try #require(read("Transaction alert", body))
+            #expect(r.amount == "58.30")
+            #expect(r.currency == "AUD")
+        }
+    }
+
     @Test func readsTheOtherWordingsBanksUse() throws {
         let samples = [
             "You spent A$58.30 at WOOLWORTHS 3342 using card ending 1234.",

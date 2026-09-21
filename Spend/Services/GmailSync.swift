@@ -132,6 +132,7 @@ enum GmailSync {
             let batch = Array(fresh[start..<min(start + 20, fresh.count)])
             let messages = try await fetchMessages(batch, token: token)
             var records: [EmailRecord] = []
+            var notReceipts: [String] = []
             for m in messages {
                 let found = await read(m)
                 records += found
@@ -139,7 +140,7 @@ enum GmailSync {
                 // but only when the best reader for it actually ran.
                 let bestRan = EmailParsers.knowsSender(m.from) || ReceiptAI.isAvailable
                 if found.isEmpty && bestRan && !m.body.isEmpty {
-                    context.insert(ImportedRecord(id: "\(m.id)-none-v\(readerVersion)", account: account.email))
+                    notReceipts.append("\(m.id)-none-v\(readerVersion)")
                 }
                 #if DEBUG
                 let layer = EmailParsers.knowsSender(m.from) ? "rule" : (ReceiptAI.isAvailable ? "ai" : "fallback")
@@ -150,6 +151,10 @@ enum GmailSync {
                 print("GMAILDEBUG [\(layer)] \(m.from.components(separatedBy: "<").first ?? "") | \(m.subject.prefix(45)) -> \(got.isEmpty ? "skipped" : got.joined(separator: "; "))")
                 #endif
             }
+            // Disconnect or Delete All may have run while this batch was
+            // downloading. Stop without writing anything back.
+            guard accounts.contains(where: { $0.email == account.email }) else { throw CancellationError() }
+            for id in notReceipts { context.insert(ImportedRecord(id: id, account: account.email)) }
             let s = try EmailSync.importRecords(records, in: context, account: account.email)
             summary.added += s.added; summary.merged += s.merged; summary.refunds += s.refunds
             summary.checked += messages.count
