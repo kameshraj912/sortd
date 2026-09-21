@@ -15,6 +15,34 @@
   root.classList.add("js");
 
   document.addEventListener("DOMContentLoaded", function () {
+    // Beta sign-up: send without leaving the page, then show "You're on the list".
+    var form = document.getElementById("beta-form");
+    if (form) {
+      var err = document.getElementById("beta-error"), done = document.getElementById("beta-done");
+      var email = form.elements.email, gmail = form.elements.gmail, submit = form.querySelector('button[type="submit"]');
+      var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
+      var show = function (msg, field) {
+        err.textContent = msg; err.hidden = !msg;
+        [email, gmail].forEach(function (f) { f.removeAttribute("aria-invalid"); });
+        if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
+      };
+      if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try again.");
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!ok(email.value.trim())) return show("Please enter a valid email address.", email);
+        if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That Gmail address doesn't look right.", gmail);
+        show(""); submit.disabled = true; submit.textContent = "Sending…";
+        fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
+          .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+          .then(function (res) {
+            if (res.ok) { form.hidden = true; done.hidden = false; done.setAttribute("tabindex", "-1"); done.focus(); }
+            else show(res.error || "That didn't go through. Please try again.");
+          })
+          .catch(function () { show("You seem to be offline. Please try again."); })
+          .then(function () { submit.disabled = false; submit.textContent = "Join the beta"; });
+      });
+    }
+
     // Theme button cycles System → Light → Dark.
     var btn = document.querySelector(".theme-btn");
     var names = { system: "Theme: match device", light: "Theme: light", dark: "Theme: dark" };
