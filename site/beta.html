@@ -10,8 +10,16 @@
 <link rel="icon" type="image/png" href="img/favicon.png">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="canonical" href="https://sortd.page/beta">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sortd Money">
+<meta property="og:title" content="Join the beta – Sortd Money">
+<meta property="og:description" content="Join the Sortd Money beta. Leave your email and we will send you the TestFlight link when the beta opens.">
+<meta property="og:url" content="https://sortd.page/beta">
+<meta property="og:image" content="https://sortd.page/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="style.css?v=24">
-<script src="site.js?v=25"></script>
+<script src="site.js?v=27"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -77,6 +85,10 @@
       <label for="f-website">Leave this empty</label>
       <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off">
     </div>
+    <!-- Turnstile: stops scripted sign-ups. Replace the data-sitekey with the SITE key
+         from your Turnstile widget (dashboard -> Turnstile). The SECRET key is set as
+         a Worker secret, not here (see worker/index.js). -->
+    <div class="cf-turnstile" data-sitekey="0x4AAAAAAE-iLd-MyhG48_1V" data-action="beta-signup" data-theme="auto"></div>
     <p class="form-error" id="beta-error" role="alert" hidden></p>
     <button class="btn btn-primary" type="submit">Join the beta</button>
     <p class="hint small">We use this only to send your invite. Not stored, not shared, not sold. We're a budgeting app, not a data&nbsp;broker. <a href="privacy#beta">Privacy</a></p>
@@ -84,7 +96,7 @@
 
   <div class="beta-done" id="beta-done" role="status" hidden>
     <svg class="done-tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="24"/><path d="M14 24.5l7 7 13-14" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <h1>Got it. You're on the&nbsp;list.</h1>
+    <h2 class="as-h1">Got it. You're on the&nbsp;list.</h2>
     <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
     <p>We'll send the TestFlight link to <strong id="beta-done-email">your email</strong> the day the beta opens. Until then, try not to open your banking app. We'll deal with it&nbsp;soon.</p>
     <p class="muted">One email. No newsletters. No "we noticed you haven't opened the app"&nbsp;guilt&nbsp;trips.</p>
