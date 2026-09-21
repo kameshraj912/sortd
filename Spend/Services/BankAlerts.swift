@@ -131,7 +131,7 @@ nonisolated enum BankAlerts {
     /// exactly the kind of invented number this file is trying to avoid.
     static func amount(in text: String) -> (amount: String, currency: String?)? {
         let patterns = [
-            #"\b([A-Z]{3})\s?\$?\s?([\d,]+\.\d{2})\b"#,        // AUD 58.30 / SGD$58.30
+            #"\b((?-i:[A-Z]{3}))\s?\$?\s?([\d,]+\.\d{2})\b"#,  // AUD 58.30 / SGD$58.30 (capitals only)
             #"\b(A|S|US|NZ|HK)\$\s?([\d,]+\.\d{2})\b"#,        // A$58.30
             #"()\$\s?([\d,]+\.\d{2})\b"#,                      // $58.30
             #"()\bRM\s?([\d,]+\.\d{2})\b"#,                    // RM58.30
@@ -139,6 +139,8 @@ nonisolated enum BankAlerts {
         for pattern in patterns {
             guard let m = match(pattern, text) else { continue }
             let raw = m[1].trimmingCharacters(in: .whitespaces).uppercased()
+            // "payment for $58.30": a word before the amount isn't a currency.
+            if raw.count == 3, !Locale.commonISOCurrencyCodes.contains(raw) { continue }
             let code: String? = switch raw {
             case "": nil
             case "A": "AUD"

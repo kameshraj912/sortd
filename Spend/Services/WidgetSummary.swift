@@ -38,6 +38,24 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     /// hidden on the Lock Screen and in StandBy until the iPhone is unlocked.
     var showWhenLocked: Bool?
 
+    /// The summary as it stands at `now`. The file is written when Sortd runs;
+    /// past midnight, a new week or a new month, the old totals aren't true any
+    /// more, so those periods start again from zero until the app updates it.
+    func asOf(_ now: Date, calendar: Calendar = .current) -> WidgetSummary {
+        var s = self
+        if !calendar.isDate(updatedAt, inSameDayAs: now) {
+            s.today = 0
+            s.perDay = nil
+        }
+        if !calendar.isDate(updatedAt, equalTo: now, toGranularity: .weekOfYear) { s.week = 0 }
+        if !calendar.isDate(updatedAt, equalTo: now, toGranularity: .month) {
+            s.month = 0
+            s.categories = []
+            s.leftThisMonth = s.budget
+        }
+        return s
+    }
+
     /// Whether widgets should redact their numbers while the phone is locked.
     var hidesWhenLocked: Bool { showWhenLocked != true }
 

@@ -11,6 +11,25 @@ import WidgetKit
 @MainActor
 enum WidgetBridge {
 
+    private static var pending: Task<Void, Never>?
+
+    /// Refreshes the widget after every save to the store: a tap logged by
+    /// Shortcuts, a purchase added, edited or deleted, an import, a restore.
+    /// Call once at launch. Saves close together are batched.
+    static func watchSaves() {
+        let context = SpendStore.container.mainContext
+        NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                pending?.cancel()
+                pending = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    refresh(from: context)
+                }
+            }
+        }
+    }
+
     /// Rebuilds the summary and asks the widget to redraw.
     /// Safe to call often and safe to call when there is no App Group.
     static func refresh(from context: ModelContext,

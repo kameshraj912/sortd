@@ -335,6 +335,7 @@ struct ImportView: View {
         busy = true
         do {
             let result = try Backup.restore(data, mode: mode, into: context)
+            Task { await FXService.backfill(in: context) }
             done = result.summary
         } catch {
             self.error = error.localizedDescription

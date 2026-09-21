@@ -63,15 +63,15 @@ struct SortdProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SortdEntry>) -> Void) {
-        // Today's total stops being true at midnight. During the day the app
-        // pokes the widget whenever a purchase lands, which is what actually
-        // keeps it fresh.
+        // Today's total stops being true at midnight (asOf zeroes it). During
+        // the day the app refreshes the widget after every save, including taps
+        // logged by Shortcuts while the app is closed.
         let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
         completion(Timeline(entries: [current()], policy: .after(midnight)))
     }
 
     private func current() -> SortdEntry {
-        SortdEntry(date: .now, summary: WidgetSummary.read())
+        SortdEntry(date: .now, summary: WidgetSummary.read()?.asOf(.now))
     }
 }
 
