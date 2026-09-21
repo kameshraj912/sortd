@@ -7,6 +7,11 @@ import UserNotifications
 /// every step can be skipped, and anything skipped can be done later in
 /// Settings. Apple Pay setup checks itself: it turns green on the first tap.
 struct OnboardingView: View {
+    /// Called when setup is finished. RootView needs this because with
+    /// SPEND_ONBOARD_STEP set it forces the cover open, so watching the
+    /// "done" flag alone left the last button looking broken.
+    var onFinish: () -> Void = {}
+
     static let doneKey = "onboardingDone"
 
     @Environment(\.modelContext) private var context
@@ -18,9 +23,14 @@ struct OnboardingView: View {
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage(OnboardingView.doneKey) private var done = false
 
-    enum Step: Int, CaseIterable { case welcome, currency, cards, cardDetails, applePay, email, budget, reminders, finish }
+    enum Step: Int, CaseIterable { case welcome, currency, cards, cardDetails, applePay, email, budget, reminders, pro, finish }
     #if DEBUG
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
+    @State private var pro = ProStore.shared
+    @State private var showingPaywall = false
+    @State private var showingImport = false
+    /// "14 days free", read from the App Store. Nil when there's no trial.
+    @State private var trialText: String?
     #else
     @State private var step: Step = .welcome
     #endif
@@ -55,6 +65,15 @@ struct OnboardingView: View {
         .background(Color.page)
         .sheet(item: $editing) { CardEditor(original: $0) }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
+        .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
+        .task(id: step) {
+            guard step == .pro, trialText == nil else { return }
+            await pro.load()
+            if let yearly = pro.product(ProStore.ID.yearly) {
+                trialText = await pro.trialText(for: yearly)
+            }
+        }
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
@@ -85,7 +104,13 @@ struct OnboardingView: View {
             .opacity(step == .welcome || step == .finish ? 0 : 1)
             .accessibilityHidden(true)
             if step != .welcome && step != .finish && step != .cardDetails {
-                Button("Skip") { go(1) }
+                // Straight to the summary, not one step along. Anything
+                // skipped has a sensible default and is in Settings.
+                Button("Skip setup") {
+                    budgetFocused = false
+                    forward = true
+                    withAnimation(.snappy) { step = .finish }
+                }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 44, minHeight: 44)
@@ -99,19 +124,50 @@ struct OnboardingView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 10) {
-            Button(action: primaryAction) {
-                Text(primaryTitle).primaryPill(enabled: step != .cardDetails || detailsComplete)
+            // Pro is the one step with two actions. They belong together at
+            // the bottom — buy, the price, then skip — rather than a filled
+            // button stranded up the page with a hole underneath it.
+            if step == .pro, !pro.isPro {
+                Button { showingPaywall = true } label: {
+                    Text(trialLine).primaryPill()
+                }
+                .buttonStyle(.plain)
+
+                Text(priceLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+
+                Button(action: primaryAction) {
+                    Text(primaryTitle)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: primaryAction) {
+                    Text(primaryTitle).primaryPill(enabled: step != .cardDetails || detailsComplete)
+                }
+                .buttonStyle(.plain)
+                .disabled(step == .cardDetails && !detailsComplete)
             }
-            .buttonStyle(.plain)
-            .disabled(step == .cardDetails && !detailsComplete)
             if step == .welcome {
-                Button("Explore with sample data") {
-                    DemoData.load(in: context)
-                    finish()
+                Button("I already have spending to bring in") {
+                    showingImport = true
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.ink)
                 .frame(minHeight: 44)
+                Button("Explore with sample data") {
+                    DemoData.load(in: context)
+                    finish()
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 40)
             }
         }
         .padding(.horizontal, 24)
@@ -127,6 +183,7 @@ struct OnboardingView: View {
         case .applePay: tapConnected ? "Continue" : "I'll Do This Later"
         case .email: gmail.isEmpty ? "I'll Do This Later" : "Continue"
         case .reminders: reminders ? "Continue" : "Not Now"
+        case .pro: pro.isPro ? "Continue" : "Maybe Later"
         case .finish: "Start Using Sortd"
         default: "Continue"
         }
@@ -149,6 +206,7 @@ struct OnboardingView: View {
     private func finish() {
         Task { await FXService.rebase(to: home, in: context) }
         done = true
+        onFinish()
     }
 
     // MARK: Pages
@@ -164,6 +222,7 @@ struct OnboardingView: View {
         case .email: emailPage
         case .budget: budgetPage
         case .reminders: remindersPage
+        case .pro: proPage
         case .finish: finishPage
         }
     }
@@ -729,6 +788,85 @@ struct OnboardingView: View {
         .onAppear { if budget > 0, customBudget.isEmpty { customBudget = String(Int(budget)) } }
     }
 
+    /// Sortd Pro, offered once during setup.
+    ///
+    /// Without this someone can finish setup having never heard of the trial
+    /// or of Pro, then hit a locked feature later and feel tricked. Said
+    /// plainly here instead: what Pro adds, what the trial costs afterwards,
+    /// and that everything on this screen is skippable.
+    ///
+    /// The price line is not decoration. The ACCC has free trials and
+    /// subscriptions as an enforcement priority through 2027: a headline
+    /// saying "free" has to say, just as clearly, what happens when the free
+    /// part ends.
+    private var proPage: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header(pro.isPro ? "You have Sortd Pro" : proHeadline,
+                   pro.isPro
+                   ? "Everything below is unlocked. Thank you."
+                   : "Apple Pay logging, adding by hand, your cards, export and delete are free forever. Pro adds the rest.")
+
+            VStack(spacing: 0) {
+                ForEach(Array(ProStore.Feature.allCases.enumerated()), id: \.element) { index, feature in
+                    if index > 0 { Divider().padding(.leading, 46) }
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: feature.symbol)
+                            .font(.body)
+                            .frame(width: 32)
+                            .foregroundStyle(Color.ink)
+                            .padding(.top, 1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(feature.title).font(.subheadline.weight(.semibold))
+                            Text(feature.detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 11)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(.horizontal, 16)
+            .surface(radius: 16)
+
+            // The hook. Not a hard sell — an accurate prediction, which is
+            // funnier and does the same job.
+            if !pro.isPro {
+                Text("You'll skip this. Then on Thursday you'll try to scan a receipt, find it locked, and come back. We'll wait.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 14)
+            }
+        }
+    }
+
+    /// "Try Sortd Pro free" reads like a typo — free is left dangling. Say
+    /// the actual offer when the App Store has told us what it is, and a
+    /// plain invitation when it hasn't.
+    private var proHeadline: String {
+        guard let trial = trialText else { return "Try Sortd Pro" }
+        return "Sortd Pro, \(trial.lowercased())"
+    }
+
+    /// Reads the real offer from the App Store when it's there, and stays
+    /// vague rather than promising a trial that might not exist.
+    private var trialLine: String {
+        trialText.map { "Start \($0.lowercased())" } ?? "See Plans"
+    }
+
+    private var priceLine: String {
+        guard let yearly = pro.product(ProStore.ID.yearly) else {
+            return "Cancel any time in the App Store."
+        }
+        guard let trial = trialText else {
+            return "\(yearly.displayPrice) a year. Cancel any time in the App Store."
+        }
+        return "\(trial.capitalized), then \(yearly.displayPrice) a year. Cancel any time in the App Store."
+    }
+
     private var remindersPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Heads-up before bills", "A notification at 9 am the day before a subscription or bill is due. Nothing leaves your iPhone.")
@@ -778,9 +916,47 @@ struct OnboardingView: View {
                 check("Budget", budget > 0 ? Money.format(Decimal(budget), home, cents: false) + " a month" : "None", ok: budget > 0)
                 Divider().padding(.leading, 52)
                 check("Reminders", reminders ? "On" : "Off", ok: reminders)
+                Divider().padding(.leading, 52)
+                check("Sortd Pro", pro.isPro ? "Active" : "Free plan", ok: pro.isPro)
             }
             .surface(radius: 16)
+
+            // Three things people otherwise never find. Named here rather
+            // than left to be discovered by accident in Settings.
+            VStack(spacing: 0) {
+                tip("square.and.arrow.down", "Import a statement",
+                    "Got months of spending already? Settings › Import takes a CSV, a PDF statement or a screenshot of your bank app.")
+                Divider().padding(.leading, 52)
+                tip("square.grid.2x2", "Put it on your Home Screen",
+                    "Touch and hold the Home Screen, tap Add Widget, and search Sortd. Light or dark, your choice.")
+                Divider().padding(.leading, 52)
+                tip("arrow.down.document", "Save a backup",
+                    "Everything stays on this iPhone, so a backup is the only way to move to a new one. Settings › Backup.")
+            }
+            .surface(radius: 16)
+            .padding(.top, 14)
         }
+    }
+
+    private func tip(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.body)
+                .foregroundStyle(Color.ink)
+                .frame(width: 24)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func check(_ title: String, _ value: String, ok: Bool) -> some View {

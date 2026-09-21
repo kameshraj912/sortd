@@ -11,11 +11,11 @@ struct PrivacyView: View {
             ListPageTitle(title: "Privacy", subtitle: "What Sortd stores, and where.")
             Section {
                 row("iphone", "Stored on this iPhone", "Purchases, cards and settings live only in Sortd's storage on your iPhone. There's no Sortd server or account.")
-                row("envelope", "Gmail, read on your iPhone", "If you connect Gmail, Sortd searches only for receipts and bank alerts and reads them on this iPhone. Emails are never copied to a server, shared, or used for anything else. Disconnect any time in Settings.")
+                row("envelope", "Gmail, read on your iPhone", "Sortd searches only for receipts and bank alerts, and reads them on this iPhone. Nothing is copied to a server or shared. Disconnect any time.")
                 row("key", "Keys in the Keychain", "The key that lets Sortd read your receipts is kept in the iPhone Keychain, not in the app's files.")
                 row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
                 row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
-                row("arrow.left.arrow.right", "Exchange rates", "To convert currencies, Sortd downloads daily rates from frankfurter.dev. Only a currency code and dates are sent, nothing about you.")
+                row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only a currency code and dates are sent.")
                 row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
             }
             Section {
@@ -85,6 +85,7 @@ enum DataReset {
         GmailSync.accounts = []
         Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }
         Keychain.deleteAll()
+        CompedPro.clear()
         // The exported spreadsheet, if one was made.
         for f in (try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
         where f.pathExtension == "csv" { try? FileManager.default.removeItem(at: f) }
