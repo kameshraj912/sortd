@@ -7,14 +7,27 @@ Paste the "Notes" part into App Store Connect › App Review Information › Not
 
 ## Notes
 
-Sortd is a personal spending tracker. There is no login and no Sortd account. All data is stored
-on the device. The app doesn't move money and doesn't connect to any bank.
+Sortd is a personal spending tracker. It doesn't move, hold or manage money, doesn't connect to
+any bank, and never asks for bank logins. There is no login and no Sortd account, and all data
+is stored on the device. It records what the user already spent so they can see where it went.
 
 **Quickest way to review**
 On the first screen, tap "Explore with sample data". This loads about two months of sample
-purchases on two sample cards, so every screen has content: Home, Activity, Insights,
-Subscriptions & Bills, and Settings. A banner on Home says it's sample data; tap "Clear" to
-remove it and go back to setup.
+purchases on two sample cards. Home, Activity, Settings and each card's page are free and show
+content straight away. A banner on Home says it's sample data; tap "Clear" to remove it and go
+back to setup.
+
+**Sortd Pro (in-app purchases)**
+Gmail receipts, Insights, Subscriptions & Bills (with local payment reminders), the receipt
+camera and category budgets are Sortd Pro. Tapping any of them shows the paywall. Three products, all unlocking the same features:
+- Sortd Pro Yearly (auto-renewable, 2-week free trial for new subscribers)
+- Sortd Pro Monthly (auto-renewable)
+- Sortd Pro Lifetime (one-time purchase)
+Buy any of them with a sandbox account to unlock Pro; the sample data then fills Insights and
+Subscriptions & Bills. "Restore Purchases", Terms of Use and the Privacy Policy are on the
+paywall, and Terms and Privacy are also in Settings › Privacy.
+What Pro keeps giving: new receipt formats and bank layouts recognised, more currencies, and
+regular feature updates. Everything is processed on the device, which is why there's no server.
 
 **Logging Apple Pay taps (needs a Shortcuts automation)**
 Sortd can't read Apple Wallet by itself. The user creates a personal automation in the
@@ -28,7 +41,7 @@ This needs a real device with a card in Wallet, so it can't be tried in the simu
 screen recording of the setup and a tap being logged is attached: [VIDEO LINK].
 Without the automation, the user can still add purchases by hand.
 
-**Gmail (optional)**
+**Gmail (optional, Pro)**
 Settings › Email Receipts › Connect Gmail. Before Google's sign-in opens, the app explains what
 it reads. It uses Google OAuth in Apple's ASWebAuthenticationSession with the read-only scope
 `gmail.readonly`. It searches only for receipts and bank alerts, reads them on the device, and
@@ -39,25 +52,19 @@ Apple doesn't apply.
 Test Gmail account (already has sample receipts):
 - Email: [TEST GMAIL ADDRESS]
 - Password: [TEST GMAIL PASSWORD]
-[While Google verification is pending, Google shows an "unverified app" warning. Tap "Advanced",
-then continue to Sortd. The test account above is on the allowed tester list.]
 
 **Other things you may notice**
 - Exchange rates come from frankfurter.dev (European Central Bank data). Only currency codes and
   a date are sent.
-- Payment reminders are local notifications, off until the user turns them on.
-- On devices with Apple Intelligence, receipts from unknown senders may be read by the on-device
-  model (Foundation Models). Nothing is sent off the device for this.
-- Receipt scanning (Add › Scan Receipt): uses the camera or one picked photo. Text is read on the
-  device (Vision, plus the on-device model where available). The photo isn't stored or sent. The
-  user checks and edits the result before it's saved. Without Apple Intelligence, simple text
-  rules are used instead.
+- Receipt scanning (Add › Scan Receipt): uses the camera or one picked photo. Text is read
+  on the device (Vision, plus the on-device model where available). The photo isn't stored or
+  sent. The user checks and edits the result before it's saved.
 - Card digits: only the last 4 of each card and of its Apple Pay number, used to match purchases
   to cards. Never a full card number.
-- Settings › Your Data has Export Purchases (CSV) and Delete All Data.
-- No tracking, ads or analytics. Privacy policy: [PRIVACY POLICY URL]
+- Settings › Your Data has Export Purchases (CSV), Delete All Data and Privacy.
+- No tracking, ads or analytics. Privacy policy: https://sortd.page/privacy
 
-Contact for review questions: [REVIEW CONTACT NAME], [REVIEW CONTACT PHONE], [CONTACT EMAIL]
+Contact for review questions: [REVIEW CONTACT NAME], [REVIEW CONTACT PHONE, +61 format], [CONTACT EMAIL]
 
 ---
 
@@ -67,8 +74,8 @@ Contact for review questions: [REVIEW CONTACT NAME], [REVIEW CONTACT PHONE], [CO
 - [ ] Type the real test password only into App Store Connect. Never commit it to this file.
 - [ ] Create the test Gmail account, send it a few real-looking receipts, and add it as a Google
       OAuth test user. Don't use a personal account.
-- [ ] Delete the square-bracket note about the unverified warning if Google verification is
-      finished by then.
+- [ ] Submit only after Google has verified gmail.readonly. Before that, reviewers can't connect
+      Gmail (only listed test users can).
 - [ ] Check that Settings › Apple Pay Auto-Logging still says online Apple Pay "will come from
       your email receipts in the next update" — Gmail is now in the app, so that line is out of
       date (Swift change, not part of this doc).

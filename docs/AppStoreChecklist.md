@@ -58,18 +58,16 @@ Checked by hand against the rule files in github.com/mjmirza/app-store-complianc
 hook were **not** installed or run). Guideline numbers are from that repo, not re-checked on
 Apple's site.
 
-- [ ] **High · 2.3.1.** v1 ships without Gmail, but Gmail is still in the listing
-      (`AppStoreListing.md` description), review notes, the paywall feature list
-      (`ProStore.swift`), Settings, the setup guide, the Privacy page and sortd.page. Strip every
-      mention from the store build and listing, not just the feature.
-- [ ] **High · 2.1.** Review notes say sample data fills Insights and Subscriptions & bills, but
+- [x] **High · 2.3.1.** No longer applies: v1 ships with Gmail (22 Sep), so the listing and
+      site can keep it. Only submit after Google verification, or Gmail won't work for reviewers.
+- [x] **High · 2.1.** (Done 21 Sep: review notes rewritten with a Pro section.) Review notes say sample data fills Insights and Subscriptions & bills, but
       both are Pro. Once `SORTD_BETA` is gone the reviewer hits a lock. Add a Pro section: the
       three products, what each unlocks, and that a sandbox purchase or restore unlocks them.
 - [ ] **High · 2.3.2.** Attach all three IAPs to version 1.0 and submit them with the build.
       "Ready to Submit" alone isn't enough for a first subscription.
 - [ ] **Medium · 2.3.2.** Mark paid features as Pro in the listing: the promo line "See every
       subscription before it charges you" and the Insights and Recurring screenshot captions.
-- [ ] **Medium · 5.1.1(i).** Pro users can't reach the privacy policy: its only link is in the
+- [x] **Medium · 5.1.1(i).** (Done 21 Sep: Privacy Policy and Terms links on Settings › Privacy.) Pro users can't reach the privacy policy: its only link is in the
       paywall footer, which Pro users never see. Add a "Privacy Policy" link on Settings › Privacy.
 - [ ] **Medium, unverified.** "Works on iPhone and Apple Watch": test a real Watch tap through the
       Wallet automation, or drop "Apple Watch" from the listing and site.
@@ -81,9 +79,9 @@ Apple's site.
 
 ## Launch extras from web research, 21 Sep 2026
 
-- [ ] Review notes: say plainly that no money moves, no bank link, all data stays on the phone
+- [x] Review notes: say plainly that no money moves, no bank link, all data stays on the phone
       (5.1.1(ix) finance-entity rule). Decide whether to publish under a company instead.
-- [ ] Review notes and listing: what Pro keeps giving over time (3.1.2(a) "ongoing value").
+- [ ] Review notes (done) and listing: what Pro keeps giving over time (3.1.2(a) "ongoing value").
 - [ ] Set AU and SG prices by hand; tax forms (ABN + GST for AU; GST number for SG).
 - [ ] Store page localised twice: en-AU (Australia) and en-GB (Singapore's default).
 - [ ] Insights and marketing never name or recommend a card, loan, super or investment (ASIC).
@@ -156,9 +154,9 @@ needs a backend, and isn't worth one until there's revenue to protect.
 - [ ] Apple Developer Program ($149 AUD/yr) — **decided 19 Sep 2026: individual for now.** If App
       Review cites 5.1.1(ix), switch to a company account (needs a D-U-N-S number) and resubmit.
       Review notes already say Sortd doesn't move, hold or manage money.
-- [ ] Gmail for v1 — **decided 19 Sep 2026:** App Store v1 ships without Gmail; TestFlight keeps
-      it (up to 100 Google test users) while Google verifies. Steps in docs/GoogleVerification.md.
-      Before the App Store build: remove Gmail from that build (not just hide it — 2.3.1(a)).
+- [ ] Gmail for v1 — **decided 22 Sep 2026 (replaces 19 Sep):** v1 ships **with** Gmail. Submit
+      to the App Store only after Google verifies gmail.readonly (docs/GoogleVerification.md).
+      Until then TestFlight only (up to 100 Google test users). `Features.gmail` / SORTD_GMAIL.
 - [ ] A website with a **privacy policy** and **support page** (Apple and Google both need the URLs)
 - [ ] Trademark check on "Sortd" (see Brand/README.md)
 - [ ] EU Digital Services Act trader status in App Store Connect

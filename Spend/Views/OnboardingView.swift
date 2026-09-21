@@ -199,6 +199,7 @@ struct OnboardingView: View {
         withAnimation(.snappy) {
             var next = Step(rawValue: min(max(step.rawValue + delta, 0), Step.finish.rawValue)) ?? .finish
             if next == .cardDetails, book.active.isEmpty { next = Step(rawValue: next.rawValue + delta) ?? .finish }
+            if next == .email, !Features.gmail { next = Step(rawValue: next.rawValue + delta) ?? .finish }
             step = next
         }
     }
@@ -807,7 +808,7 @@ struct OnboardingView: View {
                    : "Apple Pay logging, adding by hand, your cards, export and delete are free forever. Pro adds the rest.")
 
             VStack(spacing: 0) {
-                ForEach(Array(ProStore.Feature.allCases.enumerated()), id: \.element) { index, feature in
+                ForEach(Array(ProStore.Feature.available.enumerated()), id: \.element) { index, feature in
                     if index > 0 { Divider().padding(.leading, 46) }
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: feature.symbol)
@@ -911,8 +912,10 @@ struct OnboardingView: View {
                 Divider().padding(.leading, 52)
                 check("Apple Pay logging", tapConnected ? "Connected" : "Set up later", ok: tapConnected)
                 Divider().padding(.leading, 52)
-                check("Email receipts", gmail.isEmpty ? "Not connected" : gmail.map(\.email).joined(separator: ", "), ok: !gmail.isEmpty)
-                Divider().padding(.leading, 52)
+                if Features.gmail {
+                    check("Email receipts", gmail.isEmpty ? "Not connected" : gmail.map(\.email).joined(separator: ", "), ok: !gmail.isEmpty)
+                    Divider().padding(.leading, 52)
+                }
                 check("Budget", budget > 0 ? Money.format(Decimal(budget), home, cents: false) + " a month" : "None", ok: budget > 0)
                 Divider().padding(.leading, 52)
                 check("Reminders", reminders ? "On" : "Off", ok: reminders)
