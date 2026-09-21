@@ -120,6 +120,11 @@ struct UpcomingBillsIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        // Subscriptions & bills is Sortd Pro, in the app and here.
+        guard ProStore.shared.isPro else {
+            let text = "Upcoming bills are part of Sortd Pro. Open Sortd to see it."
+            return .result(value: text, dialog: "\(text)")
+        }
         let items = try SpendQuestions.transactions()
         let text = SpendSummary.upcomingBills(items.recurring(), hasPurchases: !items.isEmpty)
         return .result(value: text, dialog: "\(text)")

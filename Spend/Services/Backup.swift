@@ -126,14 +126,18 @@ nonisolated enum Backup {
                          defaults: UserDefaults = .standard) throws -> Snapshot {
         var out = Snapshot()
         out.appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        out.cards = CardBook.shared.cards
+        // Sample data is never real spending: leave it out, or it comes back on
+        // the new phone with no "Clear" banner to remove it.
+        out.cards = CardBook.shared.cards.filter { !DemoData.cardIds.contains($0.id) }
 
         for key in settingKeys {
             guard let raw = defaults.object(forKey: key), let setting = Setting(raw) else { continue }
             out.settings[key] = setting
         }
 
-        out.transactions = try context.fetch(FetchDescriptor<Transaction>()).map { t in
+        out.transactions = try context.fetch(FetchDescriptor<Transaction>())
+            .filter { $0.note != DemoData.marker }
+            .map { t in
             Snapshot.Row(
                 id: t.id, date: t.date, merchant: t.merchant, rawMerchant: t.rawMerchant,
                 amount: t.amount, currencyCode: t.currencyCode, homeAmount: t.audAmount,

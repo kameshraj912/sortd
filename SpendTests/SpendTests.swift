@@ -13,11 +13,25 @@ struct AmountParserTests {
         ("4,50", Decimal(string: "4.50")!, nil),
         ("-$20.00", Decimal(string: "20.00")!, nil),
         ("12", Decimal(12), nil),
+        // Bug hunt M9:
+        ("€1.234,56", Decimal(string: "1234.56")!, "EUR"),
+        ("Rs. 500", Decimal(500), "INR"),
+        ("4,5", Decimal(string: "4.5")!, nil),
+        ("1,299", Decimal(1299), nil),
+        ("AUD 1 234,50", Decimal(string: "1234.50")!, "AUD"),
     ])
     func parses(text: String, amount: Decimal, currency: String?) {
         let r = AmountParser.parse(text)
         #expect(r?.amount == amount)
         #expect(r?.currency == currency)
+    }
+
+    @Test func appleReceiptsUseTheirOwnCurrency() {
+        // Bug hunt M10: Singapore App Store receipts were saved as AUD.
+        #expect(EmailParsers.appleCurrency("Total S$5.98") == "SGD")
+        #expect(EmailParsers.appleCurrency("Total US$4.99") == "USD")
+        #expect(EmailParsers.appleCurrency("Total A$5.99") == "AUD")
+        #expect(EmailParsers.appleCurrency("Total $5.99") == Money.home)
     }
 
     @Test func rejectsEmpty() {

@@ -150,12 +150,22 @@ nonisolated enum EmailParsers {
         let period: String? = matches(#"annual|year"#, title) ? "yearly" : matches(#"month"#, title) ? "monthly" : nil
         let renews = item[2].isEmpty ? nil : item[2]
         var r = record(msg, 0, kind: "purchase", merchant: app, raw: "Apple: " + title, platform: "apple",
-                       amount: money(paid?[2] ?? item[3]), currency: "AUD", last4: paid?[1], date: msg.date,
+                       amount: money(paid?[2] ?? item[3]), currency: appleCurrency(text), last4: paid?[1], date: msg.date,
                        note: "App Store · " + title)
         if renews != nil || period != nil {
             r.subscription = .init(name: app, period: period, renews: renews)
         }
         return [r]
+    }
+
+    /// Apple bills in the App Store country's currency and often writes a
+    /// bare "$". Use the currency the receipt names, else the home currency
+    /// (an Australian account's "$" is AUD, a Singapore one's is SGD).
+    static func appleCurrency(_ text: String) -> String {
+        // "US$" contains "S$", so it's checked first.
+        let marks: [(String, String)] = [("US$", "USD"), ("USD", "USD"), ("S$", "SGD"), ("SGD", "SGD"),
+                                         ("NZ$", "NZD"), ("NZD", "NZD"), ("A$", "AUD"), ("AUD", "AUD")]
+        return marks.first { text.contains($0.0) }?.1 ?? Money.home
     }
 
     /// Older invoice layout, used for in-app purchases.
@@ -166,7 +176,7 @@ nonisolated enum EmailParsers {
         let title = item[1].trimmingCharacters(in: .whitespaces)
         let inApp = matches(#"In-App Purchase"#, text)
         return [record(msg, 0, kind: "purchase", merchant: title.components(separatedBy: ":")[0].trimmingCharacters(in: .whitespaces),
-                       raw: "Apple: " + title, platform: "apple", amount: money(total[1]), currency: "AUD",
+                       raw: "Apple: " + title, platform: "apple", amount: money(total[1]), currency: appleCurrency(text),
                        last4: card?[1], date: msg.date, note: "App Store · " + title + (inApp ? " · in-app purchase" : ""))]
     }
 

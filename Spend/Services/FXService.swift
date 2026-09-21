@@ -60,7 +60,8 @@ enum FXService {
                 try await fetchRates(currency: currency, to: home, from: earliest.addingTimeInterval(-5 * 86400), in: context)
                 // Home currency changed while waiting: these rates are for the old one.
                 guard Money.home == home else { return }
-                for t in txns {
+                // Purchases deleted while the rates were downloading.
+                for t in txns where !t.isDeleted && t.modelContext != nil {
                     if let rate = try rate(currency: currency, to: home, on: t.date, in: context) {
                         t.audAmount = (t.amount * rate).rounded(2)
                     }

@@ -290,6 +290,7 @@ struct SettingsView: View {
             .navigationDestination(for: Router.Destination.self) { destination in
                 switch destination {
                 case .importing: ImportView()
+                case .recurring: ProGate(feature: .recurring) { RecurringView() }
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
