@@ -79,6 +79,17 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount", transaction: same, merged: true)
             }
         }
+        // A refund tap: mark the purchase it belongs to as refunded, so the
+        // total goes down. Refunds can take weeks, so look back 60 days.
+        if refund, let p = parsed, p.amount > 0 {
+            let currency = p.currency ?? LocalCurrency.current()
+            if EmailSync.markRefunded(amount: p.amount, currency: currency, card: cardID, merchant: name,
+                                      platform: nil, before: now, lookbackDays: 60, in: context) {
+                try? context.save()
+                return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
+                               transaction: nil, merged: true)
+            }
+        }
         let purchase = IncomingPurchase(
             date: now,
             merchant: name.isEmpty ? "Unknown merchant" : name,

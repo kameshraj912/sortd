@@ -253,6 +253,23 @@ struct StatementImportTests {
         }
     }
 
+    @Test func aShopNameIsNotAMonth() {
+        // Bug-hunt M4: "12 MARKET" was read as 12 March.
+        let rows = StatementImport.rows(fromText: "03/09/2026  CAFE 12 MARKET ST  5.50")
+        #expect(rows.count == 1)
+        let c = Calendar.current.dateComponents([.month, .day], from: rows[0].date)
+        #expect(c.month == 9 && c.day == 3)
+    }
+
+    @Test func aDateWithNoYearIsNeverInTheFuture() {
+        // Bug-hunt M5: "28 Dec" read on 5 Jan 2027 became 28 Dec 2027.
+        var jan = DateComponents(); jan.year = 2027; jan.month = 1; jan.day = 5; jan.hour = 12
+        let today = Calendar.current.date(from: jan)!
+        let rows = StatementImport.rows(fromText: "28 Dec  COLES  40.00", today: today)
+        #expect(rows.count == 1)
+        #expect(Calendar.current.component(.year, from: rows[0].date) == 2026)
+    }
+
     @Test func bracketedAmountsAreMoneyOut() {
         let text = "01/09/2026  WOOLWORTHS 3342  (58.30)"
         let rows = StatementImport.rows(fromText: text)
@@ -373,6 +390,23 @@ struct StatementImportFlowTests {
                                                   card: .nab, source: .csv))
             }
         }
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 2)
+    }
+
+    @Test func twoIdenticalLinesInOneStatementAreTwoPurchases() throws {
+        // Bug-hunt I1: the second "PTV 5.30" merged into the first.
+        let ctx = try store()
+        let rows = StatementImport.rows(fromText: """
+        02/09/2026  PTV MYKI TOP UP  5.30
+        02/09/2026  PTV MYKI TOP UP  5.30
+        """)
+        #expect(rows.count == 2)
+        let first = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(first.added == 2)
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 2)
+        // The same statement again still doesn't double.
+        let again = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(again.added == 0)
         #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 2)
     }
 
