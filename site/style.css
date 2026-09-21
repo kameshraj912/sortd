@@ -700,11 +700,15 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 .beta-form .btn[disabled] { opacity: .6; cursor: progress; }
 .beta-form .form-error { margin: 0; color: var(--orange); font-weight: 600; font-size: 15px; }
 .beta-form .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.beta-done { margin: 28px 0 24px; padding: 24px; }
-.beta-done h2 { margin-top: 0; }
-.beta-form[hidden], .beta-done[hidden], .form-error[hidden] { display: none; }
+.beta-form[hidden], .beta-done[hidden], .form-error[hidden], #beta-intro[hidden], #beta-alt[hidden] { display: none; }
 
 /* The "You're on the list" box gets focus for screen readers; no ring needed for a message. */
 .beta-done:focus { outline: none; }
 .beta-form .hint, .beta-done p { text-wrap: pretty; }
-.beta-done h2 { text-wrap: balance; }
+.beta-done .btn { margin-top: 12px; }
+.beta-done h1:focus { outline: none; }
+.done-tick { width: 56px; height: 56px; margin: 0 0 18px; animation: tick-pop .35s ease-out; }
+.done-tick circle { fill: var(--green); }
+.beta-done strong { color: var(--ink); overflow-wrap: anywhere; }
+@keyframes tick-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .done-tick { animation: none; } }
