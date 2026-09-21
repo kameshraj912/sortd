@@ -91,7 +91,7 @@ struct ProStoreTests {
         // this can't reproduce the live case (grace running, expiry already past) that
         // refresh() now handles. It guards against grace locking Pro in general.
         var state: Product.SubscriptionInfo.RenewalState?
-        for _ in 0..<40 where state != .inGracePeriod {
+        for _ in 0..<120 where state != .inGracePeriod {   // up to 30 s: StoreKit Testing is slow after a simulator reset
             try await Task.sleep(for: .milliseconds(250))
             state = try await monthly.subscription?.status.first?.state
         }

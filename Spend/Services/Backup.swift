@@ -45,6 +45,10 @@ nonisolated enum Backup {
         var settings: [String: Setting] = [:]
         var transactions: [Row] = []
         var rules: [Rule] = []
+        /// Emails already read from Gmail. Without these, reconnecting Gmail on
+        /// the new phone reads every email again and brings back purchases the
+        /// user had deleted. Optional: backups made before this have none.
+        var imported: [Imported]?
 
         /// One purchase. Flat and explicit so the file stays readable and a
         /// future version can add fields without breaking old backups.
@@ -67,6 +71,11 @@ nonisolated enum Backup {
             var renewsOn: Date?
             var billingPeriod: String?
             var sourceAccount: String?
+        }
+
+        struct Imported: Codable {
+            var id: String
+            var account: String?
         }
 
         struct Rule: Codable {
@@ -137,6 +146,9 @@ nonisolated enum Backup {
 
         out.rules = try context.fetch(FetchDescriptor<MerchantRule>()).map {
             Snapshot.Rule(key: $0.key, category: $0.categoryRaw, updatedAt: $0.updatedAt)
+        }
+        out.imported = try context.fetch(FetchDescriptor<ImportedRecord>()).map {
+            Snapshot.Imported(id: $0.id, account: $0.account)
         }
 
         return out
@@ -249,6 +261,14 @@ nonisolated enum Backup {
             t.sourceAccount = row.sourceAccount
             context.insert(t)
             result.added += 1
+        }
+
+        // Emails already read, so a reconnected Gmail doesn't import them again.
+        if let imported = snapshot.imported, !imported.isEmpty {
+            let have = Set(try context.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
+            for r in imported where !have.contains(r.id) {
+                context.insert(ImportedRecord(id: r.id, account: r.account))
+            }
         }
 
         // A learned category is the user's own choice, so a newer one wins.

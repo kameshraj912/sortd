@@ -35,6 +35,8 @@ enum EmailSync {
         var checked = 0
         /// More emails are waiting than one sync reads.
         var incomplete = false
+        /// Gmail: the oldest email listed when `incomplete`, where the next sync carries on.
+        var oldestListed: Date?
 
         var text: String {
             var parts = ["\(added) new"]
@@ -160,9 +162,12 @@ enum EmailSync {
 
     /// Finds the purchase a refund cancels: same amount and currency, within
     /// 14 days before, same card if known, similar merchant or same platform.
-    private static func markRefunded(amount: Decimal, currency: String, card: Card, merchant: String,
-                                     platform: String?, before date: Date, in context: ModelContext) -> Bool {
-        let from = date.addingTimeInterval(-14 * 86400)
+    /// Finds the purchase a refund belongs to and marks it refunded, so it
+    /// stops counting. Used by email refunds and by refund taps.
+    static func markRefunded(amount: Decimal, currency: String, card: Card, merchant: String,
+                             platform: String?, before date: Date, lookbackDays: Double = 14,
+                             in context: ModelContext) -> Bool {
+        let from = date.addingTimeInterval(-lookbackDays * 86400)
         let to = date.addingTimeInterval(86400)
         guard let pool = try? context.fetch(FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= from && $0.date <= to && $0.refunded == false },
