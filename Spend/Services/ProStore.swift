@@ -140,7 +140,9 @@ final class ProStore {
         var ids: Set<String> = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let t) = result, t.revocationDate == nil else { continue }
-            if let exp = t.expirationDate, exp < .now { continue }
+            // Subscriptions here are already subscribed or in Billing Grace Period.
+            // A grace-period one has a past expirationDate but must keep Pro.
+            if t.productType != .autoRenewable, let exp = t.expirationDate, exp < .now { continue }
             ids.insert(t.productID)
         }
         purchasedIDs = ids
