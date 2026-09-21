@@ -263,10 +263,14 @@ struct BackupTests {
     }
 
     @Test func mergeOntoAPhoneWithNoCurrencyYetRebasesItsOwnPurchasesOnly() throws {
+        // A phone with no currency chosen uses its region's (Money.home). The
+        // backup must be in a different one, or there's nothing to rebase:
+        // on a Singapore simulator that default is already SGD.
+        let backupHome = Money.home == "SGD" ? "NZD" : "SGD"
         let fromDefaults = scratch()
-        fromDefaults.set("SGD", forKey: Money.homeKey)
+        fromDefaults.set(backupHome, forKey: Money.homeKey)
         let from = try store()
-        add(from, "DBS Orchard", 100, "2026-09-01", currency: "SGD").audAmount = 100
+        add(from, "DBS Orchard", 100, "2026-09-01", currency: backupHome).audAmount = 100
         try from.save()
         let data = try Backup.data(in: from, defaults: fromDefaults)
 
@@ -277,11 +281,37 @@ struct BackupTests {
         try to.save()
         try Backup.restore(data, mode: .merge, into: to, defaults: toDefaults)
 
-        #expect(toDefaults.string(forKey: Money.homeKey) == "SGD")
-        #expect(toDefaults.string(forKey: FXService.convertedKey) == "SGD")
+        #expect(toDefaults.string(forKey: Money.homeKey) == backupHome)
+        #expect(toDefaults.string(forKey: FXService.convertedKey) == backupHome)
         let rows = try to.fetch(FetchDescriptor<Transaction>())
         #expect(rows.first { $0.merchant == "DBS Orchard" }?.audAmount == 100)
-        #expect(rows.first { $0.merchant == "Coles" }?.audAmount == nil)   // A$20 to be converted to SGD
+        #expect(rows.first { $0.merchant == "Coles" }?.audAmount == nil)   // A$20 to be converted
+    }
+
+    // MARK: Emails already read (bug hunt D4)
+
+    @Test func emailsAlreadyReadComeAlong() throws {
+        let from = try store()
+        from.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))
+        from.insert(ImportedRecord(id: "18c2f0b1-none-v3", account: "me@gmail.com"))
+        try from.save()
+        let data = try Backup.data(in: from, defaults: scratch())
+
+        let to = try store()
+        to.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))   // already here
+        try to.save()
+        try Backup.restore(data, mode: .merge, into: to, defaults: scratch())
+        let ids = Set(try to.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
+        #expect(ids == ["18c2f0a9", "18c2f0b1-none-v3"])
+    }
+
+    @Test func aBackupFromBeforeImportedEmailsStillRestores() throws {
+        let old = """
+        {"format":"sortd.backup","version":1,"createdAt":"2026-09-01T00:00:00Z",
+         "cards":[],"settings":{},"rules":[],"transactions":[]}
+        """
+        let result = try Backup.restore(Data(old.utf8), mode: .merge, into: try store(), defaults: scratch())
+        #expect(result.added == 0)
     }
 
     @Test func mergeDoesNotOverwriteASettingChosenOnThisPhone() throws {
