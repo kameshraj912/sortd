@@ -26,13 +26,21 @@ export default {
 
 async function handleBeta(request, env) {
   const wantsJSON = (request.headers.get("accept") || "").includes("application/json");
-  const reply = (ok, error) => wantsJSON
-    ? json(ok ? { ok: true } : { ok: false, error }, ok ? 200 : 400)
+  const reply = (ok, error, status) => wantsJSON
+    ? json(ok ? { ok: true } : { ok: false, error }, status || (ok ? 200 : 400))
     : Response.redirect(new URL(ok ? "/beta-thanks" : "/beta?error=1", request.url), 303);
 
   // Only accept the form from our own pages.
   const origin = request.headers.get("origin");
   if (origin && new URL(origin).host !== new URL(request.url).host) return reply(false, "Please use the form on sortd.page.");
+
+  // Flood guard: one IP can't script the form to bomb the inbox. 5/min, then 429.
+  // Guarded so the Worker still runs if the binding isn't configured (e.g. local dev).
+  if (env.BETA_LIMIT) {
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const { success } = await env.BETA_LIMIT.limit({ key: ip });
+    if (!success) return reply(false, "Too many sign-ups from your network. Give it a minute and try again.", 429);
+  }
 
   let form;
   try { form = await request.formData(); } catch { return reply(false, "Something went wrong. Please try again."); }
@@ -47,7 +55,10 @@ async function handleBeta(request, env) {
   const applePay = ["yes", "no", "not sure"].includes(field("applepay", 10)) ? field("applepay", 10) : "";
   const gmail = field("gmail", 254).toLowerCase();
 
-  if (!EMAIL_RE.test(email)) return reply(false, "That's not an email address. Try again, we'll wait.");
+  if (!EMAIL_RE.test(email)) return reply(false, "That's not an email. Even your spam folder would reject it.");
+  if (!name) return reply(false, "What should we call you? First name is fine.");
+  if (!country) return reply(false, "Pick where you live. \"Other\" counts.");
+  if (!applePay) return reply(false, "Pick an Apple Pay answer. \"Not sure\" is allowed.");
   if (gmail && !EMAIL_RE.test(gmail)) return reply(false, "That doesn't look like a Gmail address.");
   if (!env.BETA_TO || !env.SEND_EMAIL) return reply(false, "Sign-ups are closed for a moment. Please email support@sortd.page.");
 
