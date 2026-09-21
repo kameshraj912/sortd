@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Hiring – intro</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  body { background: #141416; }
+  .card { background: radial-gradient(85% 55% at 50% 42%, #212128, #141416 78%); }
+  .grey { color: #7e7e87; }
+  .kick { position: absolute; left: 0; right: 0; top: 250px; display: flex; justify-content: center;
+          align-items: center; gap: 12px; font-size: 14px; font-weight: 700; letter-spacing: .2em;
+          text-transform: uppercase; color: #9b9ba3; }
+  .kick .bars4 i { width: 14px; height: 5px; }
+</style></head>
+<body data-duration="2.6"><div id="stage">
+  <div class="layer card" id="c">
+    <div class="kick" id="k"><span class="bars4"><i></i><i></i><i></i><i></i></span>Post 02 · Asking around</div>
+    <p class="cap xl" id="l1" style="top:330px">That was our first ad.</p>
+    <p class="cap xl grey" id="l2" style="top:530px">Sorry.</p>
+  </div>
+</div>
+<script src="engine.js"></script>
+<script>
+  // Frame zero is the story's first frame, so nothing fades in from nothing.
+  tw('#l1', 0, .55, { y: 0 }, { y: 14 }, 'out');
+  show('#k', .25, null, 'fade');
+  show('#l2', 1.25, null, 'pop');
+  seek(0);
+</script>
+</body></html>
