@@ -74,6 +74,9 @@ struct RecurringView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Recurring")
+        // Cancelled, undone or "not recurring": update reminders now, not on
+        // the next launch, so a cancelled bill doesn't still ping tomorrow.
+        .onChange(of: revision) { Task { await Reminders.reschedule(transactions.recurring()) } }
         .overlay {
             if all.isEmpty {
                 ContentUnavailableView("No Recurring Payments Yet", systemImage: "arrow.triangle.2.circlepath",

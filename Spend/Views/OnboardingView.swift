@@ -82,6 +82,15 @@ struct OnboardingView: View {
 
     // MARK: Chrome
 
+    /// The steps between welcome and finish that this person will see.
+    private var shownSteps: [Step] {
+        Step.allCases.filter { s in
+            s != .welcome && s != .finish
+                && !(s == .cardDetails && book.active.isEmpty)
+                && !(s == .email && !Features.gmail)
+        }
+    }
+
     private var topBar: some View {
         HStack(spacing: 12) {
             if step != .welcome && step != .finish {
@@ -93,11 +102,15 @@ struct OnboardingView: View {
             } else {
                 Color.clear.frame(width: 44, height: 44)
             }
-            // Progress: one segment per real step.
+            // Progress: one segment per step that will actually be shown, so
+            // a skipped step (card details with no cards, email without Gmail)
+            // doesn't make the bar jump two at once.
             HStack(spacing: 4) {
-                ForEach(1..<Step.finish.rawValue, id: \.self) { i in
+                let shown = shownSteps
+                let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
+                ForEach(Array(shown.indices), id: \.self) { i in
                     Capsule()
-                        .fill(i <= step.rawValue ? Color.brandPalette[(i - 1) % Color.brandPalette.count] : Color.track)
+                        .fill(i <= reached ? Color.brandPalette[i % Color.brandPalette.count] : Color.track)
                         .frame(height: 4)
                 }
             }

@@ -65,11 +65,13 @@ enum GmailSync {
         await GoogleAuth.disconnect(account.email)
         accounts.removeAll { $0.email == account.email }
         let email = account.email
+        // Keeping purchases: keep the list of emails already read too, or
+        // reconnecting reads them again and brings back ones the user deleted.
+        guard deletePurchases else { return }
         for r in (try? context.fetch(FetchDescriptor<ImportedRecord>(predicate: #Predicate { $0.account == email }))) ?? [] {
             context.delete(r)
         }
         try? context.save()
-        guard deletePurchases else { return }
         let mine = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.sourceAccount == email }))) ?? []
         for t in mine where t.seenIn == [.email] { context.delete(t) }
         try? context.save()
@@ -352,11 +354,11 @@ enum GmailSync {
     nonisolated private static func get<T: Decodable>(_ url: URL, token: String) async throws -> T {
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        var (data, response) = try await URLSession.shared.data(for: req)
+        var (data, response) = try await GoogleAuth.session.data(for: req)
         var code = (response as? HTTPURLResponse)?.statusCode ?? 0
         for wait in [2.0, 5.0, 10.0] where code == 429 || (code == 403 && isRateLimit(data)) {
             try await Task.sleep(for: .seconds(wait))
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await GoogleAuth.session.data(for: req)
             code = (response as? HTTPURLResponse)?.statusCode ?? 0
         }
         guard code == 200 else {
