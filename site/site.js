@@ -35,7 +35,12 @@
         fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
           .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
           .then(function (res) {
-            if (res.ok) { form.hidden = true; done.hidden = false; done.setAttribute("tabindex", "-1"); done.focus(); }
+            if (res.ok) {
+              ["beta-intro", "beta-alt"].forEach(function (id) { var n = document.getElementById(id); if (n) n.hidden = true; });
+              document.getElementById("beta-done-email").textContent = email.value.trim();
+              form.hidden = true; done.hidden = false; window.scrollTo(0, 0);
+              var h = done.querySelector("h1"); h.setAttribute("tabindex", "-1"); h.focus();
+            }
             else show(res.error || "That didn't go through. Please try\u00a0again.");
           })
           .catch(function () { show("You seem to be offline. Try again when the Wi-Fi comes\u00a0back."); })
