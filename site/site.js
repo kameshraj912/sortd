@@ -29,8 +29,8 @@
       if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try again.");
       form.addEventListener("submit", function (e) {
         e.preventDefault();
-        if (!ok(email.value.trim())) return show("Please enter a valid email address.", email);
-        if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That Gmail address doesn't look right.", gmail);
+        if (!ok(email.value.trim())) return show("That's not an email address. Try again, we'll wait.", email);
+        if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail address.", gmail);
         show(""); submit.disabled = true; submit.textContent = "Sending…";
         fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
           .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
@@ -38,7 +38,7 @@
             if (res.ok) { form.hidden = true; done.hidden = false; done.setAttribute("tabindex", "-1"); done.focus(); }
             else show(res.error || "That didn't go through. Please try again.");
           })
-          .catch(function () { show("You seem to be offline. Please try again."); })
+          .catch(function () { show("You seem to be offline. Try again when the Wi-Fi comes back."); })
           .then(function () { submit.disabled = false; submit.textContent = "Join the beta"; });
       });
     }

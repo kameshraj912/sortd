@@ -47,8 +47,8 @@ async function handleBeta(request, env) {
   const applePay = ["yes", "no", "not sure"].includes(field("applepay", 10)) ? field("applepay", 10) : "";
   const gmail = field("gmail", 254).toLowerCase();
 
-  if (!EMAIL_RE.test(email)) return reply(false, "Please enter a valid email address.");
-  if (gmail && !EMAIL_RE.test(gmail)) return reply(false, "That Gmail address doesn't look right.");
+  if (!EMAIL_RE.test(email)) return reply(false, "That's not an email address. Try again, we'll wait.");
+  if (gmail && !EMAIL_RE.test(gmail)) return reply(false, "That doesn't look like a Gmail address.");
   if (!env.BETA_TO || !env.SEND_EMAIL) return reply(false, "Sign-ups are closed for a moment. Please email support@sortd.page.");
 
   const when = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
