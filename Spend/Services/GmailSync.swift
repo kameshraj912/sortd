@@ -168,12 +168,18 @@ enum GmailSync {
         if EmailParsers.knowsSender(m.from) { return EmailParsers.parse(m) }
         // The model first; if it finds nothing, the plain rule gets a try
         // (both skip shipping updates, declined payments and so on).
+        var found: [EmailRecord]
         if ReceiptAI.isAvailable, var r = await ReceiptAI.read(m) {
             // Apple's rules for AI in finance: the person checks what the model read.
             r.note = "Read by on-device AI · check the amount and shop"
-            return [r]
+            found = [r]
+        } else {
+            found = GenericReceipts.parse(m).map { [$0] } ?? []
         }
-        return GenericReceipts.parse(m).map { [$0] } ?? []
+        // Anyone can send an email that says "refund". Only senders with
+        // exact rules (banks, card alerts) may mark a purchase as refunded.
+        found.removeAll { $0.kind == "refund" }
+        return found
     }
 
     nonisolated private static func isRateLimit(_ data: Data) -> Bool {
@@ -247,8 +253,32 @@ enum GmailSync {
         let headers = m.payload.headers ?? []
         func header(_ name: String) -> String { headers.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value ?? "" }
         let date = m.internalDate.flatMap(Double.init).map { Date(timeIntervalSince1970: $0 / 1000) } ?? .now
-        return EmailParsers.Message(id: m.id, from: header("From"), subject: header("Subject"),
-                                    body: bodyText(m.payload), date: date)
+        var msg = EmailParsers.Message(id: m.id, from: header("From"), subject: header("Subject"),
+                                       body: bodyText(m.payload), date: date)
+        // Only Gmail's own result counts. It's the top one; a sender can add
+        // fake ones further down, so anything that isn't Gmail's is ignored.
+        if let gmail = headers.first(where: { $0.name.caseInsensitiveCompare("Authentication-Results") == .orderedSame }),
+           gmail.value.lowercased().hasPrefix("mx.google.com") {
+            msg.authenticatedDomains = authenticatedDomains(gmail.value)
+        }
+        return msg
+    }
+
+    /// Domains with a DKIM or DMARC pass in an Authentication-Results header:
+    /// "dkim=pass header.i=@apple.com", "dmarc=pass (…) header.from=apple.com".
+    nonisolated static func authenticatedDomains(_ results: String) -> Set<String> {
+        var out = Set<String>()
+        for part in results.lowercased().split(separator: ";") {
+            let p = part.trimmingCharacters(in: .whitespaces)
+            guard p.hasPrefix("dkim=pass") || p.hasPrefix("dmarc=pass") else { continue }
+            for key in ["header.i=", "header.d=", "header.from="] {
+                guard let r = p.range(of: key) else { continue }
+                let value = p[r.upperBound...].prefix { !$0.isWhitespace && $0 != ";" }
+                let domain = value.split(separator: "@").last.map(String.init) ?? ""
+                if !domain.isEmpty { out.insert(domain) }
+            }
+        }
+        return out
     }
 
     /// The plain-text part if there is one; otherwise the HTML turned into text.

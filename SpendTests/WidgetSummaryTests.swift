@@ -77,7 +77,6 @@ struct WidgetSummaryTests {
         let all = try ctx.fetch(FetchDescriptor<Transaction>())
         let s = WidgetBridge.build(from: all, budget: 0, now: now, calendar: cal)
         #expect(s.today == Decimal(20))
-        #expect(!s.recent.contains { $0.merchant == "Returned" })
     }
 
     // MARK: Budget
@@ -126,16 +125,25 @@ struct WidgetSummaryTests {
 
     // MARK: Recent
 
-    @Test func recentIsNewestFirstAndCappedAtFour() throws {
+    /// No widget shows recent purchases, so their names and amounts
+    /// aren't copied into the shared App Group file.
+    @Test func recentPurchasesAreNotWrittenForWidgets() throws {
         let ctx = try store()
         for day in 1...8 {
             add(ctx, "Shop \(day)", Decimal(day), at(String(format: "2026-09-%02d", day)))
         }
         let all = try ctx.fetch(FetchDescriptor<Transaction>())
         let s = WidgetBridge.build(from: all, budget: 0, now: at("2026-09-15"), calendar: cal)
-        #expect(s.recent.count == 4)
-        #expect(s.recent.first?.merchant == "Shop 8")
-        #expect(s.recent.last?.merchant == "Shop 5")
+        #expect(s.recent.isEmpty)
+    }
+
+    @Test func amountsAreHiddenWhenLockedUnlessTurnedOn() {
+        var s = WidgetSummary()
+        #expect(s.hidesWhenLocked)
+        s.showWhenLocked = false
+        #expect(s.hidesWhenLocked)
+        s.showWhenLocked = true
+        #expect(!s.hidesWhenLocked)
     }
 
     @Test func anEmptyStoreSaysSoRatherThanShowingZero() throws {

@@ -66,6 +66,8 @@ struct SpentThisPeriodIntent: AppIntent {
         categoryName: "Spending"
     )
     static let openAppWhenRun = false
+    // Spending is private: Siri must not answer on a locked phone.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Period", default: .month)
     var period: SpendPeriodOption
@@ -95,6 +97,8 @@ struct BudgetLeftIntent: AppIntent {
         categoryName: "Spending"
     )
     static let openAppWhenRun = false
+    // Spending is private: Siri must not answer on a locked phone.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<Double> & ProvidesDialog {
@@ -111,6 +115,8 @@ struct UpcomingBillsIntent: AppIntent {
         categoryName: "Spending"
     )
     static let openAppWhenRun = false
+    // Spending is private: Siri must not answer on a locked phone.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
@@ -127,6 +133,8 @@ struct LastPurchaseIntent: AppIntent {
         categoryName: "Spending"
     )
     static let openAppWhenRun = false
+    // Spending is private: Siri must not answer on a locked phone.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {

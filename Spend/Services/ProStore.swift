@@ -69,8 +69,10 @@ final class ProStore {
         #if SORTD_BETA
         if isSandboxBuild { return true }
         #endif
-        // Given away rather than bought. Same features, no StoreKit.
+        #if DEBUG
+        // Given away rather than bought. Debug builds only (App Review 3.1.1).
         if CompedPro.isActive() { return true }
+        #endif
         return !purchasedIDs.isEmpty
     }
 

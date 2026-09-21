@@ -60,3 +60,46 @@ private struct LockBadge: View {
         }
     }
 }
+
+/// What the cover window shows.
+enum CoverState: Equatable {
+    case none, cover, locked
+}
+
+/// Shows the lock or the app-switcher cover in its own window, above every
+/// sheet, alert and full-screen cover the app presents. A plain overlay sits
+/// under sheets, so an open Add or Budget sheet would show in the app switcher
+/// and stay usable behind the lock.
+struct CoverWindow<Cover: View>: ViewModifier {
+    let state: CoverState
+    @ViewBuilder let cover: (CoverState) -> Cover
+    @State private var window: UIWindow?
+
+    func body(content: Content) -> some View {
+        content.onChange(of: state, initial: true) { _, new in update(new) }
+    }
+
+    private func update(_ state: CoverState) {
+        guard state != .none else {
+            // Hidden windows take no touches, so the app works normally underneath.
+            window?.isHidden = true
+            return
+        }
+        let w = window ?? make()
+        (w?.rootViewController as? UIHostingController<AnyView>)?.rootView = AnyView(cover(state))
+        w?.isHidden = false
+    }
+
+    private func make() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return nil }
+        let w = UIWindow(windowScene: scene)
+        w.windowLevel = .alert + 1
+        w.overrideUserInterfaceStyle = scene.windows.first?.overrideUserInterfaceStyle ?? .unspecified
+        let host = UIHostingController(rootView: AnyView(EmptyView()))
+        host.view.backgroundColor = .clear
+        w.rootViewController = host
+        window = w
+        return w
+    }
+}

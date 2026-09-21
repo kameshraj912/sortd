@@ -1,5 +1,9 @@
 import SwiftUI
 
+// Debug builds only. App Review 3.1.1 bars unlocking features with codes, so
+// shipped builds use App Store offer codes instead.
+#if DEBUG
+
 /// The door behind the version number.
 ///
 /// Five taps on Version in Settings opens this. It's for friends and
@@ -88,3 +92,5 @@ struct SecretCodeSheet: View {
         }
     }
 }
+
+#endif
