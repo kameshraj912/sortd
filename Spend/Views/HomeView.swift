@@ -44,6 +44,7 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
+                    .clearsTabBar()
                 }
             }
             .background(Color.page)
@@ -864,7 +865,9 @@ struct ListPageTitle: View {
     var body: some View {
         Section {
             PageTitle(title: title, subtitle: subtitle)
-                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+                // Bottom 14, not 4: the section clips to a rounded corner, and
+                // a smaller inset cut the first letter of the last line.
+                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 14, trailing: 4))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
@@ -881,5 +884,36 @@ extension View {
             // Lists add their own gap under the bar; the page title is the gap.
             .contentMargins(.top, 0, for: .scrollContent)
             .listSectionSpacing(.compact)
+            .clearsTabBar()
+    }
+
+    /// Lets the last row scroll up above the flat tab bar. Neither the bar's
+    /// safe-area inset nor content margins set on the tab reach a scroll view
+    /// inside a NavigationStack, so each page's scroll view sets it itself;
+    /// `brandedTitle` already does. Zero outside the tabs.
+    func clearsTabBar() -> some View {
+        modifier(TabBarClearance())
+    }
+
+    /// For a root tab page with no navigation bar (Settings, Insights).
+    /// Hiding the bar also dropped its scroll-edge blur, so the page title
+    /// scrolled straight under the clock and Dynamic Island. An empty
+    /// safe-area bar brings the system blur back without adding any height.
+    func hidesNavigationBar(_ hidden: Bool = true) -> some View {
+        toolbar(hidden ? .hidden : .visible, for: .navigationBar)
+            .safeAreaBar(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
+    }
+}
+
+extension EnvironmentValues {
+    /// Height of the flat tab bar over the current tab, 0 elsewhere.
+    @Entry var tabBarClearance: CGFloat = 0
+}
+
+private struct TabBarClearance: ViewModifier {
+    @Environment(\.tabBarClearance) private var clearance
+
+    func body(content: Content) -> some View {
+        content.contentMargins(.bottom, clearance, for: .scrollContent)
     }
 }

@@ -30,12 +30,13 @@ struct InsightsView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
+                    .clearsTabBar()
                     .background(Color.page)
                 }
             }
             .navigationTitle("Insights")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
+            .hidesNavigationBar(!transactions.isEmpty)
             .navigationDestination(item: $selectedCategory) { category in
                 CategoryDetailView(category: category)
             }

@@ -151,6 +151,10 @@ struct RootView: View {
     /// Set when setup finishes, so the cover closes even when a debug flag
     /// is forcing it open.
     @State private var setupFinished = false
+    /// The flat tab bar's height. The TabView doesn't pass the bar's
+    /// safe-area inset on to its tabs, so without this the last row of
+    /// every list stayed under the bar. Handed down as `tabBarClearance`.
+    @State private var tabBarHeight: CGFloat = 0
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -167,13 +171,14 @@ struct RootView: View {
         // The system tab bar is hidden and replaced with a flat one: iOS 27
         // always draws the system bar as floating Liquid Glass.
         TabView(selection: $tab) {
-            Tab(value: AppTab.home) { HomeView(tab: $tab).hideSystemTabBar() }
-            Tab(value: AppTab.activity) { ActivityView().hideSystemTabBar() }
-            Tab(value: AppTab.insights) { ProGate(feature: .insights) { InsightsView() }.hideSystemTabBar() }
-            Tab(value: AppTab.settings) { SettingsView().hideSystemTabBar() }
+            Tab(value: AppTab.home) { HomeView(tab: $tab).hideSystemTabBar(clearing: tabBarHeight) }
+            Tab(value: AppTab.activity) { ActivityView().hideSystemTabBar(clearing: tabBarHeight) }
+            Tab(value: AppTab.insights) { ProGate(feature: .insights) { InsightsView() }.hideSystemTabBar(clearing: tabBarHeight) }
+            Tab(value: AppTab.settings) { SettingsView().hideSystemTabBar(clearing: tabBarHeight) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FlatTabBar(selection: $tab)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tabBarHeight = $0 }
         }
         // The tab bar stays at the bottom, under the keyboard, like the system one.
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -268,8 +273,11 @@ struct FlatTabBar: View {
 }
 
 private extension View {
-    func hideSystemTabBar() -> some View {
+    /// Hides the system bar, and tells the pages in this tab how tall the
+    /// flat one is (see `clearsTabBar()`).
+    func hideSystemTabBar(clearing barHeight: CGFloat) -> some View {
         toolbarVisibility(.hidden, for: .tabBar)
+            .environment(\.tabBarClearance, barHeight)
     }
 }
 
