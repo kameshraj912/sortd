@@ -24,8 +24,14 @@ final class Router {
     var tab: AppTab = .home
     var sheet: Sheet?
     var settingsPath: [Destination] = []
+    /// Settings is a sheet over the tabs, opened from the gear on Home.
+    var showingSettings = false
 
-    private init() {}
+    private init() {
+        #if DEBUG
+        showingSettings = ProcessInfo.processInfo.environment["SPEND_TAB"] == "settings"
+        #endif
+    }
 
     /// Handles a `sortd://` URL from a widget. Unknown links just open the
     /// app on Home rather than doing nothing, which is the friendlier miss.
@@ -46,11 +52,11 @@ final class Router {
         case "insights":
             tab = .insights
         case "bills":
-            tab = .settings
             settingsPath = [.recurring]
+            showingSettings = true
         case "import":
-            tab = .settings
             settingsPath = [.importing]
+            showingSettings = true
         default:
             tab = .home
         }
