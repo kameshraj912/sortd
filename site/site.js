@@ -26,6 +26,8 @@
         [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { f.removeAttribute("aria-invalid"); });
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
+      // Turnstile tokens are single-use: after a failed submit, clear it so the next try gets a fresh one.
+      var resetCaptcha = function () { try { if (window.turnstile) window.turnstile.reset(); } catch (e) {} };
       if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try\u00a0again.");
       form.addEventListener("submit", function (e) {
         e.preventDefault();
@@ -42,11 +44,11 @@
               ["beta-intro", "beta-alt"].forEach(function (id) { var n = document.getElementById(id); if (n) n.hidden = true; });
               document.getElementById("beta-done-email").textContent = email.value.trim();
               form.hidden = true; done.hidden = false; window.scrollTo(0, 0);
-              var h = done.querySelector("h1"); h.setAttribute("tabindex", "-1"); h.focus();
+              var h = done.querySelector(".as-h1"); h.setAttribute("tabindex", "-1"); h.focus();
             }
-            else show(res.error || "That didn't go through. Please try\u00a0again.");
+            else { show(res.error || "That didn't go through. Please try\u00a0again."); resetCaptcha(); }
           })
-          .catch(function () { show("You seem to be offline. Try again when the Wi-Fi comes\u00a0back."); })
+          .catch(function () { show("You seem to be offline. Try again when the Wi-Fi comes\u00a0back."); resetCaptcha(); })
           .then(function () { submit.disabled = false; submit.textContent = "Join the beta"; });
       });
     }

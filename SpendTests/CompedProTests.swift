@@ -2,6 +2,9 @@ import Testing
 import Foundation
 @testable import Spend
 
+// Comped Pro exists in Debug builds only.
+#if DEBUG
+
 /// Pro given away by code. The point of these is that the door only opens
 /// for the right knock, and that Delete All Data really deletes it.
 struct CompedProTests {
@@ -137,3 +140,5 @@ struct CompedProTests {
         }
     }
 }
+
+#endif

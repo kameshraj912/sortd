@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Hiring – outro</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  body { background: #141416; }
+  .card { background: radial-gradient(85% 55% at 50% 42%, #212128, #141416 78%); }
+  .grey { color: #7e7e87; }
+  .glow { position: absolute; inset: auto -30% -20% -30%; height: 60%;
+    background: radial-gradient(40% 55% at 22% 50%, rgba(240,100,61,.40), transparent 70%),
+                radial-gradient(40% 55% at 50% 55%, rgba(123,107,240,.36), transparent 70%),
+                radial-gradient(40% 55% at 78% 50%, rgba(43,176,122,.34), transparent 70%); }
+  .word { position: absolute; left: 0; right: 0; top: 380px; text-align: center;
+          font-size: 96px; font-weight: 800; letter-spacing: -.07em; line-height: .9; }
+  .word .wbars { margin-top: 12px; }
+  .word .wbars i { height: 9px; }
+  .word .wbars i:nth-child(1){width:96px} .word .wbars i:nth-child(2){width:72px}
+  .word .wbars i:nth-child(3){width:48px} .word .wbars i:nth-child(4){width:28px}
+</style></head>
+<body data-duration="6.6"><div id="stage">
+  <!-- The question, on its own, because it is the one thing being asked -->
+  <div class="layer card" id="s1">
+    <p class="cap xl" id="q1" style="top:340px">Can one of you</p>
+    <p class="cap xl grey" id="q2" style="top:470px">do this better?</p>
+  </div>
+  <!-- What it actually is -->
+  <div class="layer card" id="s2">
+    <p class="cap lg" id="a1" style="top:330px">If one of you knows marketing, come help.</p>
+    <p class="cap sm muted" id="a2" style="top:490px">You'd run our social and tell us what to make.</p>
+    <p class="cap xl" id="a3" style="top:560px">It's paid.</p>
+  </div>
+  <div class="layer card" id="s3">
+    <div class="glow"></div>
+    <div class="word" id="w">sortd<div class="wbars"><i></i><i></i><i></i><i></i></div></div>
+    <p class="cap md" id="w2" style="top:560px">Just DM me.</p>
+  </div>
+</div>
+<script src="engine.js"></script>
+<script>
+  show('#s1', 0, 2.40, 'cut', 'cut');
+  tw('#q1', 0, .5, { y: 0 }, { y: 14 }, 'out');
+  show('#q2', .75, null, 'pop');
+
+  show('#s2', 2.50, 4.70, 'cut', 'cut');
+  show('#a1', 2.55, null, 'up');
+  show('#a2', 3.15, null, 'up');
+  show('#a3', 3.70, null, 'pop');
+
+  show('#s3', 4.80, null, 'cut');
+  show('#w', 4.90, null, 'pop');
+  show('#w2', 5.20, null, 'up');
+  seek(0);
+</script>
+</body></html>

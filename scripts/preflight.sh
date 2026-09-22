@@ -39,6 +39,25 @@ else
   fi
 fi
 
+# 1b. Sentry crash reports are for TestFlight only. The App Store label says
+#     "Data Not Collected", and Sentry's privacy manifest declares crash data.
+if grep -q 'sentry-cocoa' "$PBX"; then
+  if [ "$MODE" = "--appstore" ]; then
+    bad "Sentry is still linked. Remove the sentry-cocoa package and CrashReporting.swift,"
+    say "      or change the App Privacy label to Crash Data (not linked) first — see CrashReporting.swift."
+  elif grep -q 'static let dsn = ""' Spend/Services/CrashReporting.swift 2>/dev/null; then
+    warn "Sentry DSN is empty — beta crash reports are off. Paste it in CrashReporting.swift."
+  else
+    ok "Sentry crash reports on for TestFlight."
+  fi
+fi
+
+# 1c. Gmail ships in v1, which only works for the public once Google has verified the scope.
+if grep -q 'SORTD_GMAIL' "$PBX" && [ "$MODE" = "--appstore" ]; then
+  warn "Gmail is on. Submit only after Google has verified gmail.readonly"
+  say "      (docs/GoogleVerification.md). Before that, only 100 test users can connect."
+fi
+
 # 2. Build number must be unique per upload; remind, don't guess.
 warn "Build number is $build. Every upload needs a new one."
 

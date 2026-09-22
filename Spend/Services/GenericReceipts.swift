@@ -218,22 +218,25 @@ enum ReceiptAI {
             You read one email and extract the purchase it confirms. Only use facts written in the email. \
             If a detail isn't in the email, leave it empty. Never guess an amount.
             """)
+        // The model sees only the start of the email, so its answers are
+        // checked against that same part, not text it never read.
+        let seen = String(text.prefix(3500))
         let prompt = """
             From: \(msg.from)
             Subject: \(msg.subject)
 
-            \(text.prefix(3500))
+            \(seen)
             """
         do {
             let fields = try await session.respond(to: prompt, generating: ReceiptFields.self,
                                                    options: GenerationOptions(temperature: 0)).content
             let amount = fields.total.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
             guard fields.isReceipt, let d = Decimal(string: amount), d > 0,
-                  GenericReceipts.appears(amount, in: text) else { return nil }
+                  GenericReceipts.appears(amount, in: seen) else { return nil }
             // Only trust the model's currency if it's written in the email.
             let code = fields.currency.uppercased()
             let currency = code.count == 3 && text.contains(code) ? code : GenericReceipts.total(in: text)?.currency ?? Money.home
-            let merchant = fields.merchant.isEmpty ? GenericReceipts.merchant(from: msg.from, subject: msg.subject) : fields.merchant
+            let merchant = String((fields.merchant.isEmpty ? GenericReceipts.merchant(from: msg.from, subject: msg.subject) : fields.merchant).prefix(80))
             let digits = fields.cardLast4.filter(\.isNumber)
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -11,20 +11,31 @@ struct PrivacyView: View {
             ListPageTitle(title: "Privacy", subtitle: "What Sortd stores, and where.")
             Section {
                 row("iphone", "Stored on this iPhone", "Purchases, cards and settings live only in Sortd's storage on your iPhone. There's no Sortd server or account.")
-                row("envelope", "Gmail, read on your iPhone", "Sortd searches only for receipts and bank alerts, and reads them on this iPhone. Nothing is copied to a server or shared. Disconnect any time.")
-                row("key", "Keys in the Keychain", "The key that lets Sortd read your receipts is kept in the iPhone Keychain, not in the app's files.")
+                if Features.gmail {
+                    row("envelope", "Gmail, read on your iPhone", "Sortd searches only for receipts and bank alerts, and reads them on this iPhone. Nothing is copied to a server or shared. Disconnect any time.")
+                    row("key", "Keys in the Keychain", "The key that lets Sortd read your receipts is kept in the iPhone Keychain, not in the app's files.")
+                }
                 row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
                 row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
                 row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only a currency code and dates are sent.")
                 row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
             }
             Section {
-                Text("Sortd helps you track your own spending. It isn't a bank and doesn't move money, and nothing in it is financial advice. Amounts come from your receipts and bank alerts, and converted amounts use published exchange rates, so always check your bank statement for exact figures.")
+                Text("Sortd helps you track your own spending. It isn't a bank and doesn't move money, and nothing in it is financial advice. Amounts come from Apple Pay, your receipts and what you type in, and converted amounts use published exchange rates, so always check your bank statement for exact figures.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } header: {
                 BoldHeader("Good to Know")
             }
+            Section {
+                Link(destination: URL(string: "https://sortd.page/privacy")!) {
+                    Label("Privacy Policy", systemImage: "hand.raised")
+                }
+                Link(destination: URL(string: "https://sortd.page/terms")!) {
+                    Label("Terms of Use", systemImage: "doc.text")
+                }
+            }
+            .tint(Color.ink)
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
@@ -46,7 +57,7 @@ struct PrivacyView: View {
 
 /// Every purchase as a CSV file, for Numbers, Excel or another app.
 enum CSVExport {
-    static func file(_ transactions: [Transaction]) -> URL? {
+    static func data(_ transactions: [Transaction]) -> Data {
         let iso = ISO8601DateFormatter()
         var lines = ["date,merchant,amount,currency,amount_\(Money.home.lowercased()),category,card,refunded,note"]
         for t in transactions.sorted(by: { $0.date < $1.date }) {
@@ -55,18 +66,16 @@ enum CSVExport {
                           t.refunded ? "yes" : "no", t.note]
             lines.append(fields.map(escape).joined(separator: ","))
         }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Sortd purchases \(Date.now.formatted(.iso8601.year().month().day())).csv")
-        do {
-            try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-            return url
-        } catch {
-            return nil
-        }
+        return Data(lines.joined(separator: "\n").utf8)
     }
 
-    /// Quotes a field when it has a comma, quote or line break.
+    /// Makes a field safe for a spreadsheet. Merchant names and notes can come
+    /// from emails, so a cell starting with = + - @ (or a tab or return) gets a
+    /// leading ' and can't run as a formula. Then quotes it when it has a comma,
+    /// quote or line break.
     nonisolated static func escape(_ s: String) -> String {
+        var s = s
+        if let first = s.first, "=+-@\t\r".contains(first) { s = "'" + s }
         guard s.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" }) else { return s }
         return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
@@ -83,14 +92,16 @@ enum DataReset {
         try? context.save()
         let gmail = GmailSync.accounts
         GmailSync.accounts = []
-        Task { for a in gmail { await GoogleAuth.disconnect(a.email) } }
+        GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
+        #if DEBUG
         CompedPro.clear()
-        // The exported spreadsheet, if one was made.
-        for f in (try? FileManager.default.contentsOfDirectory(at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
-        where f.pathExtension == "csv" { try? FileManager.default.removeItem(at: f) }
+        #endif
+        // Any backup or spreadsheet copies made for sharing.
+        Exports.clear()
         CardBook.shared.replaceAll([])
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         if let domain = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: domain)
         }
@@ -99,5 +110,7 @@ enum DataReset {
         CardBook.shared.replaceAll([])
         UserDefaults.standard.set(false, forKey: DemoData.activeKey)
         UserDefaults.standard.set(false, forKey: OnboardingView.doneKey)
+        // Widgets were showing the old totals until the next app refresh.
+        WidgetBridge.refresh(from: context)
     }
 }

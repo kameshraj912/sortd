@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Sortd – post 01</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* App screens are 1080x2347, shown 540 wide, so 1173 tall against a 960
+     stage. The extra 213px is the room every vertical move uses. */
+  .shot { position: absolute; left: 0; top: 0; width: 540px; }
+  .frame { position: absolute; inset: 0; overflow: hidden; background: #f2f2f7; }
+
+  /* Karaoke line. Sits low but inside Instagram's safe zone (143–817). */
+  /* Five lines of the longest take must still clear Instagram's safe zone,
+     which ends at y 817. 600 + 5 x 36 = 781. */
+  #cap { position: absolute; left: 34px; right: 34px; top: 600px; text-align: center;
+         font-size: 33px; font-weight: 800; letter-spacing: -.025em; line-height: 1.10;
+         color: #fff; text-wrap: balance; text-shadow: 0 3px 16px rgba(0,0,0,.65), 0 1px 3px rgba(0,0,0,.6); }
+  #cap b { color: #3fd08f; font-weight: 800; }
+  #scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 430px;
+           background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.62) 58%, rgba(0,0,0,.78)); }
+
+  /* Montage label */
+  .tag { position: absolute; left: 30px; right: 30px; top: 210px; text-align: center; }
+  .tag span { display: inline-block; background: #111113; color: #fff; font-size: 30px; font-weight: 800;
+              letter-spacing: -.03em; padding: 13px 22px 15px; border-radius: 20px; box-shadow: 0 12px 34px rgba(0,0,0,.4); text-wrap: balance; }
+
+  /* Brand card */
+  .brand { background: radial-gradient(85% 55% at 50% 40%, #23232a, #111113 76%); }
+  .brand .big { position: absolute; left: 0; right: 0; top: 330px; text-align: center;
+                font-size: 118px; font-weight: 800; letter-spacing: -.07em; line-height: .9; }
+  .brand .kick { position: absolute; left: 0; right: 0; top: 268px; text-align: center;
+                 font-size: 19px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #8e8e93; }
+  .brand .wbars { margin-top: 12px; }
+  .brand .wbars i { height: 11px; }
+  .brand .wbars i:nth-child(1) { width: 118px } .brand .wbars i:nth-child(2) { width: 88px }
+  .brand .wbars i:nth-child(3) { width: 58px } .brand .wbars i:nth-child(4) { width: 34px }
+
+  /* Apple Pay tap, same furniture as the other reels */
+  .lock { background:
+      radial-gradient(120% 60% at 20% 110%, rgba(240,100,61,.55), transparent 60%),
+      radial-gradient(90% 55% at 100% 80%, rgba(123,107,240,.5), transparent 60%),
+      radial-gradient(80% 50% at 0% 20%, rgba(43,176,122,.35), transparent 60%),
+      linear-gradient(180deg, #17171b, #0b0b0d); }
+  .date { top: 168px; font-size: 19px; font-weight: 600; opacity: .9; }
+  .time { top: 190px; font-size: 112px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+  .sheet { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 430px; border-radius: 46px;
+           background: rgba(22,22,24,.97); box-shadow: 0 -10px 40px rgba(0,0,0,.4); text-align: center; padding-top: 26px; }
+  .sheet .wl { font-size: 18px; font-weight: 700; }
+  .cardart { position: relative; width: 70%; margin: 20px auto 0; aspect-ratio: 1.586; border-radius: 18px;
+             background: linear-gradient(125deg, #f0643d 0%, #f5a623 42%, #2bb07a 100%); box-shadow: 0 10px 30px rgba(0,0,0,.4); text-align: left; }
+  .cardart b { position: absolute; left: 7%; top: 9%; font-size: 19px; }
+  .cardart i { position: absolute; right: 7%; bottom: 9%; font-style: normal; font-size: 15px; }
+  .state { position: absolute; left: 0; right: 0; bottom: 36px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
+  .tick { width: 46px; height: 46px; border-radius: 50%; background: var(--green); display: grid; place-items: center; }
+</style></head>
+
+<body data-duration="38.0"><div id="stage">
+
+  <!-- 1. A money app, on screen from frame zero -->
+  <div class="layer frame" id="s1"><img class="shot" id="s1img" src="assets/ad06/home.jpg" alt=""></div>
+
+  <!-- 2. Who this is -->
+  <div class="layer brand" id="s2">
+    <p class="kick" id="s2k">Post 01</p>
+    <div class="big" id="s2w">sortd<div class="wbars"><i></i><i></i><i></i><i></i></div></div>
+  </div>
+
+  <!-- 3. The one that matters: tap to pay -->
+  <div class="layer lock" id="s3">
+    <p class="abs center date">Monday 21 September</p>
+    <p class="abs center time num">9:41</p>
+    <div class="sheet" id="sheet">
+      <p class="wl">Everyday card</p>
+      <div class="cardart"><b>Everyday</b><i class="num">•••• 4821</i></div>
+      <div class="state" id="hold">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M8.5 16.5a6 6 0 0 0 0-9"/><path d="M12 19a9.5 9.5 0 0 0 0-14"/><path d="M15.5 21.5a13 13 0 0 0 0-19"/></svg>
+        Hold near reader</div>
+      <div class="state" id="done"><div class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>Done</div>
+    </div>
+  </div>
+
+  <!-- 4. …and it is already in the list -->
+  <div class="layer frame" id="s4"><img class="shot" id="s4img" src="assets/ad06/activity-pro.jpg" alt=""></div>
+
+  <!-- 5. Everything else, at speed -->
+  <div class="layer frame m" id="m1"><img class="shot" src="assets/ad06/settings.jpg" alt=""><p class="tag" id="mt1"><span>Reads your bank's alerts out of Gmail</span></p></div>
+  <div class="layer frame m" id="m2"><img class="shot" src="assets/ad06/scan.jpg" alt=""><p class="tag" id="mt2"><span>Scans a paper receipt</span></p></div>
+  <div class="layer frame m" id="m3"><img class="shot" src="assets/ad06/import.jpg" alt=""><p class="tag" id="mt3"><span>Or a whole bank statement</span></p></div>
+  <div class="layer frame m" id="m4"><img class="shot" src="assets/ad06/recurring.jpg" alt=""><p class="tag" id="mt4"><span>Finds the subscriptions you forgot</span></p></div>
+  <div class="layer frame m" id="m5"><img class="shot" src="assets/ad06/insights-pro.jpg" alt=""><p class="tag" id="mt5"><span>This month against last month</span></p></div>
+  <div class="layer frame m" id="m6"><img class="shot" src="assets/ad06/card.jpg" alt=""><p class="tag" id="mt6"><span>Every card. Every currency.</span></p></div>
+  <div class="layer frame m" id="m7"><img class="shot" src="assets/ad06/widgets.jpg" alt=""><p class="tag" id="mt7"><span>On your Home Screen too</span></p></div>
+
+  <!-- 6. The wedge -->
+  <div class="layer frame" id="s6"><img class="shot" id="s6img" src="assets/ad06/privacy.jpg" alt=""></div>
+
+  <!-- 7. The ask -->
+  <div class="layer frame" id="s7"><img class="shot" id="s7img" src="assets/ad06/cards.jpg" alt=""></div>
+
+  <!-- The notification sits above everything, like a real one -->
+  <div class="banner" id="banner"><img src="assets/AppIcon.png" alt="">
+    <div style="flex:1"><div class="meta"><span>SORTD</span><span>now</span></div>
+    <p>Logged <b>$5.50</b> at Seven Seeds Coffee · Eating Out</p></div></div>
+
+  <div id="scrim"></div>
+  <p id="cap"></p>
+
+</div>
+<script src="ad06-words.js"></script>
+<script src="engine.js"></script>
+<script>
+  // ---- picture ----
+  show('#s1', 0, 3.40, 'cut', 'cut');
+  tw('#s1img', 0, 3.40, { s: 1.07, y: -40 }, { s: 1, y: 0 }, 'lin');
+
+  show('#s2', 3.40, 7.55, 'cut', 'cut');
+  show('#s2k', 3.55, null, 'up'); show('#s2w', 3.70, null, 'pop');
+
+  show('#s3', 7.55, 11.40, 'cut', 'cut');
+  tw('#sheet', 7.75, 8.35, { y: 0 }, { y: 460 }, 'out');
+  tw('#hold', 8.35, 8.60, { o: 1 }, { o: 0 }); tw('#hold', 9.40, 9.50, { o: 0 });
+  tw('#done', 9.45, 9.80, { o: 1, s: 1 }, { o: 0, s: .6 }, 'back');
+  tw('#sheet', 10.30, 10.75, { y: 470 }, {}, 'in');
+
+  show('#s4', 11.40, 14.95, 'cut', 'cut');
+  tw('#s4img', 11.40, 14.95, { y: -150 }, { y: 0 }, 'lin');
+  tw('#banner', 11.55, 12.10, { y: 0, s: 1, o: 1 }, { y: -170, s: .92, o: 0 }, 'back');
+  tw('#banner', 13.90, 14.20, { o: 0, s: .96 }, {}, 'lin');
+
+  // Montage: seven features, one second each, no voice under it.
+  const M = [
+    [-120, 'up'], [0, 'pop'], [-90, 'up'], [-170, 'up'],
+    [-60, 'up'], [-140, 'up'], [-110, 'up'],
+  ];
+  M.forEach(([drift], i) => {
+    const t = 14.95 + i * 1.0, id = '#m' + (i + 1);
+    show(id, t, t + 1.0, 'cut', 'cut');
+    tw(id + ' .shot', t, t + 1.0, { y: drift }, { y: 0 }, 'lin');
+    show('#mt' + (i + 1), t + .06, null, 'pop');
+  });
+
+  show('#s6', 21.95, 28.65, 'cut', 'cut');
+  tw('#s6img', 21.95, 28.65, { y: -213 }, { y: 0 }, 'inout');
+
+  show('#s7', 28.65, null, 'cut');
+  tw('#s7img', 28.65, 36.10, { s: 1.06 }, { s: 1 }, 'lin');
+
+  // The scrim only earns its keep where there is a caption over a photo.
+  tw('#scrim', 0, .01, { o: 1 }, { o: 1 }, 'lin');
+  tw('#scrim', 3.40, 3.41, { o: 0 }, {}, 'lin');       // brand card needs none
+  tw('#scrim', 7.55, 7.56, { o: 1 }, {}, 'lin');
+  tw('#scrim', 14.95, 14.96, { o: 0 }, {}, 'lin');     // montage has its own pill
+  tw('#scrim', 21.95, 21.96, { o: 1 }, {}, 'lin');
+  tw('#scrim', 35.95, 36.05, { o: 0 }, {}, 'lin');
+
+  // ---- karaoke captions, from the real transcripts ----
+  const LINES = Object.values(window.VO);
+  const cap = document.getElementById('cap');
+  onFrame(t => {
+    const ws = LINES.find(l => t >= l[0].s - 0.35 && t <= l[l.length - 1].e + 0.45);
+    if (!ws) { cap.innerHTML = ''; return; }
+    cap.innerHTML = ws.map(w =>
+      (t >= w.s && t <= w.e) ? `<b>${w.w}</b>` : w.w).join(' ');
+  });
+
+  endCard(36.10, 'He can go now.');
+  seek(0);
+</script>
+</body></html>

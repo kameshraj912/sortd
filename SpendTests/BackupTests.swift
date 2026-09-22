@@ -213,6 +213,118 @@ struct BackupTests {
         #expect((toDefaults.dictionary(forKey: CategoryBudgets.key) as? [String: Double])?["eatingOut"] == 300.0)
     }
 
+    // MARK: A backup from a phone with another home currency (bug hunt D1, D2)
+
+    @Test func mergeFromAnotherCurrencyDoesNotMixCurrencies() throws {
+        let fromDefaults = scratch()
+        fromDefaults.set("SGD", forKey: Money.homeKey)
+        let from = try store()
+        add(from, "DBS Orchard", 100, "2026-09-01", currency: "SGD").audAmount = 100
+        add(from, "Qantas", 50, "2026-09-02", currency: "AUD").audAmount = 45   // 50 AUD in SGD
+        try from.save()
+        let data = try Backup.data(in: from, defaults: fromDefaults)
+
+        let toDefaults = scratch()
+        toDefaults.set("AUD", forKey: Money.homeKey)
+        toDefaults.set("AUD", forKey: FXService.convertedKey)
+        let to = try store()
+        try Backup.restore(data, mode: .merge, into: to, defaults: toDefaults)
+
+        let rows = try to.fetch(FetchDescriptor<Transaction>())
+        // S$100 must not be counted as A$100: left for FXService to convert.
+        #expect(rows.first { $0.merchant == "DBS Orchard" }?.audAmount == nil)
+        // Already in this phone's currency.
+        #expect(rows.first { $0.merchant == "Qantas" }?.audAmount == 50)
+        #expect(toDefaults.string(forKey: Money.homeKey) == "AUD")
+        #expect(toDefaults.string(forKey: FXService.convertedKey) == "AUD")
+    }
+
+    @Test func replaceTakesTheBackupsCurrencyWithoutConvertingTheBudgetAgain() throws {
+        let fromDefaults = scratch()
+        fromDefaults.set("SGD", forKey: Money.homeKey)
+        fromDefaults.set(2400.0, forKey: "monthlyBudget")
+        let from = try store()
+        add(from, "DBS Orchard", 100, "2026-09-01", currency: "SGD").audAmount = 100
+        try from.save()
+        let data = try Backup.data(in: from, defaults: fromDefaults)
+
+        let toDefaults = scratch()
+        toDefaults.set("AUD", forKey: Money.homeKey)
+        toDefaults.set("AUD", forKey: FXService.convertedKey)
+        toDefaults.set(900.0, forKey: "monthlyBudget")
+        let to = try store()
+        try Backup.restore(data, mode: .replace, into: to, defaults: toDefaults)
+
+        #expect(toDefaults.string(forKey: Money.homeKey) == "SGD")
+        #expect(toDefaults.double(forKey: "monthlyBudget") == 2400.0)
+        // Already in SGD, so ensureConverted has nothing to redo.
+        #expect(toDefaults.string(forKey: FXService.convertedKey) == "SGD")
+        #expect(try to.fetch(FetchDescriptor<Transaction>()).first?.audAmount == 100)
+    }
+
+    @Test func mergeOntoAPhoneWithNoCurrencyYetRebasesItsOwnPurchasesOnly() throws {
+        // A phone with no currency chosen uses its region's (Money.home). The
+        // backup must be in a different one, or there's nothing to rebase:
+        // on a Singapore simulator that default is already SGD.
+        let backupHome = Money.home == "SGD" ? "NZD" : "SGD"
+        let fromDefaults = scratch()
+        fromDefaults.set(backupHome, forKey: Money.homeKey)
+        let from = try store()
+        add(from, "DBS Orchard", 100, "2026-09-01", currency: backupHome).audAmount = 100
+        try from.save()
+        let data = try Backup.data(in: from, defaults: fromDefaults)
+
+        let toDefaults = scratch()           // no home currency chosen here yet
+        let to = try store()
+        let mine = add(to, "Coles", 20, "2026-09-03", currency: "AUD")
+        mine.audAmount = 20
+        try to.save()
+        try Backup.restore(data, mode: .merge, into: to, defaults: toDefaults)
+
+        #expect(toDefaults.string(forKey: Money.homeKey) == backupHome)
+        #expect(toDefaults.string(forKey: FXService.convertedKey) == backupHome)
+        let rows = try to.fetch(FetchDescriptor<Transaction>())
+        #expect(rows.first { $0.merchant == "DBS Orchard" }?.audAmount == 100)
+        #expect(rows.first { $0.merchant == "Coles" }?.audAmount == nil)   // A$20 to be converted
+    }
+
+    // MARK: Emails already read (bug hunt D4)
+
+    @Test func emailsAlreadyReadComeAlong() throws {
+        let from = try store()
+        from.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))
+        from.insert(ImportedRecord(id: "18c2f0b1-none-v3", account: "me@gmail.com"))
+        try from.save()
+        let data = try Backup.data(in: from, defaults: scratch())
+
+        let to = try store()
+        to.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))   // already here
+        try to.save()
+        try Backup.restore(data, mode: .merge, into: to, defaults: scratch())
+        let ids = Set(try to.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
+        #expect(ids == ["18c2f0a9", "18c2f0b1-none-v3"])
+    }
+
+    @Test func aBackupFromBeforeImportedEmailsStillRestores() throws {
+        let old = """
+        {"format":"sortd.backup","version":1,"createdAt":"2026-09-01T00:00:00Z",
+         "cards":[],"settings":{},"rules":[],"transactions":[]}
+        """
+        let result = try Backup.restore(Data(old.utf8), mode: .merge, into: try store(), defaults: scratch())
+        #expect(result.added == 0)
+    }
+
+    @Test func sampleDataIsNeverInABackup() throws {
+        // Bug hunt D6: restored sample purchases had no Clear banner.
+        let from = try store()
+        add(from, "Woolworths", 58.30, "2026-09-01")
+        add(from, "Sample Cafe", 5.50, "2026-09-02").note = DemoData.marker
+        try from.save()
+        let snapshot = try Backup.snapshot(in: from, defaults: scratch())
+        #expect(snapshot.transactions.map(\.merchant) == ["Woolworths"])
+        #expect(!snapshot.cards.contains { DemoData.cardIds.contains($0.id) })
+    }
+
     @Test func mergeDoesNotOverwriteASettingChosenOnThisPhone() throws {
         let fromDefaults = scratch()
         fromDefaults.set(2400.0, forKey: "monthlyBudget")

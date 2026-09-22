@@ -303,24 +303,7 @@ struct ImportView: View {
 
     private func save(_ found: [StatementImport.Row]) {
         busy = true
-        var added = 0
-        var merged = 0
-        for row in found {
-            let purchase = IncomingPurchase(
-                date: row.date,
-                merchant: row.detail,
-                amount: row.amount,
-                currency: row.currency ?? Money.home,
-                card: card,
-                source: .csv
-            )
-            if let outcome = try? TransactionLogger.log(purchase, in: context) {
-                switch outcome {
-                case .added: added += 1
-                case .merged: merged += 1
-                }
-            }
-        }
+        let (added, merged) = StatementImport.save(found, card: card, in: context)
         try? TransactionLogger.refreshUncategorised(in: context)
         WidgetBridge.refresh(from: context)
         Task { await FXService.backfill(in: context) }
@@ -335,6 +318,7 @@ struct ImportView: View {
         busy = true
         do {
             let result = try Backup.restore(data, mode: mode, into: context)
+            Task { await FXService.backfill(in: context) }
             done = result.summary
         } catch {
             self.error = error.localizedDescription

@@ -26,8 +26,8 @@ struct PaywallView: View {
     @State private var message: String?
 
     private var features: [ProStore.Feature] {
-        guard let feature else { return ProStore.Feature.allCases }
-        return [feature] + ProStore.Feature.allCases.filter { $0 != feature }
+        guard let feature else { return ProStore.Feature.available }
+        return [feature] + ProStore.Feature.available.filter { $0 != feature }
     }
 
     var body: some View {
