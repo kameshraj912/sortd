@@ -32,15 +32,28 @@ All three are settings, not code. Do them once the paid developer account clears
       offer. Plan: one "message + offer" on monthly and yearly. Create a retention offer first
       (e.g. yearly at 50% off for the first year). Keep the message in the brand voice, and honest.
 
-## Beta crash reports — Sentry (added 21 Sep 2026)
+## Beta crash reports — Sentry (added 21 Sep 2026, checked 22 Sep 2026)
 
-Built into TestFlight builds only (`Spend/Services/CrashReporting.swift`, `#if SORTD_BETA`).
-Sends the stack trace, device model and OS. No purchases, merchants, emails, screenshots,
-breadcrumbs or IP.
+Built into TestFlight builds only (`Spend/Services/CrashReporting.swift`, gated on `isOn`, which
+is only ever true under `#if SORTD_BETA`). Sends the stack trace, device model and OS. No
+purchases, merchants, emails, screenshots or breadcrumbs.
 
+**IP address — one extra step, checked against current Sentry docs (22 Sep 2026):**
+`sendDefaultPii = false` (set in `CrashReporting.swift`) stops the SDK from *attaching* an IP to
+events, but Sentry's own docs say that on Apple platforms the server still **infers the sender's
+IP from the network connection regardless of `sendDefaultPii`**, for backward compatibility
+([Sentry: Users — IP address](https://docs.sentry.io/platforms/apple/guides/ios/enriching-events/identify-user/)).
+So "no IP" needs one more thing, done once in the browser, not in code:
+- [ ] Sentry project → **Settings → Security & Privacy → "Prevent Storing of IP Addresses"** — turn
+      this on. Only this (or server-side data scrubbing of `$user.ip_address`) actually stops IP
+      storage; the client option alone doesn't.
+      Source: [Sentry docs, same page as above](https://docs.sentry.io/platforms/apple/guides/ios/enriching-events/identify-user/).
+
+- [x] Privacy wording updated (22 Sep 2026): `site/privacy.html` and the in-app Privacy page
+      (`Spend/Views/DataControlsView.swift`) now say plainly that TestFlight builds send crash
+      reports to Sentry, and what is/isn't in them.
 - [ ] Make a free Sentry account and an iOS project; paste its DSN into `CrashReporting.dsn`.
-- [ ] Before the first beta build with the DSN: one line on sortd.page/privacy (beta section)
-      and the beta page — "TestFlight builds send crash reports (no personal data) to Sentry."
+- [ ] Do the "Prevent Storing of IP Addresses" step above in the same sitting.
 - [ ] Crash once on purpose in a TestFlight build and check the report shows no personal data.
 - [ ] **App Store build:** remove the package, or go live with it (label → Diagnostics › Crash
       Data, not linked; update the "no analytics" wording). `preflight.sh --appstore` fails
@@ -95,6 +108,12 @@ Sortd's whole pitch is "no tracking, nothing leaves your phone", and the
 App Privacy label says Data Not Collected. Adding an analytics SDK would
 make the website, the in-app privacy page and that label all false at once,
 and "no tracking" is the thing this category competes on. So: don't.
+
+This is why the Sentry crash reports above are a **beta-only, TestFlight-only**
+exception (owner's call, 22 Sep 2026 — "not stalking, nothing creepy"): fixing
+crashes, not analytics. `site/privacy.html` and the in-app Privacy page now say
+so plainly. See `docs/BetaPlaybook.md` for the wider beta plan and
+`docs/ProAndPayments.md` for payments.
 
 Everything below comes from Apple, free, with no code and no SDK.
 

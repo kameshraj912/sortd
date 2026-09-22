@@ -50,6 +50,7 @@
     <div class="cell"><b>Sortd account or server</b><span>None</span></div>
     <div class="cell"><b>Data protection</b><span><a href="#security">Encrypted on your iPhone</a></span></div>
     <div class="cell"><b>Analytics, ads, tracking</b><span>None</span></div>
+    <div class="cell"><b>Crash reports</b><span>TestFlight beta only, no personal data</span></div>
     <div class="cell"><b>Data sold or shared</b><span>Never</span></div>
     <div class="cell"><b>Gmail</b><span>Optional, read-only</span></div>
   </div>
@@ -76,7 +77,7 @@
     <li><strong>Encrypted in transit:</strong> every connection Sortd makes, to Google and to frankfurter.dev, uses HTTPS (TLS). Sortd makes no unencrypted connections.</li>
     <li><strong>Least access:</strong> Sortd asks Google only for read-only Gmail access. It can't send, change or delete email. It searches only for receipts and bank alerts.</li>
     <li><strong>Emails are not stored:</strong> an email's text is held in memory only while Sortd reads the purchase from it, then discarded. Sortd keeps the purchase details and the email's ID, not the email.</li>
-    <li><strong>No people, no third parties:</strong> no one at Sortd can see your data, because it never leaves your iPhone. Sortd has no analytics, ads, crash-reporting or tracking tools, and does not share or sell data.</li>
+    <li><strong>No people, no third parties:</strong> no one at Sortd can see your data, because it never leaves your iPhone. Sortd has no analytics, ads or tracking tools, and does not share or sell data. The one exception is crash reports during the TestFlight beta — see "Crash reports" below.</li>
     <li><strong>Removing access:</strong> Disconnect and Delete All Data ask Google to cancel Sortd's access and delete the key from the Keychain. You can also remove Sortd at any time in your Google Account's security settings.</li>
   </ul>
   <p>If you find a security problem in Sortd, please email <a href="mailto:support@sortd.page">support@sortd.page</a>. We will look into it and fix it as fast as we can.</p>
@@ -109,13 +110,18 @@
   <h2>Reminders</h2>
   <p>If you turn on payment reminders, Sortd schedules notifications on your iPhone the day before a repeat payment is expected. These are local notifications created by the app on your iPhone. No notification service or server is involved.</p>
 
+  <h2>Crash reports (TestFlight beta only)</h2>
+  <p>While you're testing Sortd through TestFlight, if the app crashes it sends a crash report to Sentry, a crash-reporting service we use to fix bugs. That report has the crash itself, a stack trace, your iPhone's model, its iOS version, and Sortd's version number. It never has your name, email address, purchases, receipts, Gmail data, or anything you've typed — Sortd doesn't send any of that to Sentry or anyone else. Crash reporting is switched off once Sortd leaves TestFlight for the App Store.</p>
+  <p>Separately, Apple's TestFlight app collects its own crash reports, and lets you send feedback — a screenshot or a comment — if you choose to. That goes to us through Apple, and is covered by <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>, not this one.</p>
+
   <h2>Services Sortd talks to</h2>
   <p>Sortd only connects to:</p>
   <ul>
     <li>Google (sign-in and the Gmail API) — only if you connect Gmail.</li>
     <li>frankfurter.dev — for exchange rates, as described above.</li>
+    <li>Sentry — crash reports, TestFlight beta only, as described above.</li>
   </ul>
-  <p>Sortd has no analytics, crash-reporting, advertising or tracking tools built in.</p>
+  <p>Sortd has no advertising or tracking tools, and no analytics beyond the beta crash reports described above.</p>
 
   <h2 id="retention">How long Sortd keeps data</h2>
   <p>Everything below is kept on your iPhone only. We hold no copy, so there is nothing for us to keep or delete on our side.</p>
