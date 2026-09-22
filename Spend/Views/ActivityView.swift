@@ -43,10 +43,12 @@ struct TransactionsScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { filterMenu }
                 .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+            if NavLayout.current == .header || NavLayout.current == .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+                }
+                .sharedBackgroundVisibility(.hidden)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .sheet(item: $recategorising) { t in

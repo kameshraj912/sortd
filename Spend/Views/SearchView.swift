@@ -6,7 +6,13 @@ import SwiftData
 /// type it searches every purchase by merchant, category or note.
 struct SearchView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
-    @State private var query = ""
+    /// Set when the search field lives on the TabView instead of here.
+    var external: Binding<String>? = nil
+    @State private var own = ""
+    private var query: String {
+        get { external?.wrappedValue ?? own }
+        nonmutating set { if let external { external.wrappedValue = newValue } else { own = newValue } }
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,7 +23,7 @@ struct SearchView: View {
             .scrollContentBackground(.hidden)
             .background(Color.page)
             .navigationTitle("Search")
-            .searchable(text: $query, prompt: "Merchant, category or note")
+            .modifier(OwnSearchField(enabled: external == nil, query: $own))
             .navigationDestination(for: Transaction.self) { TransactionDetailView(transaction: $0) }
         }
     }
@@ -113,5 +119,17 @@ struct SearchView: View {
     private var usedCategories: [SpendCategory] {
         let used = Set(transactions.map(\.category))
         return SpendCategory.allCases.filter(used.contains)
+    }
+}
+
+private struct OwnSearchField: ViewModifier {
+    let enabled: Bool
+    @Binding var query: String
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $query, prompt: "Merchant, category or note")
+        } else {
+            content
+        }
     }
 }

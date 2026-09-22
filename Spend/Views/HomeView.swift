@@ -48,7 +48,7 @@ struct HomeView: View {
             }
             .background(Color.page)
             .navigationTitle("Home")
-            .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
+            .toolbar(transactions.isEmpty || NavLayout.current == .toolbar ? .visible : .hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Settings", systemImage: "gearshape") { Router.shared.showingSettings = true }
@@ -180,7 +180,7 @@ struct HomeView: View {
                     BrandBar(width: 14, height: 3)
                 }
                 Spacer()
-                HStack(spacing: 10) {
+                if NavLayout.current != .toolbar { HStack(spacing: 10) {
                     Button { Router.shared.showingSettings = true } label: {
                         Image(systemName: "gearshape")
                             .font(.body.weight(.semibold))
@@ -190,8 +190,10 @@ struct HomeView: View {
                     .buttonBorderShape(.circle)
                     .tint(Color.ink)
                     .accessibilityLabel("Settings")
-                    RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
-                }
+                    if NavLayout.current == .header {
+                        RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
+                    }
+                } }
             }
             .padding(.top, 8)
 
