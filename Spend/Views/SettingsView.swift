@@ -95,6 +95,11 @@ struct SettingsView: View {
                 case .recurring: ProGate(feature: .recurring) { RecurringView() }
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { Router.shared.showingSettings = false }
+                }
+            }
             .onAppear { Exports.clear() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
         }

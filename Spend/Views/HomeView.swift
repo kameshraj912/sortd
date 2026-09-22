@@ -50,6 +50,10 @@ struct HomeView: View {
             .navigationTitle("Home")
             .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Settings", systemImage: "gearshape") { Router.shared.showingSettings = true }
+                        .tint(Color.ink)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Purchase", systemImage: "plus") { showingAdd = true }
                         .tint(Color.ink)
@@ -176,7 +180,18 @@ struct HomeView: View {
                     BrandBar(width: 14, height: 3)
                 }
                 Spacer()
-                RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
+                HStack(spacing: 10) {
+                    Button { Router.shared.showingSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .tint(Color.ink)
+                    .accessibilityLabel("Settings")
+                    RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
+                }
             }
             .padding(.top, 8)
 
