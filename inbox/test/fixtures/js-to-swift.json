@@ -1,0 +1,26 @@
+{
+  "note": "Made by inbox/scripts/make-vector.mjs with the Worker's seal(). Test key only.",
+  "suite": "P256_SHA256_AES_GCM_256",
+  "info": "sortd-inbox/v1",
+  "recipientPrivateKeyHex": "f8c0b20dfa4823eb796a9575ff6930cbac6642eee5202bbabf567711ca95b864",
+  "recipientPublicKeyB64u": "BKXIMdWKAkjIVf8ihKFGmrzO3rZ-Z_UGhQYeHCYAKL5qo1X1d9G_dRXd2aJGH9dQQ8Q4EobPezWveMUPyGPEfCs",
+  "id": "mfq2x9a1b-interopVector001",
+  "enc": "BH_8KfC_LJtY_D03b6XMrNIjnPL2Hq3UFORYjd97838xb1RQdDS1up9KJsnwPDMmM0hUFlLNopZjHHsDXQYR1pc",
+  "ct": "pYTDkcMxX_fjHNj8HD3F7O7xHca5H4w1gZpQELIvRfzBMYAtkMvbkpj9VYGD0VZgeRJMpr54vJ4qGqiiL-sGfYxwn8yl-S1R98Z9S34TlCTAJRvhPpmmdMsUEWWQ_26aFXP-yRXWiE7CUX8oghU4MKA4b4xxK5FOmgLQ4vx7mcgEYURRUTzu42XtXJl6Ax5WAYsRuDwPK6GAPDSeZSGRU61HZy6drk4jzuBvhKKMTUJ7QWA15FXOwIDAbaxHJq7C7zxDiOxLvbn7JzhYrXhyXsqQ878t9_CHNsqZ2SOvX8KbnR5he7QFCzDXYPJPOM9L_btDTgzSFsy_4CmQgswJ0fxpp1-LS3Btkdipyzf_uuhZa7YSIhwodr8CkfAi0a_FWySWnjmGR8jTlJh-86ltEm5k-8509IIsHKWFPXZomX9IsXjmp6quNmR7-YDHV9Q7WzEk",
+  "payload": {
+    "v": 1,
+    "kind": "mail",
+    "messageId": "<alert-58-30@nab.com.au>",
+    "from": "NAB <alerts@nab.com.au>",
+    "subject": "Transaction alert",
+    "date": "2026-09-20T01:30:00.000Z",
+    "receivedAt": "2026-09-20T01:30:05.000Z",
+    "text": "A purchase of $58.30 was made at WOOLWORTHS 3342 on your card ending 1234.",
+    "auth": {
+      "dkim": [
+        "nab.com.au"
+      ],
+      "dmarc": []
+    }
+  }
+}

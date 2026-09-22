@@ -1,0 +1,8 @@
+{
+  "ct" : "nvhQfJuAq8DvKx9Cm-0O0isQXhL3N_1LN31qaoJ4W2bCrMamR26H7zm29RycCbnYx9FiFYgfJV5QDbV2K9jcwDWX8Vf03jE8yipYwhLHbZFao5JRHXHXYQQdrXYCde0F2UR6r1gmt4LQdx-APGxKqXwy3mTodl4G8nQvpQ",
+  "enc" : "BPrwT5p3wXPZribLbB4winDhb-HOkuKlj0kqPm845-q8PYD3KhAOVMgwZsGNo4wIhFedxnk46oH46U3Zfv9bBkc",
+  "id" : "mfq2xa000-swiftVector00001",
+  "note" : "Made by inbox\/scripts\/make-swift-vector.swift with CryptoKit HPKE. Test key only.",
+  "plaintext" : "{\"v\":1,\"kind\":\"mail\",\"from\":\"CryptoKit <test@example.com>\",\"subject\":\"Sealed by Swift\",\"text\":\"Total $1.00\"}",
+  "suite" : "P256_SHA256_AES_GCM_256"
+}

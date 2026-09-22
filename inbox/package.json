@@ -1,0 +1,19 @@
+{
+  "name": "sortd-inbox",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "vector": "node scripts/make-vector.mjs",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@hpke/core": "1.9.0",
+    "postal-mime": "3.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.2.1",
+    "vitest": "4.1.11",
+    "wrangler": "4.136.1"
+  }
+}
