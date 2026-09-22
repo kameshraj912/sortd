@@ -25,6 +25,15 @@ struct DebugScreenHost: View {
             case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()
+            case "settings-sources": PurchaseSourcesSettingsView()
+            case "settings-bills": BillsRemindersSettingsView()
+            case "settings-cards": CardsAppearanceSettingsView()
+            case "settings-currency": CurrencySettingsView()
+            case "settings-categories": LearnedRulesView()
+            case "settings-privacy": PrivacySecuritySettingsView()
+            case "settings-backup": BackupDataSettingsView()
+            case "settings-help": HelpFeedbackSettingsView()
+            case "settings-about": AboutSettingsView()
             case "import": Color.page.sheet(isPresented: .constant(true)) { ImportView() }
             case "widgets": WidgetsGuideView()
             case "card": CardDetailView(card: Card.mine.first ?? .other)

@@ -7,7 +7,7 @@ struct CardsAppearanceSettingsView: View {
     @AppStorage("appearance") private var appearance = "system"
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Cards & Appearance", subtitle: "Your cards, how they look, and where they show up.")
             Section {
                 NavigationLink {
@@ -18,6 +18,7 @@ struct CardsAppearanceSettingsView: View {
                     } label: {
                         Label("Cards", systemImage: "creditcard")
                     }
+                    .font(.subheadline)
                 }
                 Picker(selection: $appearance) {
                     Text("System").tag("system")
@@ -26,6 +27,7 @@ struct CardsAppearanceSettingsView: View {
                 } label: {
                     Label("Appearance", systemImage: "circle.lefthalf.filled")
                 }
+                .font(.subheadline)
                 .onChange(of: appearance) { _, value in Appearance.apply(value) }
                 NavigationLink {
                     CardStyleView()
@@ -35,6 +37,7 @@ struct CardsAppearanceSettingsView: View {
                     } label: {
                         Label("Card Style", systemImage: "paintpalette")
                     }
+                    .font(.subheadline)
                 }
                 NavigationLink {
                     WidgetsGuideView()
@@ -43,7 +46,7 @@ struct CardsAppearanceSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Widgets")
                             Text("Home and Lock Screen · light or dark")
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "square.grid.2x2")

@@ -9,7 +9,7 @@ struct PrivacySecuritySettingsView: View {
     @AppStorage(WidgetSummary.showWhenLockedKey) private var widgetShowWhenLocked = false
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Privacy & Security", subtitle: "Lock the app, and see what Sortd stores.")
             Section {
                 Toggle(isOn: Binding(

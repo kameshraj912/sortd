@@ -7,7 +7,7 @@ struct PurchaseSourcesSettingsView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Purchase Sources", subtitle: "Where Sortd finds what you spend.")
             Section {
                 NavigationLink {
@@ -17,7 +17,7 @@ struct PurchaseSourcesSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Apple Pay Auto-Logging")
                             Text(lastTapText)
-                                .font(.footnote)
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {

@@ -11,24 +11,20 @@ struct AboutSettingsView: View {
     #endif
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "About", subtitle: "Sortd, and what's stored where.")
             Section {
                 LabeledContent("Purchases", value: "\(transactions.count)")
+                    .font(.subheadline)
                 LabeledContent("Stored", value: "On this iPhone only")
+                    .font(.subheadline)
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                    .font(.subheadline)
                     #if DEBUG
                     .contentShape(.rect)
                     .onTapGesture { knock.knock() }
                     .accessibilityHint("Tapped five times, opens a code screen")
                     #endif
-                // The flat tab bar sits over the last row otherwise, and
-                // the last row is the one with the hidden door in it.
-                Color.clear
-                    .frame(height: 1)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .accessibilityHidden(true)
             } header: {
                 BoldHeader("About")
             } footer: {
@@ -42,6 +38,16 @@ struct AboutSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 #endif
+            }
+            // The flat tab bar sits over the last row otherwise, and the
+            // last row is the one with the hidden door in it. Its own
+            // section, so the About card keeps its rounded bottom corners.
+            Section {
+                Color.clear
+                    .frame(height: 1)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .accessibilityHidden(true)
             }
         }
         .scrollContentBackground(.hidden)

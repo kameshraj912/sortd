@@ -5,7 +5,7 @@ import UIKit
 /// who skipped it, a feedback email, and the two site links.
 struct HelpFeedbackSettingsView: View {
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Help & Feedback", subtitle: "Get set up, get help, or tell us what's wrong.")
             Section {
                 NavigationLink {

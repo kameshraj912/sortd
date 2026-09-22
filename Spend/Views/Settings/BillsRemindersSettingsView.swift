@@ -9,7 +9,7 @@ struct BillsRemindersSettingsView: View {
     @State private var showingPaywall = false
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Bills & Reminders", subtitle: "Subscriptions, bills, and the day-before nudge.")
             Section {
                 NavigationLink {

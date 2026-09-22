@@ -9,7 +9,7 @@ struct BackupDataSettingsView: View {
     @State private var confirmingDelete = false
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Backup & Data", subtitle: "Move your purchases, or clear them.")
             Section {
                 ShareLink(item: BackupExport(), preview: SharePreview("Sortd backup")) {
@@ -17,7 +17,7 @@ struct BackupDataSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Save a Backup")
                             Text(lastBackupText)
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "arrow.down.document")
@@ -33,7 +33,7 @@ struct BackupDataSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Import")
                             Text("A statement, a screenshot, or a backup")
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "square.and.arrow.down")

@@ -9,7 +9,7 @@ struct CurrencySettingsView: View {
     @State private var refreshing = false
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Currency", subtitle: "What Sortd totals in, and how it converts.")
             Section {
                 Picker("Totals shown in", selection: $home) {
@@ -17,6 +17,7 @@ struct CurrencySettingsView: View {
                         Text("\(code) · \(Locale.current.localizedString(forCurrencyCode: code) ?? code)").tag(code)
                     }
                 }
+                .font(.subheadline)
                 .onChange(of: home) { _, new in
                     Task {
                         refreshing = true
@@ -25,6 +26,7 @@ struct CurrencySettingsView: View {
                     }
                 }
                 LabeledContent("Purchase currency", value: "\(LocalCurrency.current()) (from your time zone)")
+                    .font(.subheadline)
                 Button {
                     Task {
                         refreshing = true
@@ -38,6 +40,7 @@ struct CurrencySettingsView: View {
                         if refreshing { ProgressView() }
                     }
                 }
+                .font(.subheadline)
                 .disabled(refreshing)
             } header: {
                 BoldHeader("Currency")

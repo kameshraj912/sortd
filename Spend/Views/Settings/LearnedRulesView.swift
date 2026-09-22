@@ -8,7 +8,7 @@ struct LearnedRulesView: View {
     @Query(sort: \MerchantRule.key) private var rules: [MerchantRule]
 
     var body: some View {
-        List {
+        SettingsList {
             ListPageTitle(title: "Learned Categories", subtitle: "Categories you've set for a merchant are used next time.")
             if rules.isEmpty {
                 ContentUnavailableView(
@@ -20,11 +20,12 @@ struct LearnedRulesView: View {
             }
             ForEach(rules) { rule in
                 HStack(spacing: 12) {
-                    CategoryIcon(category: rule.category, size: 30)
+                    CategoryIcon(category: rule.category, size: 24)
                     Text(rule.key)
                     Spacer()
                     Text(rule.category.name).foregroundStyle(.secondary)
                 }
+                .font(.subheadline)
             }
             .onDelete { offsets in
                 for i in offsets { context.delete(rules[i]) }

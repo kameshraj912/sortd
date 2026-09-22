@@ -13,21 +13,23 @@ struct SettingsView: View {
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var showingPaywall = false
     @State private var pro = ProStore.shared
+    /// The app icon on the Pro row, the same column as the row symbols.
+    @ScaledMetric(relativeTo: .subheadline) private var proIcon: CGFloat = 24
 
     var body: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
-            List {
+            SettingsList {
                 ListPageTitle(title: "Settings")
 
                 Section {
                     Button { showingPaywall = true } label: {
                         HStack(spacing: 12) {
-                            Image("BrandIcon").resizable().frame(width: 30, height: 30)
-                                .clipShape(.rect(cornerRadius: 7, style: .continuous))
+                            Image("BrandIcon").resizable().frame(width: proIcon, height: proIcon)
+                                .clipShape(.rect(cornerRadius: proIcon * 0.23, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Sortd Pro").foregroundStyle(Color.ink)
+                                Text("Sortd Pro").font(.subheadline).foregroundStyle(Color.ink)
                                 Text(pro.isBetaFree ? "Free during the beta" : pro.isPro ? "Active. Thank you." : Features.gmail ? "Gmail, receipt camera, insights and more" : "Receipt camera, insights and more")
-                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             Image(systemName: pro.isPro ? "checkmark.seal.fill" : "chevron.right")
@@ -95,7 +97,7 @@ struct SettingsView: View {
                 case .recurring: ProGate(feature: .recurring) { RecurringView() }
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .hidesNavigationBar()
             .onAppear { Exports.clear() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
         }
@@ -105,7 +107,8 @@ struct SettingsView: View {
         guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
             return "Not set up yet"
         }
-        return "Last tap \(last.date.formatted(date: .omitted, time: .shortened))"
+        // Relative, like Purchase Sources: a time alone reads as today.
+        return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
     }
 
     private var cardsSubtitle: String {
