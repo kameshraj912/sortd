@@ -22,6 +22,14 @@ https://developers.google.com/identity/protocols/oauth2/production-readiness/res
 - [x] 21 Sep: new video recorded and edited: docs/demo/sortd-gmail-demo-v2.mp4 (5:58, captions)
 - [x] 21 Sep: v2 uploaded (Unlisted): https://youtu.be/-cIUinevNfs (8.6 MB 604x1592 copy of the v2 file)
 - [x] 21 Sep 2:33 pm AEST: replied on the Google thread (cc sortd-support group + support@sortd.page)
+- [x] 21 Sep 5:51 pm: Google round 3: privacy policy lacks "data protection mechanisms"; CASA AL1 due 20 Dec 2026
+- [x] 21 Sep: added "How we protect your data" section (privacy.html#security), deployed
+- [x] 21 Sep ~7:30 pm: Cloud Console Data Access updated (justification now mentions encryption/Keychain/HTTPS + privacy#security; video link changed to v2 -cIUinevNfs) and saved = resubmitted
+- [x] 21 Sep ~7:30 pm: replied on thread (reply-all): privacy fix + asked for local-only CASA exemption, quoting "store or transmit on servers" line
+- [x] 22 Sep 4:34 am: Google sent the generic audit checklist (new thread). Gaps found: no retention
+      section, no way for reviewer to install the app. Added "How long Sortd keeps data"
+      (privacy.html#retention). Reply saved as a Gmail draft on that thread.
+- [ ] Options analysis: docs/ReceiptSourceOptions.md + .pdf (Cloudflare forwarding inbox is the CASA-free replacement)
 - [ ] Watch for Google's next email and reply fast
 - [ ] CASA security assessment when Google asks (paid, yearly; see below)
 

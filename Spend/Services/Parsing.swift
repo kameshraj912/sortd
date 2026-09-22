@@ -45,19 +45,20 @@ enum AmountParser {
         let upper = text.uppercased()
         let currency = currency(in: text)
 
-        // Keep digits, separators and a leading minus.
-        var cleaned = upper.filter { $0.isNumber || $0 == "." || $0 == "," || $0 == "-" }
-        guard cleaned.contains(where: \.isNumber) else { return nil }
+        // The number itself, not every digit in the text: "Rs. 500" kept the
+        // "." from "RS." and read 0.5. Spaced thousands ("1 234,50") count.
+        guard let r = upper.range(of: #"[0-9]{1,3}(?:[ \x{00A0}][0-9]{3})+(?:[.,][0-9]{1,2})?|[0-9][0-9.,]*[0-9]|[0-9]"#,
+                                  options: .regularExpression) else { return nil }
+        let number = upper[r].filter { $0 != " " && $0 != "\u{00A0}" }
 
-        // "1,234.56" → drop thousands commas. "4,50" (comma as decimal) → "4.50".
-        if cleaned.contains(".") {
-            cleaned.removeAll { $0 == "," }
-        } else if let comma = cleaned.lastIndex(of: ","),
-                  cleaned.distance(from: comma, to: cleaned.endIndex) == 3 {
-            cleaned.replaceSubrange(comma...comma, with: ".")
-            cleaned.removeAll { $0 == "," }
+        // The last separator is the decimal point when 1–2 digits follow it
+        // ("1.234,56", "4,5", "58.30"); with 3 it's thousands ("1,299").
+        let cleaned: String
+        if let last = number.lastIndex(where: { $0 == "." || $0 == "," }),
+           (1...2).contains(number.distance(from: last, to: number.endIndex) - 1) {
+            cleaned = number[..<last].filter(\.isNumber) + "." + number[number.index(after: last)...]
         } else {
-            cleaned.removeAll { $0 == "," }
+            cleaned = number.filter(\.isNumber)
         }
 
         guard let value = Decimal(string: cleaned, locale: Locale(identifier: "en_US_POSIX")) else {

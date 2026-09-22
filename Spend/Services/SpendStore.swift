@@ -4,11 +4,30 @@ import OSLog
 
 let log = Logger(subsystem: "com.kameshraj.spend", category: "app")
 
+/// The database layout as it shipped in 1.0.
+///
+/// Every future change to a model (renaming or removing a property, changing
+/// a type, adding `.unique`) needs a `SchemaV2` and a stage in
+/// `SpendMigrationPlan`. Without one, SwiftData can fail to open an existing
+/// user's store and the app stops at launch. Adding an optional or defaulted
+/// property is the one change that migrates by itself.
+enum SchemaV1: VersionedSchema {
+    static let versionIdentifier = Schema.Version(1, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self]
+    }
+}
+
+enum SpendMigrationPlan: SchemaMigrationPlan {
+    static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }
+    static var stages: [MigrationStage] { [] }
+}
+
 /// One container shared by the app UI and the App Intent, so a purchase
 /// logged from Shortcuts shows up straight away.
 enum SpendStore {
     static let container: ModelContainer = {
-        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let schema = Schema(versionedSchema: SchemaV1.self)
         #if DEBUG
         let inMemory = ProcessInfo.processInfo.environment["SPEND_IN_MEMORY"] == "1"
         #else
@@ -16,7 +35,7 @@ enum SpendStore {
         #endif
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
         do {
-            return try ModelContainer(for: schema, configurations: [config])
+            return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self, configurations: [config])
         } catch {
             fatalError("Could not open the Spend database: \(error)")
         }
@@ -49,8 +68,10 @@ enum TransactionLogger {
     }
 
     /// Adds a purchase, or folds it into an existing one from another source.
+    /// `excluding`: purchases this same import already added or matched. Two
+    /// identical lines in one statement are two purchases, never a re-send.
     @discardableResult
-    static func log(_ p: IncomingPurchase, in context: ModelContext) throws -> Outcome {
+    static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = []) throws -> Outcome {
         let learned = try learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
@@ -59,7 +80,7 @@ enum TransactionLogger {
         let to = p.date.addingTimeInterval(Deduper.window)
         let nearby = try context.fetch(FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= from && $0.date <= to }
-        ))
+        )).filter { !excluding.contains($0.id) }
         let candidate = Deduper.Candidate(date: p.date, merchant: p.merchant, amount: p.amount,
                                           currency: p.currency, card: p.card, source: p.source,
                                           platform: p.platform)

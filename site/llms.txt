@@ -1,0 +1,16 @@
+# Sortd Money
+
+> Sortd Money is an iPhone spending tracker. Apple Pay taps log themselves through one Shortcuts automation, and receipts can come from Gmail (read-only) or the camera. Data is stored on the iPhone. There is no Sortd server, no account, no ads, no analytics and no trackers. No bank passwords, ever.
+
+- Platform: iPhone, iOS 26 or later
+- Price: free to use, including Apple Pay auto-logging. Sortd Pro (Gmail receipts, receipt camera, Insights, subscriptions and bills, category budgets) is monthly, yearly with a free trial for new subscribers, or a one-time purchase.
+- Currencies: 30+ currencies, converted at that day's European Central Bank rate.
+- Status: beta, via TestFlight.
+
+## Pages
+
+- [Home](https://sortd.page/): what Sortd does and how the Apple Pay logging works
+- [Help and support](https://sortd.page/support): setup, Gmail, card digits, currencies, deleting data
+- [Privacy policy](https://sortd.page/privacy): what data exists and where it stays
+- [Terms of use](https://sortd.page/terms)
+- [Join the beta](https://sortd.page/beta)

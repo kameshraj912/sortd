@@ -63,15 +63,15 @@ struct SortdProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SortdEntry>) -> Void) {
-        // Today's total stops being true at midnight. During the day the app
-        // pokes the widget whenever a purchase lands, which is what actually
-        // keeps it fresh.
+        // Today's total stops being true at midnight (asOf zeroes it). During
+        // the day the app refreshes the widget after every save, including taps
+        // logged by Shortcuts while the app is closed.
         let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
         completion(Timeline(entries: [current()], policy: .after(midnight)))
     }
 
     private func current() -> SortdEntry {
-        SortdEntry(date: .now, summary: WidgetSummary.read())
+        SortdEntry(date: .now, summary: WidgetSummary.read()?.asOf(.now))
     }
 }
 
@@ -390,6 +390,7 @@ struct SortdSpendingWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 SpendingView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
             .widgetURL(SortdLink.home)
         }
         .configurationDisplayName("Spending")
@@ -476,6 +477,7 @@ struct SortdQuickAddWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 QuickAddView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
         }
         .configurationDisplayName("Quick Add")
         .description("Log a purchase, scan a receipt or import a statement in one tap.")
@@ -524,6 +526,7 @@ struct SortdBillsWidget: Widget {
             Chrome(look: entry.configuration.look) {
                 BillsView(entry: entry)
             }
+            .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
             .widgetURL(SortdLink.bills)
         }
         .configurationDisplayName("Bills")
@@ -611,6 +614,7 @@ struct SortdLockScreenWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "SortdLockScreen", provider: SortdProvider()) { entry in
             LockScreenView(entry: entry)
+                .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
                 .containerBackground(.clear, for: .widget)
                 .widgetURL(SortdLink.home)
         }

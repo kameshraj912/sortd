@@ -114,7 +114,9 @@ struct SetupGuideView: View {
             }
 
             Section(bold: "Good to Know") {
-                Label("Only tapping your phone or watch in a shop triggers this. Apple Pay in apps and online (Uber, DoorDash) comes from your email receipts instead.",
+                Label(Features.gmail
+                      ? "Only tapping your phone or watch in a shop triggers this. Apple Pay in apps and online (Uber, DoorDash) comes from your email receipts instead."
+                      : "Only tapping your phone or watch in a shop triggers this. Add Apple Pay in apps and online (Uber, DoorDash) by hand.",
                       systemImage: "info.circle")
                 Label("If Apple Pay ever sends a purchase without an amount, Sortd still saves it and marks it “Add amount”.",
                       systemImage: "exclamationmark.circle")

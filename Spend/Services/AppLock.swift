@@ -62,7 +62,17 @@ final class AppLock {
     static func authenticate(reason: String) async -> Bool {
         let context = LAContext()
         var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return false }
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            // The iPhone passcode was removed after App Lock was turned on.
+            // Nothing can unlock Sortd then, and the phone itself is open, so
+            // the lock protects nothing: switch it off rather than lock the
+            // owner out of their data for good.
+            if error?.domain == LAErrorDomain, error?.code == LAError.Code.passcodeNotSet.rawValue {
+                UserDefaults.standard.set(false, forKey: enabledKey)
+                return true
+            }
+            return false
+        }
         return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
     }
 

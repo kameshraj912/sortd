@@ -24,6 +24,8 @@ final class ProStore {
     enum Feature: String, CaseIterable, Identifiable {
         case gmail, camera, insights, recurring, budgets
         var id: String { rawValue }
+        /// What this build offers. Gmail is left out of the App Store build (`Features.gmail`).
+        static var available: [Feature] { allCases.filter { $0 != .gmail || Features.gmail } }
         var title: String {
             switch self {
             case .gmail: "Gmail receipts"
@@ -69,8 +71,10 @@ final class ProStore {
         #if SORTD_BETA
         if isSandboxBuild { return true }
         #endif
-        // Given away rather than bought. Same features, no StoreKit.
+        #if DEBUG
+        // Given away rather than bought. Debug builds only (App Review 3.1.1).
         if CompedPro.isActive() { return true }
+        #endif
         return !purchasedIDs.isEmpty
     }
 
@@ -138,7 +142,9 @@ final class ProStore {
         var ids: Set<String> = []
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let t) = result, t.revocationDate == nil else { continue }
-            if let exp = t.expirationDate, exp < .now { continue }
+            // Subscriptions here are already subscribed or in Billing Grace Period.
+            // A grace-period one has a past expirationDate but must keep Pro.
+            if t.productType != .autoRenewable, let exp = t.expirationDate, exp < .now { continue }
             ids.insert(t.productID)
         }
         purchasedIDs = ids

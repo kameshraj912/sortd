@@ -10,7 +10,14 @@
 <link rel="icon" type="image/png" href="img/favicon.png">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="canonical" href="https://sortd.page/privacy">
-<link rel="stylesheet" href="style.css?v=23">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sortd Money">
+<meta property="og:title" content="Privacy Policy – Sortd Money">
+<meta property="og:description" content="How Sortd Money handles your data: everything stays on your iPhone, no account, no tracking, read-only Gmail.">
+<meta property="og:url" content="https://sortd.page/privacy">
+<meta property="og:image" content="https://sortd.page/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css?v=24">
 <script src="site.js?v=25"></script>
 </head>
 <body>
@@ -34,13 +41,14 @@
 <main id="main" class="doc">
   <h1>Privacy Policy</h1>
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-  <p class="muted">Last updated: 21 September 2026</p>
+  <p class="muted">Last updated: 22 September 2026</p>
   <p>This policy explains what the Sortd iPhone app ("Sortd") does with your information. "We", "us" and "Sortd" mean the makers of Sortd.</p>
 
   <h2>In short</h2>
   <div class="group" style="margin-bottom:10px">
     <div class="cell"><b>Where your data is kept</b><span>On your iPhone</span></div>
     <div class="cell"><b>Sortd account or server</b><span>None</span></div>
+    <div class="cell"><b>Data protection</b><span><a href="#security">Encrypted on your iPhone</a></span></div>
     <div class="cell"><b>Analytics, ads, tracking</b><span>None</span></div>
     <div class="cell"><b>Data sold or shared</b><span>Never</span></div>
     <div class="cell"><b>Gmail</b><span>Optional, read-only</span></div>
@@ -57,6 +65,21 @@
     <li><strong>Connected Gmail addresses</strong> — the address and when it last synced, if you connect Gmail.</li>
   </ul>
   <p>We don't run a server, so none of this is sent to us. If you back up your iPhone to iCloud or a computer, Sortd's data is included in that backup like other app data, under Apple's terms.</p>
+
+  <h2 id="security">How we protect your data</h2>
+  <p>Some of what Sortd handles is sensitive: your purchases, and, if you connect it, your Gmail. This is how it is kept safe.</p>
+  <ul>
+    <li><strong>Kept on your iPhone only:</strong> Sortd has no server and no Sortd account. Your purchases, cards, settings and Gmail data never reach us or any other company, so we hold no copy for anyone to leak. A backup or spreadsheet file only exists if you choose to share one, and Sortd deletes its own copy afterwards.</li>
+    <li><strong>Encrypted on your iPhone:</strong> Sortd's storage is protected by iOS Data Protection. It is encrypted, and after your iPhone restarts it can't be read until you unlock the phone with your passcode or Face&nbsp;ID. Other apps can't read it.</li>
+    <li><strong>Google sign-in key in the Keychain:</strong> the Google refresh token is stored in the iPhone Keychain, which iOS encrypts. It is set to stay on this iPhone only: it is not synced to iCloud Keychain and does not move to another device. Short-lived access keys are kept only in memory and are never written to storage.</li>
+    <li><strong>Secure sign-in:</strong> you sign in to Google in Apple's secure sign-in window, using OAuth&nbsp;2.0 with PKCE. Sortd never sees your Google password, and no secret key is built into the app.</li>
+    <li><strong>Encrypted in transit:</strong> every connection Sortd makes, to Google and to frankfurter.dev, uses HTTPS (TLS). Sortd makes no unencrypted connections.</li>
+    <li><strong>Least access:</strong> Sortd asks Google only for read-only Gmail access. It can't send, change or delete email. It searches only for receipts and bank alerts.</li>
+    <li><strong>Emails are not stored:</strong> an email's text is held in memory only while Sortd reads the purchase from it, then discarded. Sortd keeps the purchase details and the email's ID, not the email.</li>
+    <li><strong>No people, no third parties:</strong> no one at Sortd can see your data, because it never leaves your iPhone. Sortd has no analytics, ads, crash-reporting or tracking tools, and does not share or sell data.</li>
+    <li><strong>Removing access:</strong> Disconnect and Delete All Data ask Google to cancel Sortd's access and delete the key from the Keychain. You can also remove Sortd at any time in your Google Account's security settings.</li>
+  </ul>
+  <p>If you find a security problem in Sortd, please email <a href="mailto:support@sortd.page">support@sortd.page</a>. We will look into it and fix it as fast as we can.</p>
 
   <h2>Logging Apple Pay taps</h2>
   <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the transaction (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. Sortd keeps a copy of the last tap it received, on your iPhone, so you can check the setup. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
@@ -94,6 +117,16 @@
   </ul>
   <p>Sortd has no analytics, crash-reporting, advertising or tracking tools built in.</p>
 
+  <h2 id="retention">How long Sortd keeps data</h2>
+  <p>Everything below is kept on your iPhone only. We hold no copy, so there is nothing for us to keep or delete on our side.</p>
+  <ul>
+    <li><strong>Email text:</strong> not kept. It is held in memory only while Sortd reads the purchase from it, then discarded straight away.</li>
+    <li><strong>Refunds waiting for a match:</strong> if a refund email arrives before Sortd has found its purchase, Sortd keeps the refund's details (shop, amount, currency, date and card's last 4 digits, not the email) for up to 30 days so it can match it later. The next sync after 30 days drops them.</li>
+    <li><strong>Purchases and each email's ID:</strong> kept until you delete them, disconnect that Gmail account and choose to delete its purchases, use Delete All Data, or delete the app.</li>
+    <li><strong>Google sign-in key:</strong> kept in the Keychain until you disconnect Gmail or use Delete All Data. Sortd then asks Google to cancel it and deletes it. If you are offline, Sortd tries again the next time you open the app.</li>
+    <li><strong>Exchange rates, cards and settings:</strong> kept until you use Delete All Data or delete the app.</li>
+  </ul>
+
   <h2>Your controls</h2>
   <ul>
     <li><strong>Export:</strong> Settings › Your Data › Export Purchases (CSV) gives you every purchase as a spreadsheet file.</li>
@@ -115,6 +148,7 @@
     <li><strong>How it reaches us:</strong> as one email, sent through Cloudflare, the company that runs this website. It isn't saved in a database, on this website or anywhere else.</li>
     <li><strong>What we use it for:</strong> sending you the TestFlight link when the beta opens. If you gave a Gmail address, we also add it to Google's tester list so Gmail receipts work for you. Nothing else. No newsletters, no marketing.</li>
     <li><strong>Stopping spam:</strong> to stop bots flooding the form, Cloudflare briefly counts sign-ups from each internet connection. That count isn't kept.</li>
+    <li><strong>"I'm human" check:</strong> the form uses Cloudflare Turnstile to tell people from bots. To do that, Cloudflare sees details like your internet address and browser type. It sets no cookies. See <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Cloudflare's Turnstile privacy policy</a>.</li>
     <li><strong>Who else sees it:</strong> no one. We don't share it or sell it.</li>
     <li><strong>Changed your mind?</strong> Email <a href="mailto:support@sortd.page">support@sortd.page</a> and we'll delete your sign-up.</li>
   </ul>
@@ -124,16 +158,21 @@
 </main>
 <footer class="site-footer">
   <div class="wrap">
-    <div>
-      <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
-      <p>© 2026. Apple Pay, iPhone and Apple Watch are trademarks of Apple Inc. Gmail is a trademark of Google LLC.</p>
-    </div>
-    <nav aria-label="Footer">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
+      </div>
+      <nav aria-label="Footer">
       <a href="privacy">Privacy Policy</a>
       <a href="terms">Terms of Use</a>
       <a href="support">Support</a>
       <a href="mailto:support@sortd.page">Contact</a>
     </nav>
+    </div>
+    <div class="foot-legal">
+      <p class="foot-copy">© 2026 Sortd</p>
+      <p>Apple, Apple Pay, Apple Watch, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google and Gmail are trademarks of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
+    </div>
   </div>
 </footer>
 </body>

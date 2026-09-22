@@ -26,14 +26,14 @@ struct OnboardingView: View {
     enum Step: Int, CaseIterable { case welcome, currency, cards, cardDetails, applePay, email, budget, reminders, pro, finish }
     #if DEBUG
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
+    #else
+    @State private var step: Step = .welcome
+    #endif
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
     @State private var showingImport = false
     /// "14 days free", read from the App Store. Nil when there's no trial.
     @State private var trialText: String?
-    #else
-    @State private var step: Step = .welcome
-    #endif
     @State private var forward = true
     @State private var showingGuide = false
     @State private var customBudget = ""
@@ -82,6 +82,15 @@ struct OnboardingView: View {
 
     // MARK: Chrome
 
+    /// The steps between welcome and finish that this person will see.
+    private var shownSteps: [Step] {
+        Step.allCases.filter { s in
+            s != .welcome && s != .finish
+                && !(s == .cardDetails && book.active.isEmpty)
+                && !(s == .email && !Features.gmail)
+        }
+    }
+
     private var topBar: some View {
         HStack(spacing: 12) {
             if step != .welcome && step != .finish {
@@ -93,11 +102,15 @@ struct OnboardingView: View {
             } else {
                 Color.clear.frame(width: 44, height: 44)
             }
-            // Progress: one segment per real step.
+            // Progress: one segment per step that will actually be shown, so
+            // a skipped step (card details with no cards, email without Gmail)
+            // doesn't make the bar jump two at once.
             HStack(spacing: 4) {
-                ForEach(1..<Step.finish.rawValue, id: \.self) { i in
+                let shown = shownSteps
+                let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
+                ForEach(Array(shown.indices), id: \.self) { i in
                     Capsule()
-                        .fill(i <= step.rawValue ? Color.brandPalette[(i - 1) % Color.brandPalette.count] : Color.track)
+                        .fill(i <= reached ? Color.brandPalette[i % Color.brandPalette.count] : Color.track)
                         .frame(height: 4)
                 }
             }
@@ -199,6 +212,7 @@ struct OnboardingView: View {
         withAnimation(.snappy) {
             var next = Step(rawValue: min(max(step.rawValue + delta, 0), Step.finish.rawValue)) ?? .finish
             if next == .cardDetails, book.active.isEmpty { next = Step(rawValue: next.rawValue + delta) ?? .finish }
+            if next == .email, !Features.gmail { next = Step(rawValue: next.rawValue + delta) ?? .finish }
             step = next
         }
     }
@@ -807,7 +821,7 @@ struct OnboardingView: View {
                    : "Apple Pay logging, adding by hand, your cards, export and delete are free forever. Pro adds the rest.")
 
             VStack(spacing: 0) {
-                ForEach(Array(ProStore.Feature.allCases.enumerated()), id: \.element) { index, feature in
+                ForEach(Array(ProStore.Feature.available.enumerated()), id: \.element) { index, feature in
                     if index > 0 { Divider().padding(.leading, 46) }
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: feature.symbol)
@@ -885,6 +899,8 @@ struct OnboardingView: View {
             .accessibilityLabel("Example reminder: Netflix tomorrow")
 
             Button {
+                // Same rule as Settings: reminders are Pro.
+                guard pro.isPro else { showingPaywall = true; return }
                 Task { reminders = await Reminders.requestPermission() }
             } label: {
                 Label(reminders ? "Reminders On" : "Turn On Reminders",
@@ -911,8 +927,10 @@ struct OnboardingView: View {
                 Divider().padding(.leading, 52)
                 check("Apple Pay logging", tapConnected ? "Connected" : "Set up later", ok: tapConnected)
                 Divider().padding(.leading, 52)
-                check("Email receipts", gmail.isEmpty ? "Not connected" : gmail.map(\.email).joined(separator: ", "), ok: !gmail.isEmpty)
-                Divider().padding(.leading, 52)
+                if Features.gmail {
+                    check("Email receipts", gmail.isEmpty ? "Not connected" : gmail.map(\.email).joined(separator: ", "), ok: !gmail.isEmpty)
+                    Divider().padding(.leading, 52)
+                }
                 check("Budget", budget > 0 ? Money.format(Decimal(budget), home, cents: false) + " a month" : "None", ok: budget > 0)
                 Divider().padding(.leading, 52)
                 check("Reminders", reminders ? "On" : "Off", ok: reminders)

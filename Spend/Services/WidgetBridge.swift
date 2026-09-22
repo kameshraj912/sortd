@@ -11,6 +11,25 @@ import WidgetKit
 @MainActor
 enum WidgetBridge {
 
+    private static var pending: Task<Void, Never>?
+
+    /// Refreshes the widget after every save to the store: a tap logged by
+    /// Shortcuts, a purchase added, edited or deleted, an import, a restore.
+    /// Call once at launch. Saves close together are batched.
+    static func watchSaves() {
+        let context = SpendStore.container.mainContext
+        NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                pending?.cancel()
+                pending = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    refresh(from: context)
+                }
+            }
+        }
+    }
+
     /// Rebuilds the summary and asks the widget to redraw.
     /// Safe to call often and safe to call when there is no App Group.
     static func refresh(from context: ModelContext,
@@ -64,6 +83,7 @@ enum WidgetBridge {
 
         out.budget = budget > 0 ? Decimal(budget) : nil
         out.style = UserDefaults.standard.string(forKey: "cardStyle") ?? "satin"
+        out.showWhenLocked = UserDefaults.standard.bool(forKey: WidgetSummary.showWhenLockedKey)
 
         // Monday to now. Finance widgets that only show a daily number read
         // as a telling-off on a bad day; a week is easier to live with.
@@ -94,14 +114,8 @@ enum WidgetBridge {
             .map { WidgetSummary.Bill(name: $0.merchant, amount: $0.audAmount,
                                       currency: out.currency, due: $0.nextDate) }
 
-        out.recent = live
-            .sorted { $0.date > $1.date }
-            .prefix(4)
-            .map {
-                WidgetSummary.Item(merchant: $0.merchant, amount: $0.audValue,
-                                   currency: out.currency, category: $0.category.rawValue,
-                                   date: $0.date)
-            }
+        // No recent purchases: no widget shows them, so they aren't written
+        // into the shared file at all.
 
         return out
     }
