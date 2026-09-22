@@ -34,6 +34,7 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
+                            if !demo { FinishSetupCard() }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
@@ -52,6 +53,9 @@ struct HomeView: View {
             }
             .background(Color.page)
             .navigationTitle("Home")
+            // Home draws its own title; the bar only carries the gear.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(removing: .title)
             .toolbar(transactions.isEmpty || NavLayout.current == .toolbar ? .visible : .hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -59,8 +63,10 @@ struct HomeView: View {
                         .tint(Color.ink)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add Purchase", systemImage: "plus") { showingAdd = true }
-                        .tint(Color.ink)
+                    if NavLayout.current == .header || NavLayout.current == .toolbar {
+                        Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+                            .tint(Color.ink)
+                    }
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -68,12 +74,11 @@ struct HomeView: View {
                 CardDetailView(card: card)
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
+            // "add" links open from RootView (one add sheet for the whole
+            // app); Home only handles its own budget sheet.
             .onChange(of: Router.shared.sheet, initial: true) { _, pending in
-                switch pending {
-                case .add: showingAdd = true
-                case .budget: showingBudget = true
-                case nil: return
-                }
+                guard pending == .budget else { return }
+                showingBudget = true
                 Router.shared.clearSheet()
             }
             .sheet(isPresented: $showingSetup) {
@@ -237,7 +242,8 @@ struct HomeView: View {
 
     /// One line about categories over their limit, this month only.
     private var overLimitLine: String? {
-        guard isCurrentMonth, !limits.isEmpty else { return nil }
+        // Category limits are Pro: a lapsed subscription hides the warning too.
+        guard isCurrentMonth, !limits.isEmpty, ProStore.shared.isPro else { return nil }
         let over = CategoryBudgets.progress(for: monthItems, limits: limits)
             .filter { $0.value.status == .over }
             .sorted { $0.value.left < $1.value.left }
@@ -256,7 +262,8 @@ struct HomeView: View {
         guard isCurrentMonth else { return "\(Money.format(Decimal(left), Money.home, cents: false)) under your \(b) budget" }
         let daysLeft = max(1, (cal.range(of: .day, in: .month, for: .now)?.count ?? 30) - cal.component(.day, from: .now) + 1)
         let monthEnd = cal.dateInterval(of: .month, for: .now)?.end ?? .now
-        let bills = recurring.filter { $0.status == .active && $0.nextDate < monthEnd }.reduce(0) { $0 + $1.audAmount.double }
+        // Every time a bill still falls this month (a weekly one can be 4-5 times).
+        let bills = recurring.stillToCharge(before: monthEnd, calendar: cal).double
         let perDay = max(0, left - bills) / Double(daysLeft)
         return "\(Money.format(Decimal(left), Money.home, cents: false)) left of \(b) · \(Money.format(Decimal(perDay), Money.home, cents: false)) a day"
     }
@@ -434,15 +441,33 @@ struct HomeView: View {
         }
     }
 
+    /// Straight after setup: a welcome, the same checklist the plan showed,
+    /// and a way to add the first purchase by hand.
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("No Purchases Yet", systemImage: "creditcard")
-        } description: {
-            Text("Set up the Apple Pay automation once, and every tap lands here by itself.")
-        } actions: {
-            Button("Set Up Auto-Logging") { showingSetup = true }
-                .buttonStyle(.borderedProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
-            Button("Add a Purchase") { showingAdd = true }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Welcome to Sortd").font(.title.weight(.bold))
+                    BrandBar(width: 14, height: 3)
+                    Text("Your purchases show up here.").font(.body).foregroundStyle(.secondary)
+                }
+                FinishSetupCard(canHide: false)
+                Button { showingAdd = true } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("square.and.pencil")
+                        Text("Add a purchase by hand").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
     }
 }

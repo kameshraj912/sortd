@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct SpendApp: App {
@@ -42,6 +43,7 @@ struct SpendApp: App {
 
     init() {
         CrashReporting.start()
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         WidgetBridge.watchSaves()
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
@@ -146,6 +148,9 @@ struct RootView: View {
 
     @Environment(\.modelContext) private var context
     @AppStorage(OnboardingView.doneKey) private var onboarded = false
+    /// "Run Setup Again": setup shows over the app, but it stays set up
+    /// (so App Lock and the privacy cover keep working).
+    @AppStorage(SetupProfile.rerunKey) private var rerun = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var lock = AppLock()
@@ -187,13 +192,20 @@ struct RootView: View {
                 }
             }
             .animation(.spring(duration: 0.3), value: tab)
-            .onChange(of: tab) { old, new in
-                // The prominent + is an action, not a place: stay where you were.
-                if new == .add { tab = old; showingAdd = true }
-            }
+            // Keep the Router in step with taps on the tab bar, so a link to
+            // the tab you left (a check-in, a widget) still switches back.
+            .onChange(of: tab) { _, new in if router.tab != new { router.tab = new } }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .sensoryFeedback(.selection, trigger: tab)
-        .sheet(isPresented: $router.showingSettings) { SettingsView() }
+        .sheet(isPresented: $router.showingSettings, onDismiss: {
+            // Next time Settings opens on its main list, not a page a link pushed.
+            router.settingsPath = []
+            // "Run Setup Again" waits for Settings to finish closing.
+            if router.pendingRerun {
+                router.pendingRerun = false
+                rerun = true
+            }
+        }) { SettingsView() }
         // In its own window so open sheets are covered too. The app-switcher
         // cover shows whenever Sortd isn't active, lock on or off, so the
         // snapshot never shows purchases.
@@ -212,11 +224,18 @@ struct RootView: View {
             router.open(url)
             tab = router.tab
         }
-        .onChange(of: router.tab) { _, new in tab = new }
+        .onChange(of: router.tab) { _, new in if tab != new { tab = new } }
+        // Widget, Siri and notification "add" links: the one add sheet.
+        .onChange(of: router.sheet, initial: true) { _, pending in
+            guard pending == .add else { return }
+            showingAdd = true
+            router.clearSheet()
+        }
         // "Clear" on the sample-data banner sets onboarded back to false:
         // open setup again straight away, not on the next launch.
         .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
-        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
+        .onChange(of: rerun) { _, again in if again { setupFinished = false } }
+        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || rerun || Self.forceSetup))) {
             OnboardingView { setupFinished = true }
         }
         .task(id: scenePhase) {
@@ -225,6 +244,8 @@ struct RootView: View {
             // A subscription can expire while the app sits in memory, and
             // expiry sends no update: check again before anything uses isPro.
             await ProStore.shared.refresh()
+            // Bill reminders asked for during setup, before they had Pro.
+            SetupProfile.applyPendingBillReminders()
             await GoogleAuth.retryPendingRevokes()
             try? TransactionLogger.refreshUncategorised(in: context)
             await FXService.ensureConverted(in: context)
@@ -245,10 +266,19 @@ struct RootView: View {
 
 
 extension RootView {
+    /// The tab bar's selection. The + slot is an action, not a place: picking
+    /// it opens the add sheet and the current tab stays put (no flash of an
+    /// empty tab, one haptic).
+    var tabSelection: Binding<AppTab> {
+        Binding(get: { tab }, set: { new in
+            if new == .add { showingAdd = true } else { tab = new }
+        })
+    }
+
     @ViewBuilder
     var tabs: some View {
         if layout == .prominent, #available(iOS 27, *) {
-            TabView(selection: $tab) {
+            TabView(selection: tabSelection) {
                 Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
                 Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
                 Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .prominent) { Color.clear }
@@ -257,8 +287,22 @@ extension RootView {
                 }
                 Tab(value: AppTab.search, role: .search) { SearchView() }
             }
+        } else if layout == .prominent {
+            // iOS 26 has no prominent tab, but it draws the search-role tab
+            // as the same separate glass circle. So + goes in that slot and
+            // Search sits inside the bar: the same look as iOS 27. Tapping +
+            // never shows this tab; onChange turns it into the add sheet.
+            TabView(selection: tabSelection) {
+                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                    ProGate(feature: .insights) { InsightsView() }
+                }
+                Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
+                Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) { Color.clear }
+            }
         } else {
-            TabView(selection: $tab) {
+            TabView(selection: tabSelection) {
                 Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
                 Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
                 Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {

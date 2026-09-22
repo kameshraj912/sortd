@@ -17,12 +17,9 @@ struct HelpFeedbackSettingsView: View {
                     Label("Send Feedback", systemImage: "envelope")
                 }
                 Button {
-                    // Close Settings first, then setup opens over Home.
+                    // Setup opens once Settings has finished closing.
+                    Router.shared.pendingRerun = true
                     Router.shared.showingSettings = false
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(450))
-                        UserDefaults.standard.set(false, forKey: OnboardingView.doneKey)
-                    }
                 } label: {
                     Label("Run Setup Again", systemImage: "arrow.counterclockwise")
                 }

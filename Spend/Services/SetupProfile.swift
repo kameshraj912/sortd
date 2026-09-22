@@ -11,6 +11,16 @@ enum SetupProfile {
     static let checkInKey = "setup.checkIn"
     static let abroadKey = "setup.abroad"
     static let billsKey = "setup.billReminders"
+    static let rerunKey = "setup.rerun"
+
+    /// Someone asked for bill reminders during setup without Pro. Once Pro
+    /// is active, turn them on (once).
+    @MainActor
+    static func applyPendingBillReminders(defaults: UserDefaults = .standard) {
+        guard defaults.bool(forKey: billsKey), ProStore.shared.isPro else { return }
+        defaults.set(true, forKey: Reminders.enabledKey)
+        defaults.set(false, forKey: billsKey)
+    }
 
     enum Goal: String, CaseIterable, Identifiable, Sendable {
         case seeWhere, spendLess, countries, bills, receipts
@@ -19,9 +29,9 @@ enum SetupProfile {
             switch self {
             case .seeWhere: "See where my money goes"
             case .spendLess: "Spend less each month"
-            case .countries: "Keep track across countries"
-            case .bills: "Catch subscriptions and bills"
-            case .receipts: "Keep receipts in one place"
+            case .countries: "Spend across countries"
+            case .bills: "Never miss a bill"
+            case .receipts: "Keep receipts together"
             }
         }
         var symbol: String {
@@ -41,10 +51,10 @@ enum SetupProfile {
         var title: String {
             switch self {
             case .applePay: "Mostly Apple Pay"
-            case .card: "Mostly a card, tapped or online"
-            case .online: "A lot of online shopping"
+            case .card: "Mostly a bank card"
+            case .online: "Lots of online shopping"
             case .cash: "Often cash"
-            case .mix: "A mix of everything"
+            case .mix: "A mix of all of these"
             }
         }
         var symbol: String {
@@ -102,7 +112,7 @@ enum SetupProfile {
             case .morning: "Each morning"
             case .evening: "Each evening"
             case .sunday: "Sunday recap"
-            case .needed: "Only when something needs me"
+            case .needed: "Only when it matters"
             }
         }
         var detail: String {

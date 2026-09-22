@@ -32,22 +32,21 @@ struct WalletSetupGuide: View {
     ]
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 4) {
             TabView(selection: $page) {
                 ForEach(Self.pages) { p in
                     VStack(alignment: .leading, spacing: 12) {
                         ShortcutsMock(step: p.id)
-                            .frame(height: 230)
-                            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+                            .frame(height: 220)
                             .accessibilityHidden(true)
                         HStack(alignment: .top, spacing: 10) {
                             Text("\(p.id + 1)")
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(Color.onBrand)
-                                .frame(width: 26, height: 26)
+                                .frame(width: 28, height: 28)
                                 .background(Color.ink, in: .circle)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(p.title).font(.subheadline.weight(.semibold))
+                                Text(p.title).font(.headline)
                                 Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -60,7 +59,7 @@ struct WalletSetupGuide: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 330)
+            .frame(height: 320)
 
             HStack {
                 Button { withAnimation { page -= 1 } } label: {

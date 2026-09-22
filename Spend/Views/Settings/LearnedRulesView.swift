@@ -11,11 +11,8 @@ struct LearnedRulesView: View {
         List {
             ListPageTitle(title: "Learned Categories", subtitle: "Categories you've set for a merchant are used next time.")
             if rules.isEmpty {
-                ContentUnavailableView(
-                    "Nothing Learned Yet",
-                    systemImage: "brain",
-                    description: Text("Change a purchase’s category and Sortd will remember it for that merchant.")
-                )
+                EmptyState("Nothing learned yet", symbol: "tag",
+                           message: "Change a purchase's category and Sortd remembers it for that shop.")
                 .listRowBackground(Color.clear)
             }
             ForEach(rules) { rule in
