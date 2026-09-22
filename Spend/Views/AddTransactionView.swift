@@ -27,6 +27,9 @@ struct AddTransactionView: View {
     @State private var reading = false
     /// Apple Intelligence's category, used when the merchant rules have none.
     @State private var aiCategory: SpendCategory?
+    /// The merchant name `aiCategory` was read for. Once the name is edited
+    /// by hand the guess no longer applies.
+    @State private var aiCategoryMerchant = ""
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -92,20 +95,17 @@ struct AddTransactionView: View {
                       daysAgo: Int, category guess: SpendCategory?) {
         withAnimation(.snappy) {
             if !name.isEmpty { merchant = name }
-            if let amount {
-                // Decimal prints 5.50 as "5.5", which looks like a different
-                // number on a money screen.
-                let number = NSDecimalNumber(decimal: amount).doubleValue
-                amountText = number == number.rounded()
-                    ? String(Int(number))
-                    : String(format: "%.2f", number)
-            }
+            // "5.50", not "5.5"; formatted from the Decimal so a huge number
+            // can't crash it.
+            if let amount { amountText = QuickEntry.fieldText(amount) }
             if let code { currency = code }
             if daysAgo > 0 {
                 date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now) ?? date
             }
-            // The model's category, only where the merchant rules have none.
+            // The model's category, only where the merchant rules have none,
+            // and only for the name it read (see the merchant field).
             aiCategory = guess
+            aiCategoryMerchant = name.isEmpty ? merchant : name
             if let guess, !categoryTouched, category == .other { category = guess }
         }
     }
@@ -131,6 +131,9 @@ struct AddTransactionView: View {
                     TextField("Merchant", text: $merchant)
                         .textInputAutocapitalization(.words)
                         .onChange(of: merchant) { _, name in
+                            // A retyped name drops the model's guess for the old one.
+                            // fill() records the name it set, so its own change keeps it.
+                            if name != aiCategoryMerchant { aiCategory = nil }
                             // Suggest a category while typing until Raj picks one himself.
                             guard !categoryTouched else { return }
                             let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
@@ -301,7 +304,9 @@ struct AddTransactionView: View {
     }
 
     private func save() {
-        guard let amount = parsedAmount else { return }
+        // A double tap on Add must not save twice: hand-typed purchases are
+        // never merged as duplicates, so nothing else would catch it.
+        guard saved == 0, let amount = parsedAmount else { return }
         let purchase = IncomingPurchase(
             date: date,
             merchant: merchant.trimmingCharacters(in: .whitespaces).isEmpty

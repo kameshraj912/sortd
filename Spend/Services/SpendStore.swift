@@ -172,9 +172,17 @@ enum TransactionLogger {
         if changed { try context.save() }
     }
 
+    /// The name a category rule is learned on: the source's own text, unless
+    /// that is a bare "DoorDash" / "Uber Eats". Then the shop name (merged in
+    /// from the order email) is used, so one DoorDash order doesn't move
+    /// every DoorDash order.
+    private static func ruleKey(_ t: Transaction) -> String {
+        Deduper.isBarePlatformName(t.rawMerchant) ? MerchantName.key(t.merchant) : MerchantName.key(t.rawMerchant)
+    }
+
     static func recategorise(_ t: Transaction, to category: SpendCategory, in context: ModelContext) throws {
         t.category = category
-        let key = MerchantName.key(t.rawMerchant)
+        let key = ruleKey(t)
         guard !key.isEmpty else { try context.save(); return }
 
         let existing = try context.fetch(FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.key == key }))
@@ -186,7 +194,7 @@ enum TransactionLogger {
         }
 
         let all = try context.fetch(FetchDescriptor<Transaction>())
-        for other in all where other.id != t.id && MerchantName.key(other.rawMerchant) == key {
+        for other in all where other.id != t.id && ruleKey(other) == key {
             other.category = category
         }
         try context.save()
