@@ -16,10 +16,20 @@ struct HelpFeedbackSettingsView: View {
                 Link(destination: feedbackURL) {
                     Label("Send Feedback", systemImage: "envelope")
                 }
+                Button {
+                    // Close Settings first, then setup opens over Home.
+                    Router.shared.showingSettings = false
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        UserDefaults.standard.set(false, forKey: OnboardingView.doneKey)
+                    }
+                } label: {
+                    Label("Run Setup Again", systemImage: "arrow.counterclockwise")
+                }
             } header: {
                 BoldHeader("Get Help")
             } footer: {
-                Text("Feedback opens Mail with your app version, iOS version and device model already filled in. Nothing else — no purchases, no account.")
+                Text("Feedback opens Mail with your app version, iOS version and device model already filled in. Nothing else — no purchases, no account. Running setup again keeps all your purchases and cards.")
             }
 
             Section {
