@@ -20,6 +20,19 @@ App Privacy label says Data Not Collected. Adding an analytics SDK would
 make the website, the in-app privacy page and that label all false at once,
 and "no tracking" is the thing this category competes on. So: don't.
 
+**Update, 22 Sep 2026:** the owner decided a server and basic crash reports
+are fine for the TestFlight beta ("not stalking, nothing creepy") — see
+`docs/BetaPlaybook.md`. `Spend/Services/CrashReporting.swift` sends crash
+reports to Sentry, gated on `SORTD_BETA` and an empty-by-default DSN, with
+PII, screenshots, breadcrumbs and view hierarchy all switched off. This
+doesn't change the paragraph above: it's a beta-only exception for fixing
+crashes, not analytics, and it compiles out of the App Store build the
+same way `SORTD_BETA` does — check it's gone with `scripts/preflight.sh
+--appstore` same as everything else `SORTD_BETA` gates. The App Privacy
+label needs a "Crash Data" entry while the beta ships (used for App
+Functionality, not linked to identity) — see the "Before public launch"
+checklist in `docs/BetaPlaybook.md`.
+
 Everything below comes from Apple, free, with no code and no SDK.
 
 **Turn on (App Store Connect):**
