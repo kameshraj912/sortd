@@ -54,6 +54,36 @@ struct ProStoreTests {
         s.clearTransactions()
     }
 
+    /// A refund (Apple sets revocationDate) takes Pro away again.
+    @Test func refundLocksPro() async throws {
+        let s = try Self.session(); _ = s
+        let store = ProStore.shared
+        let lifetime = try #require(try await Product.products(for: [ProStore.ID.lifetime]).first)
+        #expect(try await store.buy(lifetime) == .purchased)
+        #expect(store.isPro)
+        let t = try #require(s.allTransactions().first { $0.productIdentifier == ProStore.ID.lifetime })
+        try s.refundTransaction(identifier: t.identifier)
+        for _ in 0..<20 where store.isPro {
+            try await Task.sleep(for: .milliseconds(250))
+            await store.refresh()
+        }
+        #expect(!store.isPro)
+        s.clearTransactions()
+    }
+
+    /// Restore (AppStore.sync) then refresh keeps a bought plan.
+    @Test func restoreKeepsPurchase() async throws {
+        let s = try Self.session(); _ = s
+        let store = ProStore.shared
+        let yearly = try #require(try await Product.products(for: [ProStore.ID.yearly]).first)
+        #expect(try await store.buy(yearly) == .purchased)
+        try await store.restore()
+        #expect(store.isPro)
+        s.clearTransactions()
+        await store.redeemed(nil)   // the offer code path: refresh with nothing new
+        #expect(!store.isPro)
+    }
+
     @Test func expiredSubscriptionLocksAgain() async throws {
         let s = try Self.session(); _ = s
         s.timeRate = .oneRenewalEveryTwoSeconds
