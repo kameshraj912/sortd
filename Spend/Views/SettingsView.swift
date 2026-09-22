@@ -95,7 +95,6 @@ struct SettingsView: View {
                 case .recurring: ProGate(feature: .recurring) { RecurringView() }
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
             .onAppear { Exports.clear() }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
         }
