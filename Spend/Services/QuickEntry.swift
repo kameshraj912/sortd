@@ -53,6 +53,11 @@ nonisolated enum QuickEntry {
             break
         }
 
+        if daysAgo == 0, let when = relativeDay(in: rest) {
+            daysAgo = when.days
+            rest.removeSubrange(when.range)
+        }
+
         guard let money = amount(in: rest) else { return nil }
         rest = rest.replacingCharacters(in: money.range, with: " ")
 
@@ -65,6 +70,31 @@ nonisolated enum QuickEntry {
 
     // MARK: - Pieces
 
+    private static let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+    /// "last friday", "on monday", "3 days ago": days back from `today`.
+    /// Worked out here, not by the language model, which is poor at dates.
+    static func relativeDay(in text: String, today: Date = .now,
+                            calendar: Calendar = .current) -> (days: Int, range: Range<String.Index>)? {
+        if let r = text.range(of: #"\b(\d{1,2})\s+days?\s+ago\b"#, options: [.regularExpression, .caseInsensitive]),
+           let n = Int(text[r].prefix { $0.isNumber }), n <= 60 {
+            return (n, r)
+        }
+        // Full names alone ("friday"); short ones only after last/on ("on sat"),
+        // so a shop like "Sun Kee" isn't read as a date.
+        let full = weekdays.joined(separator: "|")
+        let short = weekdays.map { String($0.prefix(3)) }.joined(separator: "|")
+        guard let r = text.range(of: #"\b(?:(?:last|on)\s+)?(?:"# + full + #")\b|\b(?:last|on)\s+(?:"# + short + #")\b"#,
+                                 options: [.regularExpression, .caseInsensitive]) else { return nil }
+        let phrase = text[r].lowercased()
+        guard let target = weekdays.firstIndex(where: { phrase.hasSuffix($0) || phrase.hasSuffix(String($0.prefix(3))) }) else { return nil }
+        let todayIndex = calendar.component(.weekday, from: today) - 1
+        var back = (todayIndex - target + 7) % 7
+        // "friday" on a Friday means today; "last friday" means a week ago.
+        if back == 0, phrase.hasPrefix("last") { back = 7 }
+        return (back, r)
+    }
+
     private struct Money {
         var amount: Decimal
         var currency: String?
@@ -75,7 +105,7 @@ nonisolated enum QuickEntry {
     /// wins, because "7 eleven 4.50" is a shop called 7 Eleven and an
     /// amount of 4.50, not the other way round.
     private static func amount(in text: String) -> Money? {
-        let pattern = #"(?:(A\$|S\$|US\$|NZ\$|HK\$|RM|₹|£|€|\$)\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur)?"#
+        let pattern = #"(?:(?<!\p{L})(A\$|S\$|US\$|NZ\$|HK\$|RM|₹|£|€|\$)\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur)?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
