@@ -26,7 +26,7 @@ struct SettingsView: View {
                                 .clipShape(.rect(cornerRadius: 7, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Sortd Pro").foregroundStyle(Color.ink)
-                                Text(pro.isPro ? "Active. Thank you." : Features.gmail ? "Gmail, receipt camera, insights and more" : "Receipt camera, insights and more")
+                                Text(pro.isBetaFree ? "Free during the beta" : pro.isPro ? "Active. Thank you." : Features.gmail ? "Gmail, receipt camera, insights and more" : "Receipt camera, insights and more")
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -67,7 +67,7 @@ struct SettingsView: View {
                     NavigationLink {
                         PrivacySecuritySettingsView()
                     } label: {
-                        SettingsRowLabel(title: "Privacy & Security", subtitle: lockEnabled ? "\(AppLock.methodName) on" : "Off", symbol: "lock.shield")
+                        SettingsRowLabel(title: "Privacy & Security", subtitle: lockEnabled ? "\(AppLock.methodName) on" : "App Lock off", symbol: "lock.shield")
                     }
                     NavigationLink {
                         BackupDataSettingsView()
