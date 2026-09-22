@@ -25,6 +25,11 @@ struct ImportView: View {
     @State private var photo: PhotosPickerItem?
     @State private var backup: Data?
     @State private var done: String?
+    @State private var confirmingReplace = false
+    /// Purchases on this phone now, and when the backup was made, for the
+    /// Replace warning.
+    @State private var replaceCount = 0
+    @State private var backupMade: Date?
 
     private enum Stage { case start, review, backup }
 
@@ -77,6 +82,11 @@ struct ImportView: View {
             Button("OK") { dismiss() }
         } message: {
             Text(done ?? "")
+        }
+        .confirmationDialog(replaceTitle, isPresented: $confirmingReplace, titleVisibility: .visible) {
+            Button("Replace Everything", role: .destructive) { restore(.replace) }
+        } message: {
+            Text(replaceMessage)
         }
     }
 
@@ -237,12 +247,29 @@ struct ImportView: View {
         }
         Section {
             Button("Add What's Missing") { restore(.merge) }
-            Button("Replace Everything", role: .destructive) { restore(.replace) }
-                .foregroundStyle(Color.down)
+            Button("Replace Everything", role: .destructive) {
+                replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
+                backupMade = backup.flatMap { try? Backup.decode($0).createdAt }
+                confirmingReplace = true
+            }
+            .foregroundStyle(Color.down)
             Button("Cancel") { reset() }.foregroundStyle(.secondary)
         } footer: {
             Text("Add keeps what's here and fills the gaps. Replace wipes it first — for a new phone.")
         }
+    }
+
+    private var replaceTitle: String {
+        switch replaceCount {
+        case 0: "Replace this iPhone's data with this backup?"
+        case 1: "Replace 1 purchase with this backup?"
+        default: "Replace \(replaceCount) purchases with this backup?"
+        }
+    }
+
+    private var replaceMessage: String {
+        let when = backupMade.map { " (\($0.formatted(date: .abbreviated, time: .omitted)))" } ?? ""
+        return "Anything added after the backup was made\(when) will be lost. This can't be undone."
     }
 
     // MARK: - Work
