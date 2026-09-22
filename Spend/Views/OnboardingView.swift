@@ -43,6 +43,10 @@ struct OnboardingView: View {
     @State private var editing: CardInfo?
     @State private var connectingGmail = false
     @State private var gmail = GmailSync.accounts
+    /// First-tap confetti: also checked on Home, in case onboarding is
+    /// skipped past this step before the tap arrives.
+    @State private var firstTapConfetti = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var budgetFocused: Bool
 
     private var book: CardBook { .shared }
@@ -652,6 +656,15 @@ struct OnboardingView: View {
             .padding(.top, 14)
             .animation(.snappy, value: tapConnected)
             .sensoryFeedback(.success, trigger: tapConnected)
+        }
+        .overlay { ConfettiView(trigger: firstTapConfetti).ignoresSafeArea() }
+        .onChange(of: tapConnected) { _, connected in
+            guard connected, !reduceMotion,
+                  Celebrations.shouldCelebrateFirstTap(hasTapTransaction: true,
+                                                       alreadyCelebrated: CelebrationFlags.firstTapCelebrated())
+            else { return }
+            CelebrationFlags.markFirstTapCelebrated()
+            firstTapConfetti += 1
         }
     }
 
