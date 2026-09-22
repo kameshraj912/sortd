@@ -68,6 +68,7 @@ owns the Gmail account (the forwarding confirmation email).
                                                                       4. Turn off / new address:
                          ◄──────────── DELETE /api/inbox ──────────────── mailbox and everything waiting deleted;
                                                                          mail to the old address bounces
+                                                                         (within ~1 min: KV caches reads)
 ```
 
 ### Crypto
@@ -107,6 +108,11 @@ owns the Gmail account (the forwarding confirmation email).
    https://github.com/cloudflare/workerd/issues/6740, 7 May 2026). The app's bank parsers
    need to know the bank really sent it, so `dkim.js` checks signatures itself.
    It's tested against the signed example in RFC 8463 (someone else's implementation).
+   Sortd's extra rules: the signature must cover From **and Subject** (the parsers read
+   amounts and "refund" from the subject), and if From, Sender, Subject, Date, Message-ID,
+   MIME-Version, Content-Type or Content-Transfer-Encoding appears twice, nothing is proven.
+   (DKIM checks the bottom copy of a header; a mail parser reads the top one, so a fake
+   Subject added above a real signed bank email would otherwise pass. Found in review.)
    A DMARC `p=reject` fallback exists but is **off** (`TRUST_CLOUDFLARE_DMARC`) until the
    owner check below shows Cloudflare rejects DMARC failures before the Worker runs.
 5. **Address = 24 characters, 120 random bits**, from `abcdefghijkmnpqrstuvwxyz23456789`
@@ -153,12 +159,12 @@ envelope sender, which contains the person's Gmail address. The privacy page mus
 
 | Threat | What stops it | What's left |
 |---|---|---|
-| **Forged bank alert** sent straight to someone's address ("DBS: you spent $900") | The address is secret and unguessable. The Worker only lists a domain as proven with a valid DKIM signature by that domain covering From. The app's bank parsers (`EmailParsers.isFrom`) need that domain. Refunds only come from exact-rule senders. Two From headers = nothing proven. | A forged *receipt* from an unknown shop can still be read by the general reader (same as Gmail today), marked "check the amount". A real, DKIM-signed email *replayed* (someone forwards their own genuine bank alert to your address) passes. Both need the address. |
+| **Forged bank alert** sent straight to someone's address ("DBS: you spent $900") | The address is secret and unguessable. The Worker only lists a domain as proven with a valid DKIM signature by that domain covering From. The signature must also cover Subject, and a repeated From/Subject/Date/Content-Type (etc.) means nothing is proven. The app's bank parsers (`EmailParsers.isFrom`) need that domain. Refunds only come from exact-rule senders. | A forged *receipt* from an unknown shop can still be read by the general reader (same as Gmail today), marked "check the amount". A real, DKIM-signed email *replayed* (someone forwards their own genuine bank alert to your address) passes. If a bank doesn't sign Content-Type and its email has none, one can be added; the signed body bytes can't change, so this can only garble the text, not add to it. All need the address. |
 | **Address guessing** | 120 random bits. Unknown addresses are rejected before anything else. | Spam to a leaked address. Fix: New Address. |
 | **Stolen token** | Token is only on the phone (Keychain, this device only). Server keeps only its hash. Works only with the matching address. | Someone with both can read the ciphertext list (useless without the key) and delete or turn off. Can't decrypt. |
 | **Server compromise / KV dump** | KV holds ciphertext and hashes only. No private keys anywhere on the server. | An attacker who changes the Worker code could read *new* mail in memory from then on, or insert fake messages (the server can encrypt to the public key). It can't read mail already stored. |
 | **Cloudflare as processor** | It's the mail server; we can't avoid it seeing mail in transit. DPA: Cloudflare's standard. | Cloudflare's Email Routing log (31 days of from/to/subject). Cloudflare employees or legal requests could see mail in transit. Disclose it. |
-| **Phishing via the Gmail confirmation** | Worker only marks mail from `forwarding-noreply@google.com`; app only shows a link if it's `https://mail-settings.google.com/mail/vf-…` and the sender domain is exactly google.com. Code is shown so the person can type it in Gmail instead. | A forged confirmation could show a fake code (harmless: it only works in the attacker's own Gmail). |
+| **Phishing via the Gmail confirmation** (attacker adds your Sortd address in *their* Gmail, then sends you a fake "confirm" with their real Google link and "from you@gmail.com") | Worker only marks mail from `forwarding-noreply@google.com`. The app shows the link and the "from" Gmail address only if google.com's DKIM signature proves Google sent it, and the link is `https://mail-settings.google.com/mail/vf-…`. Unproven: code only, with a warning. | A code typed into your own Gmail can't approve someone else's request, so an unproven code is harmless. If DKIM doesn't survive to the Worker (owner check 1), people get the code but no link. |
 | **Mailbox flooding** | 30/min, 100 waiting, 10 MB each, bodies trimmed to 256 KB text / 768 KB HTML. | Up to ~100 MB/day per leaked address until it's reset. |
 | **Harvest now, decrypt later (quantum)** | 24-hour retention limits what's there to capture. | P-256 isn't post-quantum. CryptoKit has X-Wing (ML-KEM + X25519) on iOS 26, but not in the Secure Enclave and not in `@hpke/core`. Revisit later. |
 | **Lost phone / app deleted** | Key is device-only; mailbox expires after 180 days unused; mail after 24 h. | Mail keeps arriving (and expiring unread) until then. |
@@ -278,22 +284,26 @@ unlock, so it works in the background. Not built: it needs Info.plist and app-la
 ## Test plan
 
 Automated (all passing on 22 Sep 2026):
-- `cd inbox && npm test` — 53 tests in workerd with a local KV:
+- `cd inbox && npm test` — 58 tests in workerd with a local KV:
   HPKE (RFC 9180 vector reproduced and opened, CryptoKit ciphertext opened, wrong aad/key,
   bad keys); DKIM (RFC 8463 both signatures, relaxed whitespace, body/header tampering,
   over-signed From, missing/revoked keys, DNS failure, simple/simple, l=, rsa-sha1, expiry,
-  short RSA keys, other-domain signatures, DMARC policy); registration (hashes only, unique,
+  short RSA keys, other-domain signatures, unsigned Subject, fake Subject/Content-Type added
+  on top, several key records, b= blanking, DMARC policy); registration (hashes only, unique,
   180-day expiry, bad input, per-IP limit); auth (wrong token, other mailbox); unknown /
   malformed / wrong-domain addresses rejected; only ciphertext stored; 24-hour expiry;
   delete-on-fetch; mailbox isolation; DKIM domains in payload; two-From trick; DMARC flag;
   attachments dropped; HTML-only mail; size cap (including a lying rawSize); rate limit;
   100-waiting cap; turned-off mailbox rejects; errors reject instead of throwing; paging;
   Gmail confirmation detection and phishing cases; filter XML shape and escaping; setup page CSP.
-- Xcode: `SpendTests/ForwardingInboxTests` — 14 tests: CryptoKit opens the RFC vector and the
+- Xcode: `SpendTests/ForwardingInboxTests` — 15 tests: CryptoKit opens the RFC vector and the
   Worker's ciphertext; key storage round trip; decrypt → parse → log (NAB alert logged with
   DKIM; forged, other-domain and no-auth alerts not logged; general receipt; HTML body;
-  same email twice); Gmail request validation; full turn on / sync / delete / turn off against
-  a fake server; offline turn-off retried; paging; setup filter lists every bank the app reads.
+  same email twice); Gmail request validation (unsigned = code only); full turn on / sync /
+  delete / turn off against a fake server; turn off waits for a check in progress; offline
+  turn-off retried; paging; setup filter lists every bank the app reads.
+- Full app suite on a cloned simulator: 301 tests pass (1 known issue, the existing
+  grace-period test).
 
 Manual, after deploy: the owner checks above, plus: iPhone real device (Secure Enclave key),
 QR code opens the setup page on a Mac, filter download works in Safari/Chrome/Firefox,
