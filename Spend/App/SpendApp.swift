@@ -113,7 +113,7 @@ struct SpendApp: App {
 }
 
 enum AppTab: Hashable, CaseIterable {
-    case home, activity, insights, search
+    case home, activity, insights, search, add
 
     var title: String {
         switch self {
@@ -121,6 +121,7 @@ enum AppTab: Hashable, CaseIterable {
         case .activity: "Activity"
         case .insights: "Insights"
         case .search: "Search"
+        case .add: "Add"
         }
     }
 
@@ -130,6 +131,7 @@ enum AppTab: Hashable, CaseIterable {
         case .activity: "list.bullet"
         case .insights: "chart.bar"
         case .search: "magnifyingglass"
+        case .add: "plus"
         }
     }
 }
@@ -151,6 +153,9 @@ struct RootView: View {
     /// Set when setup finishes, so the cover closes even when a debug flag
     /// is forcing it open.
     @State private var setupFinished = false
+    @State private var showingAdd = false
+    @State private var searchQuery = ""
+    private let layout = NavLayout.current
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -167,16 +172,26 @@ struct RootView: View {
         // The system Liquid Glass tab bar. Settings is a sheet from the gear
         // on Home (tabs are for places people go often), and Search gets the
         // trailing search tab, as the HIG suggests.
-        TabView(selection: $tab) {
-            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
-            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
-            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                ProGate(feature: .insights) { InsightsView() }
+        tabs
+            .tint(Color.brand)
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .modifier(RootSearch(enabled: layout.rootSearch, query: $searchQuery))
+            .overlay(alignment: .bottomTrailing) {
+                if layout == .fab, tab == .home || tab == .activity {
+                    AddFAB(add: { showingAdd = true },
+                           scan: { showingAdd = true },
+                           importing: { router.open(URL(string: "sortd://import")!) })
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 72)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
-            Tab(value: AppTab.search, role: .search) { SearchView() }
-        }
-        .tint(Color.brand)
-        .tabBarMinimizeBehavior(.onScrollDown)
+            .animation(.spring(duration: 0.3), value: tab)
+            .onChange(of: tab) { old, new in
+                // The prominent + is an action, not a place: stay where you were.
+                if new == .add { tab = old; showingAdd = true }
+            }
+            .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .sensoryFeedback(.selection, trigger: tab)
         .sheet(isPresented: $router.showingSettings) { SettingsView() }
         // In its own window so open sheets are covered too. The app-switcher
@@ -224,6 +239,47 @@ struct RootView: View {
             await Reminders.checkCategoryLimits(all)
             // Leave the widget fresh numbers. Does nothing without an App Group.
             WidgetBridge.refresh(from: context)
+        }
+    }
+}
+
+
+extension RootView {
+    @ViewBuilder
+    var tabs: some View {
+        if layout == .prominent, #available(iOS 27, *) {
+            TabView(selection: $tab) {
+                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+                Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .prominent) { Color.clear }
+                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                    ProGate(feature: .insights) { InsightsView() }
+                }
+                Tab(value: AppTab.search, role: .search) { SearchView() }
+            }
+        } else {
+            TabView(selection: $tab) {
+                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                    ProGate(feature: .insights) { InsightsView() }
+                }
+                Tab(value: AppTab.search, role: .search) {
+                    SearchView(external: layout.rootSearch ? $searchQuery : nil)
+                }
+            }
+        }
+    }
+}
+
+private struct RootSearch: ViewModifier {
+    let enabled: Bool
+    @Binding var query: String
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $query, prompt: "Merchant, category or note")
+        } else {
+            content
         }
     }
 }
