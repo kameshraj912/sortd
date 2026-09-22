@@ -22,6 +22,9 @@ struct TransactionsScreen: View {
     @State private var showingAdd = false
     @State private var recategorising: Transaction?
     @State private var deleted = 0
+    /// Swiped away but kept for a few seconds so Undo can bring it back.
+    @State private var pendingDelete: Transaction?
+    @State private var undoTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -41,8 +44,10 @@ struct TransactionsScreen: View {
         .brandedTitle(fixedCard?.name ?? "Activity")
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { filterMenu }
-                .sharedBackgroundVisibility(.hidden)
+            if fixedCard == nil {
+                ToolbarItem(placement: .topBarLeading) { filterMenu }
+                    .sharedBackgroundVisibility(.hidden)
+            }
             if NavLayout.current == .header || NavLayout.current == .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Purchase", systemImage: "plus") { showingAdd = true }
@@ -57,6 +62,46 @@ struct TransactionsScreen: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: deleted)
+        .overlay(alignment: .bottom) {
+            if let t = pendingDelete {
+                UndoToast(text: "Deleted \(t.merchant)") { undoDelete() }
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: pendingDelete?.persistentModelID)
+        .refreshable {
+            // Pull down to fetch new Gmail receipts and exchange rates.
+            _ = await GmailSync.syncAll(in: context)
+            await FXService.ensureConverted(in: context)
+        }
+        .onDisappear { commitDelete() }
+    }
+
+    // MARK: Delete with undo
+
+    private func delete(_ t: Transaction) {
+        commitDelete()
+        pendingDelete = t
+        deleted += 1
+        undoTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            commitDelete()
+        }
+    }
+
+    private func undoDelete() {
+        undoTask?.cancel()
+        pendingDelete = nil
+    }
+
+    private func commitDelete() {
+        undoTask?.cancel()
+        guard let t = pendingDelete else { return }
+        pendingDelete = nil
+        context.delete(t)
+        try? context.save()
     }
 
     // MARK: List
@@ -64,7 +109,7 @@ struct TransactionsScreen: View {
     private var list: some View {
         List {
             ListPageTitle(title: fixedCard?.name ?? "Activity")
-            Section {
+            if fixedCard != nil { Section {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField("Merchant, category or note", text: $search)
@@ -85,7 +130,7 @@ struct TransactionsScreen: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-            }
+            } }
             // Category chips, like the reference's outlined pills.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -127,14 +172,19 @@ struct TransactionsScreen: View {
                         }
                         .listRowBackground(Color.card)
                         .alignmentGuide(.listRowSeparatorLeading) { _ in 52 }
-                        .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                context.delete(t)
-                                try? context.save()
-                                deleted += 1
-                            }
+                        .swipeActions(edge: .leading) {
                             Button("Category", systemImage: "tag") { recategorising = t }
-                                .tint(Color(.systemGray))
+                                .tint(t.category.color)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+                                .tint(.red)
+                        }
+                        .contextMenu {
+                            Button("Change Category", systemImage: "tag") { recategorising = t }
+                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+                        } preview: {
+                            TransactionPreview(transaction: t)
                         }
                     }
                 } header: {
@@ -183,12 +233,6 @@ struct TransactionsScreen: View {
                     ForEach(Card.mine) { Text($0.name).tag(Card?.some($0)) }
                 }
             }
-            Picker("Category", selection: $categoryFilter) {
-                Text("All Categories").tag(SpendCategory?.none)
-                ForEach(SpendCategory.allCases) {
-                    Label($0.name, systemImage: $0.symbol).tag(SpendCategory?.some($0))
-                }
-            }
             if isFiltering {
                 Divider()
                 Button("Clear Filters", systemImage: "xmark.circle") {
@@ -210,7 +254,8 @@ struct TransactionsScreen: View {
     private var filtered: [Transaction] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
         return transactions.filter { t in
-            (fixedCard == nil || t.card == fixedCard)
+            t.persistentModelID != pendingDelete?.persistentModelID
+            && (fixedCard == nil || t.card == fixedCard)
             && (cardFilter == nil || t.card == cardFilter)
             && (categoryFilter == nil || t.category == categoryFilter)
             && (q.isEmpty
@@ -293,5 +338,57 @@ struct CategoryPickerSheet: View {
             .sensoryFeedback(.selection, trigger: picked)
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// "Deleted Uber Eats · Undo", in glass above the tab bar.
+struct UndoToast: View {
+    let text: String
+    let undo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Label(text, systemImage: "trash")
+                .lineLimit(1)
+                .foregroundStyle(Color.ink)
+            Button("Undo", action: undo)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.ink)
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// What a long press shows above the menu: the purchase at a glance.
+struct TransactionPreview: View {
+    let transaction: Transaction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                CategoryIcon(category: transaction.category, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(transaction.merchant).font(.headline)
+                    Text(transaction.category.name).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            Text(transaction.needsReview ? "Amount missing" : Money.format(transaction.amount, transaction.currencyCode))
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .monospacedDigit()
+            VStack(alignment: .leading, spacing: 4) {
+                Label(transaction.date.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                Label(transaction.paidWithLabel, systemImage: "creditcard")
+                if !transaction.note.isEmpty { Label(transaction.note, systemImage: "note.text") }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(width: 300, alignment: .leading)
+        .background(Color.card)
     }
 }

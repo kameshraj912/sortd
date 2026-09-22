@@ -44,6 +44,10 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
+                    .refreshable {
+                        _ = await GmailSync.syncAll(in: context)
+                        await FXService.ensureConverted(in: context)
+                    }
                 }
             }
             .background(Color.page)
