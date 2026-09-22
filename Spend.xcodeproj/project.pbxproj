@@ -364,6 +364,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Spend-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Sortd;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Sortd uses Face ID to keep your spending private.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Sortd uses the camera to scan receipts. Photos are read on your iPhone and not saved or sent anywhere.";
@@ -371,7 +372,6 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -401,6 +401,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Spend-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Sortd;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Sortd uses Face ID to keep your spending private.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Sortd uses the camera to scan receipts. Photos are read on your iPhone and not saved or sent anywhere.";
@@ -408,7 +409,6 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
