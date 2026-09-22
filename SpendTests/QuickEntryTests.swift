@@ -24,6 +24,15 @@ struct QuickEntryTests {
         #expect(r.merchant.lowercased().contains("coffee"), "merchant wrong for: \(input)")
     }
 
+    @Test func readsThousandsWithACommaAndDecimalCommas() throws {
+        // Bug-hunt M7: "laptop 1,299" became $9 at "Laptop 1 29".
+        #expect(QuickEntry.read("rent 1,200")?.amount == 1200)
+        let laptop = try #require(QuickEntry.read("laptop 1,299"))
+        #expect(laptop.amount == 1299)
+        #expect(laptop.merchant.lowercased() == "laptop")
+        #expect(QuickEntry.read("coffee 4,50")?.amount == Decimal(string: "4.50"))
+    }
+
     @Test func keepsMultiWordNames() throws {
         let r = try #require(QuickEntry.read("seven seeds coffee 5.50"))
         #expect(r.merchant == "Seven Seeds Coffee")

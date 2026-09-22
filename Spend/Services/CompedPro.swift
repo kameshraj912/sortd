@@ -1,6 +1,10 @@
 import Foundation
 import CryptoKit
 
+// Debug builds only. App Review 3.1.1 bars unlocking features with codes, so
+// shipped builds use App Store offer codes instead.
+#if DEBUG
+
 /// Pro, given away.
 ///
 /// For friends, testers, and anyone who finds the door. It unlocks the same
@@ -168,3 +172,5 @@ final class SecretKnock {
 
     private init() {}
 }
+
+#endif

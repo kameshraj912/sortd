@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Reel 6 – first post</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Lock screen + Apple Pay sheet, same furniture as reel 1. */
+  .lock { background:
+      radial-gradient(120% 60% at 20% 110%, rgba(240,100,61,.55), transparent 60%),
+      radial-gradient(90% 55% at 100% 80%, rgba(123,107,240,.5), transparent 60%),
+      radial-gradient(80% 50% at 0% 20%, rgba(43,176,122,.35), transparent 60%),
+      linear-gradient(180deg, #17171b, #0b0b0d); }
+  .date { top: 168px; font-size: 19px; font-weight: 600; opacity: .9; }
+  .time { top: 190px; font-size: 112px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+  .sheet { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 430px; border-radius: 46px; background: rgba(22,22,24,.97);
+    box-shadow: 0 -10px 40px rgba(0,0,0,.4); text-align: center; padding-top: 26px; }
+  .sheet .wl { font-size: 18px; font-weight: 700; }
+  .cardart { position: relative; width: 70%; margin: 20px auto 0; aspect-ratio: 1.586; border-radius: 18px;
+    background: linear-gradient(125deg, #f0643d 0%, #f5a623 42%, #2bb07a 100%); box-shadow: 0 10px 30px rgba(0,0,0,.4); text-align: left; }
+  .cardart b { position: absolute; left: 7%; top: 9%; font-size: 19px; }
+  .cardart i { position: absolute; right: 7%; bottom: 9%; font-style: normal; font-size: 15px; }
+  .state { position: absolute; left: 0; right: 0; bottom: 36px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
+  .tick { width: 46px; height: 46px; border-radius: 50%; background: var(--green); display: grid; place-items: center; }
+  /* The hook sits on frame 0, so it must not fade in from nothing. */
+  .hook { background: radial-gradient(85% 55% at 50% 34%, #23232a, #111113 74%); }
+</style></head>
+
+<body data-duration="18.2"><div id="stage">
+
+  <!-- 1. The thing nobody says out loud -->
+  <div class="layer hook" id="s1">
+    <p class="cap xl" id="h1" style="top:290px">You are not going to track your spending.</p>
+    <p class="cap xl" id="h2" style="top:540px; color:#2bb07a">We know.</p>
+  </div>
+
+  <!-- 2. So don't -->
+  <div class="layer" id="s2">
+    <p class="cap xl" id="t1" style="top:350px">So we did it for you.</p>
+    <p class="cap sm muted" id="t2" style="top:450px">(You still have to spend the money. Sorry.)</p>
+  </div>
+
+  <!-- 3. The whole product, shown once -->
+  <div class="layer lock" id="s3">
+    <p class="abs center date">Monday 21 September</p>
+    <p class="abs center time num">9:41</p>
+    <p class="cap xl" id="p1" style="top:340px">You tap to pay.</p>
+    <div class="sheet" id="sheet">
+      <p class="wl">Everyday card</p>
+      <div class="cardart"><b>Everyday</b><i class="num">•••• 4821</i></div>
+      <div class="state" id="hold">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M8.5 16.5a6 6 0 0 0 0-9"/><path d="M12 19a9.5 9.5 0 0 0 0-14"/><path d="M15.5 21.5a13 13 0 0 0 0-19"/></svg>
+        Hold near reader</div>
+      <div class="state" id="done"><div class="tick"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>Done</div>
+    </div>
+    <p class="cap xl" id="p2" style="top:340px">It writes it down.</p>
+    <p class="cap sm muted" id="p3" style="top:470px">Shop, amount, card. The app was never open.</p>
+  </div>
+
+  <!-- The notification lives above the layers, like a real one -->
+  <div class="banner" id="banner"><img src="assets/AppIcon.png" alt="">
+    <div style="flex:1"><div class="meta"><span>SORTD</span><span>now</span></div>
+    <p>Logged <b>$5.50</b> at Seven Seeds Coffee · Eating Out</p></div></div>
+
+  <!-- 4. The wedge -->
+  <div class="layer" id="s4">
+    <p class="cap lg" id="w1" style="top:320px">It never asks for your bank password.</p>
+    <p class="cap lg" id="w2" style="top:490px; color:#2bb07a">Go ask the other apps why they need yours.</p>
+  </div>
+
+  <!-- 5. The line the whole brand is built on -->
+  <div class="layer" id="s5">
+    <p class="cap sm muted" id="k" style="top:268px">Hi. We're Sortd.</p>
+    <p class="cap xl" id="e1" style="top:330px">We write down what you spend.</p>
+    <p class="cap xl" id="e2" style="top:560px; color:#2bb07a">Because you won't.</p>
+  </div>
+
+</div>
+<script src="engine.js"></script>
+<script>
+  // 1. Hook. No entry tween on the layer or the first line: frame 0 is the
+  //    thumbnail Instagram grabs, and a fade-in makes that frame empty.
+  tw('#s1', 2.4, 2.41, { o: 0 }, {}, 'lin');
+  tw('#h1', 0, .55, { y: 0 }, { y: 16 }, 'out');
+  show('#h2', 1.5, null, 'pop');
+
+  // 2. The turn.
+  show('#s2', 2.6, 4.6, 'cut');
+  show('#t1', 2.65, null, 'up');
+  show('#t2', 3.5, null, 'up');
+
+  // 3. Tap, sheet, done, notification. The five seconds that carry the ad.
+  show('#s3', 4.8, 10.6, 'fade', 'cut');
+  show('#p1', 5.0, 7.2, 'pop');
+  tw('#sheet', 4.95, 5.55, { y: 0 }, { y: 460 }, 'out');
+  tw('#hold', 5.55, 5.8, { o: 1 }, { o: 0 });  tw('#hold', 6.5, 6.6, { o: 0 });
+  tw('#done', 6.55, 6.9, { o: 1, s: 1 }, { o: 0, s: .6 }, 'back');
+  tw('#sheet', 7.3, 7.75, { y: 470 }, {}, 'in');
+  tw('#banner', 7.8, 8.35, { y: 0, s: 1, o: 1 }, { y: -170, s: .92, o: 0 }, 'back');
+  tw('#banner', 10.2, 10.5, { o: 0, s: .96 }, {}, 'lin');
+  show('#p2', 8.1, null, 'pop');
+  show('#p3', 9.1, null, 'up');
+
+  // 4. The wedge. A question, not a claim about anyone in particular.
+  show('#s4', 10.8, 13.0, 'cut');
+  show('#w1', 10.85, null, 'up');
+  show('#w2', 11.9, null, 'pop');
+
+  // 5. Payoff.
+  show('#s5', 13.2, null, 'cut');
+  show('#k', 13.25, null, 'up');
+  show('#e1', 13.6, null, 'up');
+  show('#e2', 14.7, null, 'pop');
+
+  endCard(16.3, "You did nothing. That was the whole feature.");
+  seek(0);
+</script>
+</body></html>

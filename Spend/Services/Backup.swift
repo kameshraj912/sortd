@@ -45,6 +45,10 @@ nonisolated enum Backup {
         var settings: [String: Setting] = [:]
         var transactions: [Row] = []
         var rules: [Rule] = []
+        /// Emails already read from Gmail. Without these, reconnecting Gmail on
+        /// the new phone reads every email again and brings back purchases the
+        /// user had deleted. Optional: backups made before this have none.
+        var imported: [Imported]?
 
         /// One purchase. Flat and explicit so the file stays readable and a
         /// future version can add fields without breaking old backups.
@@ -67,6 +71,11 @@ nonisolated enum Backup {
             var renewsOn: Date?
             var billingPeriod: String?
             var sourceAccount: String?
+        }
+
+        struct Imported: Codable {
+            var id: String
+            var account: String?
         }
 
         struct Rule: Codable {
@@ -117,14 +126,18 @@ nonisolated enum Backup {
                          defaults: UserDefaults = .standard) throws -> Snapshot {
         var out = Snapshot()
         out.appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        out.cards = CardBook.shared.cards
+        // Sample data is never real spending: leave it out, or it comes back on
+        // the new phone with no "Clear" banner to remove it.
+        out.cards = CardBook.shared.cards.filter { !DemoData.cardIds.contains($0.id) }
 
         for key in settingKeys {
             guard let raw = defaults.object(forKey: key), let setting = Setting(raw) else { continue }
             out.settings[key] = setting
         }
 
-        out.transactions = try context.fetch(FetchDescriptor<Transaction>()).map { t in
+        out.transactions = try context.fetch(FetchDescriptor<Transaction>())
+            .filter { $0.note != DemoData.marker }
+            .map { t in
             Snapshot.Row(
                 id: t.id, date: t.date, merchant: t.merchant, rawMerchant: t.rawMerchant,
                 amount: t.amount, currencyCode: t.currencyCode, homeAmount: t.audAmount,
@@ -138,6 +151,9 @@ nonisolated enum Backup {
         out.rules = try context.fetch(FetchDescriptor<MerchantRule>()).map {
             Snapshot.Rule(key: $0.key, category: $0.categoryRaw, updatedAt: $0.updatedAt)
         }
+        out.imported = try context.fetch(FetchDescriptor<ImportedRecord>()).map {
+            Snapshot.Imported(id: $0.id, account: $0.account)
+        }
 
         return out
     }
@@ -149,18 +165,6 @@ nonisolated enum Backup {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(try snapshot(in: context, defaults: defaults))
-    }
-
-    /// Writes the backup to a temporary file for the share sheet.
-    /// Named by date so two backups don't overwrite each other.
-    @MainActor
-    static func file(in context: ModelContext,
-                     defaults: UserDefaults = .standard) throws -> URL {
-        let day = Date.now.formatted(.iso8601.year().month().day())
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Sortd backup \(day).sortdbackup")
-        try data(in: context, defaults: defaults).write(to: url, options: .atomic)
-        return url
     }
 
     // MARK: - Reading one back
@@ -220,6 +224,13 @@ nonisolated enum Backup {
                         defaults: UserDefaults = .standard) throws -> Result {
         let snapshot = try decode(data)
         var result = Result()
+        // `homeAmount` in the file is in the backup phone's home currency.
+        let backupHome: String? = if case .string(let code)? = snapshot.settings[Money.homeKey] { code } else { nil }
+        // Replace takes the backup's currency with its settings. Merge keeps this
+        // phone's, unless this phone never chose one (then the backup's comes in).
+        let phoneHome = defaults.string(forKey: Money.homeKey)
+        let homeBefore = phoneHome ?? Money.home
+        let homeAfter = mode == .replace ? (backupHome ?? homeBefore) : (phoneHome ?? backupHome ?? homeBefore)
 
         if mode == .replace {
             try? context.delete(model: Transaction.self)
@@ -241,7 +252,10 @@ nonisolated enum Backup {
                 note: row.note
             )
             t.id = row.id
-            t.audAmount = row.homeAmount
+            // Converted in another currency: keep it only if it's already in this
+            // one; otherwise leave it empty for FXService.backfill to convert.
+            t.audAmount = (backupHome ?? homeAfter) == homeAfter ? row.homeAmount
+                : (row.currencyCode == homeAfter ? row.amount : nil)
             t.seenInRaw = row.seenIn
             t.createdAt = row.createdAt
             t.platform = row.platform
@@ -251,6 +265,14 @@ nonisolated enum Backup {
             t.sourceAccount = row.sourceAccount
             context.insert(t)
             result.added += 1
+        }
+
+        // Emails already read, so a reconnected Gmail doesn't import them again.
+        if let imported = snapshot.imported, !imported.isEmpty {
+            let have = Set(try context.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
+            for r in imported where !have.contains(r.id) {
+                context.insert(ImportedRecord(id: r.id, account: r.account))
+            }
         }
 
         // A learned category is the user's own choice, so a newer one wins.
@@ -292,6 +314,19 @@ nonisolated enum Backup {
             if mode == .merge, defaults.object(forKey: key) != nil { continue }
             defaults.set(setting.value, forKey: key)
             result.settings += 1
+        }
+        // The restored amounts and budget are already in `homeAfter`. Without this,
+        // FXService.ensureConverted would convert the restored budget a second time
+        // and wipe every converted amount.
+        if mode == .replace || homeAfter != homeBefore {
+            if mode == .merge {
+                // This phone's own purchases were converted to the old currency.
+                for t in try context.fetch(FetchDescriptor<Transaction>()) where existing.contains(t.id) {
+                    t.audAmount = t.currencyCode == homeAfter ? t.amount : nil
+                }
+                try context.save()
+            }
+            defaults.set(homeAfter, forKey: FXService.convertedKey)
         }
 
         return result

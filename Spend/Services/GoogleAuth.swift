@@ -115,12 +115,40 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         cache[email] = nil
     }
 
+    /// For Delete All. Reads every saved token first, so the Keychain can be
+    /// wiped straight away, then asks Google to cancel each one. (Revoking
+    /// after the wipe found no token and left Google access switched on.)
+    static func revokeAll(_ emails: [String]) {
+        let tokens = emails.compactMap { Keychain.get(keychainKey($0)) }
+        cache = [:]
+        Task { for token in tokens { await revoke(token) } }
+    }
+
+    /// Google-bound requests only: nothing cached to disk, no cookies kept.
+    nonisolated static let session = URLSession(configuration: .ephemeral)
+
+    /// Tokens whose revoke hasn't reached Google yet (offline, app killed).
+    /// Kept only until Google confirms, then deleted.
+    private static let pendingKey = "google-revoke-pending"
+
     private static func revoke(_ token: String) async {
         var req = URLRequest(url: URL(string: "https://oauth2.googleapis.com/revoke")!)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.httpBody = form(["token": token])
-        _ = try? await URLSession.shared.data(for: req)
+        let code = ((try? await session.data(for: req))?.1 as? HTTPURLResponse)?.statusCode
+        // 200 = revoked. 400 = Google no longer knows the token (already gone).
+        if code == 200 || code == 400 { return }
+        var pending = Set((Keychain.get(pendingKey) ?? "").split(separator: "\n").map(String.init))
+        pending.insert(token)
+        Keychain.set(pending.joined(separator: "\n"), for: pendingKey)
+    }
+
+    /// Tries the revokes that failed before. Called when the app becomes active.
+    static func retryPendingRevokes() async {
+        guard let saved = Keychain.get(pendingKey), !saved.isEmpty else { return }
+        Keychain.delete(pendingKey)
+        for token in saved.split(separator: "\n") { await revoke(String(token)) }
     }
 
     private static func tokenRequest(_ fields: [String: String]) async throws -> Tokens {
@@ -128,7 +156,7 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.httpBody = form(fields)
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await session.data(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             // Google's error JSON, e.g. {"error":"invalid_grant"} when access was revoked.
             let text = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String

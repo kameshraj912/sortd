@@ -41,7 +41,11 @@ struct SpendApp: App {
     }
 
     init() {
+        CrashReporting.start()
+        WidgetBridge.watchSaves()
         Self.removeAppsScriptLink()
+        // Share-sheet copies of the backup or CSV from a past session.
+        Exports.clear()
         let context = SpendStore.container.mainContext
         let used = Set(((try? context.fetch(FetchDescriptor<Transaction>())) ?? []).map(\.cardRaw))
         CardBook.shared.adoptLegacy(usedIds: used)
@@ -153,6 +157,12 @@ struct RootView: View {
     @State private var tab: AppTab = .home
     #endif
 
+    private var coverState: CoverState {
+        if lock.isLocked { return .locked }
+        if onboarded, !Self.forceSetup, scenePhase != .active { return .cover }
+        return .none
+    }
+
     var body: some View {
         // The system tab bar is hidden and replaced with a flat one: iOS 27
         // always draws the system bar as floating Liquid Glass.
@@ -167,13 +177,16 @@ struct RootView: View {
         }
         // The tab bar stays at the bottom, under the keyboard, like the system one.
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .overlay {
-            if lock.isLocked {
+        // In its own window so open sheets are covered too. The app-switcher
+        // cover shows whenever Sortd isn't active, lock on or off, so the
+        // snapshot never shows purchases.
+        .modifier(CoverWindow(state: coverState) { state in
+            if state == .locked {
                 LockView(lock: lock)
-            } else if lockEnabled, onboarded, !Self.forceSetup, scenePhase != .active {
+            } else {
                 PrivacyCover()
             }
-        }
+        })
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
         }
@@ -183,12 +196,19 @@ struct RootView: View {
             tab = router.tab
         }
         .onChange(of: router.tab) { _, new in tab = new }
+        // "Clear" on the sample-data banner sets onboarded back to false:
+        // open setup again straight away, not on the next launch.
+        .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
         .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
             OnboardingView { setupFinished = true }
         }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }
+            // A subscription can expire while the app sits in memory, and
+            // expiry sends no update: check again before anything uses isPro.
+            await ProStore.shared.refresh()
+            await GoogleAuth.retryPendingRevokes()
             try? TransactionLogger.refreshUncategorised(in: context)
             await FXService.ensureConverted(in: context)
             #if DEBUG

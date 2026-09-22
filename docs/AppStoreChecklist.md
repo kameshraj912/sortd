@@ -13,6 +13,82 @@ OAuth docs. "Done" means built and tested in the simulator.
 - [ ] Create the three products in App Store Connect and get them to "Ready to Submit".
       Until then `ProStore.load()` returns nothing and the paywall is empty.
 
+## Money settings in App Store Connect (added 21 Sep 2026)
+
+All three are settings, not code. Do them once the paid developer account clears.
+
+- [ ] **App Store Small Business Program.** Apple takes 15% instead of 30% while proceeds stay
+      under US$1M a year. Apply at developer.apple.com/app-store/small-business-program. It's a
+      form; the lower rate starts after approval, not back-dated, so apply before launch.
+- [ ] **Billing Grace Period → 28 days, "All Renewals".** App Store Connect › the app ›
+      Subscriptions › Billing Grace Period. When a card fails, Apple keeps retrying and the person
+      keeps Pro. `ProStore.refresh()` keeps Pro during grace (fixed 21 Sep 2026; before that it
+      dropped anyone whose expiry date had passed, per Apple's currentEntitlements docs).
+      `ProStoreTests.gracePeriodKeepsPro` checks grace keeps Pro, but StoreKit Testing can't
+      reproduce the past-expiry case. Confirm once on TestFlight with a failing sandbox card.
+- [ ] **Retention Messaging** (WWDC26). App Store Connect › Subscriptions › Retention Messaging.
+      Apple shows your message, and optionally an offer, when someone taps Cancel in their
+      subscription settings. No server needed. Views: message only, message + image, message +
+      offer. Plan: one "message + offer" on monthly and yearly. Create a retention offer first
+      (e.g. yearly at 50% off for the first year). Keep the message in the brand voice, and honest.
+
+## Beta crash reports — Sentry (added 21 Sep 2026)
+
+Built into TestFlight builds only (`Spend/Services/CrashReporting.swift`, `#if SORTD_BETA`).
+Sends the stack trace, device model and OS. No purchases, merchants, emails, screenshots,
+breadcrumbs or IP.
+
+- [ ] Make a free Sentry account and an iOS project; paste its DSN into `CrashReporting.dsn`.
+- [ ] Before the first beta build with the DSN: one line on sortd.page/privacy (beta section)
+      and the beta page — "TestFlight builds send crash reports (no personal data) to Sentry."
+- [ ] Crash once on purpose in a TestFlight build and check the report shows no personal data.
+- [ ] **App Store build:** remove the package, or go live with it (label → Diagnostics › Crash
+      Data, not linked; update the "no analytics" wording). `preflight.sh --appstore` fails
+      while Sentry is linked.
+
+## Account security (added 21 Sep 2026)
+
+- [ ] Two-factor on every account that can touch the app: Apple Account (developer), Google
+      Cloud / OAuth project, GitHub, Cloudflare (sortd.page), and the Gmail that owns them.
+      Passwords from a password manager, all different.
+
+## Compliance audit, 21 Sep 2026
+
+Checked by hand against the rule files in github.com/mjmirza/app-store-compliance (its scripts and
+hook were **not** installed or run). Guideline numbers are from that repo, not re-checked on
+Apple's site.
+
+- [x] **High · 2.3.1.** No longer applies: v1 ships with Gmail (22 Sep), so the listing and
+      site can keep it. Only submit after Google verification, or Gmail won't work for reviewers.
+- [x] **High · 2.1.** (Done 21 Sep: review notes rewritten with a Pro section.) Review notes say sample data fills Insights and Subscriptions & bills, but
+      both are Pro. Once `SORTD_BETA` is gone the reviewer hits a lock. Add a Pro section: the
+      three products, what each unlocks, and that a sandbox purchase or restore unlocks them.
+- [ ] **High · 2.3.2.** Attach all three IAPs to version 1.0 and submit them with the build.
+      "Ready to Submit" alone isn't enough for a first subscription.
+- [ ] **Medium · 2.3.2.** Mark paid features as Pro in the listing: the promo line "See every
+      subscription before it charges you" and the Insights and Recurring screenshot captions.
+- [x] **Medium · 5.1.1(i).** (Done 21 Sep: Privacy Policy and Terms links on Settings › Privacy.) Pro users can't reach the privacy policy: its only link is in the
+      paywall footer, which Pro users never see. Add a "Privacy Policy" link on Settings › Privacy.
+- [ ] **Medium, unverified.** "Works on iPhone and Apple Watch": test a real Watch tap through the
+      Wallet automation, or drop "Apple Watch" from the listing and site.
+- [ ] Answer the social media question in App Store Connect ("No"). The repo says it's required
+      for new versions from Sep 2026; not confirmed on Apple's site.
+- [ ] App Review contact phone in international format (+61…).
+- [ ] Optional: read `docs/` in that repo before each submission. Don't install its hook
+      without reading the scripts first.
+
+## Launch extras from web research, 21 Sep 2026
+
+- [x] Review notes: say plainly that no money moves, no bank link, all data stays on the phone
+      (5.1.1(ix) finance-entity rule). Decide whether to publish under a company instead.
+- [ ] Review notes (done) and listing: what Pro keeps giving over time (3.1.2(a) "ongoing value").
+- [ ] Set AU and SG prices by hand; tax forms (ABN + GST for AU; GST number for SG).
+- [ ] Store page localised twice: en-AU (Australia) and en-GB (Singapore's default).
+- [ ] Insights and marketing never name or recommend a card, loan, super or investment (ASIC).
+- [ ] Privacy policy names a Data Protection Officer with contact details (Singapore PDPA).
+- [ ] Review prompt: at most 3 a year, after a milestone (first monthly summary, 10 receipts).
+- [ ] Pre-order on the App Store so sortd.page can link to a real page.
+
 ## Knowing how it's going, without breaking the privacy promise
 
 Sortd's whole pitch is "no tracking, nothing leaves your phone", and the
@@ -41,7 +117,8 @@ Everything below comes from Apple, free, with no code and no SDK.
 **Fraud, and why there's little to do:**
 StoreKit 2 already verifies every transaction's signature on the device
 (`ProStore.swift` — `case .verified`), drops anything with a
-`revocationDate`, and drops anything expired. That covers forged receipts
+`revocationDate`, and only keeps subscriptions Apple reports as active or in
+grace period. That covers forged receipts
 and "refund it but keep using it", which were the two real iOS fraud
 vectors. Nothing to build.
 
@@ -77,9 +154,9 @@ needs a backend, and isn't worth one until there's revenue to protect.
 - [ ] Apple Developer Program ($149 AUD/yr) — **decided 19 Sep 2026: individual for now.** If App
       Review cites 5.1.1(ix), switch to a company account (needs a D-U-N-S number) and resubmit.
       Review notes already say Sortd doesn't move, hold or manage money.
-- [ ] Gmail for v1 — **decided 19 Sep 2026:** App Store v1 ships without Gmail; TestFlight keeps
-      it (up to 100 Google test users) while Google verifies. Steps in docs/GoogleVerification.md.
-      Before the App Store build: remove Gmail from that build (not just hide it — 2.3.1(a)).
+- [ ] Gmail for v1 — **decided 22 Sep 2026 (replaces 19 Sep):** v1 ships **with** Gmail. Submit
+      to the App Store only after Google verifies gmail.readonly (docs/GoogleVerification.md).
+      Until then TestFlight only (up to 100 Google test users). `Features.gmail` / SORTD_GMAIL.
 - [ ] A website with a **privacy policy** and **support page** (Apple and Google both need the URLs)
 - [ ] Trademark check on "Sortd" (see Brand/README.md)
 - [ ] EU Digital Services Act trader status in App Store Connect

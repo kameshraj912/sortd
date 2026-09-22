@@ -8,8 +8,8 @@ import SwiftData
 @MainActor
 enum DemoData {
     static let activeKey = "demoActive"
-    private static let marker = "Sample purchase"
-    private static let cardIds = ["demo-debit", "demo-credit"]
+    static let marker = "Sample purchase"
+    static let cardIds = ["demo-debit", "demo-credit"]
 
     static var isActive: Bool { UserDefaults.standard.bool(forKey: activeKey) }
 

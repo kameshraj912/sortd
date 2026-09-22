@@ -77,7 +77,6 @@ struct WidgetSummaryTests {
         let all = try ctx.fetch(FetchDescriptor<Transaction>())
         let s = WidgetBridge.build(from: all, budget: 0, now: now, calendar: cal)
         #expect(s.today == Decimal(20))
-        #expect(!s.recent.contains { $0.merchant == "Returned" })
     }
 
     // MARK: Budget
@@ -126,16 +125,25 @@ struct WidgetSummaryTests {
 
     // MARK: Recent
 
-    @Test func recentIsNewestFirstAndCappedAtFour() throws {
+    /// No widget shows recent purchases, so their names and amounts
+    /// aren't copied into the shared App Group file.
+    @Test func recentPurchasesAreNotWrittenForWidgets() throws {
         let ctx = try store()
         for day in 1...8 {
             add(ctx, "Shop \(day)", Decimal(day), at(String(format: "2026-09-%02d", day)))
         }
         let all = try ctx.fetch(FetchDescriptor<Transaction>())
         let s = WidgetBridge.build(from: all, budget: 0, now: at("2026-09-15"), calendar: cal)
-        #expect(s.recent.count == 4)
-        #expect(s.recent.first?.merchant == "Shop 8")
-        #expect(s.recent.last?.merchant == "Shop 5")
+        #expect(s.recent.isEmpty)
+    }
+
+    @Test func amountsAreHiddenWhenLockedUnlessTurnedOn() {
+        var s = WidgetSummary()
+        #expect(s.hidesWhenLocked)
+        s.showWhenLocked = false
+        #expect(s.hidesWhenLocked)
+        s.showWhenLocked = true
+        #expect(!s.hidesWhenLocked)
     }
 
     @Test func anEmptyStoreSaysSoRatherThanShowingZero() throws {
@@ -175,5 +183,35 @@ struct WidgetSummaryTests {
         #expect(WidgetSummary.read(from: missing) == nil)
         #expect(WidgetSummary.decode(Data("nonsense".utf8)) == nil)
         #expect(WidgetSummary.read(from: nil) == nil)
+    }
+
+    // MARK: Stale file (bug hunt U1)
+
+    @Test func afterMidnightTodayStartsAtZero() {
+        var s = WidgetSummary()
+        s.updatedAt = at("2026-09-21", "22:00")
+        s.today = 40; s.week = 120; s.month = 500; s.perDay = 30
+        let next = s.asOf(at("2026-09-22", "00:05"), calendar: cal)
+        #expect(next.today == 0)
+        #expect(next.perDay == nil)
+        #expect(next.month == 500)          // same month: still true
+    }
+
+    @Test func aNewMonthStartsFromZero() {
+        var s = WidgetSummary()
+        s.updatedAt = at("2026-09-30", "20:00")
+        s.today = 12; s.month = 812; s.budget = 1500; s.leftThisMonth = 688
+        s.categories = [.init(category: "groceries", name: "Groceries", total: 300)]
+        let next = s.asOf(at("2026-10-01", "08:00"), calendar: cal)
+        #expect(next.month == 0)
+        #expect(next.categories.isEmpty)
+        #expect(next.leftThisMonth == 1500)
+    }
+
+    @Test func sameDayIsUnchanged() {
+        var s = WidgetSummary()
+        s.updatedAt = at("2026-09-21", "08:00")
+        s.today = 40; s.month = 500
+        #expect(s.asOf(at("2026-09-21", "21:00"), calendar: cal) == s)
     }
 }
