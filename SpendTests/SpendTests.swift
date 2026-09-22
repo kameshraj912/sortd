@@ -145,6 +145,60 @@ struct DeduperTests {
     @Test func zeroAmountNeverMerges() {
         #expect(Deduper.match(c("Unknown merchant", "0"), in: [c("Unknown merchant", "0")]) == nil)
     }
+
+    @Test func twoPurchasesTypedByHandNeverMerge() {
+        // The second "Coffee 5" typed a minute later used to vanish.
+        let first = c("Coffee", "5", source: .manual)
+        let second = c("Coffee", "5", hoursLater: 1.0 / 60, source: .manual)
+        #expect(Deduper.match(second, in: [first]) == nil)
+        // A hand-typed purchase still merges with the Apple Pay tap for it.
+        #expect(Deduper.match(c("Coffee", "5", hoursLater: 0.1, source: .tap), in: [first]) == 0)
+    }
+}
+
+/// Changing a category teaches a rule; a bare "DoorDash" is not the shop.
+@MainActor
+struct RecategoriseTests {
+    let context: ModelContext
+
+    init() throws {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        context = ModelContext(container)
+    }
+
+    private func email(_ merchant: String, _ amount: Decimal, minutes: Double) throws -> Transaction {
+        let p = IncomingPurchase(date: Date(timeIntervalSince1970: 1_790_000_000 + minutes * 60), merchant: merchant,
+                                 amount: amount, currency: "AUD", card: .other, source: .email, platform: "doordash")
+        return try TransactionLogger.log(p, in: context).transaction
+    }
+
+    @Test func oneDoorDashOrderDoesNotMoveEveryDoorDashOrder() throws {
+        // Bank alert first ("DoorDash"), then the order email names the shop.
+        let biryani = try email("DoorDash", 31.05, minutes: 0)
+        _ = try email("Chennai Biryani House", 31.05, minutes: 4)
+        #expect(biryani.merchant == "Chennai Biryani House")
+        #expect(biryani.rawMerchant == "DoorDash")
+        // Another DoorDash order known only from its bank alert.
+        let other = try email("DoorDash", 20, minutes: 600)
+        let before = other.category
+
+        try TransactionLogger.recategorise(biryani, to: .groceries, in: context)
+
+        #expect(biryani.category == .groceries)
+        #expect(other.category == before)
+        let rules = try TransactionLogger.learnedRules(in: context)
+        #expect(rules["chennaibiryanihouse"] == .groceries)
+        #expect(rules["doordash"] == nil)
+    }
+
+    @Test func aNormalShopStillLearnsOnItsOwnName() throws {
+        let a = try email("Seven Seeds", 5, minutes: 0)
+        let b = try email("Seven Seeds", 6, minutes: 60)
+        try TransactionLogger.recategorise(a, to: .groceries, in: context)
+        #expect(b.category == .groceries)
+        #expect(try TransactionLogger.learnedRules(in: context)["sevenseeds"] == .groceries)
+    }
 }
 
 struct RoundingTests {
@@ -1257,6 +1311,17 @@ struct WalletTapEdgeTests {
         let ctx = try store(), b = book()
         _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b)
         let again = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b,
+                                                       now: .now.addingTimeInterval(30))
+        #expect(again.merged)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+    }
+    @Test func repeatedMissingAmountTapWithAMessyNameIsKeptOnce() async throws {
+        // The saved name is cleaned ("SQ *CAFE BLOSSOM…" → "Cafe Blossom"), so
+        // comparing it with the raw text never matched and the tap was saved twice.
+        let ctx = try store(), b = book()
+        let shop = "SQ *CAFE BLOSSOM MELBOURNE AU"
+        _ = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        let again = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b,
                                                        now: .now.addingTimeInterval(30))
         #expect(again.merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)

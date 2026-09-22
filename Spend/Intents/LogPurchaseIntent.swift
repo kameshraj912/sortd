@@ -75,7 +75,9 @@ struct LogPurchaseIntent: AppIntent {
             let since = now.addingTimeInterval(-120)
             let shop = name.isEmpty ? "Unknown merchant" : name
             let recent = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))) ?? []
-            if let same = recent.first(where: { $0.amount == 0 && $0.merchant == shop && $0.card == cardID }) {
+            // `merchant` is the cleaned name ("SQ *CAFE X" → "Cafe X"); the
+            // tap's own text is kept in `rawMerchant`, so compare that.
+            if let same = recent.first(where: { $0.amount == 0 && $0.rawMerchant == shop && $0.card == cardID }) {
                 return Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount", transaction: same, merged: true)
             }
         }

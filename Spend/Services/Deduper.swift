@@ -21,6 +21,9 @@ enum Deduper {
         guard new.amount > 0 else { return nil }
         var best: (index: Int, score: Double)?
         for (i, old) in existing.enumerated() {
+            // Two purchases typed by hand are two purchases: a person pressing
+            // Add is never a re-send (two "Coffee 5" in ten minutes are real).
+            if old.source == .manual, new.source == .manual { continue }
             guard old.amount == new.amount, old.currency == new.currency else { continue }
             guard abs(old.date.timeIntervalSince(new.date)) <= window else { continue }
             // Unknown card on either side is fine; two different known cards are not.
