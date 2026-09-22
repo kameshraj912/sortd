@@ -113,14 +113,14 @@ struct SpendApp: App {
 }
 
 enum AppTab: Hashable, CaseIterable {
-    case home, activity, insights, settings
+    case home, activity, insights, search
 
     var title: String {
         switch self {
         case .home: "Home"
         case .activity: "Activity"
         case .insights: "Insights"
-        case .settings: "Settings"
+        case .search: "Search"
         }
     }
 
@@ -129,7 +129,7 @@ enum AppTab: Hashable, CaseIterable {
         case .home: "house"
         case .activity: "list.bullet"
         case .insights: "chart.bar"
-        case .settings: "gearshape"
+        case .search: "magnifyingglass"
         }
     }
 }
@@ -164,19 +164,21 @@ struct RootView: View {
     }
 
     var body: some View {
-        // The system tab bar is hidden and replaced with a flat one: iOS 27
-        // always draws the system bar as floating Liquid Glass.
+        // The system Liquid Glass tab bar. Settings is a sheet from the gear
+        // on Home (tabs are for places people go often), and Search gets the
+        // trailing search tab, as the HIG suggests.
         TabView(selection: $tab) {
-            Tab(value: AppTab.home) { HomeView(tab: $tab).hideSystemTabBar() }
-            Tab(value: AppTab.activity) { ActivityView().hideSystemTabBar() }
-            Tab(value: AppTab.insights) { ProGate(feature: .insights) { InsightsView() }.hideSystemTabBar() }
-            Tab(value: AppTab.settings) { SettingsView().hideSystemTabBar() }
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                ProGate(feature: .insights) { InsightsView() }
+            }
+            Tab(value: AppTab.search, role: .search) { SearchView() }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            FlatTabBar(selection: $tab)
-        }
-        // The tab bar stays at the bottom, under the keyboard, like the system one.
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .tint(Color.brand)
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .sensoryFeedback(.selection, trigger: tab)
+        .sheet(isPresented: $router.showingSettings) { SettingsView() }
         // In its own window so open sheets are covered too. The app-switcher
         // cover shows whenever Sortd isn't active, lock on or off, so the
         // snapshot never shows purchases.
@@ -225,54 +227,6 @@ struct RootView: View {
         }
     }
 }
-
-/// Plain bottom bar: white, a hairline on top, black when selected, grey otherwise.
-struct FlatTabBar: View {
-    @Binding var selection: AppTab
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                Button {
-                    selection = tab
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: selection == tab ? tab.symbol + (tab == .activity ? "" : ".fill") : tab.symbol)
-                            .font(.system(size: 20, weight: .regular))
-                            .frame(height: 24)
-                        // Like the system tab bar: labels don't grow; at the
-                        // largest sizes they hide and a long press shows them big.
-                        if !typeSize.isAccessibilitySize {
-                            Text(tab.title)
-                                .font(.system(size: 10, weight: .medium))
-                        }
-                    }
-                    .foregroundStyle(selection == tab ? Color.brand : Color.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 49)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selection == tab ? [.isSelected, .isButton] : .isButton)
-                .accessibilityShowsLargeContentViewer {
-                    Label(tab.title, systemImage: tab.symbol)
-                }
-            }
-        }
-        .padding(.top, 6)
-        .background(Color.card.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Divider() }
-        .sensoryFeedback(.selection, trigger: selection)
-    }
-}
-
-private extension View {
-    func hideSystemTabBar() -> some View {
-        toolbarVisibility(.hidden, for: .tabBar)
-    }
-}
-
 
 /// Light / Dark / System, set on the app's windows. Called from Settings the
 /// moment it changes and whenever the app opens. (SwiftUI's

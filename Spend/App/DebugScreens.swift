@@ -45,7 +45,7 @@ extension AppTab {
         switch ProcessInfo.processInfo.environment["SPEND_TAB"] {
         case "activity": .activity
         case "insights": .insights
-        case "settings": .settings
+        case "search": .search
         default: .home
         }
     }
