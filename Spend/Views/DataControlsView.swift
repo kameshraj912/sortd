@@ -85,6 +85,9 @@ enum CSVExport {
 @MainActor
 enum DataReset {
     static func deleteEverything(in context: ModelContext) {
+        // A Gmail sync still downloading would otherwise save its purchases
+        // into the empty store afterwards.
+        GmailSync.cancelRunningSyncs()
         try? context.delete(model: Transaction.self)
         try? context.delete(model: MerchantRule.self)
         try? context.delete(model: ImportedRecord.self)
@@ -92,6 +95,8 @@ enum DataReset {
         try? context.save()
         let gmail = GmailSync.accounts
         GmailSync.accounts = []
+        // Also picks up revokes that failed earlier, which the wipe below
+        // would otherwise lose.
         GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
         #if DEBUG

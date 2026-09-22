@@ -12,7 +12,7 @@ struct BackupDataSettingsView: View {
         List {
             ListPageTitle(title: "Backup & Data", subtitle: "Move your purchases, or clear them.")
             Section {
-                ShareLink(item: BackupExport(), preview: SharePreview("Sortd backup")) {
+                ShareLink(item: SavedBackupExport(), preview: SharePreview("Sortd backup")) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Save a Backup")
@@ -23,9 +23,6 @@ struct BackupDataSettingsView: View {
                         Image(systemName: "arrow.down.document")
                     }
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    UserDefaults.standard.set(Date.now, forKey: Self.lastBackupKey)
-                })
                 NavigationLink {
                     ImportView()
                 } label: {
@@ -67,18 +64,35 @@ struct BackupDataSettingsView: View {
         .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete Everything", role: .destructive) {
                 DataReset.deleteEverything(in: context)
+                // Setup can't open over the Settings sheet: close it.
+                Router.shared.settingsPath = []
+                Router.shared.showingSettings = false
             }
         } message: {
             Text("This removes every purchase, card, budget and setting from this iPhone. It can't be undone. Export first if you want a copy.")
         }
     }
 
-    static let lastBackupKey = "lastBackupSaved"
+    nonisolated static let lastBackupKey = "lastBackupSaved"
 
     private var lastBackupText: String {
         guard let last = UserDefaults.standard.object(forKey: Self.lastBackupKey) as? Date else {
             return "You haven't saved one yet"
         }
         return "Last saved \(last.formatted(.relative(presentation: .named)))"
+    }
+}
+
+/// The backup, noting when it was saved. The date is set only once the file
+/// is actually made for a place the user picked, so opening the share sheet
+/// and cancelling doesn't count as a backup.
+private nonisolated struct SavedBackupExport: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .data) { _ in
+            let data = try await MainActor.run { try Backup.data(in: SpendStore.container.mainContext) }
+            let file = try Exports.write(data, named: Exports.dated("Sortd backup", "sortdbackup"))
+            UserDefaults.standard.set(Date.now, forKey: BackupDataSettingsView.lastBackupKey)
+            return SentTransferredFile(file)
+        }
     }
 }
