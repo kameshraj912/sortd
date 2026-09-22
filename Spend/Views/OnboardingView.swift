@@ -720,7 +720,7 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Email receipts", "Connect Gmail and Sortd adds purchases from receipts and bank alerts — delivery, rides, app stores, online shops. Read-only, on this iPhone.")
+            header("Email receipts", "Connect Gmail and Sortd adds purchases from receipts and bank alerts. Read-only, on this iPhone.")
             if !gmail.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(gmail) { a in

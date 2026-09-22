@@ -50,7 +50,7 @@ struct GmailSection: View {
         } header: {
             BoldHeader("Email Receipts")
         } footer: {
-            Text("Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone.")
+            Text("Finds receipts and bank alerts in your Gmail, read on this iPhone.")
         }
         // Accounts and "Synced …" lines change as a connect or sync moves on.
         .onChange(of: status.phase) { accounts = GmailSync.accounts }
@@ -62,7 +62,7 @@ struct GmailSection: View {
             Button("Disconnect") { disconnect(deleting: false) }
             Button("Disconnect and Delete Its Purchases", role: .destructive) { disconnect(deleting: true) }
         } message: {
-            Text("Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way.")
+            Text("Google access is cancelled. Purchases already logged are kept.")
         }
     }
 
@@ -102,8 +102,6 @@ struct ConnectGmailSheet: View {
                         .accessibilityHidden(true)
                     Text("Add purchases from your email")
                         .font(.title2.weight(.bold))
-                    Text("Sortd finds receipts and bank alerts in your Gmail — food delivery, rides, app stores, online shops — and adds them as purchases.")
-                        .foregroundStyle(.secondary)
                     // Up top, where the eye already is, not under the explainer.
                     if showsProgress {
                         SyncProgressCard(status: status) { connect() }
@@ -114,16 +112,13 @@ struct ConnectGmailSheet: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 14) {
-                        point("magnifyingglass", "Only receipts", "It searches for receipts and bank alerts. Other email is never opened.")
-                        point("iphone", "Read on this iPhone", "Emails aren't copied to any server or shared.")
-                        point("eye.slash", "Read-only", "Sortd can't send, delete or change your email.")
-                        point("xmark.circle", "Stop any time", "Disconnect in Settings and Google cancels access.")
+                        point("magnifyingglass", "Only Receipts", "Limited to receipts and bank alerts — nothing else is opened.")
+                        point("iphone", "Read on Your iPhone", "Processed on this iPhone. Nothing leaves the device.")
+                        point("eye.slash", "Read-Only", "Can't send, edit or delete anything in your inbox.")
+                        point("xmark.circle", "Stop Any Time", "Remove access anytime in Settings › Purchase Sources › Gmail.")
                     }
                     .padding(16)
                     .surface(radius: 16)
-                    Text("Google will show a warning that the app isn't verified yet while Sortd is being reviewed by Google.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
                 .padding(24)
             }

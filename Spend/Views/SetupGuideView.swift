@@ -117,7 +117,7 @@ struct SetupGuideView: View {
                 } header: {
                     BoldHeader("Last Tap Received")
                 } footer: {
-                    Text("What Sortd did with the last tap, and exactly what Apple Pay sent. Useful if a tap shows the wrong shop, amount or card, or doesn't show up at all.")
+                    Text("What Sortd did with the last tap. Useful if something looks wrong.")
                 }
             }
 

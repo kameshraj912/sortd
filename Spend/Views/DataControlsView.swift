@@ -10,31 +10,28 @@ struct PrivacyView: View {
         List {
             ListPageTitle(title: "Privacy", subtitle: "What Sortd stores, and where.")
             Section {
-                row("iphone", "Stored on this iPhone", "Purchases, cards and settings live only in Sortd's storage on your iPhone. There's no Sortd server or account.")
+                row("iphone", "On This iPhone", "Purchases, cards and settings are stored locally — no server, no account.")
                 if Features.gmail {
-                    row("envelope", "Gmail, read on your iPhone", "Sortd searches only for receipts and bank alerts, and reads them on this iPhone. Nothing is copied to a server or shared. Disconnect any time.")
-                    row("key", "Keys in the Keychain", "The key that lets Sortd read your receipts is kept in the iPhone Keychain, not in the app's files.")
+                    row("envelope", "Gmail, Read-Only", "Limited to receipts and bank alerts, processed on this iPhone.")
                 }
-                row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
-                row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
-                row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only a currency code and dates are sent.")
-                row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
+                row("key", "Encrypted", "The key that unlocks your email is encrypted at rest.")
+                row("building.columns", "No Bank Logins", "Bank usernames and passwords are never requested.")
+                row("number", "Only the Last 4 Digits", "Full card numbers are never requested or stored.")
+                row("chart.bar.xaxis", "No Ads, No Tracking", "No advertising, no analytics, nothing sold or shared.")
                 // Only when reports really go out: a TestFlight build with a
                 // Sentry DSN. Otherwise this row would claim something false.
                 if CrashReporting.isOn {
-                    row("ladybug", "Crash reports (TestFlight beta only)", "While you're testing in TestFlight, a crash sends a report to Sentry: the crash, your iPhone model and iOS version. No names, purchases, receipts or Gmail data. This turns off once Sortd leaves TestFlight for the App Store.")
+                    row("ladybug", "Crash Reports in Beta", "Limited to the crash and device model — never your purchases.")
                 }
             }
             Section {
-                Text("Sortd helps you track your own spending. It isn't a bank and doesn't move money, and nothing in it is financial advice. Amounts come from Apple Pay, your receipts and what you type in, and converted amounts use published exchange rates, so always check your bank statement for exact figures.")
+                Text("Sortd isn't a bank and doesn't give financial advice. Check your bank statement for exact amounts.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            } header: {
-                BoldHeader("Good to Know")
             }
             Section {
                 Link(destination: URL(string: "https://sortd.page/privacy")!) {
-                    Label("Privacy Policy", systemImage: "hand.raised")
+                    Label("Read the full privacy policy", systemImage: "hand.raised")
                 }
                 Link(destination: URL(string: "https://sortd.page/terms")!) {
                     Label("Terms of Use", systemImage: "doc.text")

@@ -33,7 +33,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 BoldHeader("Security")
             } footer: {
-                Text("Sortd locks when you open it, and when you come back after more than a minute. Widgets hide amounts on the Lock Screen and in StandBy unless you turn that on.")
+                Text("Locks on open, and after a minute away. Widgets hide amounts unless turned on.")
             }
 
             Section {
