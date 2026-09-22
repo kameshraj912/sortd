@@ -25,6 +25,8 @@ struct ImportView: View {
     @State private var photo: PhotosPickerItem?
     @State private var backup: Data?
     @State private var done: String?
+    /// Purchases being added right now, for "Adding 42 purchases…".
+    @State private var saving: Int?
 
     private enum Stage { case start, review, backup }
 
@@ -116,7 +118,7 @@ struct ImportView: View {
             Section {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Reading…").foregroundStyle(.secondary)
+                    Text("Reading your statement…").foregroundStyle(.secondary)
                 }
             }
         }
@@ -189,7 +191,11 @@ struct ImportView: View {
                 save(spend.filter(\.include).map(\.row))
             } label: {
                 HStack {
-                    Text("Add \(spend.filter(\.include).count) Purchase\(spend.filter(\.include).count == 1 ? "" : "s")")
+                    if let saving {
+                        Text("Adding \(saving) purchase\(saving == 1 ? "" : "s")…")
+                    } else {
+                        Text("Add \(spend.filter(\.include).count) Purchase\(spend.filter(\.include).count == 1 ? "" : "s")")
+                    }
                     Spacer()
                     if busy { ProgressView() }
                 }
@@ -251,9 +257,10 @@ struct ImportView: View {
     private func load(_ work: @escaping () async throws -> StatementReader.Reading) {
         busy = true
         error = nil
+        AccessibilityNotification.Announcement("Reading your statement").post()
         Task {
             do {
-                let reading = try await work()
+                let reading = try await Perf.measure("statement.read") { try await work() }
                 if StatementReader.looksLikeBackup(reading.text) {
                     backup = Data(reading.text.utf8)
                     stage = .backup
@@ -303,14 +310,23 @@ struct ImportView: View {
 
     private func save(_ found: [StatementImport.Row]) {
         busy = true
-        let (added, merged) = StatementImport.save(found, card: card, in: context)
-        try? TransactionLogger.refreshUncategorised(in: context)
-        WidgetBridge.refresh(from: context)
-        Task { await FXService.backfill(in: context) }
-        busy = false
-        done = merged > 0
-            ? "\(added) added. \(merged) matched a purchase Sortd already had."
-            : "\(added) added."
+        saving = found.count
+        Task {
+            // Let "Adding N purchases…" reach the screen before the work starts.
+            try? await Task.sleep(for: .milliseconds(30))
+            WidgetBridge.hold()
+            let (added, merged) = StatementImport.save(found, card: card, in: context)
+            try? TransactionLogger.refreshUncategorised(in: context)
+            // Refreshes the widget once for the whole import.
+            WidgetBridge.release()
+            Task { await FXService.backfill(in: context) }
+            busy = false
+            saving = nil
+            done = merged > 0
+                ? "\(added) added. \(merged) matched a purchase Sortd already had."
+                : "\(added) added."
+            AccessibilityNotification.Announcement(done ?? "").post()
+        }
     }
 
     private func restore(_ mode: Backup.Mode) {

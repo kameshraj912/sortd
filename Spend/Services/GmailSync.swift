@@ -48,14 +48,66 @@ enum GmailSync {
         set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: accountsKey) }
     }
 
-    /// Signs in and runs the first sync.
+    /// Signs in and runs the first sync of that account, reporting each
+    /// step to `SyncStatus.gmail`.
     @MainActor
     static func connect(in context: ModelContext) async throws -> EmailSync.Summary {
-        let email = try await GoogleAuth().signIn()
+        let status = SyncStatus.gmail
+        let job = status.begin(quiet: false)
+        status.update(.signingIn, job: job)
+        let total = Perf.begin("gmail.connect")
+        // Closing Google's sheet makes the app active again, which starts the
+        // app's own sync. It must not race this one for the new inbox.
+        connecting = true
+        defer { connecting = false }
+        let email: String
+        do {
+            email = try await GoogleAuth().signIn(onAuthorized: { status.update(.connecting, job: job) })
+        } catch {
+            total.end("sign-in failed")
+            throw error
+        }
         var list = accounts.filter { $0.email != email }
         list.append(GmailAccount(email: email))
         accounts = list
-        return await syncAll(in: context, force: true)
+        // Only the new account: the others were synced recently enough.
+        let s = try await syncAccounts([email], in: context, force: true, rethrow: true, job: job)
+        total.end("added \(s.added)")
+        return s
+    }
+
+    /// A connect is running (from Google's sheet to the end of its first sync).
+    @MainActor private(set) static var connecting = false
+
+    /// Starts `connect` as its own task, so closing the sheet (or the whole
+    /// setup screen) doesn't stop it. Progress and errors go to `SyncStatus.gmail`.
+    @MainActor
+    static func startConnect(in context: ModelContext) {
+        let status = SyncStatus.gmail
+        guard !status.isBusyForPerson else { return }
+        status.task = Task {
+            do {
+                _ = try await connect(in: context)
+            } catch GoogleAuth.AuthError.cancelled {
+                status.dismiss()
+            } catch is CancellationError {
+                status.dismiss()
+            } catch {
+                status.update(.failed(SyncFailure.from(error)))
+            }
+        }
+    }
+
+    /// A sync the person asked for (Sync Now, Try Again), shown with progress.
+    @MainActor
+    static func startSync(in context: ModelContext) {
+        let status = SyncStatus.gmail
+        // Already syncing in the background: just show that one.
+        if status.isBusy { status.promote(); return }
+        let job = status.begin(quiet: false)
+        status.task = Task {
+            _ = try? await syncAccounts(accounts.map(\.email), in: context, force: true, rethrow: false, job: job)
+        }
     }
 
     /// Revokes access. With `deletePurchases`, also removes purchases that
@@ -77,20 +129,54 @@ enum GmailSync {
         try? context.save()
     }
 
+    /// Accounts being synced right now. Opening the app while a connect is
+    /// still reading (the Google sheet closing makes the app active again)
+    /// must not start a second, identical sync of the same inbox.
+    @MainActor private static var inFlight: Set<String> = []
+
     /// Syncs every connected account (at most every 5 minutes unless forced).
+    /// `quiet`: started by the app, not the person; Home only hears about it
+    /// when there is something to add or to fix.
     @MainActor @discardableResult
     static func syncAll(in context: ModelContext, force: Bool = false) async -> EmailSync.Summary {
+        guard !connecting else { return EmailSync.Summary() }
+        #if DEBUG
+        if SyncStatus.demoActive { return EmailSync.Summary() }
+        #endif
+        let status = SyncStatus.gmail
+        // Something the person started owns the status line: stay invisible.
+        let job = status.isBusyForPerson ? -1 : status.begin(quiet: true)
+        return (try? await syncAccounts(accounts.map(\.email), in: context, force: force, rethrow: false, job: job)) ?? EmailSync.Summary()
+    }
+
+    @MainActor
+    private static func syncAccounts(_ emails: [String], in context: ModelContext, force: Bool, rethrow: Bool,
+                                     job: Int) async throws -> EmailSync.Summary {
         var total = EmailSync.Summary()
         // Gmail receipts are Pro. A lapsed subscription (or a build without
         // Gmail) stops reading the inbox; the account stays until disconnected.
-        guard Features.gmail, ProStore.shared.isPro else { return total }
+        guard Features.gmail, ProStore.shared.isPro else {
+            SyncStatus.gmail.update(.idle, job: job)
+            return total
+        }
+        let status = SyncStatus.gmail
+        let report: @MainActor @Sendable (SyncStatus.Phase) -> Void = { status.update($0, job: job) }
         var list = accounts
-        for i in list.indices {
+        var ran = false
+        var failure: Error?
+        WidgetBridge.hold()
+        defer { WidgetBridge.release() }
+        for i in list.indices where emails.contains(list[i].email) {
             if !force, let last = list[i].lastSync, Date.now.timeIntervalSince(last) < 300 { continue }
+            let email = list[i].email
+            guard !inFlight.contains(email) else { continue }
+            inFlight.insert(email)
+            defer { inFlight.remove(email) }
+            ran = true
             do {
                 let started = Date.now
-                let s = try await sync(list[i], in: context)
-                total.added += s.added; total.merged += s.merged; total.refunds += s.refunds
+                let s = try await sync(list[i], in: context, report: report, alreadyAdded: total.added)
+                total.added += s.added; total.merged += s.merged; total.refunds += s.refunds; total.checked += s.checked
                 if s.incomplete {
                     // Hit the 1,000 cap: next time, carry on below the oldest
                     // email reached, rather than listing the same 1,000 again.
@@ -103,20 +189,36 @@ enum GmailSync {
                 }
                 list[i].lastResult = s.incomplete ? s.text + " · more next sync" : s.text
             } catch {
-                list[i].lastResult = error.localizedDescription
+                list[i].lastResult = error is CancellationError ? nil : error.localizedDescription
+                if !(error is CancellationError) { failure = error }
                 log.error("Gmail sync failed for \(list[i].email): \(error.localizedDescription)")
             }
         }
         // Accounts may have been connected or disconnected during the sync:
         // update only the ones that are still there.
         accounts = accounts.map { a in list.first { $0.email == a.email } ?? a }
-        if total.added + total.merged + total.refunds > 0 { await FXService.backfill(in: context) }
+        if let failure {
+            report(.failed(SyncFailure.from(failure)))
+            if rethrow { throw failure }
+        } else if ran || !status.quiet {
+            report(.finished(added: total.added))
+        } else if case .failed = status.phase {
+            // Nothing ran (synced a moment ago): leave an earlier error showing.
+        } else {
+            report(.idle)
+        }
+        if total.added + total.merged + total.refunds > 0 {
+            await Perf.measure("fx.afterGmail") { _ = await FXService.backfill(in: context) }
+        }
         return total
     }
 
     @MainActor
-    private static func sync(_ account: GmailAccount, in context: ModelContext) async throws -> EmailSync.Summary {
-        let token = try await GoogleAuth.accessToken(for: account.email)
+    private static func sync(_ account: GmailAccount, in context: ModelContext, report: @escaping @MainActor @Sendable (SyncStatus.Phase) -> Void,
+                             alreadyAdded: Int) async throws -> EmailSync.Summary {
+        let whole = Perf.begin("gmail.sync")
+        let token = try await Perf.measure("gmail.token") { try await GoogleAuth.accessToken(for: account.email) }
+        let api = GmailAPI(token: token)
         // A few days of overlap so late-arriving emails aren't missed; already
         // imported ones are skipped by id.
         var since = account.lastSync.map { Int($0.addingTimeInterval(-3 * 86400).timeIntervalSince1970) }
@@ -126,7 +228,12 @@ enum GmailSync {
         var window = since.map { "after:\($0)" } ?? "newer_than:\(firstSyncDays)d"
         if let before = account.backfillBefore { window += " before:\(Int(before.timeIntervalSince1970))" }
         let search = "((\(EmailParsers.gmailQuery)) OR (\(GenericReceipts.gmailQuery))) \(window)"
-        let (ids, truncated) = try await listMessages(query: search, token: token)
+        report(.searching(found: 0))
+        let listSpan = Perf.begin("gmail.list")
+        let (ids, truncated) = try await api.listMessages(query: search) { found in
+            await MainActor.run { report(.searching(found: found)) }
+        }
+        listSpan.end("\(ids.count) ids")
 
         #if DEBUG
         if ProcessInfo.processInfo.environment["SPEND_GMAIL_RESET"] == "1" {
@@ -136,113 +243,190 @@ enum GmailSync {
             try? context.save()
         }
         #endif
-        // Gmail ids are hex (never contain "-"). "-none" rows only count for
-        // the current reader version, so a reader fix re-reads old misses.
-        let done = Set(((try? context.fetch(FetchDescriptor<ImportedRecord>())) ?? []).compactMap { r -> String? in
-            if r.id.contains("-none") && !r.id.hasSuffix("-none-v\(readerVersion)") { return nil }
-            return r.id.components(separatedBy: "-").first
-        })
-        // Oldest first, so a purchase is in before its refund.
-        let fresh = Array(ids.filter { !done.contains($0) }.reversed())
+        let fresh = Perf.measure("gmail.skipKnown") { unread(ids, in: context) }
 
-        // 20 at a time, saving after each batch: a pause or error keeps what
-        // was already read, and the next sync carries on from there.
-        var summary = EmailSync.Summary()
-        for start in stride(from: 0, to: fresh.count, by: 20) {
-            let batch = Array(fresh[start..<min(start + 20, fresh.count)])
-            let messages = try await fetchMessages(batch, token: token)
-            var records: [EmailRecord] = []
-            var notReceipts: [String] = []
-            for m in messages {
-                let found = await read(m)
-                records += found
-                // Not a receipt: remember it so it isn't downloaded again —
-                // but only when the best reader for it actually ran.
-                let bestRan = EmailParsers.knowsSender(m.from) || ReceiptAI.isAvailable
-                if found.isEmpty && bestRan && !m.body.isEmpty {
-                    notReceipts.append("\(m.id)-none-v\(readerVersion)")
-                }
-                #if DEBUG
-                let layer = EmailParsers.knowsSender(m.from) ? "rule" : (ReceiptAI.isAvailable ? "ai" : "fallback")
-                let got = found.map { "\($0.kind) \($0.merchant) \($0.currency) \($0.amount)" }
-                if let dump = ProcessInfo.processInfo.environment["SPEND_GMAIL_DUMP"], m.from.contains(dump) || m.subject.contains(dump) {
-                    print("GMAILDEBUG body(\(m.subject.prefix(30))) = \(EmailParsers.normalize(m.body).prefix(1500))")
-                }
-                print("GMAILDEBUG [\(layer)] \(m.from.components(separatedBy: "<").first ?? "") | \(m.subject.prefix(45)) -> \(got.isEmpty ? "skipped" : got.joined(separator: "; "))")
-                #endif
-            }
-            // Disconnect or Delete All may have run while this batch was
-            // downloading. Stop without writing anything back.
-            guard accounts.contains(where: { $0.email == account.email }) else { throw CancellationError() }
-            for id in notReceipts { context.insert(ImportedRecord(id: id, account: account.email)) }
-            let s = try EmailSync.importRecords(records, in: context, account: account.email)
-            summary.added += s.added; summary.merged += s.merged; summary.refunds += s.refunds
-            summary.checked += messages.count
-        }
+        let email = account.email
+        var summary = try await importMessages(
+            fresh, api: api, account: email, aiAvailable: ReceiptAI.isAvailable, in: context,
+            stillConnected: { accounts.contains { $0.email == email } },
+            progress: { done, total, added in report(.adding(done: done, total: total, added: alreadyAdded + added)) })
         #if DEBUG
         print("GMAILDEBUG found=\(ids.count) fresh=\(fresh.count) checked=\(summary.checked) added=\(summary.added) ai=\(ReceiptAI.isAvailable)")
         #endif
         log.info("Gmail sync: \(ids.count) found, \(fresh.count) new, \(summary.added) added")
         summary.incomplete = truncated
         // Where the next catch-up pass starts: the oldest email in this list.
-        if truncated, let last = ids.last { summary.oldestListed = try? await messageDate(last, token: token) }
+        if truncated, let last = ids.last { summary.oldestListed = try? await api.messageDate(last) }
+        whole.end("\(ids.count) listed, \(fresh.count) fetched, \(summary.added) added")
         return summary
+    }
+
+    /// The listed ids not read before, newest first (Gmail's order). Gmail
+    /// ids are hex (never contain "-"). "-none" rows only count for the
+    /// current reader version, so a reader fix re-reads old misses.
+    @MainActor
+    static func unread(_ ids: [String], in context: ModelContext) -> [String] {
+        let done = Set(((try? context.fetch(FetchDescriptor<ImportedRecord>())) ?? []).compactMap { r -> String? in
+            if r.id.contains("-none") && !r.id.hasSuffix("-none-v\(readerVersion)") { return nil }
+            return r.id.components(separatedBy: "-").first
+        })
+        var seen = Set<String>()
+        return ids.filter { !done.contains($0) && seen.insert($0).inserted }
+    }
+
+    /// One downloaded email, already read by the exact rules when its sender
+    /// has them (that runs off the main thread, next to the download).
+    nonisolated struct Fetched: Sendable {
+        let message: EmailParsers.Message
+        /// What was read already. nil: waits for the on-device model.
+        let ruled: [EmailRecord]?
+        /// Read by the best reader for it (exact rules), so an empty result
+        /// really means "not a receipt".
+        var exact = false
+    }
+
+    /// Downloads, reads and saves emails newest first, a few at a time.
+    ///
+    /// - Up to `api.concurrency` downloads run at once; a new one starts as
+    ///   soon as one finishes (no waiting for the slowest of a batch).
+    /// - Purchases are saved every `flushEvery` emails or `flushInterval`
+    ///   seconds, so they appear on Home while the rest is still coming, and
+    ///   a pause or error keeps what was already read.
+    /// - Refunds and DoorDash "order adjusted" emails need their purchase to
+    ///   be in first. They wait to the end and go in oldest first.
+    @MainActor
+    static func importMessages(_ ids: [String], api: GmailAPI, account: String, aiAvailable: Bool,
+                               in context: ModelContext, flushEvery: Int = 10, flushInterval: Double = 1.0,
+                               stillConnected: () -> Bool = { true },
+                               progress: (_ done: Int, _ total: Int, _ added: Int) -> Void = { _, _, _ in }) async throws -> EmailSync.Summary {
+        var summary = EmailSync.Summary()
+        guard !ids.isEmpty else { return summary }
+        let span = Perf.begin("gmail.fetchAndImport")
+        var buffer: [EmailRecord] = []
+        var notReceipts: [String] = []
+        var later: [EmailRecord] = []
+        var done = 0
+        var lastFlush = ContinuousClock.now
+        var readTime = 0.0, saveTime = 0.0
+
+        func flush() throws {
+            guard !buffer.isEmpty || !notReceipts.isEmpty else { return }
+            // Disconnect or Delete All may have run while this was
+            // downloading. Stop without writing anything back.
+            guard stillConnected() else { throw CancellationError() }
+            let t = ContinuousClock.now
+            for id in notReceipts { context.insert(ImportedRecord(id: id, account: account)) }
+            let s = try EmailSync.importRecords(buffer, in: context, account: account)
+            summary.added += s.added; summary.merged += s.merged; summary.refunds += s.refunds
+            buffer = []; notReceipts = []
+            lastFlush = .now
+            saveTime += Perf.ms(since: t)
+        }
+
+        func handle(_ f: Fetched) async {
+            let t = ContinuousClock.now
+            let m = f.message
+            let found: [EmailRecord]
+            if let ruled = f.ruled { found = ruled } else { found = await readUnknown(m, aiAvailable: aiAvailable) }
+            readTime += Perf.ms(since: t)
+            for r in found {
+                let adjusted = r.platform == "doordash" && (r.note ?? "").contains("order adjusted")
+                if r.kind == "refund" || adjusted { later.append(r) } else { buffer.append(r) }
+            }
+            // Not a receipt: remember it so it isn't downloaded again —
+            // but only when the best reader for it actually ran.
+            let bestRan = f.exact || aiAvailable
+            if found.isEmpty && bestRan && !m.body.isEmpty {
+                notReceipts.append("\(m.id)-none-v\(readerVersion)")
+            }
+            #if DEBUG
+            let layer = f.exact ? "rule" : (aiAvailable ? "ai" : "fallback")
+            let got = found.map { "\($0.kind) \($0.merchant) \($0.currency) \($0.amount)" }
+            if let dump = ProcessInfo.processInfo.environment["SPEND_GMAIL_DUMP"], m.from.contains(dump) || m.subject.contains(dump) {
+                print("GMAILDEBUG body(\(m.subject.prefix(30))) = \(EmailParsers.normalize(m.body).prefix(1500))")
+            }
+            print("GMAILDEBUG [\(layer)] \(m.from.components(separatedBy: "<").first ?? "") | \(m.subject.prefix(45)) -> \(got.isEmpty ? "skipped" : got.joined(separator: "; "))")
+            #endif
+        }
+
+        progress(0, ids.count, 0)
+        do {
+            try await withThrowingTaskGroup(of: Fetched?.self) { group in
+                var next = 0
+                func startNext() {
+                    guard next < ids.count else { return }
+                    let id = ids[next]
+                    next += 1
+                    group.addTask { try await fetchAndRule(id, api: api, aiAvailable: aiAvailable) }
+                }
+                for _ in 0..<min(api.concurrency, ids.count) { startNext() }
+                while let f = try await group.next() {
+                    startNext()
+                    if let f { await handle(f) }
+                    done += 1
+                    summary.checked += 1
+                    if buffer.count + notReceipts.count >= flushEvery
+                        || Perf.ms(since: lastFlush) >= flushInterval * 1000 {
+                        try flush()
+                    }
+                    progress(done, ids.count, summary.added)
+                }
+            }
+            try flush()
+        } catch {
+            // Keep what was read before the error; the rest comes next sync.
+            if !(error is CancellationError) { try? flush() }
+            span.end("stopped after \(done)")
+            throw error
+        }
+        if !later.isEmpty {
+            // Oldest first, so an adjusted order finds the one it changes.
+            buffer = later.sorted { $0.date < $1.date }
+            try flush()
+        }
+        progress(done, ids.count, summary.added)
+        span.end("\(ids.count) emails, read \(Int(readTime)) ms, save \(Int(saveTime)) ms")
+        return summary
+    }
+
+    /// Download one email and read it right there, off the main thread,
+    /// unless it needs the on-device model.
+    nonisolated static func fetchAndRule(_ id: String, api: GmailAPI, aiAvailable: Bool) async throws -> Fetched? {
+        guard let m = try await api.message(id) else { return nil }
+        if EmailParsers.knowsSender(m.from) { return Fetched(message: m, ruled: EmailParsers.parse(m), exact: true) }
+        if aiAvailable { return Fetched(message: m, ruled: nil) }
+        // Anyone can send an email that says "refund". Only senders with
+        // exact rules (banks, card alerts) may mark a purchase as refunded.
+        let plain = GenericReceipts.parse(m).map { [$0] }?.filter { $0.kind != "refund" } ?? []
+        return Fetched(message: m, ruled: plain)
+    }
+
+    /// Someone without exact rules: the on-device model first; if it finds
+    /// nothing, the plain rule gets a try (both skip shipping updates,
+    /// declined payments and so on). Apple's rules for AI in finance: the
+    /// person checks what the model read. Anyone can send an email that says
+    /// "refund", so only senders with exact rules may mark one refunded.
+    @MainActor
+    private static func readUnknown(_ m: EmailParsers.Message, aiAvailable: Bool) async -> [EmailRecord] {
+        var found: [EmailRecord]
+        if aiAvailable, var r = await ReceiptAI.read(m) {
+            r.note = "Read by on-device AI · check the amount and shop"
+            found = [r]
+        } else {
+            found = GenericReceipts.parse(m).map { [$0] } ?? []
+        }
+        found.removeAll { $0.kind == "refund" }
+        return found
     }
 
     /// Known sender → exact rules. Anyone else → on-device AI if the phone
     /// has it, else the plain "Total" rule.
     static func read(_ m: EmailParsers.Message) async -> [EmailRecord] {
         if EmailParsers.knowsSender(m.from) { return EmailParsers.parse(m) }
-        // The model first; if it finds nothing, the plain rule gets a try
-        // (both skip shipping updates, declined payments and so on).
-        var found: [EmailRecord]
-        if ReceiptAI.isAvailable, var r = await ReceiptAI.read(m) {
-            // Apple's rules for AI in finance: the person checks what the model read.
-            r.note = "Read by on-device AI · check the amount and shop"
-            found = [r]
-        } else {
-            found = GenericReceipts.parse(m).map { [$0] } ?? []
-        }
-        // Anyone can send an email that says "refund". Only senders with
-        // exact rules (banks, card alerts) may mark a purchase as refunded.
-        found.removeAll { $0.kind == "refund" }
-        return found
-    }
-
-    nonisolated private static func isRateLimit(_ data: Data) -> Bool {
-        let text = String(data: data, encoding: .utf8) ?? ""
-        return text.contains("rateLimit") || text.contains("Quota exceeded")
+        return await readUnknown(m, aiAvailable: ReceiptAI.isAvailable)
     }
 
     // MARK: Gmail API
-
-    nonisolated private struct ListResponse: Decodable {
-        struct Ref: Decodable { let id: String }
-        let messages: [Ref]?
-        let nextPageToken: String?
-    }
-
-    /// Message ids matching the search, newest first (capped at 500).
-    /// Bump when a reader improves, so emails it missed are read again.
-    static let readerVersion = 2
-
-    nonisolated private static func listMessages(query: String, token: String) async throws -> ([String], Bool) {
-        var ids: [String] = []
-        var page: String?
-        repeat {
-            var url = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages")!
-            url.queryItems = [.init(name: "q", value: query), .init(name: "maxResults", value: "100")]
-            if let page { url.queryItems?.append(.init(name: "pageToken", value: page)) }
-            // URLComponents leaves "+" alone, and servers read it as a space:
-            // "invoice+statements@…" would become two words and the whole
-            // OR-search would match nothing. Encode it.
-            url.percentEncodedQuery = url.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-            let r: ListResponse = try await get(url.url!, token: token)
-            ids += (r.messages ?? []).map(\.id)
-            page = r.nextPageToken
-        } while page != nil && ids.count < 1000
-        return (ids, page != nil)
-    }
 
     nonisolated struct MessageResponse: Decodable {
         struct Header: Decodable { let name: String; let value: String }
@@ -258,34 +442,10 @@ enum GmailSync {
         let payload: Part
     }
 
-    nonisolated private struct DateOnly: Decodable { let internalDate: String? }
+    /// Bump when a reader improves, so emails it missed are read again.
+    static let readerVersion = 2
 
-    /// When one email arrived, without downloading it.
-    nonisolated private static func messageDate(_ id: String, token: String) async throws -> Date? {
-        let url = URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(id)?format=minimal")!
-        let m: DateOnly = try await get(url, token: token)
-        return m.internalDate.flatMap(Double.init).map { Date(timeIntervalSince1970: $0 / 1000) }
-    }
-
-    /// Full messages, 4 at a time (kind to Gmail's per-user limits).
-    nonisolated private static func fetchMessages(_ ids: [String], token: String) async throws -> [EmailParsers.Message] {
-        var out: [EmailParsers.Message] = []
-        for chunk in stride(from: 0, to: ids.count, by: 4).map({ Array(ids[$0..<min($0 + 4, ids.count)]) }) {
-            try await withThrowingTaskGroup(of: EmailParsers.Message?.self) { group in
-                for id in chunk {
-                    group.addTask {
-                        let url = URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(id)?format=full")!
-                        let m: MessageResponse = try await get(url, token: token)
-                        return message(from: m)
-                    }
-                }
-                for try await m in group { if let m { out.append(m) } }
-            }
-        }
-        return out
-    }
-
-    nonisolated private static func message(from m: MessageResponse) -> EmailParsers.Message? {
+    nonisolated static func message(from m: MessageResponse) -> EmailParsers.Message? {
         let headers = m.payload.headers ?? []
         func header(_ name: String) -> String { headers.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value ?? "" }
         let date = m.internalDate.flatMap(Double.init).map { Date(timeIntervalSince1970: $0 / 1000) } ?? .now
@@ -349,19 +509,93 @@ enum GmailSync {
         for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
         return s
     }
+}
 
-    /// GET with retries when Gmail says "too fast" (quota / rate limit).
-    nonisolated private static func get<T: Decodable>(_ url: URL, token: String) async throws -> T {
+/// The few Gmail REST calls Sortd makes. The session, the pause between
+/// retries and how many downloads run at once can be swapped in tests.
+nonisolated struct GmailAPI: Sendable {
+    var token: String
+    var session: URLSession = GoogleAuth.session
+    var base = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+    /// Downloads at once. Gmail allows 250 quota units per user per second
+    /// and one email costs 5, so 6 in flight (about 20–30 a second) stays
+    /// well inside it, with room for a second account syncing.
+    var concurrency = 6
+    /// Waits after "too fast" (429, or 403 rateLimitExceeded), doubling,
+    /// plus a little random spread so parallel downloads don't retry together.
+    var backoff: [Double] = [1, 2, 4, 8]
+    var sleep: @Sendable (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
+
+    private struct ListResponse: Decodable {
+        struct Ref: Decodable { let id: String }
+        let messages: [Ref]?
+        let nextPageToken: String?
+    }
+    private struct DateOnly: Decodable { let internalDate: String? }
+
+    /// Message ids matching the search, newest first, capped at 1,000.
+    /// 500 per page (Gmail's most), so the cap is 2 round trips, not 10.
+    /// `found` hears the running count, for "found N".
+    func listMessages(query: String, found: @Sendable (Int) async -> Void = { _ in }) async throws -> ([String], Bool) {
+        var ids: [String] = []
+        var page: String?
+        repeat {
+            var url = URLComponents(string: base)!
+            url.queryItems = [.init(name: "q", value: query), .init(name: "maxResults", value: "500"),
+                              .init(name: "fields", value: "messages/id,nextPageToken")]
+            if let page { url.queryItems?.append(.init(name: "pageToken", value: page)) }
+            // URLComponents leaves "+" alone, and servers read it as a space:
+            // "invoice+statements@…" would become two words and the whole
+            // OR-search would match nothing. Encode it.
+            url.percentEncodedQuery = url.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+            let r: ListResponse = try await get(url.url!)
+            ids += (r.messages ?? []).map(\.id)
+            page = r.nextPageToken
+            await found(ids.count)
+        } while page != nil && ids.count < 1000
+        return (ids, page != nil)
+    }
+
+    /// One email, full body. nil when it was deleted after the list.
+    func message(_ id: String) async throws -> EmailParsers.Message? {
+        // Only the parts Sortd reads: skips the snippet, labels, size and history.
+        let url = URL(string: "\(base)/\(id)?format=full&fields=id,internalDate,payload")!
+        do {
+            let m: GmailSync.MessageResponse = try await get(url)
+            return GmailSync.message(from: m)
+        } catch let e as GmailError where e.code == 404 {
+            return nil
+        }
+    }
+
+    /// When one email arrived, without downloading it.
+    func messageDate(_ id: String) async throws -> Date? {
+        let url = URL(string: "\(base)/\(id)?format=minimal&fields=internalDate")!
+        let m: DateOnly = try await get(url)
+        return m.internalDate.flatMap(Double.init).map { Date(timeIntervalSince1970: $0 / 1000) }
+    }
+
+    /// GET with retries when Gmail says "too fast" (quota / rate limit) or
+    /// has a passing server error. Honours Retry-After when Gmail sends one.
+    func get<T: Decodable>(_ url: URL) async throws -> T {
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        var (data, response) = try await GoogleAuth.session.data(for: req)
-        var code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        for wait in [2.0, 5.0, 10.0] where code == 429 || (code == 403 && isRateLimit(data)) {
-            try await Task.sleep(for: .seconds(wait))
-            (data, response) = try await GoogleAuth.session.data(for: req)
-            code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        }
-        guard code == 200 else {
+        req.timeoutInterval = 30
+        var attempt = 0
+        while true {
+            try Task.checkCancellation()
+            let (data, response) = try await session.data(for: req)
+            let http = response as? HTTPURLResponse
+            let code = http?.statusCode ?? 0
+            if code == 200 { return try JSONDecoder().decode(T.self, from: data) }
+            let retryable = code == 429 || (code == 403 && Self.isRateLimit(data)) || code == 500 || code == 503
+            if retryable, attempt < backoff.count {
+                let asked = http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
+                let wait = min(asked ?? backoff[attempt] * Double.random(in: 1...1.3), 30)
+                attempt += 1
+                try await sleep(wait)
+                continue
+            }
             // Google's reason, e.g. "insufficientPermissions" or "rateLimitExceeded".
             let reason = String(data: data, encoding: .utf8) ?? ""
             #if DEBUG
@@ -369,6 +603,10 @@ enum GmailSync {
             #endif
             throw GmailError(code: code, body: reason)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    static func isRateLimit(_ data: Data) -> Bool {
+        let text = String(data: data, encoding: .utf8) ?? ""
+        return text.contains("rateLimit") || text.contains("Quota exceeded")
     }
 }

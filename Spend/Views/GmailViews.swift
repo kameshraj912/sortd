@@ -5,7 +5,7 @@ import SwiftData
 struct GmailSection: View {
     @Environment(\.modelContext) private var context
     @State private var accounts = GmailSync.accounts
-    @State private var syncing = false
+    private let status = SyncStatus.gmail
     @State private var showingConnect = false
     @State private var disconnecting: GmailAccount?
 
@@ -30,26 +30,30 @@ struct GmailSection: View {
             }
             if !accounts.isEmpty {
                 Button {
-                    Task {
-                        syncing = true
-                        await GmailSync.syncAll(in: context, force: true)
-                        accounts = GmailSync.accounts
-                        syncing = false
-                    }
+                    GmailSync.startSync(in: context)
                 } label: {
                     HStack {
                         Text("Sync Now")
                         Spacer()
-                        if syncing { ProgressView() }
+                        if status.isBusy { ProgressView() }
                     }
                 }
-                .disabled(syncing)
+                .disabled(status.isBusyForPerson)
+                if status.isBusyForPerson || status.phase.isEnd {
+                    SyncProgressCard(status: status) {
+                        if case .failed(let f) = status.phase { GmailSync.retry(f, in: context) }
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
             }
         } header: {
             BoldHeader("Email Receipts")
         } footer: {
             Text("Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone.")
         }
+        // Accounts and "Synced …" lines change as a connect or sync moves on.
+        .onChange(of: status.phase) { accounts = GmailSync.accounts }
         .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) {
             if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) }
         }
@@ -82,9 +86,11 @@ struct GmailSection: View {
 struct ConnectGmailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @State private var working = false
-    @State private var error: String?
-    @State private var result: String?
+    /// Shared with Home and Settings: the connect keeps going if this closes.
+    private let status = SyncStatus.gmail
+    /// This sheet started (or is watching) a connect, so show its progress.
+    @State private var watching = SyncStatus.gmail.isBusyForPerson
+        || (SyncStatus.gmail.phase.isEnd && !SyncStatus.gmail.quiet)
 
     var body: some View {
         NavigationStack {
@@ -98,6 +104,15 @@ struct ConnectGmailSheet: View {
                         .font(.title2.weight(.bold))
                     Text("Sortd finds receipts and bank alerts in your Gmail — food delivery, rides, app stores, online shops — and adds them as purchases.")
                         .foregroundStyle(.secondary)
+                    // Up top, where the eye already is, not under the explainer.
+                    if showsProgress {
+                        SyncProgressCard(status: status) { connect() }
+                        if status.isBusy, status.phase != .signingIn {
+                            Text("You can close this. Sortd keeps going and shows progress on Home.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     VStack(alignment: .leading, spacing: 14) {
                         point("magnifyingglass", "Only receipts", "It searches for receipts and bank alerts. Other email is never opened.")
                         point("iphone", "Read on this iPhone", "Emails aren't copied to any server or shared.")
@@ -106,12 +121,6 @@ struct ConnectGmailSheet: View {
                     }
                     .padding(16)
                     .surface(radius: 16)
-                    if let result {
-                        Label(result, systemImage: "checkmark.circle.fill").foregroundStyle(Color.up)
-                    }
-                    if let error {
-                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Color.down)
-                    }
                     Text("Google will show a warning that the app isn't verified yet while Sortd is being reviewed by Google.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -120,15 +129,15 @@ struct ConnectGmailSheet: View {
             }
             .background(Color.page)
             .safeAreaInset(edge: .bottom) {
-                Button(action: connect) {
-                    if result == nil {
-                        GoogleButtonLabel(working: working)
+                Button(action: primaryAction) {
+                    if showsDone {
+                        Text(status.isBusy ? "Close" : "Done").primaryPill(enabled: true)
                     } else {
-                        Text("Done").primaryPill(enabled: true)
+                        GoogleButtonLabel(working: status.phase == .signingIn)
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(working)
+                .disabled(status.phase == .signingIn)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 .background(Color.page)
@@ -152,21 +161,28 @@ struct ConnectGmailSheet: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func connect() {
-        if result != nil { dismiss(); return }
-        working = true
-        error = nil
-        Task {
-            do {
-                let s = try await GmailSync.connect(in: context)
-                result = "Connected · \(s.text)"
-            } catch GoogleAuth.AuthError.cancelled {
-                // Closed the Google sheet: nothing to report.
-            } catch {
-                self.error = error.localizedDescription
-            }
-            working = false
+    /// Progress belongs to a connect this sheet is showing, not to the
+    /// app's own quiet background sync.
+    private var showsProgress: Bool {
+        watching && status.phase != .idle
+    }
+
+    /// Past Google's sheet: the bottom button closes, the work carries on.
+    private var showsDone: Bool {
+        guard showsProgress else { return false }
+        switch status.phase {
+        case .connecting, .searching, .adding, .finished: return true
+        default: return false
         }
+    }
+
+    private func primaryAction() {
+        if showsDone { dismiss() } else { connect() }
+    }
+
+    private func connect() {
+        watching = true
+        GmailSync.startConnect(in: context)
     }
 }
 
@@ -187,7 +203,7 @@ struct GoogleButtonLabel: View {
             } else {
                 Image("GoogleG").resizable().frame(width: 20, height: 20).accessibilityHidden(true)
             }
-            Text(working ? "Connecting…" : "Continue with Google")
+            Text(working ? "Opening Google…" : "Continue with Google")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Color(hex: dark ? 0xE3E3E3 : 0x1F1F1F))
         }
