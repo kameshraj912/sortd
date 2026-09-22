@@ -52,16 +52,18 @@ enum WidgetBridge {
         out.currency = Money.home
         out.hasAnyPurchases = !transactions.isEmpty
 
-        let live = transactions.filter { !$0.refunded }
+        // Same rule as Home's `audTotal`: refunds and transfers (a top-up,
+        // money moved between your own accounts) aren't spending.
+        let live = transactions.filter { !$0.refunded && $0.category != .transfers }
 
         let startOfDay = calendar.startOfDay(for: now)
         out.today = live
             .filter { calendar.isDate($0.date, inSameDayAs: startOfDay) }
-            .reduce(Decimal(0)) { $0 + $1.audValue }
+            .audTotal
 
         let month = calendar.dateInterval(of: .month, for: now)
         let monthItems = live.filter { month?.contains($0.date) ?? false }
-        out.month = monthItems.reduce(Decimal(0)) { $0 + $1.audValue }
+        out.month = monthItems.audTotal
 
         if budget > 0 {
             let left = Decimal(budget) - out.month
@@ -71,9 +73,7 @@ enum WidgetBridge {
                 let daysLeft = max(1, daysInMonth - calendar.component(.day, from: now) + 1)
                 // Bills still to charge this month are already spoken for.
                 let monthEnd = month?.end ?? now
-                let bills = transactions.recurring()
-                    .filter { $0.status == .active && $0.nextDate < monthEnd }
-                    .reduce(Decimal(0)) { $0 + $1.audAmount }
+                let bills = transactions.recurring(now: now).stillToCharge(before: monthEnd, calendar: calendar)
                 let spendable = max(0, left - bills)
                 out.perDay = spendable / Decimal(daysLeft)
             } else {
@@ -88,8 +88,7 @@ enum WidgetBridge {
         // Monday to now. Finance widgets that only show a daily number read
         // as a telling-off on a bad day; a week is easier to live with.
         if let week = calendar.dateInterval(of: .weekOfYear, for: now) {
-            out.week = live.filter { week.contains($0.date) }
-                .reduce(Decimal(0)) { $0 + $1.audValue }
+            out.week = live.filter { week.contains($0.date) }.audTotal
         }
 
         // What one day is worth, so "today" can be shown against a limit.
@@ -102,6 +101,7 @@ enum WidgetBridge {
         var totals: [SpendCategory: Decimal] = [:]
         for t in monthItems { totals[t.category, default: 0] += t.audValue }
         out.categories = totals
+            .filter { $0.value > 0 }
             .sorted { $0.value > $1.value }
             .prefix(5)
             .map { WidgetSummary.Slice(category: $0.key.rawValue, name: $0.key.name, total: $0.value) }
@@ -118,5 +118,32 @@ enum WidgetBridge {
         // into the shared file at all.
 
         return out
+    }
+}
+
+// MARK: - Bills still to charge
+
+extension Recurring {
+    /// How many times this charges from `nextDate` up to (not including)
+    /// `end`. A weekly bill can land four or five times in what's left of a
+    /// month; a monthly one at most once.
+    func timesDue(before end: Date, calendar: Calendar = .current) -> Int {
+        guard status == .active else { return 0 }
+        var count = 0
+        var date = nextDate
+        while date < end, count < 60 {
+            count += 1
+            date = cadence.advance(nextDate, by: count, calendar: calendar)
+        }
+        return count
+    }
+}
+
+extension Array where Element == Recurring {
+    /// What active bills will still take before `end`, in the home currency,
+    /// counting each time a weekly or fortnightly one falls. Home's "a day"
+    /// figure and the widget both use this, so they agree.
+    func stillToCharge(before end: Date, calendar: Calendar = .current) -> Decimal {
+        reduce(Decimal(0)) { $0 + $1.audAmount * Decimal($1.timesDue(before: end, calendar: calendar)) }
     }
 }

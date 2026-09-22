@@ -16,7 +16,27 @@ enum Reminders {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
+    /// The rebuild running now. App open and the Settings toggle can both
+    /// call `reschedule` at once; without this, an app-open rebuild still
+    /// adding reminders could finish after "off" had cleared them.
+    private static var rebuilding: Task<Void, Never>?
+
+    /// One at a time: a newer call stops the one in progress, waits for it,
+    /// then clears and rebuilds from scratch.
     static func reschedule(_ recurring: [Recurring], now: Date = .now) async {
+        let previous = rebuilding
+        previous?.cancel()
+        let task = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }   // an even newer call will do it
+            await rebuild(recurring, now: now)
+        }
+        rebuilding = task
+        await task.value
+        if rebuilding == task { rebuilding = nil }
+    }
+
+    private static func rebuild(_ recurring: [Recurring], now: Date) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
@@ -31,6 +51,8 @@ enum Reminders {
             guard let dayBefore = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: r.nextDate)),
                   let fireAt = cal.date(bySettingHour: 9, minute: 0, second: 0, of: dayBefore),
                   fireAt > now else { continue }
+            // Superseded: the newer call clears whatever this one added.
+            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = "\(r.merchant) tomorrow"
             content.body = "\(Money.format(r.amount, r.currency)) on \(r.card.shortLabel). \(r.cadence.name)."

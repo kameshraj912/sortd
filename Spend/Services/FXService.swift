@@ -18,24 +18,68 @@ enum FXService {
     /// The currency `audAmount` values are currently in.
     static let convertedKey = "convertedTo"
 
+    static let budgetKey = "monthlyBudget"
+
+    /// Where today's rate comes from. Tests pass their own.
+    typealias RateSource = (_ from: String, _ to: String) async throws -> Double?
+
     /// Safety net: if the saved values were converted for a different
     /// currency than the current home one, convert them again.
-    static func ensureConverted(in context: ModelContext) async {
-        let home = Money.home
-        guard UserDefaults.standard.string(forKey: convertedKey) != home else { return }
-        await rebase(to: home, in: context)
+    static func ensureConverted(in context: ModelContext, defaults: UserDefaults = .standard,
+                                rate: @escaping RateSource = FXService.latestRate(from:to:)) async {
+        let home = defaults.string(forKey: Money.homeKey) ?? Money.detectedHome
+        guard defaults.string(forKey: convertedKey) != home else { return }
+        await rebase(to: home, in: context, defaults: defaults, rate: rate)
     }
 
-    static func rebase(to home: String, in context: ModelContext) async {
-        let old = UserDefaults.standard.string(forKey: convertedKey) ?? Money.home
-        // The monthly budget was set in the old currency: convert it too.
-        if old != home, UserDefaults.standard.double(forKey: "monthlyBudget") > 0,
-           let rate = try? await latestRate(from: old, to: home) {
-            let b = UserDefaults.standard.double(forKey: "monthlyBudget") * rate
-            UserDefaults.standard.set((b / 10).rounded() * 10, forKey: "monthlyBudget")
+    /// The rebase running now (or queued last), so two callers never convert
+    /// the budget twice: app-open's `ensureConverted` and the Settings picker
+    /// can both fire while the rate is still downloading.
+    private static var rebasing: (home: String, defaults: UserDefaults, task: Task<Void, Never>)?
+
+    /// Home currency changed. One at a time: a call for the currency already
+    /// on its way waits for that one; any other waits its turn, then reads
+    /// what the last one left.
+    static func rebase(to home: String, in context: ModelContext, defaults: UserDefaults = .standard,
+                       rate: @escaping RateSource = FXService.latestRate(from:to:)) async {
+        if let running = rebasing, running.home == home, running.defaults === defaults {
+            await running.task.value
+            return
         }
-        UserDefaults.standard.set(home, forKey: Money.homeKey)
-        UserDefaults.standard.set(home, forKey: convertedKey)
+        let previous = rebasing?.task
+        let task = Task {
+            await previous?.value
+            await rebaseNow(to: home, in: context, defaults: defaults, rate: rate)
+        }
+        rebasing = (home, defaults, task)
+        await task.value
+        if rebasing?.task == task { rebasing = nil }
+    }
+
+    private static func rebaseNow(to home: String, in context: ModelContext, defaults: UserDefaults,
+                                  rate: RateSource) async {
+        // Read everything before waiting on the network.
+        let old = defaults.string(forKey: convertedKey)
+            ?? defaults.string(forKey: Money.homeKey) ?? Money.detectedHome
+        let budget = defaults.double(forKey: budgetKey)
+        let limits = CategoryBudgets.stored(defaults)
+
+        // The budget and category limits were set in the old currency.
+        // Offline, leave them (and `convertedKey`) as they are so the next
+        // `ensureConverted` tries again, rather than keep a SGD 1,000 budget
+        // as USD 1,000 for good.
+        var settingsDone = old == home || (budget <= 0 && limits.isEmpty)
+        if !settingsDone, let r = try? await rate(old, home), r > 0 {
+            // Changed while the rate loaded: typed in the new currency already.
+            if budget > 0, defaults.double(forKey: budgetKey) == budget {
+                defaults.set((budget * r / 10).rounded() * 10, forKey: budgetKey)
+            }
+            CategoryBudgets.convert(from: limits, rate: r, defaults)
+            settingsDone = true
+        }
+
+        defaults.set(home, forKey: Money.homeKey)
+        if settingsDone { defaults.set(home, forKey: convertedKey) }
         for t in (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] {
             t.audAmount = t.currencyCode == home ? t.amount : nil
         }

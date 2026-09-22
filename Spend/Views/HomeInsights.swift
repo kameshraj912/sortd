@@ -53,7 +53,9 @@ struct InsightCarousel: View {
     }
 
     private var biggest: [Row] {
-        transactions.sorted { $0.audValue > $1.audValue }.prefix(3).map {
+        // Transfers (top-ups, moving money between accounts) and refunds aren't purchases.
+        transactions.filter { $0.category != .transfers && !$0.refunded }
+            .sorted { $0.audValue > $1.audValue }.prefix(3).map {
             Row(category: $0.category, title: $0.merchant,
                 detail: $0.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)),
                 amount: $0.audValue)
