@@ -38,6 +38,7 @@ struct WalletSetupGuide: View {
                     VStack(alignment: .leading, spacing: 12) {
                         ShortcutsMock(step: p.id)
                             .frame(height: 230)
+                            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
                             .accessibilityHidden(true)
                         HStack(alignment: .top, spacing: 10) {
                             Text("\(p.id + 1)")

@@ -148,6 +148,13 @@ struct OnboardingView: View {
         return nil
     }
 
+    private var progress: Double {
+        let shown = Step.allCases.filter { $0 != .welcome && $0 != .building && isShown($0) }
+        guard !shown.isEmpty else { return 0 }
+        let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
+        return Double(reached + 1) / Double(shown.count)
+    }
+
     private var questionSteps: [Step] { [.goals, .payment, .currency, .feeling, .budget, .checkIn].filter(isShown) }
 
     private func counter(_ s: Step) -> String {
@@ -168,18 +175,21 @@ struct OnboardingView: View {
             } else {
                 Color.clear.frame(width: 44, height: 44)
             }
-            // One segment per step this person will actually see.
-            HStack(spacing: 4) {
-                let shown = Step.allCases.filter { $0 != .welcome && $0 != .building && isShown($0) }
-                let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
-                ForEach(Array(shown.indices), id: \.self) { i in
-                    Capsule()
-                        .fill(i <= reached ? Color.brandPalette[i % Color.brandPalette.count] : Color.track)
-                        .frame(height: 4)
+            // One bar that fills, counting only steps this person will see.
+            Capsule()
+                .fill(Color.track)
+                .frame(height: 5)
+                .overlay(alignment: .leading) {
+                    GeometryReader { g in
+                        Capsule()
+                            .fill(LinearGradient(colors: Color.brandPalette, startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(5, g.size.width * progress))
+                    }
                 }
-            }
-            .opacity(step == .welcome || step == .building ? 0 : 1)
-            .accessibilityHidden(true)
+                .clipShape(.capsule)
+                .animation(.snappy, value: progress)
+                .opacity(step == .welcome || step == .building ? 0 : 1)
+                .accessibilityHidden(true)
             if questionSteps.contains(step) {
                 // Straight to the plan with sensible defaults.
                 Button("Skip") {
@@ -261,6 +271,14 @@ struct OnboardingView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                         .frame(minHeight: 36)
+                case .applePay where !tapConnected:
+                    primaryButton("Open Shortcuts") {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    }
+                    Button("I'll do this later") { go(1) }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(minHeight: 36)
                 case .checkIn where asksNotifications:
                     primaryButton(primaryTitle, action: primaryAction)
                     Button("Not now") { go(1) }
@@ -334,7 +352,7 @@ struct OnboardingView: View {
         switch step {
         case .welcome: welcome
         case .goals: GoalsPage(counter: counter(.goals), goals: goalsBinding)
-        case .payment: PaymentPage(counter: counter(.payment), payment: paymentBinding)
+        case .payment: PaymentPage(counter: counter(.payment), payment: paymentBinding) { if step == .payment { go(1) } }
         case .currency: currency
         case .feeling: FeelingPage(counter: counter(.feeling), feeling: feelingBinding)
         case .budget: budgetPage
@@ -547,7 +565,7 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Pick the bank for each card you pay with. Two cards from one bank? Add it twice. Debit or credit comes next.")
+            header("Your cards", "Tap the bank for each card you pay with. Two cards at one bank? Tap it twice.")
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
             // Below the grid, so adding a card never moves the buttons.
@@ -727,7 +745,7 @@ struct OnboardingView: View {
 
     private var cardDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Card details", "The last 4 digits are how Sortd matches bank emails and receipts to the right card. Only the last 4 — never the full number.")
+            header("Last 4 digits", "So Sortd can match emails and receipts to the right card. Only the last 4, never the full number. You can add them later.")
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
                     CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
@@ -781,68 +799,67 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay taps", "A one-time setup in Apple's Shortcuts app. Apple doesn't let apps do this part for you, so it takes about two minutes.")
-            if #available(iOS 27.0, *) {
-                WalletSetupGuide()
+            header("Log Apple Pay by itself", "Set it up once in Apple's Shortcuts app. About 2 minutes. Apple doesn't let apps do this part for you.")
+            tapStatus
+            Group {
+                if #available(iOS 27.0, *) {
+                    WalletSetupGuide()
+                        .padding(16)
+                        .surface(radius: 20)
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
+                        miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
+                        miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
+                        actionMock.padding(.leading, 38)
+                    }
                     .padding(16)
-                    .surface(radius: 16)
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
-                    miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
-                    miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
-                    actionMock.padding(.leading, 38)
+                    .surface(radius: 20)
                 }
-                .padding(16)
-                .surface(radius: 16)
             }
-
-            HStack(spacing: 10) {
-                Button {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
-                } label: {
-                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.onBrand)
-                        .background(Color.brand, in: .capsule)
-                }
-                Button { showingGuide = true } label: {
-                    Text("Detailed Steps")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.ink)
-                        .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
-                }
+            .padding(.top, 14)
+            Button { showingGuide = true } label: {
+                Label("Every step in detail", systemImage: "list.number")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.ink)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
-            .padding(.top, 14)
+            .padding(.top, 4)
+        }
+    }
 
-            // Checks itself: turns green as soon as a tap arrives.
-            HStack(spacing: 12) {
+    /// Checks itself: listens for the first tap and celebrates when it lands.
+    private var tapStatus: some View {
+        HStack(spacing: 14) {
+            Image(systemName: tapConnected ? "checkmark" : "wave.3.right")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.onBrand)
+                .frame(width: 46, height: 46)
+                .background(tapConnected ? Color.up : Color.brand, in: .circle)
+                .symbolEffect(.variableColor.iterative, isActive: !tapConnected)
+                .symbolEffect(.bounce, value: tapConnected)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 2) {
                 if let t = firstTap {
-                    Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(Color.up)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Connected").font(.headline)
-                        Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
+                    Text("Connected").font(.headline)
+                    Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 } else {
-                    ProgressView()
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Waiting for your first tap").font(.headline)
-                        Text("Pay for anything with Apple Pay and it shows up here.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
+                    Text("Waiting for your first tap").font(.headline)
+                    Text("Set it up below, then pay with Apple Pay. It shows up here.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .surface(radius: 16)
-            .padding(.top, 14)
-            .animation(.snappy, value: tapConnected)
-            .sensoryFeedback(.success, trigger: tapConnected)
+            Spacer(minLength: 0)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.tint(tapConnected ? Color.up.opacity(0.2) : nil), in: .rect(cornerRadius: 22))
+        .animation(.snappy, value: tapConnected)
+        .sensoryFeedback(.success, trigger: tapConnected)
+        .accessibilityElement(children: .combine)
     }
 
     /// What the finished Shortcuts action looks like, so people can check theirs.
@@ -897,7 +914,26 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Email receipts", "Connect Gmail and Sortd adds purchases from receipts and bank alerts — delivery, rides, app stores, online shops. Read-only, on this iPhone.")
+            header("Catch online receipts", "Sortd reads receipts and bank alerts in your Gmail and adds the purchases for you.")
+            FlowLayout(spacing: 8) {
+                ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
+                         ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
+                    Label(name, systemImage: symbol)
+                        .font(.footnote.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.card, in: .capsule)
+                }
+            }
+            .padding(.bottom, 16)
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Read-only. Sortd can't send, delete or change email.", systemImage: "lock")
+                Label("Read on this iPhone. Nothing goes to a server.", systemImage: "iphone")
+                Label("Disconnect any time in Settings.", systemImage: "xmark.circle")
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 18)
             if !gmail.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(gmail) { a in
