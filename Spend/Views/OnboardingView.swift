@@ -959,13 +959,13 @@ struct OnboardingView: View {
             // than left to be discovered by accident in Settings.
             VStack(spacing: 0) {
                 tip("square.and.arrow.down", "Import a statement",
-                    "Got months of spending already? Settings › Import takes a CSV, a PDF statement or a screenshot of your bank app.")
+                    "Got months of spending already? Settings › Backup & Data › Import takes a CSV, a PDF statement or a screenshot of your bank app.")
                 Divider().padding(.leading, 52)
                 tip("square.grid.2x2", "Put it on your Home Screen",
                     "Touch and hold the Home Screen, tap Add Widget, and search Sortd. Light or dark, your choice.")
                 Divider().padding(.leading, 52)
                 tip("arrow.down.document", "Save a backup",
-                    "Everything stays on this iPhone, so a backup is the only way to move to a new one. Settings › Backup.")
+                    "Everything stays on this iPhone, so a backup is the only way to move to a new one. Settings › Backup & Data.")
             }
             .surface(radius: 16)
             .padding(.top, 14)
