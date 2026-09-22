@@ -8,7 +8,7 @@
 // size bucket.
 
 import PostalMime from "postal-mime";
-import { dmarcRejectDomains, fieldName, splitMessage, toBinary, verifyDkim } from "./dkim.js";
+import { dmarcRejectDomains, repeatedHeader, verifyDkim } from "./dkim.js";
 import { resolveTxt } from "./dns.js";
 import { importPublicKey, seal } from "./hpke.js";
 import { ADDRESS_RE, b64u, randomBytes, sha256hex, tag, unb64u } from "./util.js";
@@ -163,14 +163,12 @@ export async function handleEmail(message, env, deps = {}) {
     return reject("Sortd couldn't read this message", "unparseable", { t });
   }
 
-  // Which domains provably sent this. Two or more From headers make the sender
-  // ambiguous (the parsers could read one while the signature covers another),
-  // so such a message proves nothing.
-  const { fields } = splitMessage(toBinary(raw.subarray(0, Math.min(raw.length, 256 * 1024))));
-  const fromCount = fields.filter((f) => fieldName(f) === "from").length;
+  // Which domains provably sent this. verifyDkim gives nothing if a header like
+  // From or Subject appears twice (the parsers could read one while the
+  // signature covers the other).
   let dkim = [];
   let dmarc = [];
-  if (fromCount === 1 && email.from && email.from.address) {
+  if (email.from && email.from.address && !repeatedHeader(raw)) {
     try { dkim = (await verifyDkim(raw, { resolve, now })).domains; } catch { dkim = []; }
     if (env.TRUST_CLOUDFLARE_DMARC === "true") dmarc = await dmarcRejectDomains(domainOf(email.from.address), resolve);
   }

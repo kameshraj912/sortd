@@ -104,9 +104,24 @@ export function signedHeaderData(fields, sigField, names, relaxed) {
     }
     // A name with no (unused) instance adds nothing: that's how over-signing works.
   }
-  const blanked = sigField.replace(/([;:][ \t\r\n]*b[ \t\r\n]*=)[^;]*/, "$1");
+  const blanked = blankSignature(sigField);
   out += relaxed ? canonHeaderRelaxed(blanked) : blanked;
   return out;
+}
+
+/**
+ * The DKIM-Signature field with the b= tag's value (and the whitespace around
+ * it) removed, everything else byte for byte. Works tag by tag, so "b=" inside
+ * another tag's value (z= can hold copied headers) is left alone.
+ */
+export function blankSignature(sigField) {
+  const colon = sigField.indexOf(":");
+  const parts = sigField.slice(colon + 1).split(";");
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^([ \t\r\n]*b[ \t\r\n]*=)/);
+    if (m) { parts[i] = m[1]; break; }
+  }
+  return sigField.slice(0, colon + 1) + parts.join(";");
 }
 
 function b64(text) {
@@ -121,6 +136,7 @@ const SELECTOR_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/i;
 
 async function publicKey(selector, domain, algorithm, resolve) {
   const records = await resolve(`${selector}._domainkey.${domain}`);
+  let mismatch = false;
   for (const r of records) {
     const tags = parseTags(r);
     if (!tags || !tags.has("p")) continue;
@@ -141,9 +157,9 @@ async function publicKey(selector, domain, algorithm, resolve) {
       const key = await crypto.subtle.importKey("raw", raw, { name: "Ed25519" }, false, ["verify"]);
       return { key, strict: flags.includes("s") };
     }
-    return { error: "key type mismatch" };
+    mismatch = true; // e.g. an ed25519 and an rsa record under one selector: try the next one
   }
-  return { error: "no key" };
+  return { error: mismatch ? "key type mismatch" : "no key" };
 }
 
 /** Checks one DKIM-Signature field. Returns { domain, selector, result } where result is "pass" or a reason. */
@@ -162,6 +178,8 @@ export async function verifyOne(sigField, fields, body, { resolve, now }) {
   if (tags.has("q") && !tags.get("q").split(":").some((q) => q.trim() === "dns/txt")) return out("bad q", domain, selector);
   const names = tags.get("h").split(":").map((x) => x.trim().toLowerCase()).filter(Boolean);
   if (!names.includes("from")) return out("from not signed", domain, selector);
+  // The parsers read amounts and "refund" from the subject, so an unsigned subject proves nothing useful.
+  if (!names.includes("subject")) return out("subject not signed", domain, selector);
   let identity = null;
   if (tags.has("i")) {
     const i = tags.get("i").toLowerCase();
@@ -200,11 +218,33 @@ export async function verifyOne(sigField, fields, body, { resolve, now }) {
 }
 
 /**
+ * Headers that must appear at most once. DKIM checks the bottom-most copy of a
+ * signed header, but a mail parser reads the top one; a second copy added above
+ * a real signed email would be read, unsigned, as the subject (or sender, or
+ * body type). So any repeat makes the whole message prove nothing.
+ */
+export const SINGLE_HEADERS = ["from", "sender", "subject", "date", "message-id", "mime-version", "content-type", "content-transfer-encoding"];
+
+function repeatedIn(fields) {
+  const counts = new Map();
+  for (const f of fields) counts.set(fieldName(f), (counts.get(fieldName(f)) || 0) + 1);
+  return SINGLE_HEADERS.find((h) => (counts.get(h) || 0) > 1) || null;
+}
+
+/** The first SINGLE_HEADERS name that appears more than once in a raw message, or null. */
+export function repeatedHeader(rawBytes) {
+  return repeatedIn(splitMessage(toBinary(rawBytes)).fields);
+}
+
+/**
  * Verifies every DKIM signature on a raw message (bytes).
  * Returns { domains: [...domains with a passing signature], results: [...] }.
+ * `domains` is empty when a SINGLE_HEADERS header is repeated.
  */
 export async function verifyDkim(rawBytes, { resolve = defaultResolve, now = Date.now() } = {}) {
   const { fields, body } = splitMessage(toBinary(rawBytes));
+  const repeated = repeatedIn(fields);
+  if (repeated) return { domains: [], results: [{ domain: "", selector: "", result: `repeated ${repeated}` }] };
   const sigs = fields.filter((f) => fieldName(f) === "dkim-signature").slice(0, MAX_SIGNATURES);
   const results = [];
   for (const sig of sigs) results.push(await verifyOne(sig, fields, body, { resolve, now }));

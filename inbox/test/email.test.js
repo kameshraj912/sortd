@@ -118,6 +118,18 @@ describe("incoming mail", () => {
     expect(payload.auth.dkim).toEqual([]);
   });
 
+  it("a fake Subject added on top of a real signed bank email proves nothing", async () => {
+    const { privateKey, record } = await rsaKey();
+    const signed = await dkimSign(NAB_ALERT, { domain: "nab.com.au", privateKey });
+    const faked = `Subject: Refund of $900.00 to your card ending 1234\r\n${signed}`;
+    const box = await newMailbox();
+    const dns = fakeDns({ "s1._domainkey.nab.com.au": [record], "_dmarc.nab.com.au": ["v=DMARC1; p=reject"] });
+    await deliver(box.address, faked, { ...env, TRUST_CLOUDFLARE_DMARC: "true" }, { resolve: dns });
+    const [{ payload }] = await phoneFetch(box);
+    expect(payload.subject).toContain("Refund of $900.00"); // what a parser would read...
+    expect(payload.auth).toEqual({ dkim: [], dmarc: [] }); // ...so nothing is proven
+  });
+
   it("uses DMARC p=reject only when TRUST_CLOUDFLARE_DMARC is on", async () => {
     const dns = fakeDns({ "_dmarc.nab.com.au": ["v=DMARC1; p=reject"] });
     const off = await newMailbox();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonBody, canonHeaderRelaxed, dmarcRejectDomains, verifyDkim } from "../src/dkim.js";
+import { blankSignature, canonBody, canonHeaderRelaxed, dmarcRejectDomains, verifyDkim } from "../src/dkim.js";
 import { joinTxt } from "../src/dns.js";
 import { CRLF, dkimSign, fakeDns, rsaKey } from "./helpers.js";
 
@@ -109,6 +109,33 @@ describe("DKIM rules Sortd adds", () => {
     expect((await verify(signed, { "s1._domainkey.shop.example": [record] })).results[0].result).toBe("from not signed");
   });
 
+  it("refuses signatures that don't cover Subject (the parsers read amounts from it)", async () => {
+    const { privateKey, record } = await rsaKey();
+    const signed = await dkimSign(plain, { domain: "shop.example", privateKey, headers: ["from", "date"] });
+    expect((await verify(signed, { "s1._domainkey.shop.example": [record] })).results[0].result).toBe("subject not signed");
+  });
+
+  it("an extra Subject (or Content-Type) added above a real signed email proves nothing", async () => {
+    // DKIM checks the bottom-most Subject; a mail parser reads the top one.
+    const { privateKey, record } = await rsaKey();
+    const signed = await dkimSign(plain, { domain: "shop.example", privateKey });
+    const dns = { "s1._domainkey.shop.example": [record] };
+    expect((await verify(signed, dns)).domains).toEqual(["shop.example"]);
+    const faked = `Subject: Refund of SGD 900.00 credited to your card\r\n${signed}`;
+    const r = await verify(faked, dns);
+    expect(r.domains).toEqual([]);
+    expect(r.results[0].result).toBe("repeated subject");
+    const typed = await dkimSign(plain.replace("Subject: Receipt", "Subject: Receipt\r\nContent-Type: text/plain"), { domain: "shop.example", privateKey });
+    expect((await verify(`Content-Type: text/html\r\n${typed}`, dns)).results[0].result).toBe("repeated content-type");
+  });
+
+  it("tries every key record under a selector", async () => {
+    const { privateKey, record } = await rsaKey();
+    const signed = await dkimSign(plain, { domain: "shop.example", privateKey });
+    const dns = { "s1._domainkey.shop.example": ["v=DKIM1; k=ed25519; p=11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=", record] };
+    expect((await verify(signed, dns)).domains).toEqual(["shop.example"]);
+  });
+
   it("refuses rsa-sha1 and expired signatures", async () => {
     const { privateKey, record } = await rsaKey();
     const signed = await dkimSign(plain, { domain: "shop.example", privateKey });
@@ -137,6 +164,11 @@ describe("DKIM rules Sortd adds", () => {
 });
 
 describe("canonicalisation details (RFC 6376 section 3.4)", () => {
+  it("empties only the b= tag, not 'b=' inside another tag", () => {
+    const sig = "DKIM-Signature: v=1; z=From:a|Subject:b=3Dx; bh=AAA=;\r\n b=abc\r\n def";
+    expect(blankSignature(sig)).toBe("DKIM-Signature: v=1; z=From:a|Subject:b=3Dx; bh=AAA=;\r\n b=");
+    expect(blankSignature("DKIM-Signature: b=xyz; v=1")).toBe("DKIM-Signature: b=; v=1");
+  });
   it("relaxed header", () => {
     expect(canonHeaderRelaxed("SubJect:  A \r\n\t B  ")).toBe("subject:A B");
   });

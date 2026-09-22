@@ -104,7 +104,12 @@ export async function deleteMessage(env, box, id) {
   return noContent();
 }
 
-/** Turn off: the address stops accepting mail at once, and anything waiting is deleted. */
+/**
+ * Turn off: the mailbox and anything waiting are deleted. KV caches reads for up
+ * to about 60 seconds per location, so mail can still be accepted for a minute;
+ * anything that slips in is ciphertext for a key the phone has already deleted,
+ * and expires in 24 hours.
+ */
 export async function deleteMailbox(env, box) {
   await env.INBOX.delete(mailboxKey(box.addrHash));
   let cursor;
