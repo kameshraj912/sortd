@@ -14,14 +14,14 @@ enum NavLayout: String {
     case toolbar
 
     static let current: NavLayout = {
+        // + in its own glass circle beside the tab bar, on every iOS: the
+        // prominent tab on iOS 27, the same slot (the search circle) on 26.
         var chosen = NavLayout.prominent
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["SPEND_NAV"], let layout = NavLayout(rawValue: raw) {
             chosen = layout
         }
         #endif
-        // The prominent tab is iOS 27 only; iOS 26 keeps + in Home's header.
-        if chosen == .prominent, #unavailable(iOS 27) { return .header }
         return chosen
     }()
 
