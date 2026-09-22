@@ -1,7 +1,8 @@
 // HTTP API the iPhone app talks to (https://inbox.sortd.page/api/inbox/...).
 //
 //   POST   /api/inbox/register        { publicKey, suite } -> { address, token }
-//   GET    /api/inbox/messages        -> { messages: [{ id, enc, ct }], more }
+//   GET    /api/inbox/messages        -> { messages: [{ id, enc, ct }], more, cursor }
+//          (?cursor=... for the next page, so an unreadable message can't hide the rest)
 //   DELETE /api/inbox/messages/:id    -> 204 (after the phone has decrypted and saved it)
 //   DELETE /api/inbox                 -> 204 (turn off: mailbox and everything waiting is deleted)
 //
@@ -81,16 +82,20 @@ async function touch(env, box, now) {
   await env.INBOX.put(mailboxKey(box.addrHash), JSON.stringify(record), { expirationTtl: MAILBOX_TTL_SECONDS });
 }
 
-export async function listMessages(env, box, now) {
+export async function listMessages(env, box, now, cursor) {
   await touch(env, box, now);
-  const listed = await env.INBOX.list({ prefix: messagePrefix(box.addrHash), limit: PAGE });
+  const options = { prefix: messagePrefix(box.addrHash), limit: PAGE };
+  if (cursor) options.cursor = cursor;
+  let listed;
+  try { listed = await env.INBOX.list(options); } catch { return error(400, "Bad cursor."); }
   const messages = [];
   for (const k of listed.keys) {
     const value = await env.INBOX.get(k.name, "json");
     if (!value) continue; // expired or deleted since the list
     messages.push({ id: k.name.slice(messagePrefix(box.addrHash).length), enc: value.enc, ct: value.ct });
   }
-  return json({ ok: true, messages, more: !listed.list_complete });
+  const more = !listed.list_complete;
+  return json({ ok: true, messages, more, cursor: more ? listed.cursor : null });
 }
 
 export async function deleteMessage(env, box, id) {
@@ -124,7 +129,12 @@ export async function handleApi(request, env, now) {
     const { success } = await env.API_LIMIT.limit({ key: box.addrHash });
     if (!success) return error(429, "Slow down.");
   }
-  if (path === "/api/inbox/messages" && request.method === "GET") return listMessages(env, box, now);
+  if (path === "/api/inbox/messages" && request.method === "GET") {
+    const cursor = url.searchParams.get("cursor");
+    // KV cursors are opaque; KV itself refuses a bad one (caught in listMessages).
+    if (cursor !== null && cursor.length > 1024) return error(400, "Bad cursor.");
+    return listMessages(env, box, now, cursor || undefined);
+  }
   if (path === "/api/inbox" && request.method === "DELETE") return deleteMailbox(env, box);
   const m = path.match(/^\/api\/inbox\/messages\/([^/]+)$/);
   if (m && request.method === "DELETE") return deleteMessage(env, box, m[1]);

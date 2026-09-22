@@ -75,7 +75,22 @@ describe("the authenticated API", () => {
   it("lists nothing for a new mailbox", async () => {
     const a = await newMailbox();
     const body = await (await call("/api/inbox/messages", { headers: a.auth })).json();
-    expect(body).toEqual({ ok: true, messages: [], more: false });
+    expect(body).toEqual({ ok: true, messages: [], more: false, cursor: null });
+  });
+
+  it("pages through more than 20 waiting messages with a cursor", async () => {
+    const a = await newMailbox();
+    const h = await sha256hex(a.local);
+    for (let i = 0; i < 25; i++) {
+      await env.INBOX.put(`m:${h}:${String(i).padStart(9, "0")}-AAAAAAAAAAAAAAAA`, JSON.stringify({ v: 1, enc: "e", ct: String(i) }));
+    }
+    const first = await (await call("/api/inbox/messages", { headers: a.auth })).json();
+    expect(first.messages).toHaveLength(20);
+    expect(first.more).toBe(true);
+    const second = await (await call(`/api/inbox/messages?cursor=${encodeURIComponent(first.cursor)}`, { headers: a.auth })).json();
+    expect(second.messages.map((m) => m.ct)).toEqual(["20", "21", "22", "23", "24"]);
+    expect(second.more).toBe(false);
+    expect((await call(`/api/inbox/messages?cursor=${"x".repeat(2000)}`, { headers: a.auth })).status).toBe(400);
   });
 
   it("turning off deletes the mailbox, its messages, and the token stops working", async () => {
