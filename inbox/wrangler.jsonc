@@ -1,0 +1,39 @@
+// sortd-inbox: the receipt-forwarding inbox (docs/ForwardingInbox.md).
+// Separate from the site Worker in site/ on purpose: different data, different risk.
+//
+// NOT DEPLOYED YET. Before the first `npx wrangler deploy` from this folder:
+//   1. npx wrangler kv namespace create INBOX   -> paste the id below
+//   2. Email Routing on the in.sortd.page subdomain, catch-all -> "Send to a Worker" -> sortd-inbox
+//      (dashboard only; wrangler can't set routing rules). Steps in the doc.
+{
+  "name": "sortd-inbox",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-18",
+  // No *.workers.dev or preview URLs: the only way in is inbox.sortd.page and in.sortd.page mail.
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    // Mail is accepted only for <24 random characters>@this domain.
+    "INBOX_DOMAIN": "in.sortd.page",
+    // Leave "false" until the owner check in the doc shows Cloudflare rejects DMARC failures
+    // before the Worker runs. DKIM checking works either way.
+    "TRUST_CLOUDFLARE_DMARC": "false"
+  },
+  "kv_namespaces": [
+    // Mailboxes (a:<sha256 of address>) and encrypted messages (m:<hash>:<id>, 24-hour expiry).
+    { "binding": "INBOX", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  // Edge counters, nothing stored. namespace_id only has to be unique in the account
+  // (the site Worker uses 1001).
+  "ratelimits": [
+    // New addresses per IP.
+    { "name": "REGISTER_LIMIT", "namespace_id": "2001", "simple": { "limit": 5, "period": 60 } },
+    // Incoming mail per address. A person's receipts never come this fast.
+    { "name": "MAIL_LIMIT", "namespace_id": "2002", "simple": { "limit": 30, "period": 60 } },
+    // App API calls per address.
+    { "name": "API_LIMIT", "namespace_id": "2003", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "routes": [
+    { "pattern": "inbox.sortd.page", "custom_domain": true }
+  ]
+}
