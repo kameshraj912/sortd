@@ -96,8 +96,10 @@ struct SettingsView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") { Router.shared.showingSettings = false }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { Router.shared.showingSettings = false }
+                        .fontWeight(.semibold)
+                        .tint(Color.ink)
                 }
             }
             .onAppear { Exports.clear() }
