@@ -66,6 +66,7 @@ struct OnboardingView: View {
         }
         .background(Color.page)
         .sheet(item: $editing) { CardEditor(original: $0) }
+        .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
         .sheet(isPresented: $showingPaywall) { PaywallView() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
@@ -723,6 +724,13 @@ struct OnboardingView: View {
                     }
                 }
                 .surface(radius: 16)
+                .padding(.bottom, 14)
+            }
+            // A connect still reading after its sheet closed: say so here.
+            if SyncStatus.gmail.isBusyForPerson || (SyncStatus.gmail.phase.isEnd && !SyncStatus.gmail.quiet) {
+                SyncProgressCard(status: SyncStatus.gmail) {
+                    if case .failed(let f) = SyncStatus.gmail.phase { GmailSync.retry(f, in: context) }
+                }
                 .padding(.bottom, 14)
             }
             Button { connectingGmail = true } label: {

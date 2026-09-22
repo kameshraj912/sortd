@@ -52,7 +52,13 @@ enum EmailSync {
     @discardableResult
     static func importRecords(_ records: [EmailRecord], in context: ModelContext, account: String? = nil) throws -> Summary {
         var summary = Summary()
+        guard !records.isEmpty || !pendingRefunds.isEmpty else {
+            if context.hasChanges { try context.save() }
+            return summary
+        }
         let done = Set(try context.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
+        // Read once for the whole batch, not once per purchase.
+        let learned = try TransactionLogger.learnedRules(in: context)
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
@@ -90,7 +96,6 @@ enum EmailSync {
                 // Delivery orders: use the shop's category if it has one
                 // (Costco → Groceries), otherwise Food Delivery.
                 if r.platform == "doordash" || r.platform == "uber" {
-                    let learned = try TransactionLogger.learnedRules(in: context)
                     let byShop = Categorizer.category(for: r.merchant, learned: learned)
                     purchase.category = [.other, .transport, .eatingOut].contains(byShop) ? .foodDelivery : byShop
                     if r.merchant == "Uber" { purchase.category = .transport }
@@ -98,7 +103,6 @@ enum EmailSync {
                 // App Store: renewing plans are subscriptions, one-off app
                 // buys and in-app purchases count as entertainment.
                 if r.platform == "apple" {
-                    let learned = try TransactionLogger.learnedRules(in: context)
                     let byName = Categorizer.category(for: r.merchant, learned: learned)
                     purchase.category = byName != .other ? byName : (r.subscription != nil ? .subscriptions : .entertainment)
                 }
@@ -113,7 +117,7 @@ enum EmailSync {
                     context.insert(ImportedRecord(id: r.id, account: account))
                     continue
                 }
-                let outcome = try TransactionLogger.log(purchase, in: context)
+                let outcome = try TransactionLogger.log(purchase, in: context, learned: learned, save: false)
                 if outcome.transaction.sourceAccount == nil { outcome.transaction.sourceAccount = account }
                 switch outcome {
                 case .added: summary.added += 1

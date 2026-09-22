@@ -48,6 +48,8 @@ struct HomeView: View {
                 }
             }
             .background(Color.page)
+            // A Gmail connect or sync that's still going, or that stopped.
+            .safeAreaInset(edge: .bottom) { GmailStatusBanner() }
             .navigationTitle("Home")
             .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
             .toolbar {

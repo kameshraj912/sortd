@@ -7,6 +7,8 @@ struct CurrencySettingsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @State private var refreshing = false
+    /// What the last update did, in one line.
+    @State private var fxResult: String?
 
     var body: some View {
         SettingsList {
@@ -21,6 +23,7 @@ struct CurrencySettingsView: View {
                 .onChange(of: home) { _, new in
                     Task {
                         refreshing = true
+                        fxResult = nil
                         await FXService.rebase(to: new, in: context)
                         refreshing = false
                     }
@@ -30,18 +33,24 @@ struct CurrencySettingsView: View {
                 Button {
                     Task {
                         refreshing = true
-                        await FXService.backfill(in: context)
+                        fxResult = nil
+                        let outcome = await FXService.backfill(in: context)
+                        fxResult = outcome.text
                         refreshing = false
+                        AccessibilityNotification.Announcement(outcome.text).post()
                     }
                 } label: {
                     HStack {
-                        Text("Update Exchange Rates")
+                        Text(refreshing ? "Updating rates…" : "Update Exchange Rates")
                         Spacer()
                         if refreshing { ProgressView() }
                     }
                 }
                 .font(.subheadline)
                 .disabled(refreshing)
+                if let fxResult {
+                    Text(fxResult).font(.footnote).foregroundStyle(.secondary)
+                }
             } header: {
                 BoldHeader("Currency")
             } footer: {
