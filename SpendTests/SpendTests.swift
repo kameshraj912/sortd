@@ -19,6 +19,12 @@ struct AmountParserTests {
         ("4,5", Decimal(string: "4.5")!, nil),
         ("1,299", Decimal(1299), nil),
         ("AUD 1 234,50", Decimal(string: "1234.50")!, "AUD"),
+        // Exact strings from the Apple Pay tap bug report.
+        ("A$1,234.50", Decimal(string: "1234.50")!, "AUD"),
+        ("$58.30", Decimal(string: "58.30")!, nil),
+        ("S$12", Decimal(12), "SGD"),
+        // European: dot for thousands, comma for decimal.
+        ("1.234,50", Decimal(string: "1234.50")!, nil),
     ])
     func parses(text: String, amount: Decimal, currency: String?) {
         let r = AmountParser.parse(text)
@@ -997,16 +1003,48 @@ struct ApplePayTapTests {
         let r = try await LogPurchaseIntent.handle(merchant: nil, amount: nil, card: nil, in: ctx, book: book)
         #expect(r.transaction == nil)
         #expect(r.message.contains("connected"))
+        #expect(r.kind == .testRun)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
         #expect(book.cards.isEmpty)
     }
 
-    @Test func cardOnlyRunSavesNothing() async throws {
-        let (ctx, book) = try setup()
+    /// Regression for the "doesn't show up" bug: Shortcuts can hand a real
+    /// tap a blank Merchant and Amount (a documented Shortcuts bug), leaving
+    /// only the Card. That must never be mistaken for a test run — a real
+    /// tap always leaves a row, even an "unknown merchant, amount 0" one.
+    @Test func cardOnlyRunIsSavedAndFlagged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
         let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
-        #expect(r.transaction == nil)
-        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
-        #expect(r.message.contains("connected"))
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.amount == 0)
+        #expect(t.needsReview == true)
+        #expect(t.card == book.active[0].card)
+        #expect(r.kind == .saved)
+        #expect(r.message.contains("amount missing"))
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+    }
+
+    /// Merchant only (no amount, no card) must also be saved, not dropped.
+    @Test func merchantOnlyRunIsSaved() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "Seven Seeds Coffee", amount: "", card: nil, in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Seven Seeds Coffee")
+        #expect(t.amount == 0)
+        #expect(t.card == .other)
+        #expect(r.kind == .saved)
+    }
+
+    /// Amount only (no merchant, no card) must also be saved, not dropped.
+    @Test func amountOnlyRunIsSaved() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "A$5.00", card: nil, in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.amount == Decimal(string: "5.00"))
+        #expect(t.card == .other)
+        #expect(r.kind == .saved)
     }
 
     @Test func missingAmountIsSavedAndFlagged() async throws {
@@ -1022,6 +1060,7 @@ struct ApplePayTapTests {
         _ = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit", in: ctx, book: book, now: now)
         let second = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit", in: ctx, book: book, now: now.addingTimeInterval(20))
         #expect(second.merged)
+        #expect(second.kind == .merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
 
@@ -1031,6 +1070,18 @@ struct ApplePayTapTests {
         _ = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "$5.50", card: "NAB Visa Debit", in: ctx, book: book, now: now)
         _ = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "$5.50", card: "NAB Visa Debit", in: ctx, book: book, now: now.addingTimeInterval(3600))
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 2)
+    }
+
+    /// An amount AmountParser can't make sense of at all (no digits) must
+    /// still leave a flagged row, never a dropped tap.
+    @Test func unparseableAmountIsStillSavedAndFlagged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let r = try await LogPurchaseIntent.handle(merchant: "Café de Flore", amount: "n/a", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Café de Flore")
+        #expect(t.needsReview == true)
+        #expect(r.kind == .saved)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
 
     @Test func unknownCardIsAddedOnFirstTap() async throws {
@@ -1068,6 +1119,27 @@ struct WalletTapTextTests {
         #expect(r.transaction?.amount == Decimal(string: "18.90"))
         let empty = try await LogWalletTapIntent.handle(nil, in: ctx, book: book)
         #expect(empty.transaction == nil)
+    }
+
+    /// Regression: a nil Transaction (the automation's field was never set to
+    /// Shortcut Input) is a setup mistake, not a "▶ test run" press — it must
+    /// get its own diagnosis so Raj knows exactly what to fix.
+    @Test func nilTransactionIsDiagnosedAsMissingInput() async throws {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let ctx = ModelContext(container)
+        let book = CardBook(defaults: UserDefaults(suiteName: "wallet-tap-\(UUID())")!)
+
+        let missing = try await LogWalletTapIntent.handle(nil, in: ctx, book: book)
+        #expect(missing.transaction == nil)
+        #expect(missing.kind == .missingInput)
+        #expect(missing.message.contains("Shortcut Input"))
+
+        // An empty (but non-nil) Transaction has no such signal to go on —
+        // that really is indistinguishable from a genuine test run.
+        let empty = try await LogWalletTapIntent.handle("", in: ctx, book: book)
+        #expect(empty.transaction == nil)
+        #expect(empty.kind == .testRun)
     }
 }
 
@@ -1238,6 +1310,7 @@ struct WalletTapEdgeTests {
         let r = try await LogPurchaseIntent.handle(merchant: "Kmart", amount: "-A$5.00", card: "NAB Visa Debit", in: ctx, book: book())
         #expect(r.transaction?.refunded == true)
         #expect(r.transaction?.amount == 5)
+        #expect(r.kind == .refund)
     }
     @Test func aLaterRefundTapTakesThePurchaseOffTheTotal() async throws {
         // Bug-hunt R1: a refund 3 hours later was saved as its own row and the
@@ -1282,5 +1355,65 @@ struct WalletTapEdgeTests {
         _ = b.matchOrCreate("Everyday ••1234")
         #expect(b.info(x.card)?.applePayLast4 == nil)
         #expect(b.info(y.card)?.applePayLast4 == nil)
+    }
+}
+
+/// The Setup Guide's "Last Tap Received" diagnostic: every run must leave a
+/// timestamped, plain-English record of what Sortd did with it. Each test
+/// uses its own UserDefaults suite (like `CardBook` does) so these never
+/// race with other tests writing the same keys in parallel.
+@MainActor
+struct TapDiagnosticsTests {
+    private func store() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        return ModelContext(container)
+    }
+    private func book() -> CardBook { CardBook(defaults: UserDefaults(suiteName: "diag-book-\(UUID().uuidString)")!) }
+    private func defaults() -> UserDefaults {
+        let name = "diag-\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    @Test func savedTapRecordsOutcomeAndTimestamp() async throws {
+        let d = defaults()
+        let r = try await LogPurchaseIntent.handle(merchant: "Seven Seeds Coffee", amount: "A$5.50", card: "NAB Visa Debit",
+                                                    in: try store(), book: book(), defaults: d)
+        let raw = try #require(d.string(forKey: LogPurchaseIntent.lastTapKey))
+        let outcome = try #require(d.string(forKey: LogPurchaseIntent.lastOutcomeKey))
+        #expect(raw.contains("Seven Seeds Coffee"))
+        #expect(outcome.contains("Saved"))
+        #expect(outcome.contains(r.message))
+    }
+
+    @Test func testRunIsRecordedAsIgnored() async throws {
+        let d = defaults()
+        _ = try await LogPurchaseIntent.handle(merchant: nil, amount: nil, card: nil, in: try store(), book: book(), defaults: d)
+        let outcome = try #require(d.string(forKey: LogPurchaseIntent.lastOutcomeKey))
+        #expect(outcome.contains("Ignored"))
+        #expect(outcome.contains("test run"))
+    }
+
+    @Test func missingTransactionInputIsRecorded() async throws {
+        let d = defaults()
+        _ = try await LogWalletTapIntent.handle(nil, in: try store(), book: book(), defaults: d)
+        let outcome = try #require(d.string(forKey: LogPurchaseIntent.lastOutcomeKey))
+        #expect(outcome.contains("Transaction input missing"))
+        #expect(outcome.contains("Shortcut Input"))
+    }
+
+    @Test func mergedTapUpdatesTheOutcomeEachTime() async throws {
+        let d = defaults()
+        let ctx = try store()
+        let b = book()
+        let now = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit",
+                                               in: ctx, book: b, now: now, defaults: d)
+        _ = try await LogPurchaseIntent.handle(merchant: "Woolworths", amount: "$23.40", card: "NAB Visa Debit",
+                                               in: ctx, book: b, now: now.addingTimeInterval(20), defaults: d)
+        let outcome = try #require(d.string(forKey: LogPurchaseIntent.lastOutcomeKey))
+        #expect(outcome.contains("Merged"))
     }
 }
