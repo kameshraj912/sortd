@@ -19,7 +19,11 @@ struct PrivacyView: View {
                 row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
                 row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only a currency code and dates are sent.")
                 row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
-                row("ladybug", "Crash reports (TestFlight beta only)", "While you're testing in TestFlight, a crash sends a report to Sentry: the crash, your iPhone model and iOS version. No names, purchases, receipts or Gmail data. This turns off once Sortd leaves TestFlight for the App Store.")
+                // Only when reports really go out: a TestFlight build with a
+                // Sentry DSN. Otherwise this row would claim something false.
+                if CrashReporting.isOn {
+                    row("ladybug", "Crash reports (TestFlight beta only)", "While you're testing in TestFlight, a crash sends a report to Sentry: the crash, your iPhone model and iOS version. No names, purchases, receipts or Gmail data. This turns off once Sortd leaves TestFlight for the App Store.")
+                }
             }
             Section {
                 Text("Sortd helps you track your own spending. It isn't a bank and doesn't move money, and nothing in it is financial advice. Amounts come from Apple Pay, your receipts and what you type in, and converted amounts use published exchange rates, so always check your bank statement for exact figures.")
