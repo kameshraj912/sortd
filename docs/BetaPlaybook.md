@@ -181,7 +181,7 @@ source**, this is just a reasonable plan:
   even if it's one line — "fixed the Gmail reconnect bug" tells testers what to actually check.
 - **Before every upload:** `scripts/preflight.sh` (plain, for TestFlight). It checks `SORTD_BETA`
   is on, warns about the build number, checks for huge tracked files, and fails if a DEBUG-only
-  flag (`SPEND_DEMO`, `SPEND_PRO`, `SPEND_PAYWALL_DEMO`, `SPEND_REEL_TAP`) leaked outside
+  flag (`SPEND_DEMO`, `SPEND_PRO`, `SPEND_PAYWALL_DEMO`, `SPEND_REEL_TAP`, `SPEND_BETA`) leaked outside
   `#if DEBUG`.
 
 ## 12. Bug triage

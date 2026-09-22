@@ -83,7 +83,7 @@ fails while it is still there.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
 - No bank passwords, no screen scraping. Secrets (the Google refresh token) go in the Keychain, never in git.
-- Debug-only escapes (`SPEND_DEMO`, `SPEND_PRO`, `SPEND_PAYWALL_DEMO`, `SPEND_REEL_TAP`) stay inside `#if DEBUG`.
+- Debug-only escapes (`SPEND_DEMO`, `SPEND_PRO`, `SPEND_PAYWALL_DEMO`, `SPEND_REEL_TAP`, `SPEND_BETA`) stay inside `#if DEBUG`.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 
 ## Known gaps
