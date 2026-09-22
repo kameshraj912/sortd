@@ -72,7 +72,7 @@ nonisolated struct InboxClient: Sendable {
         _ = try await send("DELETE", "api/inbox/messages/\(id)", auth: c, expect: 204)
     }
 
-    /// Deletes the mailbox and everything waiting in it. Mail to the old address bounces from then on.
+    /// Deletes the mailbox and everything waiting in it. Mail to the old address bounces within about a minute.
     func turnOff(_ c: Credentials) async throws {
         _ = try await send("DELETE", "api/inbox", auth: c, expect: 204)
     }

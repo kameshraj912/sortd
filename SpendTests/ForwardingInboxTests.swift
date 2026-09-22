@@ -157,12 +157,24 @@ struct ForwardingInboxTests {
     @Test func googlesConfirmationIsShownOnlyWhenItsReallyGoogles() {
         let good = payload(from: "Gmail Team <forwarding-noreply@google.com>",
                            subject: "(#123456789) Gmail Forwarding Confirmation - Receive Mail from raj@gmail.com",
-                           kind: InboxPayload.gmailConfirmation,
+                           dkim: ["google.com"], kind: InboxPayload.gmailConfirmation,
                            confirm: .init(code: "123456789", url: "https://mail-settings.google.com/mail/vf-%5Babc%5D-xyz"))
         let r = ForwardingInbox.gmailRequest(from: good)
         #expect(r?.code == "123456789")
         #expect(r?.url?.host() == "mail-settings.google.com")
         #expect(r?.requestedBy == "raj@gmail.com")
+        #expect(r?.verified == true)
+
+        // Anyone can type Google's address into From. Without google.com's signature,
+        // no link and no "from raj@gmail.com": an attacker could send their own real
+        // Google link and steer you into approving *their* forwarding.
+        var unsigned = good
+        unsigned.auth = .init(dkim: [], dmarc: [])
+        let u = ForwardingInbox.gmailRequest(from: unsigned)
+        #expect(u?.verified == false)
+        #expect(u?.url == nil)
+        #expect(u?.requestedBy == nil)
+        #expect(u?.code == "123456789")
 
         var phish = good
         phish.confirm?.url = "https://mail-settings.google.com.evil.example/mail/vf-x"
@@ -236,6 +248,26 @@ struct ForwardingInboxTests {
         #expect(server.turnedOff)
     }
 
+    @Test func turnOffWaitsForACheckInProgress() async throws {
+        // Otherwise "Turn Off and Delete Its Purchases" during a check could
+        // delete the purchases, then the check would add them back.
+        let server = FakeInboxServer()
+        let defaults = try #require(UserDefaults(suiteName: "ForwardingInboxTests-\(UUID().uuidString)"))
+        let inbox = ForwardingInbox(client: server.client, secrets: .memory(), defaults: defaults)
+        try await inbox.turnOn()
+        try server.store(try JSONEncoder().encode(payload()), id: "000000001-aaaaaaaaaaaaaaaa", to: try #require(server.publicKey))
+        server.delay = .milliseconds(300)
+        let check = Task { try await inbox.sync(in: context) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(inbox.busy)
+        await inbox.turnOff(deletePurchases: true, in: context)
+        _ = try await check.value
+        #expect(!inbox.isOn)
+        #expect(all.isEmpty)
+        // Once off, a check does nothing.
+        #expect(try await inbox.sync(in: context).added == 0)
+    }
+
     @Test func pagesThroughEverythingWaiting() async throws {
         let server = FakeInboxServer()
         server.pageSize = 2
@@ -278,6 +310,8 @@ nonisolated final class FakeInboxServer: @unchecked Sendable {
     private(set) var lastAuthorization: String?
     var offline = false
     var pageSize = 20
+    /// Slows every request, to test overlapping operations.
+    var delay: Duration = .zero
 
     var waiting: [String] { lock.withLock { messages.map(\.id) } }
 
@@ -291,7 +325,10 @@ nonisolated final class FakeInboxServer: @unchecked Sendable {
     }
 
     var client: InboxClient {
-        InboxClient(base: URL(string: "https://inbox.test")!) { [self] req in try self.handle(req) }
+        InboxClient(base: URL(string: "https://inbox.test")!) { [self] req in
+            if self.delay > .zero { try await Task.sleep(for: self.delay) }
+            return try self.handle(req)
+        }
     }
 
     private func respond(_ req: URLRequest, _ status: Int, _ body: Any? = nil) throws -> (Data, URLResponse) {

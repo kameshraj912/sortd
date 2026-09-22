@@ -36,9 +36,14 @@ nonisolated struct InboxPayload: Codable, Equatable, Sendable {
 nonisolated struct GmailForwardingRequest: Codable, Equatable, Sendable {
     var code: String?
     /// Always https://mail-settings.google.com/mail/vf-… (checked before it gets here).
+    /// Only set when google.com's DKIM signature proved Google sent it.
     var url: URL?
-    /// The Gmail address asking to forward, from Google's subject line.
+    /// The Gmail address asking to forward, from Google's subject line. Only when proven.
     var requestedBy: String?
+    /// google.com signed it. Without that, only the code is shown: typing a code
+    /// into your own Gmail can't approve someone else's forwarding, but tapping
+    /// their link could.
+    var verified: Bool = false
     var receivedAt: Date
 }
 
@@ -140,6 +145,7 @@ final class ForwardingInbox {
     /// Makes a key pair, registers the public half, and saves the address.
     @discardableResult
     func turnOn() async throws -> String {
+        await waitUntilIdle()
         if isOn, let address { return address }
         busy = true
         defer { busy = false }
@@ -154,7 +160,7 @@ final class ForwardingInbox {
         return reg.address
     }
 
-    /// A fresh address and key. The old address stops working at once.
+    /// A fresh address and key. The old address stops working within about a minute.
     @discardableResult
     func newAddress() async throws -> String {
         await turnOff(deletePurchases: false, in: nil)
@@ -166,6 +172,11 @@ final class ForwardingInbox {
     /// next `turnOn` or check. With `deletePurchases`, also removes purchases
     /// that only the forwarding inbox reported.
     func turnOff(deletePurchases: Bool, in context: ModelContext?) async {
+        // Let a check in progress finish first, or it could put back purchases
+        // this is about to delete.
+        await waitUntilIdle()
+        busy = true
+        defer { busy = false }
         if let c = credentials {
             do { try await client.turnOff(c) } catch let e as InboxClient.Failure where e.status == 401 {
                 // Already gone on the server.
@@ -223,7 +234,7 @@ final class ForwardingInbox {
     /// decrypted is left alone and expires on the server within 24 hours.
     @discardableResult
     func sync(in context: ModelContext) async throws -> EmailSync.Summary {
-        guard let creds = credentials, let key else { return EmailSync.Summary() }
+        guard !busy, let creds = credentials, let key else { return EmailSync.Summary() }
         busy = true
         defer { busy = false }
         var total = EmailSync.Summary()
@@ -259,6 +270,11 @@ final class ForwardingInbox {
         if total.added + total.merged + total.refunds > 0 { await FXService.backfill(in: context) }
         log.info("Forwarding inbox: \(total.checked) read, \(total.added) added, \(unreadable) unreadable")
         return total
+    }
+
+    /// One thing at a time: turning on, checking, turning off.
+    private func waitUntilIdle() async {
+        while busy { try? await Task.sleep(for: .milliseconds(50)) }
     }
 
     private func setResult(_ text: String?) {
@@ -320,9 +336,15 @@ final class ForwardingInbox {
             url = u
         }
         let code = p.confirm?.code.flatMap { c in c.allSatisfy(\.isNumber) && (6...12).contains(c.count) ? c : nil }
+        // Anyone can put forwarding-noreply@google.com in From. Only google.com's
+        // own signature makes the link and "from you@gmail.com" trustworthy.
+        let verified = (p.auth?.dkim ?? []).contains { EmailParsers.isDomain($0.lowercased(), within: "google.com") }
+        if !verified { url = nil }
         guard url != nil || code != nil else { return nil }
-        let requestedBy = p.subject.range(of: "Receive Mail from ").map { String(p.subject[$0.upperBound...]).trimmingCharacters(in: .whitespaces) }
-        return GmailForwardingRequest(code: code, url: url, requestedBy: requestedBy, receivedAt: now)
+        let requestedBy = verified
+            ? p.subject.range(of: "Receive Mail from ").map { String(p.subject[$0.upperBound...]).trimmingCharacters(in: .whitespaces) }
+            : nil
+        return GmailForwardingRequest(code: code, url: url, requestedBy: requestedBy, verified: verified, receivedAt: now)
     }
 
     /// Reads each email with the same readers as Gmail sync and logs what

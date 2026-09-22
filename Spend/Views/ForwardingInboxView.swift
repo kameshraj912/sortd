@@ -148,7 +148,7 @@ struct ForwardingInboxView: View {
         .confirmationDialog("Get a new address?", isPresented: $confirmingNew, titleVisibility: .visible) {
             Button("New Address") { Task { await run { try await inbox.newAddress() } } }
         } message: {
-            Text("Mail sent to \(address) will bounce from now on.")
+            Text("Mail sent to \(address) will bounce, starting within a minute.")
         }
         .confirmationDialog("Turn off the forwarding inbox?", isPresented: $confirmingOff, titleVisibility: .visible) {
             Button("Turn Off") { Task { await inbox.turnOff(deletePurchases: false, in: context) } }
@@ -164,7 +164,12 @@ struct ForwardingInboxView: View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Label("Gmail wants to forward here", systemImage: "envelope.badge.fill").font(.headline)
-                if let who = r.requestedBy { Text("From \(who). Only confirm if that's you.") }
+                if let who = r.requestedBy {
+                    Text("From \(who). Only confirm if that's you.")
+                } else if !r.verified {
+                    Text("Sortd couldn't prove Google sent this. Only use the code if you just added this address in Gmail.")
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.vertical, 4)
             if let url = r.url {
