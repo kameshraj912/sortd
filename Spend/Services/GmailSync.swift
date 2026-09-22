@@ -40,6 +40,14 @@ enum GmailSync {
     /// How far back the first sync looks.
     static let firstSyncDays = 120
 
+    /// Goes up each time Delete All runs. A sync that started before then
+    /// stops without saving anything, even if the same Gmail has been
+    /// connected again while it was still downloading.
+    @MainActor private(set) static var resetGeneration = 0
+
+    /// Called by Delete All, before it wipes the store.
+    @MainActor static func cancelRunningSyncs() { resetGeneration += 1 }
+
     static var accounts: [GmailAccount] {
         get {
             guard let data = UserDefaults.standard.data(forKey: accountsKey) else { return [] }
@@ -84,12 +92,14 @@ enum GmailSync {
         // Gmail receipts are Pro. A lapsed subscription (or a build without
         // Gmail) stops reading the inbox; the account stays until disconnected.
         guard Features.gmail, ProStore.shared.isPro else { return total }
+        let generation = resetGeneration
         var list = accounts
         for i in list.indices {
+            guard resetGeneration == generation else { break }
             if !force, let last = list[i].lastSync, Date.now.timeIntervalSince(last) < 300 { continue }
             do {
                 let started = Date.now
-                let s = try await sync(list[i], in: context)
+                let s = try await sync(list[i], generation: generation, in: context)
                 total.added += s.added; total.merged += s.merged; total.refunds += s.refunds
                 if s.incomplete {
                     // Hit the 1,000 cap: next time, carry on below the oldest
@@ -107,6 +117,8 @@ enum GmailSync {
                 log.error("Gmail sync failed for \(list[i].email): \(error.localizedDescription)")
             }
         }
+        // Delete All ran during the sync: write nothing back.
+        guard resetGeneration == generation else { return EmailSync.Summary() }
         // Accounts may have been connected or disconnected during the sync:
         // update only the ones that are still there.
         accounts = accounts.map { a in list.first { $0.email == a.email } ?? a }
@@ -115,7 +127,8 @@ enum GmailSync {
     }
 
     @MainActor
-    private static func sync(_ account: GmailAccount, in context: ModelContext) async throws -> EmailSync.Summary {
+    private static func sync(_ account: GmailAccount, generation: Int,
+                             in context: ModelContext) async throws -> EmailSync.Summary {
         let token = try await GoogleAuth.accessToken(for: account.email)
         // A few days of overlap so late-arriving emails aren't missed; already
         // imported ones are skipped by id.
@@ -173,7 +186,8 @@ enum GmailSync {
             }
             // Disconnect or Delete All may have run while this batch was
             // downloading. Stop without writing anything back.
-            guard accounts.contains(where: { $0.email == account.email }) else { throw CancellationError() }
+            guard resetGeneration == generation,
+                  accounts.contains(where: { $0.email == account.email }) else { throw CancellationError() }
             for id in notReceipts { context.insert(ImportedRecord(id: id, account: account.email)) }
             let s = try EmailSync.importRecords(records, in: context, account: account.email)
             summary.added += s.added; summary.merged += s.merged; summary.refunds += s.refunds

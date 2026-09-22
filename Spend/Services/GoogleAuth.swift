@@ -118,10 +118,21 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     /// For Delete All. Reads every saved token first, so the Keychain can be
     /// wiped straight away, then asks Google to cancel each one. (Revoking
     /// after the wipe found no token and left Google access switched on.)
+    /// Includes tokens from an earlier disconnect whose revoke never reached
+    /// Google: that list lives in the Keychain too, so the wipe would lose it.
     static func revokeAll(_ emails: [String]) {
-        let tokens = emails.compactMap { Keychain.get(keychainKey($0)) }
+        let tokens = tokensToRevoke(accounts: emails.compactMap { Keychain.get(keychainKey($0)) },
+                                    pending: Keychain.get(pendingKey))
         cache = [:]
         Task { for token in tokens { await revoke(token) } }
+    }
+
+    /// The connected accounts' tokens plus the saved list of failed revokes
+    /// (one per line), each once.
+    static func tokensToRevoke(accounts: [String], pending: String?) -> [String] {
+        let saved = (pending ?? "").split(separator: "\n").map(String.init)
+        var seen = Set<String>()
+        return (accounts + saved).filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     /// Google-bound requests only: nothing cached to disk, no cookies kept.
