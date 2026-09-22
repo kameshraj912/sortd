@@ -96,10 +96,11 @@ struct ConnectGmailSheet: View {
                         .accessibilityHidden(true)
                     Text("Add purchases from your email")
                         .font(.title2.weight(.bold))
-                    VStack(alignment: .leading, spacing: 10) {
-                        point("magnifyingglass", "Searches for receipts and bank alerts only — other email stays untouched.")
-                        point("iphone", "Read-only, on this iPhone. Never copied or shared.")
-                        point("xmark.circle", "Disconnect any time in Settings.")
+                    VStack(alignment: .leading, spacing: 14) {
+                        point("magnifyingglass", "Only Receipts", "Limited to receipts and bank alerts — nothing else is opened.")
+                        point("iphone", "Read on Your iPhone", "Processed on this iPhone. Nothing leaves the device.")
+                        point("eye.slash", "Read-Only", "Can't send, edit or delete anything in your inbox.")
+                        point("xmark.circle", "Stop Any Time", "Remove access anytime in Settings › Purchase Sources › Gmail.")
                     }
                     .padding(16)
                     .surface(radius: 16)
@@ -135,10 +136,15 @@ struct ConnectGmailSheet: View {
         }
     }
 
-    private func point(_ symbol: String, _ text: String) -> some View {
-        Label(text, systemImage: symbol)
-            .font(.subheadline)
-            .foregroundStyle(Color.ink)
+    private func point(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol).frame(width: 22).foregroundStyle(Color.ink)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func connect() {

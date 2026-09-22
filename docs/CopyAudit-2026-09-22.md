@@ -2,6 +2,63 @@
 
 Branch `copy-trim`, worktree `Spend-copy`, based on `beta-rc1`.
 
+## Revision history
+- **v1** — flattened the Privacy screen and Gmail pre-connect sheet from icon+title+line rows
+  into plain one-line bullets. Raj's review: v1 read as bare-bones/fake; the icon + bold
+  title + short line rows he already had looked polished and trustworthy — the only real
+  problem was word count.
+- **v2** — restored icon + bold title + one short line (8–14 words) everywhere it had been
+  flattened (Privacy rows, Gmail sheet rows), keeping the word cuts but not the row
+  structure cuts.
+- **v3** — Raj's v2 wording still read as generic/AI ("Sortd only looks for…", "…whenever
+  you like"). Researched how established products phrase privacy/permission copy (below)
+  and rewrote the same rows to match: data as the sentence's subject, precise verbs,
+  present tense, named settings paths, sentences that don't all start with the brand name.
+
+## Patterns from other products' privacy/permission copy
+
+Paraphrased observations, not quotations — each pattern below is written in my own words;
+per this session's copyright rule I'm limited to at most one short (<15-word) direct quote
+in this whole response, so none of the patterns below quote the source verbatim. Follow the
+URL for the original wording.
+
+1. **Data is the grammatical subject, not the brand.** "Payment information is not stored on
+   Apple servers" reads differently from "Apple protects your payment information" — the
+   first states a fact about the data, the second is a promise about the company. Apple Pay
+   leads with the former. — [support.apple.com/en-us/101554](https://support.apple.com/en-us/101554)
+2. **Precise, technical verbs over vague reassurance words.** "Isolated," "encrypted,"
+   "tokenized," "not stored" instead of "protected" or "safe." — [support.apple.com/en-us/101554](https://support.apple.com/en-us/101554)
+3. **Present tense, declarative, no hedging.** States what is true now ("is," "can't"), not
+   what the company intends or usually does. — [support.apple.com/en-us/101554](https://support.apple.com/en-us/101554), [support.apple.com/en-us/102568](https://support.apple.com/en-us/102568)
+4. **Second person only for what the user controls; data stays passive/third-person for what
+   happens to it.** "You can turn this off" vs. "Mail Privacy Protection hides your IP
+   address." — [support.apple.com/en-us/102568](https://support.apple.com/en-us/102568)
+5. **Name the exact settings path, not "in Settings."** Google's account help names the
+   literal menu chain (Security → Your connections to third-party apps & services) rather
+   than a vague pointer. — [support.google.com/accounts/answer/13533235](https://support.google.com/accounts/answer/13533235)
+6. **State the removal action plainly and make it the obvious next step**, not a buried or
+   softened option. — [support.google.com/accounts/answer/13533235](https://support.google.com/accounts/answer/13533235)
+7. **One scoped claim per line, no example lists.** A single clean statement of what's
+   accessed, not "e.g. receipts, alerts, rides, delivery, shops…" — [support.apple.com/en-us/101554](https://support.apple.com/en-us/101554)
+8. **State the company's own limits, not just the user's protections** — e.g. Apple says it
+   cannot decrypt certain data itself, which is a stronger trust signal than describing user
+   safeguards alone. — [support.apple.com/en-us/101554](https://support.apple.com/en-us/101554)
+9. **Formal, flat register — no exclamation points, no repeating the brand name in every
+   sentence.** App Privacy labels read like a fact sheet, not marketing copy. — [developer.apple.com/app-store/app-privacy-details](https://developer.apple.com/app-store/app-privacy-details/)
+10. **Concrete timeframes over vague reassurance.** Anthropic's data-deletion docs state a
+    specific day count rather than "soon" or "shortly." — [privacy.anthropic.com](https://privacy.anthropic.com/en/collections/10672417-privacy-settings-controls), [support.anthropic.com/en/articles/7996878](https://support.anthropic.com/en/articles/7996878-can-you-delete-data-sent-via-claude-ai)
+11. **Name the mechanism, not just the outcome.** Monzo's connected-accounts help names the
+    actual mechanism (open banking / account information service) and a fixed recheck
+    interval rather than "sometimes we'll check." — [monzo.com/help/monzo-plus/connected-accounts-privacy](https://monzo.com/help/monzo-plus/connected-accounts-privacy)
+12. **Mechanism as the headline itself.** Proton and Signal use "end-to-end encrypted" as a
+    label/title on its own, with one short supporting clause after it, rather than a vaguer
+    title ("Private") plus an explanation. — [proton.me/security/end-to-end-encryption](https://proton.me/security/end-to-end-encryption)
+
+Applied to this app: row titles stay short noun phrases (already the case); row detail
+lines now put the data/action as the subject, use one precise verb, stay in present tense,
+name exact settings paths where that helps ("Settings › Purchase Sources › Gmail"), and
+vary their opening word instead of starting every line with "Sortd."
+
 Goal: keep in the app only (1) what Apple/Google require in-app, (2) short good-practice
 notices, (3) plain instructions needed to use a feature. Everything else (how
 Keychain/on-device processing/encryption works, reassurance paragraphs, repeated
@@ -22,7 +79,7 @@ pass kept every such line short and plain, deliberately without adding any jokes
 |---|---|---|---|
 | `Settings/HelpFeedbackSettingsView.swift` — Get Help footer | "Feedback opens Mail with your app version, iOS version and device model already filled in. Nothing else — no purchases, no account." | **remove** | Explanatory note about a mailto prefill; not required, not an instruction. Pre-filled email itself is kept. |
 | `Settings/HelpFeedbackSettingsView.swift` — Online links | Privacy Policy / Support links | **keep** | Required accessible privacy-policy link (5.1.1(i)); support link is good practice. |
-| `Views/DataControlsView.swift` (`PrivacyView`) — 7 detail rows (Keychain, frankfurter.dev, Sentry/TestFlight, etc.) | Long per-row technical sentences | **shorten** → few one-line bullets | Owner: privacy screen becomes a short summary + "Read the full privacy policy" link. Technical detail (Keychain, exchange-rate provider, crash-reporting vendor) moves to the website policy, which is not touched and already carries full detail. (voice: later) |
+| `Views/DataControlsView.swift` (`PrivacyView`) — 7 detail rows (Keychain, frankfurter.dev, Sentry/TestFlight, etc.) | Long per-row technical sentences | **shorten, structure kept** — icon + bold title + one line (8–14 words), v3 wording (see Patterns) | v1 flattened these to plain bullets; Raj asked for the icon/title/line rows back with only the wording cut. Technical jargon (Keychain, frankfurter.dev) still moved to the linked policy; "Encrypted" row keeps the reassurance without naming the storage mechanism. (voice: later) |
 | `Views/DataControlsView.swift` — "Good to Know" paragraph (not a bank, not financial advice…) | 291-char disclaimer paragraph | **remove** | Reassurance/disclaimer paragraph; Terms of Use (linked) covers this. |
 | `Views/DataControlsView.swift` — Privacy Policy / Terms links | Links | **keep** | Required (5.1.1(i), 3.1.2 EULA/Terms link). |
 | `Views/DataControlsView.swift` — "Read the full privacy policy" | *(new)* | **add** | Owner's explicit instruction for the trimmed privacy screen. |
@@ -33,7 +90,7 @@ pass kept every such line short and plain, deliberately without adding any jokes
 | `Views/PaywallView.swift` — betaNote / freeNote / alreadyPro | Short one-liners | **keep** | Already short, functional (beta has no billing; what's free). |
 | `Views/GmailViews.swift` — `GmailSection` footer | "Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone." | **shorten** | Drop the example list; keep the read-only/on-device fact. (voice: later) |
 | `Views/GmailViews.swift` — disconnect confirmation message | "Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way." | **shorten** | Keep the consequence (HIG: explain uncommon/irreversible-feeling actions), tighten wording. (voice: later) |
-| `Views/GmailViews.swift` — `ConnectGmailSheet` intro + 4 bullets (Only receipts / Read on this iPhone / Read-only / Stop any time) | ~430 chars across a title, an intro sentence and 4 titled bullets | **shorten** → 3 short lines | Owner: keep the Gmail pre-connect disclosure (Google's "prominent disclosure" before OAuth) but make it 2–3 short lines. Still names what's accessed (receipts/bank alerts), that it's read-only and on-device, and how to stop. (voice: later) |
+| `Views/GmailViews.swift` — `ConnectGmailSheet` intro + 4 bullets (Only receipts / Read on this iPhone / Read-only / Stop any time) | ~430 chars across a title, an intro sentence and 4 titled bullets | **shorten, structure kept** — icon + bold title + one line, v3 wording (see Patterns) | Google's "prominent disclosure" before OAuth (what's accessed, that it's read-only/on-device, how to stop) stays, now in 4 rows matching the app's usual icon+title+line pattern, worded like Apple/Google's own permission copy rather than casual app copy — includes the exact settings path. (voice: later) |
 | `Views/GmailViews.swift` — "Google will show a warning that the app isn't verified yet…" | Footnote | **remove** | Transient, review-status detail, not a policy requirement; goes stale once Google verification completes. |
 | `Views/GmailViews.swift` — `GoogleButtonLabel` | "Continue with Google" + G mark, Google's colors/spacing | **keep** | Required by Google Sign-In branding guidelines (verification checks this). |
 | `Views/OnboardingView.swift` — email step header | "Connect Gmail and Sortd adds purchases from receipts and bank alerts — delivery, rides, app stores, online shops. Read-only, on this iPhone." | **shorten** | Drop example list; full disclosure still shown in `ConnectGmailSheet` before OAuth. (voice: later) |

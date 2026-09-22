@@ -10,13 +10,15 @@ struct PrivacyView: View {
         List {
             ListPageTitle(title: "Privacy", subtitle: "What Sortd stores, and where.")
             Section {
-                row("iphone", "On this iPhone — no server, no account.")
+                row("iphone", "On This iPhone", "Purchases, cards and settings are stored locally — no server, no account.")
                 if Features.gmail {
-                    row("envelope", "Gmail is read-only, on this iPhone.")
+                    row("envelope", "Gmail, Read-Only", "Limited to receipts and bank alerts, processed on this iPhone.")
                 }
-                row("building.columns", "No bank logins.")
-                row("number", "Only the last 4 digits of your card.")
-                row("chart.bar.xaxis", "No ads, no tracking.")
+                row("key", "Encrypted", "The key that unlocks your email is encrypted at rest.")
+                row("building.columns", "No Bank Logins", "Bank usernames and passwords are never requested.")
+                row("number", "Only the Last 4 Digits", "Full card numbers are never requested or stored.")
+                row("chart.bar.xaxis", "No Ads, No Tracking", "No advertising, no analytics, nothing sold or shared.")
+                row("ladybug", "Crash Reports in Beta", "Limited to the crash and device model — never your purchases.")
             }
             Section {
                 Link(destination: URL(string: "https://sortd.page/privacy")!) {
@@ -33,10 +35,16 @@ struct PrivacyView: View {
         .brandedTitle("Privacy")
     }
 
-    private func row(_ symbol: String, _ title: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.subheadline)
-            .padding(.vertical, 4)
+    private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol).frame(width: 24).foregroundStyle(Color.ink).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.body.weight(.semibold))
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 
