@@ -26,6 +26,9 @@ https://developers.google.com/identity/protocols/oauth2/production-readiness/res
 - [x] 21 Sep: added "How we protect your data" section (privacy.html#security), deployed
 - [x] 21 Sep ~7:30 pm: Cloud Console Data Access updated (justification now mentions encryption/Keychain/HTTPS + privacy#security; video link changed to v2 -cIUinevNfs) and saved = resubmitted
 - [x] 21 Sep ~7:30 pm: replied on thread (reply-all): privacy fix + asked for local-only CASA exemption, quoting "store or transmit on servers" line
+- [x] 22 Sep 4:34 am: Google sent the generic audit checklist (new thread). Gaps found: no retention
+      section, no way for reviewer to install the app. Added "How long Sortd keeps data"
+      (privacy.html#retention). Reply saved as a Gmail draft on that thread.
 - [ ] Options analysis: docs/ReceiptSourceOptions.md + .pdf (Cloudflare forwarding inbox is the CASA-free replacement)
 - [ ] Watch for Google's next email and reply fast
 - [ ] CASA security assessment when Google asks (paid, yearly; see below)
