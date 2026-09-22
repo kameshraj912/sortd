@@ -48,7 +48,7 @@ struct GmailSection: View {
         } header: {
             BoldHeader("Email Receipts")
         } footer: {
-            Text("Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone.")
+            Text("Finds receipts and bank alerts in your Gmail, read on this iPhone.")
         }
         .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) {
             if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) }
@@ -58,7 +58,7 @@ struct GmailSection: View {
             Button("Disconnect") { disconnect(deleting: false) }
             Button("Disconnect and Delete Its Purchases", role: .destructive) { disconnect(deleting: true) }
         } message: {
-            Text("Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way.")
+            Text("Google access is cancelled. Purchases already logged are kept.")
         }
     }
 
@@ -96,13 +96,10 @@ struct ConnectGmailSheet: View {
                         .accessibilityHidden(true)
                     Text("Add purchases from your email")
                         .font(.title2.weight(.bold))
-                    Text("Sortd finds receipts and bank alerts in your Gmail — food delivery, rides, app stores, online shops — and adds them as purchases.")
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 14) {
-                        point("magnifyingglass", "Only receipts", "It searches for receipts and bank alerts. Other email is never opened.")
-                        point("iphone", "Read on this iPhone", "Emails aren't copied to any server or shared.")
-                        point("eye.slash", "Read-only", "Sortd can't send, delete or change your email.")
-                        point("xmark.circle", "Stop any time", "Disconnect in Settings and Google cancels access.")
+                    VStack(alignment: .leading, spacing: 10) {
+                        point("magnifyingglass", "Searches for receipts and bank alerts only — other email stays untouched.")
+                        point("iphone", "Read-only, on this iPhone. Never copied or shared.")
+                        point("xmark.circle", "Disconnect any time in Settings.")
                     }
                     .padding(16)
                     .surface(radius: 16)
@@ -112,9 +109,6 @@ struct ConnectGmailSheet: View {
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Color.down)
                     }
-                    Text("Google will show a warning that the app isn't verified yet while Sortd is being reviewed by Google.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
                 .padding(24)
             }
@@ -141,15 +135,10 @@ struct ConnectGmailSheet: View {
         }
     }
 
-    private func point(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol).frame(width: 22).foregroundStyle(Color.ink)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
+    private func point(_ symbol: String, _ text: String) -> some View {
+        Label(text, systemImage: symbol)
+            .font(.subheadline)
+            .foregroundStyle(Color.ink)
     }
 
     private func connect() {

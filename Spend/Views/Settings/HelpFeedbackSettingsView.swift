@@ -18,8 +18,6 @@ struct HelpFeedbackSettingsView: View {
                 }
             } header: {
                 BoldHeader("Get Help")
-            } footer: {
-                Text("Feedback opens Mail with your app version, iOS version and device model already filled in. Nothing else — no purchases, no account.")
             }
 
             Section {

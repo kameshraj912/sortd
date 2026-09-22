@@ -10,27 +10,17 @@ struct PrivacyView: View {
         List {
             ListPageTitle(title: "Privacy", subtitle: "What Sortd stores, and where.")
             Section {
-                row("iphone", "Stored on this iPhone", "Purchases, cards and settings live only in Sortd's storage on your iPhone. There's no Sortd server or account.")
+                row("iphone", "On this iPhone — no server, no account.")
                 if Features.gmail {
-                    row("envelope", "Gmail, read on your iPhone", "Sortd searches only for receipts and bank alerts, and reads them on this iPhone. Nothing is copied to a server or shared. Disconnect any time.")
-                    row("key", "Keys in the Keychain", "The key that lets Sortd read your receipts is kept in the iPhone Keychain, not in the app's files.")
+                    row("envelope", "Gmail is read-only, on this iPhone.")
                 }
-                row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
-                row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
-                row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only a currency code and dates are sent.")
-                row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
-                row("ladybug", "Crash reports (TestFlight beta only)", "While you're testing in TestFlight, a crash sends a report to Sentry: the crash, your iPhone model and iOS version. No names, purchases, receipts or Gmail data. This turns off once Sortd leaves TestFlight for the App Store.")
-            }
-            Section {
-                Text("Sortd helps you track your own spending. It isn't a bank and doesn't move money, and nothing in it is financial advice. Amounts come from Apple Pay, your receipts and what you type in, and converted amounts use published exchange rates, so always check your bank statement for exact figures.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } header: {
-                BoldHeader("Good to Know")
+                row("building.columns", "No bank logins.")
+                row("number", "Only the last 4 digits of your card.")
+                row("chart.bar.xaxis", "No ads, no tracking.")
             }
             Section {
                 Link(destination: URL(string: "https://sortd.page/privacy")!) {
-                    Label("Privacy Policy", systemImage: "hand.raised")
+                    Label("Read the full privacy policy", systemImage: "hand.raised")
                 }
                 Link(destination: URL(string: "https://sortd.page/terms")!) {
                     Label("Terms of Use", systemImage: "doc.text")
@@ -43,16 +33,10 @@ struct PrivacyView: View {
         .brandedTitle("Privacy")
     }
 
-    private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol).frame(width: 24).foregroundStyle(Color.ink).padding(.top, 2)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.body.weight(.semibold))
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+    private func row(_ symbol: String, _ title: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.subheadline)
+            .padding(.vertical, 4)
     }
 }
 
