@@ -130,6 +130,8 @@ struct GoalsPage: View {
 struct PaymentPage: View {
     let counter: String
     @Binding var payment: SetupProfile.Payment?
+    /// Pick-one: moves on by itself a moment after a tap.
+    var onPicked: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -139,6 +141,10 @@ struct PaymentPage: View {
                 ForEach(SetupProfile.Payment.allCases) { p in
                     OptionCard(symbol: p.symbol, title: p.title, selected: payment == p) {
                         withAnimation(.snappy) { payment = p }
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(350))
+                            onPicked()
+                        }
                     }
                 }
             }
