@@ -108,6 +108,19 @@ struct LookConfiguration: WidgetConfigurationIntent {
 
 // MARK: - Timelines
 
+extension WidgetSummary {
+    /// The saved summary as it stands right now. The file is only as fresh as
+    /// the last time Sortd ran: past midnight or into a new month its totals
+    /// are old (`asOf` resets them), and bills whose due date has passed
+    /// would still read "Coming up", so those are dropped.
+    nonisolated static func readNow(_ now: Date = .now, calendar: Calendar = .current) -> WidgetSummary? {
+        guard var s = read()?.asOf(now, calendar: calendar) else { return nil }
+        let today = calendar.startOfDay(for: now)
+        s.bills.removeAll { $0.due < today }
+        return s
+    }
+}
+
 struct SpendingEntry: TimelineEntry {
     var date: Date
     var summary: WidgetSummary?
@@ -125,12 +138,12 @@ struct SpendingProvider: AppIntentTimelineProvider {
     func snapshot(for configuration: SpendingConfiguration, in context: Context) async -> SpendingEntry {
         context.isPreview
             ? SpendingEntry(date: .now, summary: SortdEntry.sample.summary, configuration: configuration)
-            : SpendingEntry(date: .now, summary: WidgetSummary.read(), configuration: configuration)
+            : SpendingEntry(date: .now, summary: WidgetSummary.readNow(), configuration: configuration)
     }
 
     func timeline(for configuration: SpendingConfiguration, in context: Context) async -> Timeline<SpendingEntry> {
         let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
-        let entry = SpendingEntry(date: .now, summary: WidgetSummary.read(), configuration: configuration)
+        let entry = SpendingEntry(date: .now, summary: WidgetSummary.readNow(), configuration: configuration)
         return Timeline(entries: [entry], policy: .after(midnight))
     }
 }
@@ -151,12 +164,12 @@ struct LookProvider: AppIntentTimelineProvider {
     func snapshot(for configuration: LookConfiguration, in context: Context) async -> LookEntry {
         context.isPreview
             ? LookEntry(date: .now, summary: SortdEntry.sample.summary, configuration: configuration)
-            : LookEntry(date: .now, summary: WidgetSummary.read(), configuration: configuration)
+            : LookEntry(date: .now, summary: WidgetSummary.readNow(), configuration: configuration)
     }
 
     func timeline(for configuration: LookConfiguration, in context: Context) async -> Timeline<LookEntry> {
         let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
-        let entry = LookEntry(date: .now, summary: WidgetSummary.read(), configuration: configuration)
+        let entry = LookEntry(date: .now, summary: WidgetSummary.readNow(), configuration: configuration)
         return Timeline(entries: [entry], policy: .after(midnight))
     }
 }
