@@ -109,4 +109,31 @@ struct QuickEntryTests {
         #expect(QuickEntry.read("at 5.50") == nil)
         #expect(QuickEntry.read("spent 5.50 on") == nil)
     }
+
+    @Test func aCurrencySymbolInsideAWordIsNotACurrency() throws {
+        // "farm 5" used to read as RM 5 (Malaysian ringgit).
+        let r = try #require(QuickEntry.read("coffee at the farm 5"))
+        #expect(r.currency == nil)
+        #expect(r.amount == 5)
+        #expect(QuickEntry.read("nasi lemak RM 8")?.currency == "MYR")
+    }
+
+    @Test func readsWeekdaysAndDaysAgo() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Australia/Melbourne")!
+        // Tuesday 22 September 2026.
+        let tue = try #require(cal.date(from: DateComponents(year: 2026, month: 9, day: 22, hour: 12)))
+        #expect(QuickEntry.relativeDay(in: "nandos last friday", today: tue, calendar: cal)?.days == 4)
+        #expect(QuickEntry.relativeDay(in: "uber on mon", today: tue, calendar: cal)?.days == 1)
+        #expect(QuickEntry.relativeDay(in: "coffee tuesday", today: tue, calendar: cal)?.days == 0)
+        #expect(QuickEntry.relativeDay(in: "coffee last tuesday", today: tue, calendar: cal)?.days == 7)
+        #expect(QuickEntry.relativeDay(in: "parking 3 days ago", today: tue, calendar: cal)?.days == 3)
+        // The 3 in "3 days ago" is not the amount.
+        let r = try #require(QuickEntry.read("parking 12 3 days ago"))
+        #expect(r.amount == 12)
+        #expect(r.daysAgo == 3)
+        // "Sunday Market" style names still read (a weekday word is not always a date,
+        // but the purchase and amount must survive either way).
+        #expect(QuickEntry.read("sunday market 8")?.amount == 8)
+    }
 }

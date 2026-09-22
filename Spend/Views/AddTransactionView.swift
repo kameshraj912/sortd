@@ -23,6 +23,10 @@ struct AddTransactionView: View {
     @State private var saveError: String?
     @State private var quick = ""
     @FocusState private var quickFocused: Bool
+    /// True while Apple Intelligence reads the quick line.
+    @State private var reading = false
+    /// Apple Intelligence's category, used when the merchant rules have none.
+    @State private var aiCategory: SpendCategory?
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -35,15 +39,18 @@ struct AddTransactionView: View {
     /// wrong guess should cost a glance, not a wrong total.
     private var quickField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "text.cursor")
+            Image(systemName: QuickEntryAI.isAvailable ? "sparkles" : "text.cursor")
                 .foregroundStyle(.secondary)
+                .symbolEffect(.pulse, isActive: reading)
                 .accessibilityHidden(true)
-            TextField("coffee 5.50", text: $quick)
+            TextField("lunch at nandos 18 yesterday", text: $quick)
                 .focused($quickFocused)
                 .submitLabel(.done)
                 .autocorrectionDisabled()
                 .onSubmit(applyQuick)
-            if !quick.isEmpty {
+            if reading {
+                ProgressView()
+            } else if !quick.isEmpty {
                 Button("Fill", action: applyQuick)
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.plain)
@@ -55,20 +62,52 @@ struct AddTransactionView: View {
     }
 
     private func applyQuick() {
-        guard let reading = QuickEntry.read(quick) else { return }
-        merchant = reading.merchant
-        // Decimal prints 5.50 as "5.5", which looks like a different number
-        // on a money screen.
-        let number = NSDecimalNumber(decimal: reading.amount).doubleValue
-        amountText = number == number.rounded()
-            ? String(Int(number))
-            : String(format: "%.2f", number)
-        if let code = reading.currency { currency = code }
-        if reading.daysAgo > 0 {
-            date = Calendar.current.date(byAdding: .day, value: -reading.daysAgo, to: .now) ?? date
-        }
-        quick = ""
+        let line = quick
+        guard !line.trimmingCharacters(in: .whitespaces).isEmpty, !reading else { return }
         quickFocused = false
+        Task {
+            if QuickEntryAI.isAvailable {
+                reading = true
+                let ai = await QuickEntryAI.read(line)
+                reading = false
+                if let ai {
+                    fill(merchant: ai.merchant, amount: ai.amount, currency: ai.currency,
+                         daysAgo: ai.daysAgo, category: ai.category)
+                    quick = ""
+                    return
+                }
+            }
+            // No Apple Intelligence (or it couldn't read it): the plain reader.
+            guard let plain = QuickEntry.read(line) else {
+                quickFocused = true
+                return
+            }
+            fill(merchant: plain.merchant, amount: plain.amount, currency: plain.currency,
+                 daysAgo: plain.daysAgo, category: nil)
+            quick = ""
+        }
+    }
+
+    private func fill(merchant name: String, amount: Decimal?, currency code: String?,
+                      daysAgo: Int, category guess: SpendCategory?) {
+        withAnimation(.snappy) {
+            if !name.isEmpty { merchant = name }
+            if let amount {
+                // Decimal prints 5.50 as "5.5", which looks like a different
+                // number on a money screen.
+                let number = NSDecimalNumber(decimal: amount).doubleValue
+                amountText = number == number.rounded()
+                    ? String(Int(number))
+                    : String(format: "%.2f", number)
+            }
+            if let code { currency = code }
+            if daysAgo > 0 {
+                date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now) ?? date
+            }
+            // The model's category, only where the merchant rules have none.
+            aiCategory = guess
+            if let guess, !categoryTouched, category == .other { category = guess }
+        }
     }
 
     var body: some View {
@@ -83,7 +122,9 @@ struct AddTransactionView: View {
                 Section {
                     quickField
                 } footer: {
-                    Text("Type it the way you'd say it: \u{201C}seven seeds coffee 5.50\u{201D}.")
+                    Text(QuickEntryAI.isAvailable
+                         ? "Type it the way you'd say it. Apple Intelligence fills in the rest, on this iPhone."
+                         : "Type it the way you'd say it: \u{201C}seven seeds coffee 5.50\u{201D}.")
                 }
 
                 Section {
@@ -94,7 +135,8 @@ struct AddTransactionView: View {
                             guard !categoryTouched else { return }
                             let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
                             withAnimation(.snappy) {
-                                category = Categorizer.category(for: name, learned: learned)
+                                let rule = Categorizer.category(for: name, learned: learned)
+                                category = rule == .other ? aiCategory ?? .other : rule
                             }
                         }
                     Button { showingCategories = true } label: {
