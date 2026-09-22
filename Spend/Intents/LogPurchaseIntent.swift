@@ -32,37 +32,75 @@ struct LogPurchaseIntent: AppIntent {
         return .result(dialog: IntentDialog(stringLiteral: result.message))
     }
 
-    /// What happened to one tap. `transaction` is nil for an empty test run.
+    /// What happened to one tap. `transaction` is nil for an empty test run
+    /// or a run where the automation never passed a transaction at all.
     struct Outcome {
         let message: String
         let transaction: Transaction?
         let merged: Bool
+        let kind: TapOutcomeKind
+    }
+
+    /// The category of what a run did, used for the Setup Guide diagnostic.
+    enum TapOutcomeKind: String, Equatable {
+        case saved, merged, refund, testRun, missingInput
+
+        var label: String {
+            switch self {
+            case .saved: "Saved"
+            case .merged: "Merged"
+            case .refund: "Refund noted"
+            case .testRun: "Ignored — test run"
+            case .missingInput: "Transaction input missing"
+            }
+        }
     }
 
     static let lastTapKey = "lastTapReceived"
+    /// What Sortd did about the last tap, in plain words — shown live in the
+    /// Setup Guide next to `lastTapKey`.
+    static let lastOutcomeKey = "lastTapOutcome"
 
-    /// The whole tap-handling logic, callable from tests.
+    /// Writes both diagnostics and hands back the outcome, so every return
+    /// path in `handle` records the same thing Settings shows. `defaults` is
+    /// injectable (like `book`) so parallel tests don't race on the real
+    /// UserDefaults.standard the way SetupGuideView reads.
+    private static func finish(_ outcome: Outcome, now: Date, seen: String, defaults: UserDefaults) -> Outcome {
+        let ts = now.formatted(date: .abbreviated, time: .standard)
+        defaults.set("\(ts): \(seen)", forKey: lastTapKey)
+        defaults.set("\(ts): \(outcome.kind.label) — \(outcome.message)", forKey: lastOutcomeKey)
+        defaults.synchronize()
+        return outcome
+    }
+
+    /// The whole tap-handling logic, callable from tests. `transactionMissing`
+    /// is set by `LogWalletTapIntent` when its Transaction parameter never
+    /// arrived at all (the automation isn't set to Shortcut Input) — a setup
+    /// mistake, not a test run, so it gets its own diagnosis.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
-                       in context: ModelContext, book: CardBook, now: Date = .now) async throws -> Outcome {
+                       in context: ModelContext, book: CardBook, now: Date = .now,
+                       transactionMissing: Bool = false, defaults: UserDefaults = .standard) async throws -> Outcome {
         // Shortcuts sometimes hands intents an empty merchant or amount
         // (developer.apple.com/forums/thread/797233). Never drop a real tap:
         // save it with amount 0 and flag it so it can be filled in.
         let parsed = AmountParser.parse(amount ?? "")
         let name = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        // Nothing at all came in: a test run (the ▶ button in Shortcuts),
-        // not a Wallet tap. Don't save an empty purchase.
         let cardName = (card ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         // Keep exactly what arrived, for checking the setup (Settings shows it).
         let seen = "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
-        UserDefaults.standard.set("\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", forKey: lastTapKey)
-        UserDefaults.standard.synchronize()
-        // No amount and no shop: a test run (the ▶ button in Shortcuts), not a
-        // shop tap — a real tap always has an amount. Nothing is saved.
-        if name.isEmpty && parsed == nil {
-            let extra = cardName.isEmpty ? "" : " (it did send the card: \(cardName))"
-            return Outcome(message: "Sortd is connected\(extra). Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
-                           transaction: nil, merged: false)
+
+        if transactionMissing {
+            return finish(Outcome(message: "Your automation isn't passing the transaction. In Shortcuts, open the automation, tap Transaction, then choose Shortcut Input.",
+                                  transaction: nil, merged: false, kind: .missingInput), now: now, seen: seen, defaults: defaults)
+        }
+        // Nothing at all came in — no shop, no amount, no card: a test run
+        // (the ▶ button in Shortcuts), not a Wallet tap. Don't save an empty
+        // purchase. If ANY of the three arrived, it's a real tap: save it,
+        // even with the rest missing, so nothing is silently dropped.
+        if name.isEmpty && parsed == nil && cardName.isEmpty {
+            return finish(Outcome(message: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
+                                  transaction: nil, merged: false, kind: .testRun), now: now, seen: seen, defaults: defaults)
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let refund = AmountParser.isNegative(amount ?? "")
@@ -74,7 +112,8 @@ struct LogPurchaseIntent: AppIntent {
             let shop = name.isEmpty ? "Unknown merchant" : name
             let recent = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))) ?? []
             if let same = recent.first(where: { $0.amount == 0 && $0.merchant == shop && $0.card == cardID }) {
-                return Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount", transaction: same, merged: true)
+                return finish(Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount",
+                                      transaction: same, merged: true, kind: .merged), now: now, seen: seen, defaults: defaults)
             }
         }
         let purchase = IncomingPurchase(
@@ -92,19 +131,23 @@ struct LogPurchaseIntent: AppIntent {
         if refund, !t.refunded {
             t.refunded = true
             try? context.save()
-            return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false)
+            return finish(Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted",
+                                  transaction: t, merged: false, kind: .refund), now: now, seen: seen, defaults: defaults)
         }
         await FXService.backfill(in: context)
 
         if missingAmount {
-            return Outcome(message: "Logged a purchase at \(t.merchant) — amount missing, open Sortd to fix", transaction: t, merged: false)
+            return finish(Outcome(message: "Logged a purchase at \(t.merchant) — amount missing, open Sortd to fix",
+                                  transaction: t, merged: false, kind: .saved), now: now, seen: seen, defaults: defaults)
         }
         let money = Money.format(t.amount, t.currencyCode)
         switch outcome {
         case .added:
-            return Outcome(message: "Logged \(money) at \(t.merchant) · \(t.category.name)", transaction: t, merged: false)
+            return finish(Outcome(message: "Logged \(money) at \(t.merchant) · \(t.category.name)",
+                                  transaction: t, merged: false, kind: .saved), now: now, seen: seen, defaults: defaults)
         case .merged:
-            return Outcome(message: "\(money) at \(t.merchant) was already logged", transaction: t, merged: true)
+            return finish(Outcome(message: "\(money) at \(t.merchant) was already logged",
+                                  transaction: t, merged: true, kind: .merged), now: now, seen: seen, defaults: defaults)
         }
     }
 }

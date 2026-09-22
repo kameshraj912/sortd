@@ -49,14 +49,25 @@ enum AmountParser {
         var cleaned = upper.filter { $0.isNumber || $0 == "." || $0 == "," || $0 == "-" }
         guard cleaned.contains(where: \.isNumber) else { return nil }
 
-        // "1,234.56" → drop thousands commas. "4,50" (comma as decimal) → "4.50".
-        if cleaned.contains(".") {
+        // "1,234.56" → drop thousands commas. "4,50" (comma as decimal) →
+        // "4.50". "1.234,50" (European: dot thousands, comma decimal) →
+        // "1234.50" — whichever separator comes LAST is the decimal one;
+        // the other (if any) is thousands grouping and gets dropped.
+        let lastDot = cleaned.lastIndex(of: ".")
+        let lastComma = cleaned.lastIndex(of: ",")
+        switch (lastDot, lastComma) {
+        case let (.some(dot), .some(comma)) where comma > dot:
+            cleaned.removeAll { $0 == "." }
+            if let c = cleaned.lastIndex(of: ",") {
+                cleaned.replaceSubrange(c...c, with: ".")
+            }
             cleaned.removeAll { $0 == "," }
-        } else if let comma = cleaned.lastIndex(of: ","),
-                  cleaned.distance(from: comma, to: cleaned.endIndex) == 3 {
+        case (.some, .some):
+            cleaned.removeAll { $0 == "," }
+        case (nil, .some(let comma)) where cleaned.distance(from: comma, to: cleaned.endIndex) == 3:
             cleaned.replaceSubrange(comma...comma, with: ".")
             cleaned.removeAll { $0 == "," }
-        } else {
+        default:
             cleaned.removeAll { $0 == "," }
         }
 

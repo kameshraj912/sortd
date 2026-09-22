@@ -4,6 +4,10 @@ import SwiftUI
 struct SetupGuideView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
+    // @AppStorage (not a direct UserDefaults read) so this updates live: a
+    // tap logged while this screen is open shows up without reopening it.
+    @AppStorage(LogPurchaseIntent.lastTapKey) private var lastTapRaw = ""
+    @AppStorage(LogPurchaseIntent.lastOutcomeKey) private var lastTapOutcome = ""
 
     private struct Step: Identifiable {
         let id: Int
@@ -103,13 +107,17 @@ struct SetupGuideView: View {
                 .listRowInsets(EdgeInsets())
             }
 
-            if let last = UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) {
+            if !lastTapRaw.isEmpty {
                 Section {
-                    Text(last).font(.footnote.monospaced()).textSelection(.enabled)
+                    if !lastTapOutcome.isEmpty {
+                        Text(lastTapOutcome).font(.subheadline.weight(.semibold))
+                    }
+                    Text(lastTapRaw).font(.footnote.monospaced()).textSelection(.enabled)
+                        .foregroundStyle(lastTapOutcome.isEmpty ? .primary : .secondary)
                 } header: {
                     BoldHeader("Last Tap Received")
                 } footer: {
-                    Text("Exactly what Apple Pay sent Sortd. Useful if a tap shows the wrong shop, amount or card.")
+                    Text("What Sortd did with the last tap, and exactly what Apple Pay sent. Useful if a tap shows the wrong shop, amount or card, or doesn't show up at all.")
                 }
             }
 

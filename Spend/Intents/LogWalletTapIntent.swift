@@ -28,15 +28,24 @@ struct LogWalletTapIntent: AppIntent {
 
     @MainActor
     static func handle(_ text: String?, in context: ModelContext, book: CardBook,
-                       now: Date = .now) async throws -> LogPurchaseIntent.Outcome {
-        var parts = WalletTapText.parse(text ?? "")
+                       now: Date = .now, defaults: UserDefaults = .standard) async throws -> LogPurchaseIntent.Outcome {
+        // `text` is nil only when Transaction was never wired to Shortcut
+        // Input at all — a setup mistake, distinct from a real tap or a test
+        // run, so it gets its own diagnosis instead of being lumped in with
+        // "test run".
+        guard let text else {
+            return try await LogPurchaseIntent.handle(merchant: nil, amount: nil, card: nil,
+                                                      in: context, book: book, now: now,
+                                                      transactionMissing: true, defaults: defaults)
+        }
+        var parts = WalletTapText.parse(text)
         // Test runs send nothing; any text at all is a real tap, so never drop it.
-        let raw = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if parts.merchant == nil, parts.amount == nil, !raw.isEmpty {
             parts.merchant = String(raw.prefix(60))
         }
         return try await LogPurchaseIntent.handle(merchant: parts.merchant, amount: parts.amount,
-                                                  card: parts.card, in: context, book: book, now: now)
+                                                  card: parts.card, in: context, book: book, now: now, defaults: defaults)
     }
 }
 
