@@ -17,8 +17,9 @@ struct InsightsView: View {
         NavigationStack {
             Group {
                 if transactions.isEmpty {
-                    ContentUnavailableView("No Insights Yet", systemImage: "chart.bar.xaxis",
-                                           description: Text("Once a few purchases come in, you'll see where your money goes. \(SortdVoice.noInsights)"))
+                    EmptyState("No insights yet", symbol: "chart.bar.xaxis",
+                               message: "After a few purchases, you'll see where your money goes.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {

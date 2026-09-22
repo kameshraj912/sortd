@@ -65,12 +65,10 @@ struct CardsSettingsView: View {
         .brandedTitle("Cards")
         .overlay {
             if book.active.isEmpty {
-                ContentUnavailableView {
-                    Label("No Cards", systemImage: "creditcard")
-                } description: {
-                    Text("Add the cards you pay with, or just pay with Apple Pay: a new card is added the first time you use it.")
-                } actions: {
-                    Button("Add Card") { adding = true }.buttonStyle(.borderedProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
+                EmptyState("No cards yet", symbol: "creditcard",
+                           message: "Add the cards you pay with. Apple Pay adds new ones by itself.") {
+                    Button("Add Card") { adding = true }
+                        .buttonStyle(.glassProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
                 }
             }
         }

@@ -14,6 +14,7 @@ struct ActivityView: View {
 struct TransactionsScreen: View {
     let fixedCard: Card?
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     @State private var search = ""
@@ -29,11 +30,13 @@ struct TransactionsScreen: View {
     var body: some View {
         Group {
             if transactions.isEmpty {
-                ContentUnavailableView(
-                    "No Purchases Yet",
-                    systemImage: "list.bullet.rectangle.portrait",
-                    description: Text("Purchases you log, or that come in from Apple Pay, show up here. \(SortdVoice.noPurchases)")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    PageTitle(title: fixedCard?.name ?? "Activity")
+                        .padding(.horizontal, 20)
+                    EmptyState("No purchases yet", symbol: "list.bullet.rectangle.portrait",
+                               message: "Purchases you log, or that come in from Apple Pay, show up here.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 // The list always shows (title, search box, chips), with a
                 // "nothing matches" message inside it, so a search can be cleared.
@@ -44,7 +47,7 @@ struct TransactionsScreen: View {
         .brandedTitle(fixedCard?.name ?? "Activity")
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
-            if fixedCard == nil {
+            if fixedCard == nil, !transactions.isEmpty {
                 ToolbarItem(placement: .topBarLeading) { filterMenu }
                     .sharedBackgroundVisibility(.hidden)
             }
@@ -71,11 +74,19 @@ struct TransactionsScreen: View {
         }
         .animation(.spring(duration: 0.35), value: pendingDelete?.persistentModelID)
         .refreshable {
+            // Finish a pending delete first, so a receipt from the sync can't
+            // merge into a purchase that is about to go.
+            commitDelete()
             // Pull down to fetch new Gmail receipts and exchange rates.
             _ = await GmailSync.syncAll(in: context)
             await FXService.ensureConverted(in: context)
         }
         .onDisappear { commitDelete() }
+        // Leaving the app ends the Undo window: save the delete now, or the
+        // 6-second timer may never fire and the widgets keep the purchase.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { commitDelete() }
+        }
     }
 
     // MARK: Delete with undo
@@ -102,6 +113,7 @@ struct TransactionsScreen: View {
         pendingDelete = nil
         context.delete(t)
         try? context.save()
+        WidgetBridge.refresh(from: context)
     }
 
     // MARK: List

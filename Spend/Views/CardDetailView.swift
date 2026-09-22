@@ -151,8 +151,8 @@ struct CardDetailView: View {
             .padding(.top, 12)
 
             if transactions.isEmpty {
-                ContentUnavailableView("No Purchases Yet", systemImage: "creditcard",
-                                       description: Text("Tap \(card.name) with Apple Pay and it shows up here."))
+                EmptyState("No purchases yet", symbol: "creditcard",
+                           message: "Pay with \(card.name) and it shows up here.")
             } else {
                 let shown = Array(transactions.prefix(8))
                 VStack(spacing: 0) {

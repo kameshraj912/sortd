@@ -29,13 +29,17 @@ struct OnboardingView: View {
     @AppStorage(SetupProfile.abroadKey) private var abroadRaw = ""
     @AppStorage(SetupProfile.checkInKey) private var checkInRaw = SetupProfile.CheckIn.sunday.rawValue
     @AppStorage(SetupProfile.billsKey) private var billIntent = false
+    @AppStorage(SetupProfile.rerunKey) private var rerun = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// They answered the check-in question this time (not skipped, not "Not now").
+    @State private var checkInChosen = false
+    /// Asking iOS for notification permission; one tap is enough.
+    @State private var requesting = false
+    /// The budget before setup started, so un-ticking "Spend less" undoes
+    /// a limit set a moment ago without wiping one set weeks ago.
+    @State private var budgetBefore: Double?
 
-    /// Questions first, then what the answers built, then the few chores,
-    /// then Pro. Nothing is asked for before the app has earned it.
-    enum Step: Int, CaseIterable {
-        case welcome, goals, payment, currency, feeling, budget, checkIn, building, plan
-        case cards, cardDetails, applePay, pro, email
-    }
+    typealias Step = SetupFlow.Step
     #if DEBUG
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
     #else
@@ -62,6 +66,7 @@ struct OnboardingView: View {
 
     var body: some View {
         ScrollView {
+            VStack(spacing: 0) {
             page
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
@@ -70,12 +75,17 @@ struct OnboardingView: View {
                 .transition(.asymmetric(
                     insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
                     removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
+            if typeSize.isAccessibilitySize, step != .building { bottomBar }
+            }
         }
         .scrollDismissesKeyboard(.interactively)
         .scrollBounceBehavior(.basedOnSize)
         // Glass controls float over the page, and the page scrolls under them.
-        .safeAreaInset(edge: .top, spacing: 0) { topBar }
-        .safeAreaInset(edge: .bottom, spacing: 0) { if step != .building { bottomBar } }
+        // Bars (not plain insets) so the page blurs softly under them as it
+        // scrolls, instead of text running into the buttons.
+        .safeAreaBar(edge: .top, spacing: 0) { topBar }
+        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
+        .onAppear { if budgetBefore == nil { budgetBefore = budget } }
         .background {
             ZStack {
                 Color.page.ignoresSafeArea()
@@ -108,7 +118,11 @@ struct OnboardingView: View {
     private var payment: SetupProfile.Payment? { SetupProfile.Payment(rawValue: paymentRaw) }
     private var checkIn: SetupProfile.CheckIn { SetupProfile.CheckIn(rawValue: checkInRaw) ?? .sunday }
     private var abroad: SetupProfile.Abroad? { SetupProfile.Abroad(rawValue: abroadRaw) }
-    private var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
+    private var flow: SetupFlow {
+        SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty,
+                  gmailFeature: Features.gmail, isPro: pro.isPro)
+    }
+    private var wantsGmail: Bool { flow.wantsGmail }
     /// The check-in step asks for notifications only if something will use them.
     private var asksNotifications: Bool { checkIn != .needed || billIntent }
 
@@ -127,44 +141,27 @@ struct OnboardingView: View {
 
     // MARK: Flow
 
-    private func isShown(_ s: Step) -> Bool {
-        switch s {
-        case .budget: goals.contains(.spendLess)
-        case .cardDetails: !book.active.isEmpty
-        case .applePay: payment != .cash
-        case .email: Features.gmail && pro.isPro && wantsGmail
-        default: true
-        }
-    }
-
-    /// The next step this person will see, going forward or back. Going back
-    /// never lands on the "building" pause.
-    private func neighbour(of s: Step, _ delta: Int) -> Step? {
-        var i = s.rawValue + delta
-        while let c = Step(rawValue: i) {
-            if isShown(c), !(delta < 0 && c == .building) { return c }
-            i += delta
-        }
-        return nil
-    }
-
-    private var progress: Double {
-        let shown = Step.allCases.filter { $0 != .welcome && $0 != .building && isShown($0) }
-        guard !shown.isEmpty else { return 0 }
-        let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
-        return Double(reached + 1) / Double(shown.count)
-    }
-
-    private var questionSteps: [Step] { [.goals, .payment, .currency, .feeling, .budget, .checkIn].filter(isShown) }
-
-    private func counter(_ s: Step) -> String {
-        let steps = questionSteps
-        return "Question \((steps.firstIndex(of: s) ?? 0) + 1) of \(steps.count)"
-    }
+    private func isShown(_ s: Step) -> Bool { flow.isShown(s) }
+    private func neighbour(of s: Step, _ delta: Int) -> Step? { flow.neighbour(of: s, delta) }
+    private var progress: Double { flow.progress(at: step) }
+    private var questionSteps: [Step] { flow.questionSteps }
+    private func counter(_ s: Step) -> String { flow.counter(s) ?? "" }
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            if step != .welcome && step != .building {
+            if step == .welcome, rerun {
+                // Running setup again from Settings: a way back out.
+                Button {
+                    rerun = false
+                    onFinish()
+                } label: {
+                    Image(systemName: "xmark").font(.body.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel("Close")
+            } else if step != .welcome && step != .building {
                 Button { go(-1) } label: {
                     Image(systemName: "chevron.left").font(.body.weight(.semibold))
                         .frame(width: 30, height: 30)
@@ -231,6 +228,18 @@ struct OnboardingView: View {
         .controlSize(.large)
     }
 
+    /// Quiet text button under the main one. 44pt tall: Apple's minimum.
+    private func tertiaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var bottomBar: some View {
         GlassEffectContainer(spacing: 10) {
             VStack(spacing: 10) {
@@ -244,47 +253,38 @@ struct OnboardingView: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 8)
-                    Button(action: primaryAction) {
-                        Text(primaryTitle)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 34)
-                    }
-                    .buttonStyle(.plain)
+                    tertiaryButton(primaryTitle, action: primaryAction)
                 case .welcome:
                     primaryButton(primaryTitle, action: primaryAction)
-                    secondaryButton("I Already Have Spending to Bring In") { showingImport = true }
+                    secondaryButton("Bring In Past Spending") { showingImport = true }
                     // Not when setup is run again over real purchases: sample
                     // data would mix into them.
                     if transactions.isEmpty {
-                        Button("Look around with sample data") {
+                        tertiaryButton("Look around with sample data") {
                             DemoData.load(in: context)
                             finish()
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(minHeight: 36)
                     }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
-                    Button("Do this later and look around") { finish() }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(minHeight: 36)
+                    tertiaryButton("Do this later and look around") { finish() }
+                case .email where gmail.isEmpty:
+                    primaryButton("Connect Gmail") { connectingGmail = true }
+                    tertiaryButton("I'll do this later") { go(1) }
                 case .applePay where !tapConnected:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     }
-                    Button("I'll do this later") { go(1) }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(minHeight: 36)
+                    tertiaryButton("I'll do this later") { go(1) }
                 case .checkIn where asksNotifications:
                     primaryButton(primaryTitle, action: primaryAction)
-                    Button("Not now") { go(1) }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(minHeight: 36)
+                    tertiaryButton("Not now") {
+                        // No notifications: no check-in, no bill reminders.
+                        checkInRaw = SetupProfile.CheckIn.needed.rawValue
+                        billIntent = false
+                        checkInChosen = true
+                        go(1)
+                    }
                 default:
                     primaryButton(primaryTitle, action: primaryAction)
                 }
@@ -302,7 +302,7 @@ struct OnboardingView: View {
         case .payment where payment == nil: return "Skip This One"
         case .feeling where feelingRaw.isEmpty: return "Skip This One"
         case .checkIn: return asksNotifications ? "Turn On Notifications" : "Continue"
-        case .plan: return "Start with Step 1"
+        case .plan: return book.active.isEmpty ? "Add My First Card" : "Continue Setup"
         case .cards where book.active.isEmpty: return "Add Cards Later"
         case .cardDetails where !detailsComplete: return "Add Digits Later"
         case .applePay where !tapConnected: return last ? "Do This Later and Start" : "I'll Do This Later"
@@ -313,13 +313,21 @@ struct OnboardingView: View {
     }
 
     private func primaryAction() {
-        if step == .checkIn, asksNotifications {
-            // One button, straight to Apple's own alert (no fake "Allow").
-            Task {
-                _ = await Reminders.requestPermission()
-                go(1)
+        if step == .checkIn {
+            checkInRaw = checkIn.rawValue   // keep the pre-picked default too
+            checkInChosen = true
+            if asksNotifications {
+                // One button, straight to Apple's own alert (no fake "Allow").
+                guard !requesting else { return }
+                requesting = true
+                let from = step
+                Task {
+                    _ = await Reminders.requestPermission()
+                    requesting = false
+                    if step == from { go(1) }
+                }
+                return
             }
-            return
         }
         go(1)
     }
@@ -336,13 +344,37 @@ struct OnboardingView: View {
 
     private func finish() {
         Task { await FXService.rebase(to: home, in: context) }
+        // Skipped the question: keep an earlier answer, otherwise no check-in.
+        if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil {
+            checkInRaw = SetupProfile.CheckIn.needed.rawValue
+        }
+        // A limit set a moment ago, then "Spend less" un-ticked: undo it.
+        if !goals.contains(.spendLess), let before = budgetBefore { budget = before }
         let choice = checkIn
-        Task { await CheckInReminder.schedule(choice) }
-        // Bill reminders are Pro: on now if they have it, otherwise they
-        // come on when a trial starts from Settings.
-        if billIntent, pro.isPro { reminders = true }
+        Task {
+            // Only if notifications are allowed; otherwise clear any old one,
+            // and say so in Settings rather than show a time that never comes.
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            let allowed = status == .authorized || status == .provisional
+            await CheckInReminder.schedule(allowed ? choice : .needed)
+            if !allowed {
+                UserDefaults.standard.set(SetupProfile.CheckIn.needed.rawValue, forKey: SetupProfile.checkInKey)
+            }
+        }
+        // Bill reminders are Pro: on now if they have it, otherwise the
+        // intent waits and comes on when Pro starts (applyPendingBillReminders).
+        if billIntent, pro.isPro {
+            reminders = true
+            billIntent = false
+        }
+        rerun = false
         done = true
         onFinish()
+    }
+
+    /// The limit that will actually be in place when setup ends.
+    private var effectiveBudget: Double {
+        goals.contains(.spendLess) ? budget : (budgetBefore ?? 0)
     }
 
     // MARK: Pages
@@ -358,7 +390,7 @@ struct OnboardingView: View {
         case .budget: budgetPage
         case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent, isPro: pro.isPro)
         case .building: BuildingPage(lines: buildingLines) { if step == .building { go(1) } }
-        case .plan: PlanPage(summary: planSummary, items: planItems, settings: planSettings)
+        case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
         case .cardDetails: cardDetails
         case .applePay: applePay
@@ -372,8 +404,8 @@ struct OnboardingView: View {
     private var buildingLines: [String] {
         var lines = ["Showing totals in \(home)"
                      + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", other currencies converted each day" : "")]
-        if goals.contains(.spendLess), budget > 0 {
-            lines.append("Setting a \(Money.format(Decimal(budget), home, cents: false)) monthly limit, with what's left each day")
+        if goals.contains(.spendLess), effectiveBudget > 0 {
+            lines.append("Setting a \(Money.format(Decimal(effectiveBudget), home, cents: false)) monthly limit, with what's left each day")
         } else if goals.contains(.bills) {
             lines.append("Watching for subscriptions and bills")
         } else {
@@ -384,38 +416,23 @@ struct OnboardingView: View {
         return lines
     }
 
-    private var planSummary: String {
-        var s = "Built for spending in \(home)"
-        if abroad == .often || abroad == .sometimes || goals.contains(.countries) { s += " and other currencies" }
-        if budget > 0 { s += ", with a monthly limit of \(Money.format(Decimal(budget), home, cents: false))" }
-        return s + "."
-    }
+    private var planSummary: String { "Built from your answers. Change any of it in Settings." }
 
     private var planSettings: [(String, String)] {
-        var chips = [("dollarsign.circle", "Totals in \(home)")]
-        if budget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(budget), home, cents: false) + " a month")) }
-        chips.append((checkIn.symbol, checkIn == .needed ? "Quiet mode" : checkIn.title))
-        if billIntent { chips.append(("bell.badge", "Bill heads-ups")) }
+        var chips = [(Self.currencySymbol(home), "Totals in \(home)"
+                      + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", others converted daily" : ""))]
+        if effectiveBudget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(effectiveBudget), home, cents: false) + " monthly limit")) }
+        chips.append((checkIn.symbol, checkIn == .needed ? "No regular check-ins" : checkIn.summary))
+        if billIntent { chips.append(("bell.badge", pro.isPro ? "Bill heads-ups" : "Bill heads-ups with Pro")) }
         return chips
     }
 
-    private var planItems: [PlanItem] {
-        var items = [PlanItem(id: "cards", symbol: "creditcard", title: "Add the cards you pay with", time: "30 seconds", pro: false)]
-        if payment != .cash {
-            items.append(PlanItem(id: "tap", symbol: "wave.3.right", title: "Log Apple Pay taps by themselves", time: "2 minutes, once", pro: false))
-        } else {
-            items.append(PlanItem(id: "widget", symbol: "square.grid.2x2", title: "Quick add from your Home Screen", time: "Add the widget any time", pro: false))
-        }
-        if Features.gmail, wantsGmail {
-            items.append(PlanItem(id: "gmail", symbol: "envelope", title: "Catch online receipts from Gmail", time: "1 minute", pro: true))
-        }
-        if goals.contains(.receipts) {
-            items.append(PlanItem(id: "scan", symbol: "doc.text.viewfinder", title: "Scan paper receipts", time: "When you need it", pro: true))
-        }
-        return items
+    private var setupTasks: [SetupTask] {
+        SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty, tapped: tapConnected,
+                             widgetAdded: false, gmailConnected: !gmail.isEmpty)
     }
 
-    private func header(_ title: String, _ subtitle: String) -> some View {
+    private func header(_ title: String, _ subtitle: String? = nil) -> some View {
         SetupHeader(title: title, subtitle: subtitle)
     }
 
@@ -447,26 +464,21 @@ struct OnboardingView: View {
                     .font(.body).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 18) {
-                feature("wave.3.right", "Apple Pay taps log themselves", "Pay as usual. Each tap lands in Sortd in a second.", Color.brandPalette[0])
-                feature("square.stack", "Every card, every currency", "Debit, credit and travel cards, converted at the day's rate.", Color.brandPalette[1])
-                feature("arrow.triangle.2.circlepath", "Bills and subscriptions, predicted", "See what's due before it's charged.", Color.brandPalette[2])
-                feature("lock", "Private by design", "No bank logins. Your data stays on your iPhone.", Color.brandPalette[3])
+                feature("wave.3.right", "Apple Pay logs itself", "Pay as usual. It shows up in a second.", Color.brandPalette[0])
+                feature("creditcard", "Every card, every currency", "Converted at the day's rate.", Color.brandPalette[1])
+                feature("arrow.triangle.2.circlepath", "Bills, seen coming", "Know what's due before it's charged.", Color.brandPalette[2])
+                feature("lock", "Private by design", "No bank login. Stays on your iPhone.", Color.brandPalette[3])
             }
-            .padding(20)
-            .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            .setupCard(padding: 20)
         }
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String, _ tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .frame(width: 26)
-                .foregroundStyle(tint)
-                .accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 12) {
+            RowIcon(symbol)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -475,31 +487,35 @@ struct OnboardingView: View {
     private var currency: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.currency), title: "Your main currency",
-                        subtitle: "Totals and budgets are shown in this. Other currencies are converted at that day's rate.")
-            VStack(spacing: 0) {
-                currencyRow(Money.detectedHome, note: "From your iPhone")
-                // A short list; the rest are one tap away under "Other currencies".
-                ForEach(Array(["AUD", "SGD", "USD", "INR", "GBP"].filter { $0 != Money.detectedHome }.prefix(3)), id: \.self) {
-                    Divider().padding(.leading, 16)
-                    currencyRow($0, note: nil)
+                        subtitle: nil)
+            VStack(spacing: 10) {
+                ForEach(currencyChoices, id: \.self) { code in
+                    OptionCard(symbol: Self.currencySymbol(code), title: "\(code) · \(name(of: code))",
+                               detail: code == Money.detectedHome ? "From your iPhone" : nil,
+                               selected: home == code) {
+                        withAnimation(.snappy) { home = code }
+                    }
+                }
+                Menu {
+                    ForEach(Money.supported, id: \.self) { code in
+                        Button("\(code) · \(name(of: code))") { withAnimation(.snappy) { home = code } }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("globe")
+                        Text("Other currencies").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                 }
             }
-            .surface(radius: 16)
-            Menu {
-                ForEach(Money.supported, id: \.self) { code in
-                    Button("\(code) · \(name(of: code))") { home = code }
-                }
-            } label: {
-                Label("Other currencies", systemImage: "globe")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.ink)
-                    .frame(minHeight: 44)
-            }
-            .padding(.top, 8)
 
             Text("Do you spend in other currencies?")
                 .font(.headline)
-                .padding(.top, 16)
+                .padding(.top, 24)
             HStack(spacing: 8) {
                 ForEach(SetupProfile.Abroad.allCases) { a in
                     Button { withAnimation(.snappy) { abroadRaw = a.rawValue } } label: {
@@ -517,13 +533,13 @@ struct OnboardingView: View {
             .sensoryFeedback(.selection, trigger: abroadRaw)
 
             if let ratePreview {
-                Label(ratePreview, systemImage: "arrow.left.arrow.right")
-                    .font(.subheadline)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                    .padding(.top, 12)
-                    .transition(.opacity)
+                HStack(spacing: 12) {
+                    RowIcon("arrow.left.arrow.right")
+                    Text(ratePreview).font(.body).monospacedDigit()
+                }
+                .setupCard()
+                .padding(.top, 12)
+                .transition(.opacity)
             }
         }
         .task(id: home) { await loadRatePreview() }
@@ -542,6 +558,29 @@ struct OnboardingView: View {
     }
 
     private func name(of code: String) -> String { Locale.current.localizedString(forCurrencyCode: code) ?? code }
+
+    /// The phone's currency and three common ones, plus whatever was picked
+    /// from "Other currencies", so the choice is always on screen.
+    private var currencyChoices: [String] {
+        var list = [Money.detectedHome]
+        list += ["AUD", "SGD", "USD", "INR", "GBP"].filter { $0 != Money.detectedHome }.prefix(3)
+        if !list.contains(home) { list.insert(home, at: 0) }
+        return list
+    }
+
+    static func currencySymbol(_ code: String) -> String {
+        switch code {
+        case "GBP": "sterlingsign.circle"
+        case "EUR": "eurosign.circle"
+        case "INR": "indianrupeesign.circle"
+        case "JPY", "CNY": "yensign.circle"
+        case "MYR": "malaysianringgitsign.circle"
+        case "KRW": "wonsign.circle"
+        case "THB": "bahtsign.circle"
+        case "PHP": "pesosign.circle"
+        default: "dollarsign.circle"
+        }
+    }
 
     private func currencyRow(_ code: String, note: String?) -> some View {
         Button { home = code } label: {
@@ -565,7 +604,7 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Tap the bank for each card you pay with. Two cards at one bank? Tap it twice.")
+            header("Your cards", "Tap each bank you pay with. Two cards at one bank? Tap twice.")
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
             // Below the grid, so adding a card never moves the buttons.
@@ -656,20 +695,20 @@ struct OnboardingView: View {
                 let count = book.active.filter { $0.bank == bank.name }.count
                 Button { addCard(from: bank) } label: {
                     HStack(spacing: 8) {
-                        Text(bank.name).font(.subheadline.weight(.medium)).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(bank.name).font(.body).foregroundStyle(Color.ink).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 2)
                         if count > 0 {
-                            Text(count > 1 ? "\(count)" : "").font(.caption.weight(.bold))
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.up)
+                            if count > 1 { Text("\(count)").font(.footnote.weight(.bold)).monospacedDigit() }
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.ink)
                         } else {
                             Image(systemName: "plus.circle").foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(Color.card, in: .rect(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(count > 0 ? Color.ink : .clear, lineWidth: 1.5)
                     }
                     .contentShape(.rect)
@@ -687,10 +726,11 @@ struct OnboardingView: View {
                 withAnimation(.snappy) { book.upsert(card) }
             } label: {
                 Label("Other bank", systemImage: "plus")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .font(.body)
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     }
                     .contentShape(.rect)
@@ -745,7 +785,7 @@ struct OnboardingView: View {
 
     private var cardDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Last 4 digits", "So Sortd can match emails and receipts to the right card. Only the last 4, never the full number. You can add them later.")
+            header("Last 4 digits", "So receipts land on the right card. Only the last 4.")
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
                     CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
@@ -799,13 +839,12 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay by itself", "Set it up once in Apple's Shortcuts app. About 2 minutes. Apple doesn't let apps do this part for you.")
+            header("Log Apple Pay by itself", "A 2-minute setup in Apple's Shortcuts app.")
             tapStatus
             Group {
                 if #available(iOS 27.0, *) {
                     WalletSetupGuide()
-                        .padding(16)
-                        .surface(radius: 20)
+                        .setupCard()
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
@@ -813,19 +852,23 @@ struct OnboardingView: View {
                         miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
                         actionMock.padding(.leading, 38)
                     }
-                    .padding(16)
-                    .surface(radius: 20)
+                    .setupCard()
                 }
             }
-            .padding(.top, 14)
+            .padding(.top, 10)
             Button { showingGuide = true } label: {
-                Label("Every step in detail", systemImage: "list.number")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.ink)
-                    .frame(minHeight: 44)
+                HStack(spacing: 12) {
+                    RowIcon("list.number")
+                    Text("Every step in detail").font(.body).foregroundStyle(Color.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 56)
+                .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
+            .padding(.top, 10)
         }
     }
 
@@ -847,7 +890,7 @@ struct OnboardingView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 } else {
                     Text("Waiting for your first tap").font(.headline)
-                    Text("Set it up below, then pay with Apple Pay. It shows up here.")
+                    Text("Do the steps below, then pay with Apple Pay.")
                         .font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -856,7 +899,7 @@ struct OnboardingView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(tapConnected ? Color.up.opacity(0.2) : nil), in: .rect(cornerRadius: 22))
+        .background(tapConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: tapConnected)
         .sensoryFeedback(.success, trigger: tapConnected)
         .accessibilityElement(children: .combine)
@@ -914,26 +957,30 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Catch online receipts", "Sortd reads receipts and bank alerts in your Gmail and adds the purchases for you.")
+            header("Catch online receipts", "From receipts and bank alerts in your Gmail.")
             FlowLayout(spacing: 8) {
                 ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
                          ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
                     Label(name, systemImage: symbol)
-                        .font(.footnote.weight(.medium))
+                        .font(.subheadline)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.card, in: .capsule)
                 }
             }
             .padding(.bottom, 16)
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Read-only. Sortd can't send, delete or change email.", systemImage: "lock")
-                Label("Read on this iPhone. Nothing goes to a server.", systemImage: "iphone")
-                Label("Disconnect any time in Settings.", systemImage: "xmark.circle")
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach([("lock", "Read-only. Can't send, delete or change email."),
+                         ("iphone", "Read on this iPhone, never a server."),
+                         ("xmark.circle", "Disconnect any time in Settings.")], id: \.1) { symbol, text in
+                    HStack(alignment: .top, spacing: 12) {
+                        RowIcon(symbol)
+                        Text(text).font(.body).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 18)
+            .setupCard()
+            .padding(.bottom, 16)
             if !gmail.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(gmail) { a in
@@ -952,15 +999,19 @@ struct OnboardingView: View {
                 .surface(radius: 16)
                 .padding(.bottom, 14)
             }
-            Button { connectingGmail = true } label: {
-                Label(gmail.isEmpty ? "Connect Gmail" : "Connect Another Gmail", systemImage: "envelope")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .foregroundStyle(gmail.isEmpty ? Color.onBrand : Color.ink)
-                    .background(gmail.isEmpty ? Color.brand : Color.clear, in: .capsule)
-                    .overlay(Capsule().strokeBorder(gmail.isEmpty ? .clear : Color.secondary.opacity(0.35), lineWidth: 1))
+            if !gmail.isEmpty {
+                Button { connectingGmail = true } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("plus")
+                        Text("Connect another Gmail").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -973,7 +1024,7 @@ struct OnboardingView: View {
     private var budgetPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.budget), title: "Want a monthly limit?",
-                        subtitle: "Sortd shows what's left each day, after bills that are still due. Change it any time.")
+                        subtitle: "Change it any time.")
 
             // One big amount, typed or picked.
             VStack(spacing: 8) {
@@ -1000,8 +1051,8 @@ struct OnboardingView: View {
                     .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 26)
-            .surface(radius: 20)
+            .padding(.vertical, 10)
+            .setupCard()
             .animation(.snappy, value: budget)
 
             FlowLayout(spacing: 8) {
@@ -1022,7 +1073,7 @@ struct OnboardingView: View {
             }
             .padding(.top, 14)
 
-            Button("No budget for now") {
+            Button("No limit for now") {
                 budget = 0
                 customBudget = ""
                 budgetFocused = false
@@ -1051,32 +1102,29 @@ struct OnboardingView: View {
             header(pro.isPro ? "You have Sortd Pro" : "What Pro adds for you",
                    pro.isPro
                    ? "Everything below is unlocked. Thank you."
-                   : "Picked from your answers. Apple Pay logging, adding by hand, your cards, budgets, export and delete stay free forever.")
+                   : "Picked from your answers. Logging, cards, budgets and export stay free.")
 
             VStack(spacing: 0) {
                 ForEach(Array(SetupProfile.proOrder(goals: goals, payment: payment).enumerated()), id: \.element) { index, feature in
                     if index > 0 { Divider().padding(.leading, 46) }
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: feature.symbol)
-                            .font(.body)
-                            .frame(width: 32)
-                            .foregroundStyle(Color.ink)
-                            .padding(.top, 1)
+                    HStack(alignment: .top, spacing: 12) {
+                        RowIcon(feature.symbol)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(feature.title).font(.subheadline.weight(.semibold))
+                            Text(feature.title).font(.headline)
                             Text(feature.detail)
-                                .font(.footnote)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(.vertical, 11)
+                    .padding(.vertical, 12)
                     .accessibilityElement(children: .combine)
                 }
             }
             .padding(.horizontal, 16)
-            .surface(radius: 16)
+            .padding(.vertical, 4)
+            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
 
             // How the trial works, said plainly: what happens today, and
             // what happens when it ends.
@@ -1087,20 +1135,18 @@ struct OnboardingView: View {
                                 pro.product(ProStore.ID.yearly).map { "Your plan starts at \($0.displayPrice) a year." } ?? "Your plan starts.")
                     timelineRow("xmark.circle", "Any time before", "Cancel in the App Store and you pay nothing.")
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.card, in: .rect(cornerRadius: 16, style: .continuous))
-                .padding(.top, 14)
+                .setupCard()
+                .padding(.top, 12)
             }
         }
     }
 
     private func timelineRow(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol).font(.body.weight(.semibold)).frame(width: 26)
+            RowIcon(symbol)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)
@@ -1209,7 +1255,7 @@ struct CardDetailForm: View {
                     // Looks like a field so people know they can call it
                     // something they'll recognise ("Groceries card").
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Nickname").font(.caption).foregroundStyle(.secondary)
+                        Text("Nickname").font(.footnote).foregroundStyle(.secondary)
                         HStack(spacing: 6) {
                             TextField("e.g. Groceries card", text: $name)
                                 .font(.headline)
@@ -1275,12 +1321,12 @@ struct CardDetailForm: View {
     private var preview: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(BankPreset.short(info.bank.isEmpty ? name : info.bank))
-                .font(.caption.weight(.bold))
+                .font(.footnote.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
             Text(missing ? "•• ····" : "•• \(CardEditor.fours(digits)[0])")
-                .font(.caption2.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .monospacedDigit()
                 .opacity(0.8)
         }

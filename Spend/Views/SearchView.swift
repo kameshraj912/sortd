@@ -33,9 +33,8 @@ struct SearchView: View {
     @ViewBuilder
     private var landing: some View {
         if transactions.isEmpty {
-            ContentUnavailableView("Nothing to search yet",
-                                   systemImage: "magnifyingglass",
-                                   description: Text("Purchases you log show up here."))
+            EmptyState("Nothing to search yet", symbol: "magnifyingglass",
+                       message: "Purchases you log show up here.")
                 .listRowBackground(Color.clear)
         } else {
             Section("Top merchants this month") {
@@ -72,7 +71,8 @@ struct SearchView: View {
     private var results: some View {
         let found = matches
         if found.isEmpty {
-            ContentUnavailableView.search(text: trimmed)
+            EmptyState("No results", symbol: "magnifyingglass",
+                       message: "Nothing matches \u{201C}\(trimmed)\u{201D}.")
                 .listRowBackground(Color.clear)
         } else {
             Section {

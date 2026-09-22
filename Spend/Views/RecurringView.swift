@@ -79,8 +79,8 @@ struct RecurringView: View {
         .onChange(of: revision) { Task { await Reminders.reschedule(transactions.recurring()) } }
         .overlay {
             if all.isEmpty {
-                ContentUnavailableView("No Recurring Payments Yet", systemImage: "arrow.triangle.2.circlepath",
-                                       description: Text("Subscriptions and bills show up here after they've charged twice, or once with an App Store receipt. \(SortdVoice.noRecurring)"))
+                EmptyState("No repeat payments yet", symbol: "arrow.triangle.2.circlepath",
+                           message: "Subscriptions and bills show up here once they've charged twice.")
             }
         }
     }

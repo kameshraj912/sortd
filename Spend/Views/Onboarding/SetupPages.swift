@@ -35,9 +35,40 @@ struct SetupAura: View {
     }
 }
 
+// MARK: - Shared style
+//
+// One look for every setup screen, using Apple's text styles so Dynamic
+// Type works: titles .title bold, body text .body, secondary .subheadline,
+// small labels .footnote (never smaller). Icons are plain one-colour SF
+// Symbols, the same as Settings; colour stays for spending categories.
+
+/// The one icon style: plain, ink-coloured, fixed width so text lines up.
+struct RowIcon: View {
+    let symbol: String
+    init(_ symbol: String) { self.symbol = symbol }
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.body.weight(.medium))
+            .foregroundStyle(Color.ink)
+            .frame(width: 28)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// The one card surface on setup screens.
+    func setupCard(padding: CGFloat = 16) -> some View {
+        self.padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+    }
+}
+
 /// One answer: a solid card with a symbol (glass is for controls, not
 /// content). A check circle for pick-any questions, a dot for pick-one.
 struct OptionCard: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let symbol: String
     let title: String
     var detail: String? = nil
@@ -47,16 +78,13 @@ struct OptionCard: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(selected ? Color.onBrand : Color.ink)
-                    .frame(width: 38, height: 38)
-                    .background(selected ? Color.brand : Color.track, in: .rect(cornerRadius: 11, style: .continuous))
+            HStack(spacing: 12) {
+                // At the largest text sizes the words need the room.
+                if !typeSize.isAccessibilitySize { RowIcon(symbol) }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.body.weight(.medium)).foregroundStyle(Color.ink)
+                    Text(title).font(.body).foregroundStyle(Color.ink)
                     if let detail {
-                        Text(detail).font(.footnote).foregroundStyle(.secondary)
+                        Text(detail).font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 8)
@@ -65,10 +93,11 @@ struct OptionCard: View {
                     .foregroundStyle(selected ? Color.ink : Color.secondary.opacity(0.5))
                     .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.card, in: .rect(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .frame(minHeight: 56)
+            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(selected ? Color.ink : .clear, lineWidth: 1.5))
             .contentShape(.rect)
         }
@@ -82,7 +111,7 @@ struct OptionCard: View {
 struct SetupHeader: View {
     var counter: String? = nil
     let title: String
-    let subtitle: String
+    var subtitle: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -92,12 +121,14 @@ struct SetupHeader: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
             }
-            Text(title).font(.title2.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
             BrandBar(width: 14, height: 3)
-            Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let subtitle {
+                Text(subtitle).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 16)
+        .padding(.bottom, 20)
     }
 }
 
@@ -109,8 +140,8 @@ struct GoalsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SetupHeader(counter: counter, title: "What do you want Sortd to help with?",
-                        subtitle: "Pick any. It decides what Sortd shows you first.")
+            SetupHeader(counter: counter, title: "What should Sortd help with?",
+                        subtitle: "Pick any.")
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Goal.allCases) { goal in
                     OptionCard(symbol: goal.symbol, title: goal.title, selected: goals.contains(goal), multi: true) {
@@ -120,9 +151,6 @@ struct GoalsPage: View {
                     }
                 }
             }
-            Text("Not sure yet? Just tap Continue.")
-                .font(.footnote).foregroundStyle(.secondary)
-                .padding(.top, 12)
         }
     }
 }
@@ -135,8 +163,7 @@ struct PaymentPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SetupHeader(counter: counter, title: "How do you usually pay?",
-                        subtitle: "So Sortd sets up the way you actually spend.")
+            SetupHeader(counter: counter, title: "How do you usually pay?")
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Payment.allCases) { p in
                     OptionCard(symbol: p.symbol, title: p.title, selected: payment == p) {
@@ -158,8 +185,8 @@ struct FeelingPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SetupHeader(counter: counter, title: "How do you feel about your spending lately?",
-                        subtitle: "There's no wrong answer. It changes how Sortd talks to you.")
+            SetupHeader(counter: counter, title: "How does your spending feel lately?",
+                        subtitle: "No wrong answer.")
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Feeling.allCases) { f in
                     OptionCard(symbol: f.symbol, title: f.title, selected: feeling == f) {
@@ -168,13 +195,13 @@ struct FeelingPage: View {
                 }
             }
             if let feeling {
-                Label(feeling.reply, systemImage: "heart")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.ink)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 16))
-                    .padding(.top, 16)
+                HStack(alignment: .top, spacing: 12) {
+                    RowIcon("heart")
+                    Text(feeling.reply).font(.body).foregroundStyle(Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .setupCard()
+                .padding(.top, 16)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .id(feeling)
             }
@@ -190,8 +217,8 @@ struct CheckInPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SetupHeader(counter: counter, title: "When do you want a quick look?",
-                        subtitle: "One short notification at the time you pick. Change it any time.")
+            SetupHeader(counter: counter, title: "When should we check in?",
+                        subtitle: "One short notification. Change it any time.")
             VStack(spacing: 10) {
                 ForEach(SetupProfile.CheckIn.allCases) { c in
                     OptionCard(symbol: c.symbol, title: c.title, detail: c.detail, selected: checkIn == c) {
@@ -200,15 +227,17 @@ struct CheckInPage: View {
                 }
             }
             Toggle(isOn: $billReminders) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Tell me the day before a bill is due").font(.subheadline.weight(.medium))
-                    Text(isPro ? "Subscriptions and bills, 9 am the day before." : "Part of Pro · included in the free trial")
-                        .font(.footnote).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    RowIcon("bell")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Remind me the day before a bill").font(.body)
+                        Text(isPro ? "9 am, the day before it's charged" : "Pro · included in the free trial")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
             }
             .tint(Color.brand)
-            .padding(14)
-            .background(Color.card, in: .rect(cornerRadius: 18, style: .continuous))
+            .setupCard()
             .padding(.top, 16)
         }
     }
@@ -221,12 +250,15 @@ struct BuildingPage: View {
     let lines: [String]
     let done: () -> Void
     @State private var shown = 0
+    /// VoiceOver users move on themselves; the timer would cut them off.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
             Spacer(minLength: 60)
-            Text("Building your Sortd")
+            Text(shown == lines.count ? "Your Sortd is ready" : "Building your Sortd")
                 .font(.title.weight(.bold))
+                .contentTransition(.opacity)
             VStack(alignment: .leading, spacing: 18) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     HStack(alignment: .top, spacing: 12) {
@@ -236,19 +268,29 @@ struct BuildingPage: View {
                             .contentTransition(.symbolEffect(.replace))
                         Text(line)
                             .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(i < shown ? Color.ink : .secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            .padding(20)
-            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+            .setupCard(padding: 20)
+            if voiceOver {
+                Button("Continue", action: done)
+                    .buttonStyle(.glassProminent)
+                    .tint(Color.brand)
+                    .controlSize(.large)
+            }
             Spacer(minLength: 60)
         }
         .contentShape(.rect)
         .onTapGesture(perform: done)
-        .sensoryFeedback(.impact(weight: .light), trigger: shown)
+        .sensoryFeedback(.success, trigger: shown == lines.count)
         .task {
+            if voiceOver {
+                shown = lines.count
+                return
+            }
             for i in 1...lines.count {
                 try? await Task.sleep(for: .milliseconds(650))
                 withAnimation(.snappy) { shown = i }
@@ -256,79 +298,109 @@ struct BuildingPage: View {
             try? await Task.sleep(for: .milliseconds(700))
             if !Task.isCancelled { done() }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Tap to continue")
+        .accessibilityElement(children: voiceOver ? .contain : .combine)
+        .accessibilityAddTraits(voiceOver ? [] : .isButton)
+        .accessibilityHint(voiceOver ? "" : "Tap to continue")
     }
 }
 
 // MARK: - Plan
 
-struct PlanItem: Identifiable {
-    let id: String
-    let symbol: String
-    let title: String
-    let time: String
-    let pro: Bool
-}
-
-/// "Here's your Sortd": what the answers set up, and the few steps left,
-/// in the order that matters to this person.
+/// "Here's your Sortd": their settings in one card, then what's left, in
+/// the order that matters to this person. The list starts one step in.
 struct PlanPage: View {
     let summary: String
-    let items: [PlanItem]
+    let tasks: [SetupTask]
     let settings: [(String, String)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(title: "Here's your Sortd", subtitle: summary)
 
-            // What's already set, as small glass chips over the glow.
-            FlowLayout(spacing: 8) {
-                ForEach(settings, id: \.0) { symbol, text in
-                    Label(text, systemImage: symbol)
-                        .font(.footnote.weight(.medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .glassEffect(.regular, in: .capsule)
-                }
-            }
-            .padding(.bottom, 20)
-
-            Text("A few steps left")
-                .font(.headline)
-                .padding(.bottom, 8)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                    if i > 0 { Divider().padding(.leading, 60) }
-                    HStack(spacing: 14) {
-                        Text("\(i + 1)")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(Color.onBrand)
-                            .frame(width: 28, height: 28)
-                            .background(Color.ink, in: .circle)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.title).font(.subheadline.weight(.semibold))
-                            Text(item.time).font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 8)
-                        Text(item.pro ? "Pro" : "Free")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(item.pro ? Color.onBrand : Color.ink)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(item.pro ? Color.brand : Color.track, in: .capsule)
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(settings, id: \.1) { symbol, text in
+                    HStack(spacing: 12) {
+                        RowIcon(symbol)
+                        Text(text).font(.body)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .accessibilityElement(children: .combine)
                 }
             }
-            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+            .setupCard()
 
-            Label("Everything stays on this iPhone. Sortd never asks for your bank login.", systemImage: "lock.iphone")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(.top, 14)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Finish setup").font(.headline)
+                Spacer()
+                Text("\(SetupChecklist.doneCount(tasks)) of \(tasks.count) done")
+                    .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .padding(.top, 24)
+            .padding(.bottom, 8)
+            SetupChecklistList(tasks: tasks)
+
+            HStack(alignment: .top, spacing: 12) {
+                RowIcon("lock.iphone")
+                Text("Everything stays on this iPhone. Sortd never asks for your bank login.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 16)
         }
+    }
+}
+
+/// The checklist rows, as a card. Tapping a row is optional: the plan screen
+/// shows it, Home makes each row open its step.
+struct SetupChecklistList: View {
+    let tasks: [SetupTask]
+    var open: ((SetupTask.Kind) -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(tasks.enumerated()), id: \.element.id) { i, task in
+                if i > 0 { Divider().padding(.leading, 56) }
+                // Rows only become buttons where they open something (Home),
+                // so the plan screen's list isn't greyed out as "disabled".
+                if let open, !task.done {
+                    Button { open(task.kind) } label: { row(task) }
+                        .buttonStyle(.plain)
+                } else {
+                    row(task)
+                }
+            }
+        }
+        .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+    }
+
+    private func row(_ task: SetupTask) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundStyle(task.done ? Color.up : Color.secondary.opacity(0.5))
+                .frame(width: 28)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title).font(.body)
+                    .foregroundStyle(task.done ? Color.secondary : Color.ink)
+                    .strikethrough(task.done && task.kind != .answers, color: .secondary)
+                Text(task.detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if task.pro, !task.done {
+                Text("Pro")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.onBrand)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.brand, in: .capsule)
+            }
+            if open != nil, !task.done {
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 60)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(task.done ? "Done" : "Not done")
     }
 }
