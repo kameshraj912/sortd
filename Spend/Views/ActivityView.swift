@@ -151,6 +151,7 @@ struct TransactionsScreen: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.page)
+        .refreshable { await RefreshCoordinator.refresh(in: context) }
     }
 
     private var usedCategories: [SpendCategory] {

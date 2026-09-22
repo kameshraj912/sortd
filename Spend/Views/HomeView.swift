@@ -22,6 +22,13 @@ struct HomeView: View {
     @State private var focused: String? = "all"
     @ScaledMetric(relativeTo: .largeTitle) private var totalSize: CGFloat = 52
 
+    // MARK: Pull-to-refresh and celebrations
+    @State private var refreshStatus: RefreshStatusLine.State?
+    @State private var refreshHaptic = 0
+    @State private var confettiTrigger = 0
+    @State private var celebrationHaptic = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var cal: Calendar { .current }
     private var isCurrentMonth: Bool { cal.isDate(month, equalTo: .now, toGranularity: .month) }
 
@@ -34,6 +41,9 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
+                            // Only actually in the layout while non-nil, so it
+                            // doesn't leave a gap the rest of the time.
+                            if let refreshStatus { RefreshStatusLine(state: refreshStatus) }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
@@ -44,6 +54,7 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
+                    .refreshable { await refresh() }
                 }
             }
             .background(Color.page)
@@ -72,12 +83,79 @@ struct HomeView: View {
                 NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
             }
             .sheet(isPresented: $showingBudget) { BudgetSheet(budget: $budget) }
+            .animation(.snappy, value: refreshStatus)
         }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
         }
+        // Confetti draws over the whole screen, not just the scroll content.
+        .overlay { ConfettiView(trigger: confettiTrigger).ignoresSafeArea() }
+        .sensoryFeedback(.success, trigger: refreshHaptic)
+        .sensoryFeedback(.success, trigger: celebrationHaptic)
+        .task { checkBudgetWinCelebration() }
+        .onChange(of: transactions) { _, _ in checkFirstTapCelebration() }
+        .task { checkFirstTapCelebration() }
+        #if DEBUG
+        .task { debugConfettiIfNeeded() }
+        #endif
     }
+
+    // MARK: Pull-to-refresh
+
+    private func refresh() async {
+        // .refreshable already prevents overlapping pulls on the same view;
+        // RefreshCoordinator also covers a pull racing the app-active sync.
+        refreshStatus = .refreshing
+        let result = await RefreshCoordinator.refresh(in: context)
+        let shown: RefreshStatusLine.State = result.newPurchases > 0 ? .newPurchases(result.newPurchases) : .upToDate
+        refreshStatus = shown
+        refreshHaptic += 1
+        try? await Task.sleep(for: .seconds(2))
+        // Another pull may have already replaced this status; only clear our own.
+        if refreshStatus == shown { refreshStatus = nil }
+    }
+
+    // MARK: Celebrations
+
+    /// Once per finished month: confetti the first time the app opens after
+    /// a month closed at or under the monthly budget.
+    private func checkBudgetWinCelebration() {
+        guard budget > 0, let finishedMonth = cal.date(byAdding: .month, value: -1, to: .now) else { return }
+        let interval = cal.dateInterval(of: .month, for: finishedMonth)
+        let total = transactions.filter { interval?.contains($0.date) ?? false }.audTotal
+        let already = CelebrationFlags.celebratedBudgetMonths()
+        guard Celebrations.shouldCelebrateBudgetWin(finishedMonthTotal: total, budget: budget, now: .now,
+                                                     finishedMonth: finishedMonth, alreadyCelebrated: already,
+                                                     calendar: cal) else { return }
+        CelebrationFlags.markBudgetMonthCelebrated(Celebrations.monthKey(finishedMonth, calendar: cal))
+        celebrate()
+    }
+
+    /// The first Apple Pay tap ever, whichever screen sees it first —
+    /// Onboarding's "Connected" moment, or (if onboarding was skipped) here.
+    private func checkFirstTapCelebration() {
+        let hasTap = transactions.contains { $0.seenIn.contains(.tap) }
+        guard Celebrations.shouldCelebrateFirstTap(hasTapTransaction: hasTap,
+                                                    alreadyCelebrated: CelebrationFlags.firstTapCelebrated()) else { return }
+        CelebrationFlags.markFirstTapCelebrated()
+        celebrate()
+    }
+
+    private func celebrate() {
+        guard !reduceMotion else { return }
+        confettiTrigger += 1
+        celebrationHaptic += 1
+    }
+
+    #if DEBUG
+    /// SPEND_CONFETTI=1: fire a budget-win celebration once at launch, so a
+    /// screen recording can show it without waiting for a real month to end.
+    private func debugConfettiIfNeeded() {
+        guard ProcessInfo.processInfo.environment["SPEND_CONFETTI"] == "1" else { return }
+        celebrate()
+    }
+    #endif
 
     /// Shown while the sample data is in: one tap removes it and reopens setup.
     /// Debug: SPEND_HIDE_DEMO_BANNER=1 for website and App Store screenshots.

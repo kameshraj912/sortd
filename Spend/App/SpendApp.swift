@@ -210,18 +210,19 @@ struct RootView: View {
             await ProStore.shared.refresh()
             await GoogleAuth.retryPendingRevokes()
             try? TransactionLogger.refreshUncategorised(in: context)
-            await FXService.ensureConverted(in: context)
+            // Gmail, FX and the widget: the same pass pull-to-refresh runs on
+            // Home and Activity. Routing both through RefreshCoordinator means
+            // a pull that lands while this scene-phase sync is still running
+            // (or the other way around) awaits the one already in flight
+            // instead of starting a second one.
             #if DEBUG
-            await GmailSync.syncAll(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")
+            await RefreshCoordinator.refresh(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")
             #else
-            await GmailSync.syncAll(in: context)
+            await RefreshCoordinator.refresh(in: context)
             #endif
-            await FXService.backfill(in: context)
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())
             await Reminders.checkCategoryLimits(all)
-            // Leave the widget fresh numbers. Does nothing without an App Group.
-            WidgetBridge.refresh(from: context)
         }
     }
 }
