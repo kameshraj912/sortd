@@ -31,6 +31,8 @@ struct OnboardingView: View {
     #endif
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
+    @State private var redeeming = false
+    @State private var redeemError: String?
     @State private var showingImport = false
     /// "14 days free", read from the App Store. Nil when there's no trial.
     @State private var trialText: String?
@@ -88,6 +90,7 @@ struct OnboardingView: View {
             s != .welcome && s != .finish
                 && !(s == .cardDetails && book.active.isEmpty)
                 && !(s == .email && !Features.gmail)
+                && !(s == .pro && pro.isBetaFree)
         }
     }
 
@@ -213,6 +216,8 @@ struct OnboardingView: View {
             var next = Step(rawValue: min(max(step.rawValue + delta, 0), Step.finish.rawValue)) ?? .finish
             if next == .cardDetails, book.active.isEmpty { next = Step(rawValue: next.rawValue + delta) ?? .finish }
             if next == .email, !Features.gmail { next = Step(rawValue: next.rawValue + delta) ?? .finish }
+            // The beta is free: no Pro pitch, no trial button.
+            if next == .pro, pro.isBetaFree { next = Step(rawValue: next.rawValue + delta) ?? .finish }
             step = next
         }
     }
@@ -848,6 +853,16 @@ struct OnboardingView: View {
             // The hook. Not a hard sell — an accurate prediction, which is
             // funnier and does the same job.
             if !pro.isPro {
+                // Apple's offer code sheet: the only allowed way to give Pro
+                // away with a code in the App Store build (Guideline 3.1.1).
+                Button("Have a code? Redeem it") { redeemError = nil; redeeming = true }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                    .frame(minHeight: 44)
+                    .padding(.top, 10)
+                if let redeemError {
+                    Text(redeemError).font(.footnote).foregroundStyle(.secondary)
+                }
                 Text("You'll skip this. Then on Thursday you'll try to scan a receipt, find it locked, and come back. We'll wait.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -855,6 +870,7 @@ struct OnboardingView: View {
                     .padding(.top, 14)
             }
         }
+        .redeemOfferCode(isPresented: $redeeming) { redeemError = $0 }
     }
 
     /// "Try Sortd Pro free" reads like a typo — free is left dangling. Say
@@ -935,7 +951,7 @@ struct OnboardingView: View {
                 Divider().padding(.leading, 52)
                 check("Reminders", reminders ? "On" : "Off", ok: reminders)
                 Divider().padding(.leading, 52)
-                check("Sortd Pro", pro.isPro ? "Active" : "Free plan", ok: pro.isPro)
+                check("Sortd Pro", pro.isBetaFree ? "Free during the beta" : pro.isPro ? "Active" : "Free plan", ok: pro.isPro)
             }
             .surface(radius: 16)
 
