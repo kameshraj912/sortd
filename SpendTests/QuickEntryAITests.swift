@@ -54,5 +54,25 @@ struct QuickEntryAITests {
     @Test func refusesSillyAmounts() throws {
         let r = try #require(QuickEntryAI.merge(fields("House", "5000000"), typed: "house five million"))
         #expect(r.amount == nil)
+        // A huge written number is refused too, not handed to the Add form.
+        let huge = try #require(QuickEntryAI.merge(fields("Coffee", "99999999999999999999"),
+                                                   typed: "coffee 99999999999999999999"))
+        #expect(huge.amount == nil)
+    }
+
+    @Test func aDatePhraseMeaningTodayBeatsTheModel() throws {
+        // "this morning" is 0 days ago; the model's 1 used to win because 0
+        // looked like "no date found".
+        let morning = try #require(QuickEntryAI.merge(fields("Coffee", "5", daysAgo: 1), typed: "coffee 5 this morning"))
+        #expect(morning.daysAgo == 0)
+        let today = Calendar.current.component(.weekday, from: .now)
+        let name = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][today - 1]
+        let sameDay = try #require(QuickEntryAI.merge(fields("Coffee", "5", daysAgo: 7), typed: "coffee 5 \(name)"))
+        #expect(sameDay.daysAgo == 0)
+    }
+
+    @Test func aMinusLineDoesNotTakeTheModelsAmount() throws {
+        let r = try #require(QuickEntryAI.merge(fields("Refund", "5"), typed: "refund -5"))
+        #expect(r.amount == nil)
     }
 }

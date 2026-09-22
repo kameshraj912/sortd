@@ -55,10 +55,12 @@ enum QuickEntryAI {
     static func merge(_ fields: QuickEntryFields, typed text: String) -> Reading? {
         let plain = QuickEntry.read(text)
 
-        // A written number beats the model's reading of it.
+        // A written number beats the model's reading of it. A line with a
+        // minus ("refund -5") is not a purchase of 5, whatever the model says.
         let modelAmount = Decimal(string: fields.amount.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: ",", with: ""))
-        let amount = plain?.amount ?? modelAmount.flatMap { $0 > 0 && $0 < 1_000_000 ? $0 : nil }
+        let amount = plain?.amount ?? (QuickEntry.hasNegativeAmount(in: text) ? nil
+            : modelAmount.flatMap { $0 > 0 && $0 < QuickEntry.limit ? $0 : nil })
 
         // Only keep a currency the line actually shows.
         let code = fields.currency.uppercased()
@@ -68,12 +70,17 @@ enum QuickEntryAI {
         let name = merchant.isEmpty ? plain?.merchant ?? "" : String(merchant.prefix(60))
         guard !name.isEmpty || amount != nil else { return nil }
 
+        // A date phrase the plain reader understood ("today", "this morning",
+        // "friday") wins, even when it means 0 days ago. The model's date is
+        // only used for a time phrase the plain reader can't work out.
+        let daysAgo = QuickEntry.daysAgo(in: text)
+            ?? (mentionsWhen(text) ? min(max(fields.daysAgo, 0), 30) : 0)
+
         return Reading(
             merchant: name,
             amount: amount,
             currency: plain?.currency ?? modelCurrency,
-            daysAgo: plain.flatMap { $0.daysAgo > 0 ? $0.daysAgo : nil }
-                ?? (mentionsWhen(text) ? min(max(fields.daysAgo, 0), 30) : 0),
+            daysAgo: daysAgo,
             category: SpendCategory.allCases.first { $0.name == fields.category }.flatMap { $0 == .other ? nil : $0 })
     }
 
