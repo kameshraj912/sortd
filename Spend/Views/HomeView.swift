@@ -853,6 +853,8 @@ struct SpendChart: View {
                     .foregroundStyle(Color.ink)
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .interpolationMethod(.monotone)
+                    .accessibilityLabel(p.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .accessibilityValue(Money.spoken(Decimal(p.total), Money.home))
             }
             if let last = current.last, selected == nil {
                 PointMark(x: .value("Day", last.date), y: .value("Spent", last.total))
@@ -913,7 +915,7 @@ struct SpendChart: View {
         .frame(height: chartHeight)
         .sensoryFeedback(.selection, trigger: selected.map { cal.startOfDay(for: $0) })
         .accessibilityLabel("Running total, \(range.title.lowercased())")
-        .accessibilityValue("\(Money.format(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.format(Decimal(previous.last?.total ?? 0), Money.home)).")
+        .accessibilityValue("\(Money.spoken(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.spoken(Decimal(previous.last?.total ?? 0), Money.home)).")
     }
 
     private var legend: some View {
