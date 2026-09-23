@@ -217,12 +217,15 @@ struct RootView: View {
                         .padding(.top, 2)
                 }
             }
-            .animation(.spring(duration: 0.3), value: tab)
+
             // Keep the Router in step with taps on the tab bar, so a link to
             // the tab you left (a check-in, a widget) still switches back.
             .onChange(of: tab) { _, new in if router.tab != new { router.tab = new } }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .sensoryFeedback(.selection, trigger: tab)
+        // The + never assigns `tab`, so the app's main action was the
+        // one tab that gave no feedback at all.
+        .sensoryFeedback(.selection, trigger: showingAdd) { _, open in open }
         .sheet(isPresented: $router.showingSettings, onDismiss: {
             // Next time Settings opens on its main list, not a page a link pushed.
             router.settingsPath = []

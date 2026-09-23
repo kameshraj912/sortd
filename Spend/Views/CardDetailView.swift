@@ -44,8 +44,7 @@ struct CardDetailView: View {
             GridRow {
                 Tile(title: "Spent This Month") {
                     Text(Money.format(thisMonth.audTotal, Money.home))
-                        .font(.title2.weight(.bold))
-                        .monospacedDigit()
+                        .font(.moneySmall)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                     Text(thisMonth.count == 1 ? "1 purchase" : "\(thisMonth.count) purchases")

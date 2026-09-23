@@ -21,6 +21,9 @@ struct HomeView: View {
     /// Card in view in the carousel: "all" or a Card rawValue.
     @State private var focused: String? = "all"
     @ScaledMetric(relativeTo: .largeTitle) private var totalSize: CGFloat = 52
+    /// What the last pull-to-refresh found.
+    @State private var refreshNote: RefreshNote?
+    @State private var confirmingClearDemo = false
 
     private var cal: Calendar { .current }
     private var isCurrentMonth: Bool { cal.isDate(month, equalTo: .now, toGranularity: .month) }
@@ -45,10 +48,7 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
-                    .refreshable {
-                        _ = await GmailSync.syncAll(in: context)
-                        await FXService.ensureConverted(in: context)
-                    }
+                    .refreshable { refreshNote = await RefreshNote.run(in: context) }
                 }
             }
             .background(Color.page)
@@ -88,6 +88,7 @@ struct HomeView: View {
                 NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
             }
             .sheet(isPresented: $showingBudget) { BudgetSheet(budget: $budget) }
+            .refreshNote($refreshNote, bottomPadding: 16)
         }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
@@ -113,16 +114,24 @@ struct HomeView: View {
                 Text("Clear it to set up Sortd with your own.").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            Button("Clear") {
-                DemoData.clear(in: context)
-                onboarded = false
-            }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(.bordered)
-            .tint(Color.ink)
+            // One tap used to delete everything on screen and throw you back
+            // into setup, with no warning and no way back.
+            Button("Clear", role: .destructive) { confirmingClearDemo = true }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.bordered)
+                .tint(Color.ink)
         }
         .padding(14)
         .surface(radius: 16)
+        .confirmationDialog("Clear the sample data?", isPresented: $confirmingClearDemo, titleVisibility: .visible) {
+            Button("Clear and Set Up Sortd", role: .destructive) {
+                DemoData.clear(in: context)
+                onboarded = false
+            }
+            Button("Keep Looking Around", role: .cancel) {}
+        } message: {
+            Text("The sample purchases go, and setup starts so you can add your own.")
+        }
     }
 
     // MARK: Data
@@ -214,14 +223,14 @@ struct HomeView: View {
             .padding(.top, 8)
 
             Text(Money.format(monthItems.audTotal, Money.home, cents: false))
-                .font(.system(size: totalSize, weight: .bold, design: .rounded))
+                .font(.system(size: totalSize, weight: .bold))
                 .foregroundStyle(Color.ink)
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .padding(.top, 6)
-                .accessibilityLabel("Spent \(Money.format(monthItems.audTotal, Money.home))")
+                .accessibilityLabel("Spent \(Money.spoken(monthItems.audTotal, Money.home))")
             Button { showingBudget = true } label: {
                 HStack(spacing: 4) {
                     Text(budgetLine(spent: spent))
@@ -277,6 +286,15 @@ struct HomeView: View {
 
     // MARK: Budget card
 
+    /// The bar's contents in words, for VoiceOver: the shares it draws plus
+    /// the total, which the colours alone can't convey.
+    private var breakdownSpoken: String {
+        let top = byCategory.prefix(3)
+            .map { "\($0.category.name), \(Money.spoken($0.total, Money.home))" }
+            .joined(separator: ", ")
+        return "\(top). Total \(Money.spoken(monthItems.audTotal, Money.home))."
+    }
+
     /// Where this month went, as one colour bar with a small key.
     @ViewBuilder
     private var budgetCard: some View {
@@ -299,10 +317,15 @@ struct HomeView: View {
                     }
                 }
                 .padding(16)
-                .surface(radius: 18)
+                .surface()
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
+            // `.combine` read out only the three category names — no amounts,
+            // no total. This is the app's main spending breakdown, so it says
+            // what it shows.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Where this month went")
+            .accessibilityValue(breakdownSpoken)
             .accessibilityHint("Edit your monthly budget")
         }
     }
@@ -400,7 +423,7 @@ struct HomeView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home)), \(row.count == 1 ? "1 purchase" : "\(row.count) purchases")")
+                        .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home)), \(row.count == 1 ? "1 purchase" : "\(row.count) purchases")")
                     }
                 }
                 .padding(.vertical, 4)
@@ -606,8 +629,7 @@ struct WalletCard: View {
             Spacer(minLength: 12)
 
             Text(Money.format(total, Money.home))
-                .font(.system(.title2, design: .rounded, weight: .bold))
-                .monospacedDigit()
+                .font(.moneySmall)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
@@ -632,7 +654,7 @@ struct WalletCard: View {
                               lineWidth: style.systemFace ? 1 : 0.5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(card?.name ?? "All cards"), \(Money.format(total, Money.home)) this month, \(transactions.count == 1 ? "1 purchase" : "\(transactions.count) purchases")")
+        .accessibilityLabel("\(card?.name ?? "All cards"), \(Money.spoken(total, Money.home)) this month, \(transactions.count == 1 ? "1 purchase" : "\(transactions.count) purchases")")
         .accessibilityHint(card == nil ? "Shows all purchases" : "Shows this card's purchases")
     }
 
@@ -774,9 +796,6 @@ struct SpendChart: View {
                         Button(r.rawValue) {
                             withAnimation(.snappy) { range = r; selected = nil }
                         }
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
                         .chip(selected: r == range)
                         .accessibilityAddTraits(r == range ? .isSelected : [])
                     }
