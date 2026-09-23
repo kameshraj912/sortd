@@ -139,14 +139,22 @@ struct CardDetailView: View {
 
     private var recent: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Same shape as Home's SectionHeader, which this used to differ
+            // from: .headline instead of .title3, and a "See All" with no
+            // minimum height.
             HStack(alignment: .firstTextBaseline) {
                 Text("Recent")
-                    .font(.headline)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color.ink)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
-                NavigationLink("See All") {
+                NavigationLink {
                     TransactionsScreen(fixedCard: card)
+                } label: {
+                    Text("See All").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        .frame(minHeight: 44).contentShape(.rect)
                 }
-                .font(.subheadline)
+                .accessibilityLabel("See All, Recent")
             }
             .padding(.horizontal, 4)
             .padding(.top, 12)

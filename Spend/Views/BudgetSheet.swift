@@ -128,7 +128,7 @@ struct BudgetSheet: View {
                             Text(Money.format(Decimal(preset), Money.home, cents: false))
                                 .chip(selected: selected)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .accessibilityAddTraits(selected ? .isSelected : [])
                     }
                 }
@@ -162,7 +162,7 @@ struct BudgetSheet: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
         .padding(20)
         .onAppear {
