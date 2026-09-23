@@ -25,6 +25,12 @@ struct HomeView: View {
     @State private var refreshNote: RefreshNote?
     @State private var confirmingClearDemo = false
 
+    /// Writing the month through here is what makes the numericText
+    /// transition on the total — and the rest of the page — actually run.
+    private var animatedMonth: Binding<Date> {
+        Binding(get: { month }, set: { new in withAnimation(.snappy) { month = new } })
+    }
+
     private var cal: Calendar { .current }
     private var isCurrentMonth: Bool { cal.isDate(month, equalTo: .now, toGranularity: .month) }
 
@@ -47,6 +53,7 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
+                        .animation(.snappy, value: focused)
                     }
                     .refreshable { refreshNote = await RefreshNote.run(in: context) }
                 }
@@ -188,7 +195,7 @@ struct HomeView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
                     Menu {
-                        Picker("Month", selection: $month) {
+                        Picker("Month", selection: animatedMonth) {
                             ForEach(lastTwelveMonths, id: \.self) { m in
                                 Text(m.formatted(.dateTime.month(.wide).year())).tag(m)
                             }
@@ -672,12 +679,9 @@ struct WalletCard: View {
     }
 }
 
-struct CardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
+/// Kept as a name for the two card call sites; the behaviour is now the
+/// app-wide press so a card and a button feel the same under a finger.
+typealias CardPressStyle = PressableButtonStyle
 
 // MARK: - Chart
 
@@ -797,6 +801,9 @@ struct SpendChart: View {
                             withAnimation(.snappy) { range = r; selected = nil }
                         }
                         .chip(selected: r == range)
+                        .frame(minHeight: 44)
+                        .contentShape(.rect)
+                        .accessibilityLabel(r.title)
                         .accessibilityAddTraits(r == range ? .isSelected : [])
                     }
                 }

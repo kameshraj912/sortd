@@ -207,6 +207,27 @@ struct SegmentedBar: View {
     }
 }
 
+/// A press that feels like the system's: a small scale with a soft spring,
+/// the way Apple's own cards and pills behave.
+///
+/// `.buttonStyle(.plain)` was on about thirty controls, including every
+/// primary call to action. Plain removes the press effect entirely, so the
+/// app's most important buttons did nothing at all under a finger.
+struct PressableButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.spring(duration: 0.25), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == PressableButtonStyle {
+    static var pressable: PressableButtonStyle { PressableButtonStyle() }
+}
+
 extension View {
     func surface(radius: CGFloat = 24) -> some View { modifier(Surface(radius: radius)) }
     func chip(selected: Bool) -> some View { modifier(ChipStyle(selected: selected)) }

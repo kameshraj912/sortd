@@ -62,6 +62,8 @@ struct AddTransactionView: View {
             } else if !quick.isEmpty {
                 Button("Fill", action: applyQuick)
                     .font(.subheadline.weight(.semibold))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(.rect)
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.ink)
             }
