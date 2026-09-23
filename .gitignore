@@ -30,3 +30,4 @@ docs/demo/
 
 # Ad footage (huge, and regenerated from source)
 claude-project/ads/
+.claude/worktrees/

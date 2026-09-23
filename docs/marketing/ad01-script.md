@@ -2,7 +2,7 @@
 
 Cast: Nik (takeaway guy, light Singaporean accent), Ollie (spreadsheet, English), Mitch (the
 straight one, Australian). See cast.md. Clips: Google Flow, Veo 3.1 Fast, Veo's own voices.
-Cards and end card: claude-project/ads/ad01/src. App shot: real Sortd, simulator, SPEND_REEL_TAP.
+Cards and end card: claude-project/ads/ad01/src. App shot: real Sortd, simulator, SORTD_REEL_TAP.
 
 | Time | Shot | Picture | Sound |
 |---|---|---|---|

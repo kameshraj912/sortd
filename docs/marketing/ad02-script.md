@@ -24,7 +24,7 @@
 
 **Real app shots**
 - Simulator on the iPhone Pro Max, running the demo data.
-- The tap runs through `LogPurchaseIntent` using the DEBUG switch `SPEND_REEL_TAP` in `SpendApp.swift`.
+- The tap runs through `LogPurchaseIntent` using the DEBUG switch `SORTD_REEL_TAP` in `SortdApp.swift`.
 
 **Checked before sending**
 - Frame sheet at 2 frames per second.

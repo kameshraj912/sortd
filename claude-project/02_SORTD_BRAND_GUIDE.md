@@ -1,7 +1,7 @@
 # Sortd brand guide — social and marketing
 
 Version 1 · 20 Sep 2026 · Owner: Raj
-Sources: `Brand/README.md`, `site/` (sortd.page), `Spend/Views/Components/Theme.swift`, `Spend/Models/Kinds.swift`.
+Sources: `Brand/README.md`, `site/` (sortd.page), `Sortd/Views/Components/Theme.swift`, `Sortd/Models/Kinds.swift`.
 
 ---
 

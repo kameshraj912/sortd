@@ -8,7 +8,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
-PBX=Spend.xcodeproj/project.pbxproj
+PBX=Sortd.xcodeproj/project.pbxproj
 MODE=${1:-testflight}
 fail=0
 
@@ -45,7 +45,7 @@ if grep -q 'sentry-cocoa' "$PBX"; then
   if [ "$MODE" = "--appstore" ]; then
     bad "Sentry is still linked. Remove the sentry-cocoa package and CrashReporting.swift,"
     say "      or change the App Privacy label to Crash Data (not linked) first — see CrashReporting.swift."
-  elif grep -q 'static let dsn = ""' Spend/Services/CrashReporting.swift 2>/dev/null; then
+  elif grep -q 'static let dsn = ""' Sortd/Services/CrashReporting.swift 2>/dev/null; then
     warn "Sentry DSN is empty — beta crash reports are off. Paste it in CrashReporting.swift."
   else
     ok "Sentry crash reports on for TestFlight."
@@ -66,8 +66,8 @@ big=$(git ls-files -z 2>/dev/null | xargs -0 -I{} find {} -size +50M 2>/dev/null
 if [ -n "$big" ]; then bad "tracked files over 50 MB:"; say "$big"; else ok "no tracked file over 50 MB."; fi
 
 # 4. Debug escapes stay inside #if DEBUG.
-if grep -rn 'SPEND_PRO\|SPEND_DEMO\|SPEND_PAYWALL_DEMO\|SPEND_REEL_TAP' Spend/ \
-     | grep -v 'Spend/Services/ProStore.swift' > /tmp/sortd_flags.txt 2>/dev/null; then :; fi
+if grep -rn 'SORTD_PRO\|SORTD_DEMO\|SORTD_PAYWALL_DEMO\|SORTD_REEL_TAP' Sortd/ \
+     | grep -v 'Sortd/Services/ProStore.swift' > /tmp/sortd_flags.txt 2>/dev/null; then :; fi
 ok "debug flags checked by hand — see docs/AppStoreChecklist.md."
 
 say ""
