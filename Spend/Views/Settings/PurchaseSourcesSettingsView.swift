@@ -38,9 +38,14 @@ struct PurchaseSourcesSettingsView: View {
     }
 
     private var lastTapText: String {
-        guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
-            return "No taps yet"
+        if let last = transactions.first(where: { $0.seenIn.contains(.tap) }) {
+            return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
         }
-        return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
+        // Set up but nothing bought yet. "No taps yet" on its own reads as
+        // "this isn't working".
+        if LogPurchaseIntent.shortcutHasReachedApp {
+            return "Connected · waiting for a shop tap"
+        }
+        return "Not set up yet"
     }
 }
