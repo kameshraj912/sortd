@@ -47,7 +47,7 @@ struct SetupGuideView: View {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Image(systemName: "wave.3.right.circle.fill")
-                        .font(.system(size: 44))
+                        .font(.largeTitle)
                         .foregroundStyle(.tint)
                         .accessibilityHidden(true)
                     Text("Log every Apple Pay tap automatically")
