@@ -1186,6 +1186,7 @@ struct OnboardingView: View {
                     Text(Money.symbol(home))
                         .font(.system(size: budgetSymbolSize, weight: .bold))
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     TextField("0", text: $customBudget)
                         .font(.system(size: budgetAmountSize, weight: .bold))
                         .monospacedDigit()
@@ -1193,6 +1194,7 @@ struct OnboardingView: View {
                         .focused($budgetFocused)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
+                        .accessibilityLabel("Monthly budget in \(home)")
                         .onChange(of: customBudget) { _, text in
                             // Same cap as the budget sheet, so a 19-digit
                             // typo can't be saved.

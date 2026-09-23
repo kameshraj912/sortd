@@ -96,6 +96,7 @@ struct BudgetSheet: View {
                     Text(Money.symbol(Money.home))
                         .font(.title.weight(.bold))
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     TextField("0", text: $text)
                         .font(.money)
                         .keyboardType(.numberPad)
@@ -147,6 +148,7 @@ struct BudgetSheet: View {
                     Text("Save")
                         .primaryPill(enabled: value > 0)
                 }
+                .primaryGlass()
                 .disabled(value <= 0)
 
                 if budget > 0 {
