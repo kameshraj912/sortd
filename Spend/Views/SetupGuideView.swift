@@ -132,9 +132,26 @@ struct SetupGuideView: View {
                 .listRowInsets(EdgeInsets())
             }
 
+            Section {
+                TapTestButton()
+            } header: {
+                BoldHeader("Check It Works")
+            } footer: {
+                Text("Puts a made-up purchase through the same code a real tap uses, then lets you delete it. It can't test the Shortcuts automation — only tapping your card in a shop does that.")
+            }
+
             if let last = UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) {
                 Section {
                     Text(last).font(.footnote.monospaced()).textSelection(.enabled)
+                    // Three empty fields is the single most confusing thing on
+                    // this screen: it looks broken, but it is what the ▶ button
+                    // in Shortcuts sends, every time.
+                    if last.contains("amount “” · merchant “” · card “”") {
+                        Label("Nothing was attached to that run. That's what the ▶ button in Shortcuts sends — it proves the connection but never logs a purchase. Only tapping your card in a shop sends real details.",
+                              systemImage: "play.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     BoldHeader("Last Tap Received")
                 } footer: {
