@@ -21,7 +21,7 @@ struct ReceiptScanView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: "doc.text.viewfinder")
-                    .font(.system(size: 44, weight: .regular))
+                    .font(.largeTitle)
                     .foregroundStyle(Color.ink)
                     .padding(.top, 8)
                     .accessibilityHidden(true)

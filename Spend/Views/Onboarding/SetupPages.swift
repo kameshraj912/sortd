@@ -328,7 +328,7 @@ struct PlanPage: View {
             .setupCard()
 
             HStack(alignment: .firstTextBaseline) {
-                Text("Finish setup").font(.headline)
+                Text("Finish Setup").font(.headline)
                 Spacer()
                 Text("\(SetupChecklist.doneCount(tasks)) of \(tasks.count) done")
                     .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
