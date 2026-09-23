@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct SpendApp: App {
@@ -42,6 +43,7 @@ struct SpendApp: App {
 
     init() {
         CrashReporting.start()
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         WidgetBridge.watchSaves()
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
@@ -113,14 +115,16 @@ struct SpendApp: App {
 }
 
 enum AppTab: Hashable, CaseIterable {
-    case home, activity, insights, settings
+    case home, activity, insights, search, you, add
 
     var title: String {
         switch self {
         case .home: "Home"
         case .activity: "Activity"
         case .insights: "Insights"
-        case .settings: "Settings"
+        case .search: "Search"
+        case .you: "You"
+        case .add: "Add"
         }
     }
 
@@ -129,7 +133,9 @@ enum AppTab: Hashable, CaseIterable {
         case .home: "house"
         case .activity: "list.bullet"
         case .insights: "chart.bar"
-        case .settings: "gearshape"
+        case .search: "magnifyingglass"
+        case .you: "person.crop.circle"
+        case .add: "plus"
         }
     }
 }
@@ -144,6 +150,9 @@ struct RootView: View {
 
     @Environment(\.modelContext) private var context
     @AppStorage(OnboardingView.doneKey) private var onboarded = false
+    /// "Run Setup Again": setup shows over the app, but it stays set up
+    /// (so App Lock and the privacy cover keep working).
+    @AppStorage(SetupProfile.rerunKey) private var rerun = false
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var lock = AppLock()
@@ -151,6 +160,13 @@ struct RootView: View {
     /// Set when setup finishes, so the cover closes even when a debug flag
     /// is forcing it open.
     @State private var setupFinished = false
+    @State private var showingAdd = false
+    /// When setup closed: a second tap from a double-tap on setup's last
+    /// button mustn't land on the tab bar underneath.
+    @State private var setupClosedAt: Date = .distantPast
+    @State private var searchQuery = ""
+    private let layout = NavLayout.current
+    private let nav = NavOption.current
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -159,24 +175,63 @@ struct RootView: View {
 
     private var coverState: CoverState {
         if lock.isLocked { return .locked }
-        if onboarded, !Self.forceSetup, scenePhase != .active { return .cover }
+        // Not behind iOS's own permission alerts (they make the scene
+        // inactive for a moment; the app isn't going anywhere).
+        if onboarded, !Self.forceSetup, scenePhase != .active,
+           !(scenePhase == .inactive && SystemPrompt.shared.active) { return .cover }
         return .none
     }
 
     var body: some View {
-        // The system tab bar is hidden and replaced with a flat one: iOS 27
-        // always draws the system bar as floating Liquid Glass.
-        TabView(selection: $tab) {
-            Tab(value: AppTab.home) { HomeView(tab: $tab).hideSystemTabBar() }
-            Tab(value: AppTab.activity) { ActivityView().hideSystemTabBar() }
-            Tab(value: AppTab.insights) { ProGate(feature: .insights) { InsightsView() }.hideSystemTabBar() }
-            Tab(value: AppTab.settings) { SettingsView().hideSystemTabBar() }
+        // The system Liquid Glass tab bar. Settings is a sheet from the gear
+        // on Home (tabs are for places people go often), and Search gets the
+        // trailing search tab, as the HIG suggests.
+        Group {
+            // First launch: nothing behind setup, so Home doesn't flash for
+            // a moment before the setup cover slides up.
+            if !onboarded, !setupFinished {
+                Color.page.ignoresSafeArea()
+            } else {
+                tabs
+            }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            FlatTabBar(selection: $tab)
-        }
-        // The tab bar stays at the bottom, under the keyboard, like the system one.
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+            .tint(Color.brand)
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .modifier(RootSearch(enabled: layout.rootSearch, query: $searchQuery))
+            .overlay(alignment: .bottomTrailing) {
+                if layout == .fab, tab == .home || tab == .activity {
+                    AddFAB(add: { showingAdd = true },
+                           scan: { showingAdd = true },
+                           importing: { router.open(URL(string: "sortd://import")!) })
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 72)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            // Settings in the same top-right spot on every tab (nav options
+            // that don't keep it on Home or in a You tab).
+            .overlay(alignment: .topTrailing) {
+                if nav.gearOnEveryTab {
+                    SettingsButton()
+                        .padding(.trailing, 16)
+                        .padding(.top, 2)
+                }
+            }
+            .animation(.spring(duration: 0.3), value: tab)
+            // Keep the Router in step with taps on the tab bar, so a link to
+            // the tab you left (a check-in, a widget) still switches back.
+            .onChange(of: tab) { _, new in if router.tab != new { router.tab = new } }
+            .sheet(isPresented: $showingAdd) { AddTransactionView() }
+        .sensoryFeedback(.selection, trigger: tab)
+        .sheet(isPresented: $router.showingSettings, onDismiss: {
+            // Next time Settings opens on its main list, not a page a link pushed.
+            router.settingsPath = []
+            // "Run Setup Again" waits for Settings to finish closing.
+            if router.pendingRerun {
+                router.pendingRerun = false
+                rerun = true
+            }
+        }) { SettingsView() }
         // In its own window so open sheets are covered too. The app-switcher
         // cover shows whenever Sortd isn't active, lock on or off, so the
         // snapshot never shows purchases.
@@ -195,12 +250,22 @@ struct RootView: View {
             router.open(url)
             tab = router.tab
         }
-        .onChange(of: router.tab) { _, new in tab = new }
+        .onChange(of: router.tab) { _, new in if tab != new { tab = new } }
+        // Widget, Siri and notification "add" links: the one add sheet.
+        .onChange(of: router.sheet, initial: true) { _, pending in
+            guard pending == .add else { return }
+            showingAdd = true
+            router.clearSheet()
+        }
         // "Clear" on the sample-data banner sets onboarded back to false:
         // open setup again straight away, not on the next launch.
         .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
-        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || Self.forceSetup))) {
-            OnboardingView { setupFinished = true }
+        .onChange(of: rerun) { _, again in if again { setupFinished = false } }
+        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || rerun || Self.forceSetup))) {
+            OnboardingView {
+                setupClosedAt = .now
+                setupFinished = true
+            }
         }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
@@ -208,6 +273,8 @@ struct RootView: View {
             // A subscription can expire while the app sits in memory, and
             // expiry sends no update: check again before anything uses isPro.
             await ProStore.shared.refresh()
+            // Bill reminders asked for during setup, before they had Pro.
+            SetupProfile.applyPendingBillReminders()
             await GoogleAuth.retryPendingRevokes()
             try? TransactionLogger.refreshUncategorised(in: context)
             await FXService.ensureConverted(in: context)
@@ -226,53 +293,100 @@ struct RootView: View {
     }
 }
 
-/// Plain bottom bar: white, a hairline on top, black when selected, grey otherwise.
-struct FlatTabBar: View {
-    @Binding var selection: AppTab
-    @Environment(\.dynamicTypeSize) private var typeSize
 
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                Button {
-                    selection = tab
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: selection == tab ? tab.symbol + (tab == .activity ? "" : ".fill") : tab.symbol)
-                            .font(.system(size: 20, weight: .regular))
-                            .frame(height: 24)
-                        // Like the system tab bar: labels don't grow; at the
-                        // largest sizes they hide and a long press shows them big.
-                        if !typeSize.isAccessibilitySize {
-                            Text(tab.title)
-                                .font(.system(size: 10, weight: .medium))
-                        }
-                    }
-                    .foregroundStyle(selection == tab ? Color.brand : Color.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 49)
-                    .contentShape(.rect)
+extension RootView {
+    /// The tab bar's selection. The + slot is an action, not a place: picking
+    /// it opens the add sheet and the current tab stays put (no flash of an
+    /// empty tab, one haptic).
+    var tabSelection: Binding<AppTab> {
+        Binding(get: { tab }, set: { new in
+            guard Date.now.timeIntervalSince(setupClosedAt) > 0.6 else { return }
+            if new == .add { showingAdd = true } else { tab = new }
+        })
+    }
+
+    @ViewBuilder
+    var tabs: some View {
+        // The prominent tab is in the iOS 27 SDK only, so the code is compiled
+        // in only by Xcode 27 (Swift 6.4). Older Xcode — and iOS 26 at run
+        // time — uses the search-role slot below, which looks the same.
+        #if compiler(>=6.4)
+        if layout == .prominent, #available(iOS 27, *) {
+            TabView(selection: tabSelection) {
+                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+                Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .prominent) { Color.clear }
+                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                    ProGate(feature: .insights) { InsightsView() }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selection == tab ? [.isSelected, .isButton] : .isButton)
-                .accessibilityShowsLargeContentViewer {
-                    Label(tab.title, systemImage: tab.symbol)
+                if nav.hasYouTab {
+                    Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
+                }
+                if nav.hasSearchTab {
+                    Tab(value: AppTab.search, role: .search) { SearchView() }
                 }
             }
+        } else if layout == .prominent {
+            legacyPlusTabs
+        } else {
+            searchTabOnlyTabs
         }
-        .padding(.top, 6)
-        .background(Color.card.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Divider() }
-        .sensoryFeedback(.selection, trigger: selection)
+        #else
+        if layout == .prominent {
+            legacyPlusTabs
+        } else {
+            searchTabOnlyTabs
+        }
+        #endif
+    }
+
+    /// iOS 26, and any Xcode older than 27: iOS 26 draws the search-role tab
+    /// as the same separate glass circle, so + goes in that slot and Search
+    /// sits inside the bar. The same look as iOS 27's prominent tab. Tapping
+    /// + never shows this tab; the selection binding opens the add sheet.
+    var legacyPlusTabs: some View {
+        TabView(selection: tabSelection) {
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                ProGate(feature: .insights) { InsightsView() }
+            }
+            if nav.hasYouTab {
+                Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
+            }
+            if nav.hasSearchTab {
+                Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
+            }
+            Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) { Color.clear }
+        }
+    }
+
+    /// The other nav layouts (no + circle): Search keeps the system slot.
+    var searchTabOnlyTabs: some View {
+        TabView(selection: tabSelection) {
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                ProGate(feature: .insights) { InsightsView() }
+            }
+            Tab(value: AppTab.search, role: .search) {
+                SearchView(external: layout.rootSearch ? $searchQuery : nil)
+            }
+        }
     }
 }
 
-private extension View {
-    func hideSystemTabBar() -> some View {
-        toolbarVisibility(.hidden, for: .tabBar)
+private struct RootSearch: ViewModifier {
+    let enabled: Bool
+    @Binding var query: String
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $query, prompt: "Shop, category or note")
+        } else {
+            content
+        }
     }
 }
-
 
 /// Light / Dark / System, set on the app's windows. Called from Settings the
 /// moment it changes and whenever the app opens. (SwiftUI's

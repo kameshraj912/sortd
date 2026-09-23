@@ -22,8 +22,35 @@ struct OnboardingView: View {
     @AppStorage("monthlyBudget") private var budget: Double = 0
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage(OnboardingView.doneKey) private var done = false
+    // What they tell us about themselves. Kept on this iPhone.
+    @AppStorage(SetupProfile.goalsKey) private var goalsRaw = ""
+    @AppStorage(SetupProfile.paymentKey) private var paymentRaw = ""
+    @AppStorage(SetupProfile.feelingKey) private var feelingRaw = ""
+    @AppStorage(SetupProfile.abroadKey) private var abroadRaw = ""
+    @AppStorage(SetupProfile.checkInKey) private var checkInRaw = SetupProfile.CheckIn.sunday.rawValue
+    @AppStorage(SetupProfile.billsKey) private var billIntent = false
+    @AppStorage(SetupProfile.rerunKey) private var rerun = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// They answered the check-in question this time (not skipped, not "Not now").
+    @State private var checkInChosen = false
+    /// Asking iOS for notification permission; one tap is enough.
+    @State private var requesting = false
+    /// Notifications aren't allowed, so no check-in will come: the building
+    /// and plan pages say so instead of promising one.
+    @State private var notificationsOff = false
+    /// When the step last changed. A double tap on a bottom button would
+    /// otherwise land its second tap on the next screen's button in the same
+    /// spot (e.g. skip Apple Pay by accident).
+    @State private var stepChangedAt = Date.distantPast
+    /// finish() has run: ignore every tap after that.
+    @State private var finished = false
+    /// Each new step opens at the top, title in view.
+    @State private var scroll = ScrollPosition(edge: .top)
+    /// The budget before setup started, so un-ticking "Spend less" undoes
+    /// a limit set a moment ago without wiping one set weeks ago.
+    @State private var budgetBefore: Double?
 
-    enum Step: Int, CaseIterable { case welcome, currency, cards, cardDetails, applePay, email, budget, reminders, pro, finish }
+    typealias Step = SetupFlow.Step
     #if DEBUG
     @State private var step: Step = Step(rawValue: Int(ProcessInfo.processInfo.environment["SPEND_ONBOARD_STEP"] ?? "") ?? 0) ?? .welcome
     #else
@@ -41,28 +68,54 @@ struct OnboardingView: View {
     @State private var editing: CardInfo?
     @State private var connectingGmail = false
     @State private var gmail = GmailSync.accounts
+    /// "S$25.00 ≈ A$28.40 today", once a rate has come in.
+    @State private var ratePreview: String?
     @FocusState private var budgetFocused: Bool
+    /// The budget amount grows with the text-size setting, within reason.
+    @ScaledMetric(relativeTo: .largeTitle) private var budgetAmountSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .title) private var budgetSymbolSize: CGFloat = 30
 
     private var book: CardBook { .shared }
     private var region: String { Locale.current.region?.identifier ?? "AU" }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            ScrollView {
-                page
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
-                    .id(step)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
-                        removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
+        ScrollView {
+            VStack(spacing: 0) {
+            page
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+                .id(step)
+                .transition(.asymmetric(
+                    insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                    removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
+            if typeSize.isAccessibilitySize, step != .building { bottomBar }
             }
-            .scrollDismissesKeyboard(.interactively)
-            bottomBar
         }
-        .background(Color.page)
+        .scrollPosition($scroll)
+        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(.basedOnSize)
+        // Text scrolling under Back / progress / Skip gets a backdrop.
+        .scrollEdgeEffectStyle(.hard, for: .top)
+        // Glass controls float over the page, and the page scrolls under them.
+        // Bars (not plain insets) so the page blurs softly under them as it
+        // scrolls, instead of text running into the buttons.
+        .safeAreaBar(edge: .top, spacing: 0) { topBar }
+        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
+        .onAppear { if budgetBefore == nil { budgetBefore = budget } }
+        // A budget already set (Run Setup Again) is in the old currency.
+        // Convert it now, so the budget step and the plan show what will be
+        // saved, not the old number with a new symbol.
+        .onChange(of: home) { _, new in rebaseForSetup(to: new) }
+        .background {
+            ZStack {
+                Color.page.ignoresSafeArea()
+                if step == .welcome || step == .building || step == .plan {
+                    SetupAura().transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.6), value: step)
+        }
         .sheet(item: $editing) { CardEditor(original: $0) }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
         .sheet(isPresented: $showingPaywall) { PaywallView() }
@@ -78,149 +131,347 @@ struct OnboardingView: View {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
         .sensoryFeedback(.selection, trigger: step)
-    }
-
-    // MARK: Chrome
-
-    /// The steps between welcome and finish that this person will see.
-    private var shownSteps: [Step] {
-        Step.allCases.filter { s in
-            s != .welcome && s != .finish
-                && !(s == .cardDetails && book.active.isEmpty)
-                && !(s == .email && !Features.gmail)
+        .onChange(of: step) {
+            stepChangedAt = .now
+            scroll.scrollTo(edge: .top)
+        }
+        // The real permission, for the building and plan text (it may have
+        // been turned off in Settings, or asked in an earlier setup).
+        .task(id: step) {
+            guard step == .building || step == .plan else { return }
+            notificationsOff = !(await Self.notificationsAllowed())
         }
     }
+
+    /// True just after a step change, and for good once setup has finished.
+    private var tapsLocked: Bool {
+        finished || Date.now.timeIntervalSince(stepChangedAt) < 0.4
+    }
+
+    /// The check-in that will actually be saved: skipped or never answered
+    /// means none (as finish() does), and none without notifications.
+    private var effectiveCheckIn: SetupProfile.CheckIn {
+        if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil { return .needed }
+        return checkIn
+    }
+
+    static func notificationsAllowed() async -> Bool {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return status == .authorized || status == .provisional || status == .ephemeral
+    }
+
+    /// The check-in line for the building and plan pages.
+    private var checkInLine: (symbol: String, text: String) {
+        let choice = effectiveCheckIn
+        if choice != .needed, notificationsOff {
+            return ("bell.slash", "Check-ins off (notifications are off)")
+        }
+        return (choice.symbol, choice == .needed ? "No regular check-ins" : choice.summary)
+    }
+
+    // MARK: Answers
+
+    private var goals: Set<SetupProfile.Goal> { SetupProfile.goals(goalsRaw) }
+    private var payment: SetupProfile.Payment? { SetupProfile.Payment(rawValue: paymentRaw) }
+    private var checkIn: SetupProfile.CheckIn { SetupProfile.CheckIn(rawValue: checkInRaw) ?? .sunday }
+    private var abroad: SetupProfile.Abroad? { SetupProfile.Abroad(rawValue: abroadRaw) }
+    private var flow: SetupFlow {
+        SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty,
+                  gmailFeature: Features.gmail, isPro: pro.isPro)
+    }
+    private var wantsGmail: Bool { flow.wantsGmail }
+    /// The check-in step asks for notifications only if something will use them.
+    private var asksNotifications: Bool { checkIn != .needed || billIntent }
+
+    private var goalsBinding: Binding<Set<SetupProfile.Goal>> {
+        Binding(get: { goals }, set: { goalsRaw = SetupProfile.raw($0) })
+    }
+    private var paymentBinding: Binding<SetupProfile.Payment?> {
+        Binding(get: { payment }, set: { paymentRaw = $0?.rawValue ?? "" })
+    }
+    private var feelingBinding: Binding<SetupProfile.Feeling?> {
+        Binding(get: { SetupProfile.Feeling(rawValue: feelingRaw) }, set: { feelingRaw = $0?.rawValue ?? "" })
+    }
+    private var checkInBinding: Binding<SetupProfile.CheckIn> {
+        Binding(get: { checkIn }, set: { checkInRaw = $0.rawValue })
+    }
+
+    // MARK: Flow
+
+    private func isShown(_ s: Step) -> Bool { flow.isShown(s) }
+    private func neighbour(of s: Step, _ delta: Int) -> Step? { flow.neighbour(of: s, delta) }
+    private var progress: Double { flow.progress(at: step) }
+    private var questionSteps: [Step] { flow.questionSteps }
+    private func counter(_ s: Step) -> String { flow.counter(s) ?? "" }
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            if step != .welcome && step != .finish {
-                Button { go(-1) } label: {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
+            if step == .welcome, rerun {
+                // Running setup again from Settings: a way back out.
+                Button {
+                    rerun = false
+                    onFinish()
+                } label: {
+                    Image(systemName: "xmark").font(.body.weight(.semibold))
+                        .frame(width: 30, height: 30)
                 }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel("Close")
+            } else if step != .welcome && step != .building {
+                Button { if !tapsLocked { go(-1) } } label: {
+                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
                 .accessibilityLabel("Back")
             } else {
-                Color.clear.frame(width: 44, height: 44)
+                placeholderCircle
             }
-            // Progress: one segment per step that will actually be shown, so
-            // a skipped step (card details with no cards, email without Gmail)
-            // doesn't make the bar jump two at once.
-            HStack(spacing: 4) {
-                let shown = shownSteps
-                let reached = shown.lastIndex { $0.rawValue <= step.rawValue } ?? -1
-                ForEach(Array(shown.indices), id: \.self) { i in
-                    Capsule()
-                        .fill(i <= reached ? Color.brandPalette[i % Color.brandPalette.count] : Color.track)
-                        .frame(height: 4)
+            // One bar that fills, counting only steps this person will see.
+            Capsule()
+                .fill(Color.track)
+                .frame(height: 5)
+                .overlay(alignment: .leading) {
+                    GeometryReader { g in
+                        Capsule()
+                            .fill(LinearGradient(colors: Color.brandPalette, startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(5, g.size.width * progress))
+                    }
                 }
-            }
-            .opacity(step == .welcome || step == .finish ? 0 : 1)
-            .accessibilityHidden(true)
-            if step != .welcome && step != .finish && step != .cardDetails {
-                // Straight to the summary, not one step along. Anything
-                // skipped has a sensible default and is in Settings.
-                Button("Skip setup") {
+                .clipShape(.capsule)
+                .animation(.snappy, value: progress)
+                .opacity(step == .welcome || step == .building ? 0 : 1)
+                .accessibilityHidden(true)
+            if questionSteps.contains(step) {
+                // Straight to the plan with sensible defaults.
+                Button("Skip") {
+                    guard !tapsLocked else { return }
                     budgetFocused = false
                     forward = true
-                    withAnimation(.snappy) { step = .finish }
+                    withAnimation(.snappy) { step = .plan }
                 }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
+                .font(.subheadline.weight(.medium))
+                .buttonStyle(.glass)
             } else {
-                Color.clear.frame(width: 44, height: 44)
+                placeholderCircle
             }
         }
         .tint(Color.ink)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    /// An invisible copy of the round back button, so the progress bar
+    /// stays put on steps with nothing on one side.
+    private var placeholderCircle: some View {
+        Button {} label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .hidden()
+            .accessibilityHidden(true)
+    }
+
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button { if !tapsLocked { action() } } label: {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.onBrand)
+                .frame(maxWidth: .infinity, minHeight: 32)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(Color.brand)
+        .controlSize(.large)
+    }
+
+    private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button { if !tapsLocked { action() } } label: {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.ink)
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
+    }
+
+    /// Quiet text button under the main one. 44pt tall: Apple's minimum.
+    private func tertiaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button { if !tapsLocked { action() } } label: {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 10) {
-            // Pro is the one step with two actions. They belong together at
-            // the bottom — buy, the price, then skip — rather than a filled
-            // button stranded up the page with a hole underneath it.
-            if step == .pro, !pro.isPro {
-                Button { showingPaywall = true } label: {
-                    Text(trialLine).primaryPill()
-                }
-                .buttonStyle(.plain)
-
-                Text(priceLine)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 8)
-
-                Button(action: primaryAction) {
-                    Text(primaryTitle)
-                        .font(.subheadline.weight(.medium))
+        GlassEffectContainer(spacing: 10) {
+            VStack(spacing: 10) {
+                switch step {
+                case .pro where !pro.isPro:
+                    // Buy, the price, then skip, together at the bottom.
+                    primaryButton(trialLine) { showingPaywall = true }
+                    Text(priceLine)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                    tertiaryButton(primaryTitle, action: primaryAction)
+                case .welcome:
+                    primaryButton(primaryTitle, action: primaryAction)
+                    secondaryButton("Bring In Past Spending") { showingImport = true }
+                    // Not when setup is run again: sample data would mix into
+                    // real purchases, and its Clear forces a full setup.
+                    if transactions.isEmpty, !rerun {
+                        tertiaryButton("Look around with sample data") {
+                            DemoData.load(in: context)
+                            finish()
+                        }
+                    }
+                case .plan:
+                    primaryButton(primaryTitle, action: primaryAction)
+                    tertiaryButton("Do this later and look around") { finish() }
+                case .email where gmail.isEmpty:
+                    primaryButton("Connect Gmail") { connectingGmail = true }
+                    tertiaryButton("I'll do this later") { go(1) }
+                case .applePay where !tapConnected:
+                    primaryButton("Open Shortcuts") {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    }
+                    tertiaryButton("I'll do this later") { go(1) }
+                case .checkIn where asksNotifications:
+                    primaryButton(primaryTitle, action: primaryAction)
+                    tertiaryButton("Not now") {
+                        // No notifications: no check-in, no bill reminders.
+                        checkInRaw = SetupProfile.CheckIn.needed.rawValue
+                        billIntent = false
+                        checkInChosen = true
+                        go(1)
+                    }
+                default:
+                    primaryButton(primaryTitle, action: primaryAction)
                 }
-                .buttonStyle(.plain)
-            } else {
-                Button(action: primaryAction) {
-                    Text(primaryTitle).primaryPill(enabled: step != .cardDetails || detailsComplete)
-                }
-                .buttonStyle(.plain)
-                .disabled(step == .cardDetails && !detailsComplete)
-            }
-            if step == .welcome {
-                Button("I already have spending to bring in") {
-                    showingImport = true
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Color.ink)
-                .frame(minHeight: 44)
-                Button("Explore with sample data") {
-                    DemoData.load(in: context)
-                    finish()
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(minHeight: 40)
             }
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, 12)
+        .padding(.bottom, 8)
         .padding(.top, 8)
-        .background(Color.page)
     }
 
     private var primaryTitle: String {
+        let last = neighbour(of: step, 1) == nil
         switch step {
-        case .welcome: "Get Started"
-        case .cardDetails: detailsComplete ? "Continue" : missingDigitsText
-        case .applePay: tapConnected ? "Continue" : "I'll Do This Later"
-        case .email: gmail.isEmpty ? "I'll Do This Later" : "Continue"
-        case .reminders: reminders ? "Continue" : "Not Now"
-        case .pro: pro.isPro ? "Continue" : "Maybe Later"
-        case .finish: "Start Using Sortd"
-        default: "Continue"
+        case .welcome: return "Get Started"
+        case .payment where payment == nil: return "Skip This One"
+        case .feeling where feelingRaw.isEmpty: return "Skip This One"
+        case .checkIn: return asksNotifications ? "Turn On Notifications" : "Continue"
+        case .plan: return book.active.isEmpty ? "Add My First Card" : "Continue Setup"
+        case .cards where book.active.isEmpty: return "Add Cards Later"
+        case .cardDetails where !detailsComplete: return "Add Digits Later"
+        case .applePay where !tapConnected: return last ? "Do This Later and Start" : "I'll Do This Later"
+        case .email where gmail.isEmpty: return "I'll Do This Later"
+        case .pro where !pro.isPro: return "Maybe Later"
+        default: return last ? "Start Using Sortd" : "Continue"
         }
     }
 
     private func primaryAction() {
-        step == .finish ? finish() : go(1)
+        guard !finished else { return }
+        if step == .checkIn {
+            checkInRaw = checkIn.rawValue   // keep the pre-picked default too
+            checkInChosen = true
+            if asksNotifications {
+                // One button, straight to Apple's own alert (no fake "Allow").
+                guard !requesting else { return }
+                requesting = true
+                let from = step
+                Task {
+                    let allowed = await Reminders.requestPermission()
+                    let actual = await Self.notificationsAllowed()
+                    notificationsOff = !(allowed || actual)
+                    requesting = false
+                    if step == from { go(1) }
+                }
+                return
+            }
+        }
+        go(1)
     }
 
     private func go(_ delta: Int) {
+        guard !finished else { return }
         budgetFocused = false
         forward = delta > 0
-        withAnimation(.snappy) {
-            var next = Step(rawValue: min(max(step.rawValue + delta, 0), Step.finish.rawValue)) ?? .finish
-            if next == .cardDetails, book.active.isEmpty { next = Step(rawValue: next.rawValue + delta) ?? .finish }
-            if next == .email, !Features.gmail { next = Step(rawValue: next.rawValue + delta) ?? .finish }
-            step = next
+        guard let next = neighbour(of: step, delta) else {
+            if delta > 0 { finish() }
+            return
+        }
+        withAnimation(.snappy) { step = next }
+    }
+
+    /// Converts the saved budget (and category limits) to the new home
+    /// currency straight away. FXService runs one rebase at a time, so
+    /// flicking between currencies can't convert twice.
+    private func rebaseForSetup(to new: String) {
+        let beforeRebase = budget
+        Task {
+            await FXService.rebase(to: new, in: context)
+            // Picked another currency while this one ran: that call updates.
+            guard home == new else { return }
+            let after = UserDefaults.standard.double(forKey: FXService.budgetKey)
+            // Keep the "undo" value in step with the budget it came from.
+            if let before = budgetBefore, before > 0 {
+                if before == beforeRebase {
+                    budgetBefore = after
+                } else if beforeRebase > 0, after > 0 {
+                    budgetBefore = FXService.convertSetting(before, rate: after / beforeRebase)
+                }
+            }
+            customBudget = BudgetSheet.text(for: after, currency: new)
         }
     }
 
     private func finish() {
+        // Once only: a second tap must not run setup's ending again.
+        guard !finished else { return }
+        finished = true
         Task { await FXService.rebase(to: home, in: context) }
+        // Skipped the question: keep an earlier answer, otherwise no check-in.
+        if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil {
+            checkInRaw = SetupProfile.CheckIn.needed.rawValue
+        }
+        // A limit set a moment ago, then "Spend less" un-ticked: undo it.
+        if !goals.contains(.spendLess), let before = budgetBefore { budget = before }
+        let choice = checkIn
+        Task {
+            // Only if notifications are allowed; otherwise clear any old one,
+            // and say so in Settings rather than show a time that never comes.
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            let allowed = status == .authorized || status == .provisional
+            await CheckInReminder.schedule(allowed ? choice : .needed)
+            if !allowed {
+                UserDefaults.standard.set(SetupProfile.CheckIn.needed.rawValue, forKey: SetupProfile.checkInKey)
+            }
+        }
+        // Bill reminders are Pro: on now if they have it, otherwise the
+        // intent waits and comes on when Pro starts (applyPendingBillReminders).
+        if billIntent, pro.isPro {
+            reminders = true
+            billIntent = false
+        }
+        rerun = false
         done = true
         onFinish()
+    }
+
+    /// The limit that will actually be in place when setup ends.
+    private var effectiveBudget: Double {
+        goals.contains(.spendLess) ? budget : (budgetBefore ?? 0)
     }
 
     // MARK: Pages
@@ -229,26 +480,57 @@ struct OnboardingView: View {
     private var page: some View {
         switch step {
         case .welcome: welcome
+        case .goals: GoalsPage(counter: counter(.goals), goals: goalsBinding)
+        case .payment: PaymentPage(counter: counter(.payment), payment: paymentBinding) { if step == .payment { go(1) } }
         case .currency: currency
+        case .feeling: FeelingPage(counter: counter(.feeling), feeling: feelingBinding)
+        case .budget: budgetPage
+        case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent, isPro: pro.isPro)
+        case .building: BuildingPage(lines: buildingLines) { if step == .building { go(1) } }
+        case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
         case .cardDetails: cardDetails
         case .applePay: applePay
-        case .email: emailPage
-        case .budget: budgetPage
-        case .reminders: remindersPage
         case .pro: proPage
-        case .finish: finishPage
+        case .email: emailPage
         }
     }
 
-    private func header(_ title: String, _ subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.title2.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-            BrandBar(width: 14, height: 3)
-            Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    // MARK: What the answers built
+
+    private var buildingLines: [String] {
+        var lines = ["Showing totals in \(home)"
+                     + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", other currencies converted each day" : "")]
+        if goals.contains(.spendLess), effectiveBudget > 0 {
+            lines.append("Setting a \(Money.format(Decimal(effectiveBudget), home, cents: false)) monthly limit, with what's left each day")
+        } else if goals.contains(.bills) {
+            lines.append("Watching for subscriptions and bills")
+        } else {
+            lines.append("Putting where your money goes first")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 16)
+        lines.append(checkInLine.text)
+        lines.append("Keeping everything on this iPhone. No bank login, ever.")
+        return lines
+    }
+
+    private var planSummary: String { "Built from your answers. Change any of it in Settings." }
+
+    private var planSettings: [(String, String)] {
+        var chips = [(Self.currencySymbol(home), "Totals in \(home)"
+                      + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", others converted daily" : ""))]
+        if effectiveBudget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(effectiveBudget), home, cents: false) + " monthly limit")) }
+        chips.append((checkInLine.symbol, checkInLine.text))
+        if billIntent { chips.append(("bell.badge", pro.isPro ? "Bill heads-ups" : "Bill heads-ups with Pro")) }
+        return chips
+    }
+
+    private var setupTasks: [SetupTask] {
+        SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty, tapped: tapConnected,
+                             widgetAdded: false, gmailConnected: !gmail.isEmpty)
+    }
+
+    private func header(_ title: String, _ subtitle: String? = nil) -> some View {
+        SetupHeader(title: title, subtitle: subtitle)
     }
 
     private var welcome: some View {
@@ -278,25 +560,22 @@ struct OnboardingView: View {
                 Text("Your spending, logged by itself.")
                     .font(.body).foregroundStyle(.secondary)
             }
-            VStack(alignment: .leading, spacing: 16) {
-                feature("wave.3.right", "Apple Pay taps log themselves", "Pay as usual. Each tap lands in Sortd in a second.", Color.brandPalette[0])
-                feature("square.stack", "Every card, every currency", "Debit, credit and travel cards, converted at the day's rate.", Color.brandPalette[1])
-                feature("arrow.triangle.2.circlepath", "Bills and subscriptions, predicted", "See what's due before it's charged.", Color.brandPalette[2])
-                feature("lock", "Private by design", "No bank logins. Your data stays on your iPhone.", Color.brandPalette[3])
+            VStack(alignment: .leading, spacing: 18) {
+                feature("wave.3.right", "Apple Pay logs itself", "Pay as usual. It shows up in a second.", Color.brandPalette[0])
+                feature("creditcard", "Every card, every currency", "Converted at the day's rate.", Color.brandPalette[1])
+                feature("arrow.triangle.2.circlepath", "Bills, seen coming", "Know what's due before it's charged.", Color.brandPalette[2])
+                feature("lock", "Private by design", "No bank login. Stays on your iPhone.", Color.brandPalette[3])
             }
+            .setupCard(padding: 20)
         }
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String, _ tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .frame(width: 26)
-                .foregroundStyle(tint)
-                .accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 12) {
+            RowIcon(symbol)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -304,30 +583,109 @@ struct OnboardingView: View {
 
     private var currency: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your currency", "Totals and budgets are shown in this. Purchases in other currencies are converted at that day's rate.")
-            VStack(spacing: 0) {
-                currencyRow(Money.detectedHome, note: "From your iPhone")
-                ForEach(["AUD", "SGD", "INR", "USD", "GBP", "EUR", "MYR", "NZD"].filter { $0 != Money.detectedHome }, id: \.self) {
-                    Divider().padding(.leading, 16)
-                    currencyRow($0, note: nil)
+            SetupHeader(counter: counter(.currency), title: "Your main currency",
+                        subtitle: nil)
+            VStack(spacing: 10) {
+                ForEach(currencyChoices, id: \.self) { code in
+                    OptionCard(symbol: Self.currencySymbol(code), title: "\(code) · \(name(of: code))",
+                               detail: code == Money.detectedHome ? "From your iPhone" : nil,
+                               selected: home == code) {
+                        withAnimation(.snappy) { home = code }
+                    }
+                }
+                Menu {
+                    ForEach(Money.supported, id: \.self) { code in
+                        Button("\(code) · \(name(of: code))") { withAnimation(.snappy) { home = code } }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("globe")
+                        Text("Other currencies").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                 }
             }
-            .surface(radius: 16)
-            Menu {
-                ForEach(Money.supported, id: \.self) { code in
-                    Button("\(code) · \(name(of: code))") { home = code }
+
+            Text("Do you spend in other currencies?")
+                .font(.headline)
+                .padding(.top, 24)
+            HStack(spacing: 8) {
+                ForEach(SetupProfile.Abroad.allCases) { a in
+                    Button { withAnimation(.snappy) { abroadRaw = a.rawValue } } label: {
+                        Text(a.title)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .chip(selected: abroad == a)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(abroad == a ? .isSelected : [])
                 }
-            } label: {
-                Label("Other currencies", systemImage: "globe")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.ink)
-                    .frame(minHeight: 44)
             }
             .padding(.top, 8)
+            .sensoryFeedback(.selection, trigger: abroadRaw)
+
+            if let ratePreview {
+                HStack(spacing: 12) {
+                    RowIcon("arrow.left.arrow.right")
+                    Text(ratePreview).font(.body).monospacedDigit()
+                }
+                .setupCard()
+                .padding(.top, 12)
+                .transition(.opacity)
+            }
+        }
+        .task(id: home) { await loadRatePreview() }
+    }
+
+    /// A live conversion, so the currency choice already does something.
+    private func loadRatePreview() async {
+        let other = home == "SGD" ? "AUD" : home == "AUD" ? "SGD" : "USD"
+        guard other != home, let rate = try? await FXService.latestRate(from: other, to: home) else { return }
+        let converted = Decimal(25 * rate)
+        withAnimation(.snappy) {
+            // Codes, not symbols: "$" alone doesn't say which dollar.
+            let fmt = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(2))
+            ratePreview = "25.00 \(other) ≈ \(NSDecimalNumber(decimal: converted).doubleValue.formatted(fmt)) \(home) today"
         }
     }
 
     private func name(of code: String) -> String { Locale.current.localizedString(forCurrencyCode: code) ?? code }
+
+    /// The phone's currency and three common ones, plus whatever was picked
+    /// from "Other currencies", so the choice is always on screen.
+    private var currencyChoices: [String] {
+        var list = [Money.detectedHome]
+        list += ["AUD", "SGD", "USD", "INR", "GBP"].filter { $0 != Money.detectedHome }.prefix(3)
+        if !list.contains(home) { list.insert(home, at: 0) }
+        return list
+    }
+
+    static func currencySymbol(_ code: String) -> String {
+        switch code {
+        case "GBP": "sterlingsign.circle"
+        case "EUR": "eurosign.circle"
+        case "INR": "indianrupeesign.circle"
+        case "JPY", "CNY": "yensign.circle"
+        case "MYR": "malaysianringgitsign.circle"
+        case "KRW": "wonsign.circle"
+        case "THB": "bahtsign.circle"
+        case "PHP": "pesosign.circle"
+        case "CHF": "francsign.circle"
+        case "RUB": "rublesign.circle"
+        case "TRY": "turkishlirasign.circle"
+        case "ILS": "shekelsign.circle"
+        case "BRL": "brazilianrealsign.circle"
+        case "VND": "dongsign.circle"
+        // Only dollar currencies get the dollar sign.
+        case "AUD", "USD", "SGD", "NZD", "HKD", "CAD", "TWD", "BND", "FJD": "dollarsign.circle"
+        default: "banknote"
+        }
+    }
 
     private func currencyRow(_ code: String, note: String?) -> some View {
         Button { home = code } label: {
@@ -351,7 +709,7 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Pick the bank for each card you pay with. Two cards from one bank? Add it twice. Debit or credit comes next.")
+            header("Your cards", "Tap each bank you pay with. Two cards at one bank? Tap twice.")
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
             // Below the grid, so adding a card never moves the buttons.
@@ -442,20 +800,20 @@ struct OnboardingView: View {
                 let count = book.active.filter { $0.bank == bank.name }.count
                 Button { addCard(from: bank) } label: {
                     HStack(spacing: 8) {
-                        Text(bank.name).font(.subheadline.weight(.medium)).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(bank.name).font(.body).foregroundStyle(Color.ink).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 2)
                         if count > 0 {
-                            Text(count > 1 ? "\(count)" : "").font(.caption.weight(.bold))
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.up)
+                            if count > 1 { Text("\(count)").font(.footnote.weight(.bold)).monospacedDigit() }
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.ink)
                         } else {
                             Image(systemName: "plus.circle").foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(Color.card, in: .rect(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(count > 0 ? Color.ink : .clear, lineWidth: 1.5)
                     }
                     .contentShape(.rect)
@@ -473,10 +831,11 @@ struct OnboardingView: View {
                 withAnimation(.snappy) { book.upsert(card) }
             } label: {
                 Label("Other bank", systemImage: "plus")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .font(.body)
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     }
                     .contentShape(.rect)
@@ -531,7 +890,7 @@ struct OnboardingView: View {
 
     private var cardDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Card details", "The last 4 digits are how Sortd matches bank emails and receipts to the right card. Only the last 4 — never the full number.")
+            header("Last 4 digits", "So receipts land on the right card. Only the last 4.")
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
                     CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
@@ -585,68 +944,70 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay taps", "A one-time setup in Apple's Shortcuts app. Apple doesn't let apps do this part for you, so it takes about two minutes.")
-            if #available(iOS 27.0, *) {
-                WalletSetupGuide()
-                    .padding(16)
-                    .surface(radius: 16)
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
-                    miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
-                    miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
-                    actionMock.padding(.leading, 38)
+            header("Log Apple Pay by itself", "A 2-minute setup in Apple's Shortcuts app.")
+            tapStatus
+            Group {
+                if #available(iOS 27.0, *) {
+                    WalletSetupGuide()
+                        .setupCard()
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
+                        miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
+                        miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
+                        actionMock.padding(.leading, 38)
+                    }
+                    .setupCard()
                 }
-                .padding(16)
-                .surface(radius: 16)
             }
-
-            HStack(spacing: 10) {
-                Button {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
-                } label: {
-                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.onBrand)
-                        .background(Color.brand, in: .capsule)
+            .padding(.top, 10)
+            Button { showingGuide = true } label: {
+                HStack(spacing: 12) {
+                    RowIcon("list.number")
+                    Text("Every step in detail").font(.body).foregroundStyle(Color.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 }
-                Button { showingGuide = true } label: {
-                    Text("Detailed Steps")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color.ink)
-                        .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
-                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 56)
+                .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
             }
             .buttonStyle(.plain)
-            .padding(.top, 14)
+            .padding(.top, 10)
+        }
+    }
 
-            // Checks itself: turns green as soon as a tap arrives.
-            HStack(spacing: 12) {
+    /// Checks itself: listens for the first tap and celebrates when it lands.
+    private var tapStatus: some View {
+        HStack(spacing: 14) {
+            Image(systemName: tapConnected ? "checkmark" : "wave.3.right")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.onBrand)
+                .frame(width: 46, height: 46)
+                .background(tapConnected ? Color.up : Color.brand, in: .circle)
+                .symbolEffect(.variableColor.iterative, isActive: !tapConnected)
+                .symbolEffect(.bounce, value: tapConnected)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 2) {
                 if let t = firstTap {
-                    Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(Color.up)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Connected").font(.headline)
-                        Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
+                    Text("Connected").font(.headline)
+                    Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 } else {
-                    ProgressView()
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Waiting for your first tap").font(.headline)
-                        Text("Pay for anything with Apple Pay and it shows up here.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
+                    Text("Waiting for your first tap").font(.headline)
+                    Text("Do the steps below, then pay with Apple Pay.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .surface(radius: 16)
-            .padding(.top, 14)
-            .animation(.snappy, value: tapConnected)
-            .sensoryFeedback(.success, trigger: tapConnected)
+            Spacer(minLength: 0)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tapConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .animation(.snappy, value: tapConnected)
+        .sensoryFeedback(.success, trigger: tapConnected)
+        .accessibilityElement(children: .combine)
     }
 
     /// What the finished Shortcuts action looks like, so people can check theirs.
@@ -701,7 +1062,30 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Email receipts", "Connect Gmail and Sortd adds purchases from receipts and bank alerts — delivery, rides, app stores, online shops. Read-only, on this iPhone.")
+            header("Catch online receipts", "From receipts and bank alerts in your Gmail.")
+            FlowLayout(spacing: 8) {
+                ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
+                         ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
+                    Label(name, systemImage: symbol)
+                        .font(.subheadline)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.card, in: .capsule)
+                }
+            }
+            .padding(.bottom, 16)
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach([("lock", "Read-only. Can't send, delete or change email."),
+                         ("iphone", "Read on this iPhone, never a server."),
+                         ("xmark.circle", "Disconnect any time in Settings.")], id: \.1) { symbol, text in
+                    HStack(alignment: .top, spacing: 12) {
+                        RowIcon(symbol)
+                        Text(text).font(.body).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .setupCard()
+            .padding(.bottom, 16)
             if !gmail.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(gmail) { a in
@@ -720,15 +1104,19 @@ struct OnboardingView: View {
                 .surface(radius: 16)
                 .padding(.bottom, 14)
             }
-            Button { connectingGmail = true } label: {
-                Label(gmail.isEmpty ? "Connect Gmail" : "Connect Another Gmail", systemImage: "envelope")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .foregroundStyle(gmail.isEmpty ? Color.onBrand : Color.ink)
-                    .background(gmail.isEmpty ? Color.brand : Color.clear, in: .capsule)
-                    .overlay(Capsule().strokeBorder(gmail.isEmpty ? .clear : Color.secondary.opacity(0.35), lineWidth: 1))
+            if !gmail.isEmpty {
+                Button { connectingGmail = true } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("plus")
+                        Text("Connect another Gmail").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -740,22 +1128,27 @@ struct OnboardingView: View {
 
     private var budgetPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Monthly budget", "Sortd shows what's left each day, after bills that are still due. Change it any time.")
+            SetupHeader(counter: counter(.budget), title: "Want a monthly limit?",
+                        subtitle: "Change it any time.")
 
             // One big amount, typed or picked.
             VStack(spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(Money.symbol(home))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetSymbolSize, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $customBudget)
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetAmountSize, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .keyboardType(.numberPad)
                         .focused($budgetFocused)
                         .fixedSize()
                         .onChange(of: customBudget) { _, text in
-                            budget = Double(text.filter(\.isNumber)) ?? 0
+                            // Same cap as the budget sheet, so a 19-digit
+                            // typo can't be saved.
+                            let limited = BudgetSheet.limitInput(text, currency: home)
+                            if limited != text { customBudget = limited; return }
+                            budget = BudgetSheet.sanitized(Double(limited) ?? 0, currency: home)
                         }
                 }
                 .onTapGesture { budgetFocused = true }
@@ -767,15 +1160,15 @@ struct OnboardingView: View {
                     .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 26)
-            .surface(radius: 20)
+            .padding(.vertical, 10)
+            .setupCard()
             .animation(.snappy, value: budget)
 
             FlowLayout(spacing: 8) {
                 ForEach(budgetPresets, id: \.self) { value in
                     Button {
                         budget = value
-                        customBudget = String(Int(value))
+                        customBudget = BudgetSheet.text(for: value, currency: home)
                         budgetFocused = false
                     } label: {
                         Text(Money.format(Decimal(value), home, cents: false))
@@ -789,7 +1182,7 @@ struct OnboardingView: View {
             }
             .padding(.top, 14)
 
-            Button("No budget for now") {
+            Button("No limit for now") {
                 budget = 0
                 customBudget = ""
                 budgetFocused = false
@@ -799,7 +1192,7 @@ struct OnboardingView: View {
             .frame(minHeight: 44)
             .padding(.top, 4)
         }
-        .onAppear { if budget > 0, customBudget.isEmpty { customBudget = String(Int(budget)) } }
+        .onAppear { if budget > 0, customBudget.isEmpty { customBudget = BudgetSheet.text(for: budget, currency: home) } }
     }
 
     /// Sortd Pro, offered once during setup.
@@ -815,46 +1208,57 @@ struct OnboardingView: View {
     /// part ends.
     private var proPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header(pro.isPro ? "You have Sortd Pro" : proHeadline,
+            header(pro.isPro ? "You have Sortd Pro" : "What Pro adds for you",
                    pro.isPro
                    ? "Everything below is unlocked. Thank you."
-                   : "Apple Pay logging, adding by hand, your cards, export and delete are free forever. Pro adds the rest.")
+                   : "Picked from your answers. Logging, cards, budgets and export stay free.")
 
             VStack(spacing: 0) {
-                ForEach(Array(ProStore.Feature.available.enumerated()), id: \.element) { index, feature in
+                ForEach(Array(SetupProfile.proOrder(goals: goals, payment: payment).enumerated()), id: \.element) { index, feature in
                     if index > 0 { Divider().padding(.leading, 46) }
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: feature.symbol)
-                            .font(.body)
-                            .frame(width: 32)
-                            .foregroundStyle(Color.ink)
-                            .padding(.top, 1)
+                    HStack(alignment: .top, spacing: 12) {
+                        RowIcon(feature.symbol)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(feature.title).font(.subheadline.weight(.semibold))
+                            Text(feature.title).font(.headline)
                             Text(feature.detail)
-                                .font(.footnote)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(.vertical, 11)
+                    .padding(.vertical, 12)
                     .accessibilityElement(children: .combine)
                 }
             }
             .padding(.horizontal, 16)
-            .surface(radius: 16)
+            .padding(.vertical, 4)
+            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
 
-            // The hook. Not a hard sell — an accurate prediction, which is
-            // funnier and does the same job.
-            if !pro.isPro {
-                Text("You'll skip this. Then on Thursday you'll try to scan a receipt, find it locked, and come back. We'll wait.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 14)
+            // How the trial works, said plainly: what happens today, and
+            // what happens when it ends.
+            if !pro.isPro, let trialText {
+                VStack(alignment: .leading, spacing: 14) {
+                    timelineRow("gift", "Today", "Everything in Pro unlocked. \(trialText.capitalized).")
+                    timelineRow("calendar.badge.clock", "When the trial ends",
+                                pro.product(ProStore.ID.yearly).map { "Your plan starts at \($0.displayPrice) a year." } ?? "Your plan starts.")
+                    timelineRow("xmark.circle", "Any time before", "Cancel in the App Store and you pay nothing.")
+                }
+                .setupCard()
+                .padding(.top, 12)
             }
         }
+    }
+
+    private func timelineRow(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            RowIcon(symbol)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// "Try Sortd Pro free" reads like a typo — free is left dangling. Say
@@ -881,117 +1285,6 @@ struct OnboardingView: View {
         return "\(trial.capitalized), then \(yearly.displayPrice) a year. Cancel any time in the App Store."
     }
 
-    private var remindersPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header("Heads-up before bills", "A notification at 9 am the day before a subscription or bill is due. Nothing leaves your iPhone.")
-            HStack(spacing: 14) {
-                Image(systemName: reminders ? "bell.badge.fill" : "bell")
-                    .font(.title2).frame(width: 32)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Netflix tomorrow").font(.headline)
-                    Text("\(Money.format(18.99, home)) on your card. Monthly.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .surface(radius: 16)
-            .accessibilityLabel("Example reminder: Netflix tomorrow")
-
-            Button {
-                // Same rule as Settings: reminders are Pro.
-                guard pro.isPro else { showingPaywall = true; return }
-                Task { reminders = await Reminders.requestPermission() }
-            } label: {
-                Label(reminders ? "Reminders On" : "Turn On Reminders",
-                      systemImage: reminders ? "checkmark" : "bell")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .foregroundStyle(reminders ? Color.ink : Color.onBrand)
-                    .background(reminders ? Color.clear : Color.brand, in: .capsule)
-                    .overlay(Capsule().strokeBorder(reminders ? Color.hairline : .clear, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(reminders)
-            .padding(.top, 16)
-        }
-    }
-
-    private var finishPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header("You're set", "Here's what's ready. Anything skipped is in Settings.")
-            VStack(spacing: 0) {
-                check("Currency", home, ok: true)
-                Divider().padding(.leading, 52)
-                check("Cards", book.active.isEmpty ? "Added as you pay" : "\(book.active.count) added", ok: !book.active.isEmpty)
-                Divider().padding(.leading, 52)
-                check("Apple Pay logging", tapConnected ? "Connected" : "Set up later", ok: tapConnected)
-                Divider().padding(.leading, 52)
-                if Features.gmail {
-                    check("Email receipts", gmail.isEmpty ? "Not connected" : gmail.map(\.email).joined(separator: ", "), ok: !gmail.isEmpty)
-                    Divider().padding(.leading, 52)
-                }
-                check("Budget", budget > 0 ? Money.format(Decimal(budget), home, cents: false) + " a month" : "None", ok: budget > 0)
-                Divider().padding(.leading, 52)
-                check("Reminders", reminders ? "On" : "Off", ok: reminders)
-                Divider().padding(.leading, 52)
-                check("Sortd Pro", pro.isPro ? "Active" : "Free plan", ok: pro.isPro)
-            }
-            .surface(radius: 16)
-
-            // Three things people otherwise never find. Named here rather
-            // than left to be discovered by accident in Settings.
-            VStack(spacing: 0) {
-                tip("square.and.arrow.down", "Import a statement",
-                    "Got months of spending already? Settings › Import takes a CSV, a PDF statement or a screenshot of your bank app.")
-                Divider().padding(.leading, 52)
-                tip("square.grid.2x2", "Put it on your Home Screen",
-                    "Touch and hold the Home Screen, tap Add Widget, and search Sortd. Light or dark, your choice.")
-                Divider().padding(.leading, 52)
-                tip("arrow.down.document", "Save a backup",
-                    "Everything stays on this iPhone, so a backup is the only way to move to a new one. Settings › Backup.")
-            }
-            .surface(radius: 16)
-            .padding(.top, 14)
-        }
-    }
-
-    private func tip(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol)
-                .font(.body)
-                .foregroundStyle(Color.ink)
-                .frame(width: 24)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func check(_ title: String, _ value: String, ok: Bool) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed")
-                .font(.title3)
-                .foregroundStyle(ok ? Color.up : Color.secondary)
-                .frame(width: 24)
-            Text(title)
-            Spacer()
-            Text(value).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 16)
-        .frame(minHeight: 52)
-        .accessibilityElement(children: .combine)
-    }
 }
 
 /// Lays chips out left to right, wrapping onto new lines.
@@ -1049,8 +1342,20 @@ struct CardDetailForm: View {
     @State private var digits: String
     @State private var payDigits: String
     @State private var showHelp = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Sizes that grow with the text size, so large text isn't clipped.
+    @ScaledMetric(relativeTo: .footnote) private var previewWidth: CGFloat = 92
+    @ScaledMetric(relativeTo: .footnote) private var previewHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .body) private var digitsWidth: CGFloat = 90
 
     var needsPay = false
+
+    /// Side by side normally; stacked at the accessibility text sizes.
+    private var rowLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 14))
+    }
 
     init(info: CardInfo, needsPay: Bool = false) {
         self.needsPay = needsPay
@@ -1065,13 +1370,13 @@ struct CardDetailForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
+            rowLayout {
                 preview
                 VStack(alignment: .leading, spacing: 8) {
                     // Looks like a field so people know they can call it
                     // something they'll recognise ("Groceries card").
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Nickname").font(.caption).foregroundStyle(.secondary)
+                        Text("Nickname").font(.footnote).foregroundStyle(.secondary)
                         HStack(spacing: 6) {
                             TextField("e.g. Groceries card", text: $name)
                                 .font(.headline)
@@ -1137,18 +1442,18 @@ struct CardDetailForm: View {
     private var preview: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(BankPreset.short(info.bank.isEmpty ? name : info.bank))
-                .font(.caption.weight(.bold))
+                .font(.footnote.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
             Text(missing ? "•• ····" : "•• \(CardEditor.fours(digits)[0])")
-                .font(.caption2.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .monospacedDigit()
                 .opacity(0.8)
         }
         .foregroundStyle(isCredit ? Color.white : Color.ink)
         .padding(8)
-        .frame(width: 92, height: 58, alignment: .leading)
+        .frame(width: previewWidth, height: previewHeight, alignment: .leading)
         .background(isCredit ? Color.creditFill : Color.page, in: .rect(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
             .strokeBorder(isCredit ? .clear : Color.secondary.opacity(0.35), lineWidth: 1))
@@ -1157,25 +1462,28 @@ struct CardDetailForm: View {
     }
 
     private func digitRow(_ title: String, text: Binding<String>, required: Bool) -> some View {
-        HStack {
+        let stacked = typeSize.isAccessibilitySize
+        return (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                 Text(required ? (title == "Apple Pay number" ? "Required — tells same-bank cards apart" : "Required") : "Recommended")
                     .font(.caption)
                     .foregroundStyle(required && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
             }
-            Spacer()
+            if !stacked { Spacer() }
             TextField("Last 4", text: text)
                 .keyboardType(.numberPad)
                 .onChange(of: text.wrappedValue) { _, new in
                     let clean = String(new.filter(\.isNumber).prefix(4))
                     if clean != new { text.wrappedValue = clean }
                 }
-                .multilineTextAlignment(.trailing)
+                .multilineTextAlignment(stacked ? .leading : .trailing)
                 .font(.body.monospacedDigit())
-                .frame(width: 90)
+                .frame(width: stacked ? nil : digitsWidth)
+                .frame(maxWidth: stacked ? .infinity : nil, alignment: .leading)
         }
         .padding(.horizontal, 14)
+        .padding(.vertical, stacked ? 8 : 0)
         .frame(minHeight: 52)
     }
 

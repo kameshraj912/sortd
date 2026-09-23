@@ -161,10 +161,16 @@ nonisolated enum Backup {
     @MainActor
     static func data(in context: ModelContext,
                      defaults: UserDefaults = .standard) throws -> Data {
+        try encode(try snapshot(in: context, defaults: defaults))
+    }
+
+    /// The file's bytes. Safe off the main thread, so the slow part of
+    /// saving a big backup doesn't freeze the screen.
+    static func encode(_ snapshot: Snapshot) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(try snapshot(in: context, defaults: defaults))
+        return try encoder.encode(snapshot)
     }
 
     // MARK: - Reading one back
@@ -221,7 +227,8 @@ nonisolated enum Backup {
     @MainActor
     @discardableResult
     static func restore(_ data: Data, mode: Mode, into context: ModelContext,
-                        defaults: UserDefaults = .standard) throws -> Result {
+                        defaults: UserDefaults = .standard,
+                        cardBook: CardBook = .shared) throws -> Result {
         let snapshot = try decode(data)
         var result = Result()
         // `homeAmount` in the file is in the backup phone's home currency.
@@ -232,15 +239,121 @@ nonisolated enum Backup {
         let homeBefore = phoneHome ?? Money.home
         let homeAfter = mode == .replace ? (backupHome ?? homeBefore) : (phoneHome ?? backupHome ?? homeBefore)
 
-        if mode == .replace {
-            try? context.delete(model: Transaction.self)
-            try? context.delete(model: MerchantRule.self)
+        // Every change below is saved once, at the end. If anything fails
+        // on the way, nothing is kept: a failed Replace must not leave the
+        // phone empty.
+        do {
+            try apply(snapshot, mode: mode, homeBefore: homeBefore, homeAfter: homeAfter,
+                      backupHome: backupHome, into: context, result: &result)
             try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+
+        // Cards. Replace: the backup's list, and nothing else (an empty list
+        // if the backup has none), so old cards don't linger. A card of this
+        // phone's stays only if a restored purchase still points at it.
+        // Merge: add any this phone doesn't have, never drop one.
+        let mine = cardBook.cards
+        if mode == .replace {
+            cardBook.replaceAll(replacementCards(snapshot, current: mine))
+            result.cards = snapshot.cards.count
+        } else {
+            let known = Set(mine.map(\.id))
+            let missing = snapshot.cards.filter { !known.contains($0.id) }
+            if !missing.isEmpty {
+                cardBook.replaceAll(mine + missing)
+                result.cards = missing.count
+            }
+        }
+
+        for key in settingKeys {
+            if let setting = snapshot.settings[key] {
+                // On merge, don't stomp a setting the user has already chosen here.
+                if mode == .merge, defaults.object(forKey: key) != nil { continue }
+                defaults.set(setting.value, forKey: key)
+                result.settings += 1
+            } else if mode == .replace, key != "appLockEnabled" {
+                // The backup phone never set this, so it had the default. Keep
+                // this phone's value and a budget or limit set here in one
+                // currency would be read in the backup's. The app lock is the
+                // exception: a restore never quietly switches it off.
+                defaults.removeObject(forKey: key)
+            }
+        }
+        // The restored amounts and budget are already in `homeAfter`. Without this,
+        // FXService.ensureConverted would convert the restored budget a second time
+        // and wipe every converted amount.
+        if mode == .replace || homeAfter != homeBefore {
+            if mode == .replace { defaults.set(homeAfter, forKey: Money.homeKey) }
+            defaults.set(homeAfter, forKey: FXService.convertedKey)
+        }
+
+        return result
+    }
+
+    /// The card list after a Replace: the backup's cards, plus any card on
+    /// this phone that a restored purchase uses but the backup didn't list
+    /// (so no purchase is left pointing at nothing).
+    static func replacementCards(_ snapshot: Snapshot, current: [CardInfo]) -> [CardInfo] {
+        let listed = Set(snapshot.cards.map(\.id))
+        let used = Set(snapshot.transactions.map(\.card))
+        let kept = current.filter { used.contains($0.id) && !listed.contains($0.id) }
+        return snapshot.cards + kept
+    }
+
+    /// What a backup holds, for the Replace warning.
+    struct Contents: Equatable {
+        var purchases: Int
+        var cards: Int
+        var createdAt: Date
+    }
+
+    static func contents(of data: Data) -> Contents? {
+        guard let s = try? decode(data) else { return nil }
+        return Contents(purchases: s.transactions.count, cards: s.cards.count, createdAt: s.createdAt)
+    }
+
+    /// The Replace confirmation, said plainly: what's here now, and what the
+    /// backup will leave. An empty backup says Sortd will be left empty.
+    static func replaceWarning(backup: Contents, purchasesHere: Int) -> (title: String, message: String) {
+        func purchases(_ n: Int) -> String { n == 1 ? "1 purchase" : "\(n) purchases" }
+        func cards(_ n: Int) -> String { n == 0 ? "no cards" : n == 1 ? "1 card" : "\(n) cards" }
+        let made = backup.createdAt.formatted(date: .abbreviated, time: .shortened)
+        let title = purchasesHere == 0
+            ? "Replace this iPhone's data with this backup?"
+            : "Replace the \(purchases(purchasesHere)) on this iPhone?"
+        var message: String
+        if backup.purchases == 0 {
+            message = "This backup has no purchases. Replacing will leave Sortd empty."
+            if backup.cards > 0 { message += " It has \(cards(backup.cards))." }
+            message += " Backup made \(made)."
+        } else {
+            message = "This backup from \(made) has \(purchases(backup.purchases)) and \(cards(backup.cards)). "
+                + "They'll take the place of everything here, and anything added since will be lost."
+        }
+        message += " This can't be undone."
+        return (title, message)
+    }
+
+    /// The store changes for `restore`, left unsaved so the caller can save
+    /// them all at once or throw them all away.
+    @MainActor
+    private static func apply(_ snapshot: Snapshot, mode: Mode, homeBefore: String, homeAfter: String,
+                              backupHome: String?, into context: ModelContext,
+                              result: inout Result) throws {
+        let mine = try context.fetch(FetchDescriptor<Transaction>())
+        if mode == .replace {
+            for t in mine { context.delete(t) }
+        } else if homeAfter != homeBefore {
+            // This phone's own purchases were converted to the old currency.
+            for t in mine { t.audAmount = t.currencyCode == homeAfter ? t.amount : nil }
         }
 
         // Purchases are matched by id, so restoring the same backup twice
         // adds nothing the second time.
-        let existing = Set(try context.fetch(FetchDescriptor<Transaction>()).map(\.id))
+        let existing: Set<UUID> = mode == .replace ? [] : Set(mine.map(\.id))
         for row in snapshot.transactions {
             guard !existing.contains(row.id) else { result.skipped += 1; continue }
             let t = Transaction(
@@ -276,11 +389,21 @@ nonisolated enum Backup {
         }
 
         // A learned category is the user's own choice, so a newer one wins.
+        // Replace takes the backup's as they are. Rules are updated in place,
+        // not deleted and added again: `key` is unique, and a delete and an
+        // insert of the same key can't go in one save.
         var rulesByKey: [String: MerchantRule] = [:]
         for rule in try context.fetch(FetchDescriptor<MerchantRule>()) { rulesByKey[rule.key] = rule }
+        if mode == .replace {
+            let keep = Set(snapshot.rules.map(\.key))
+            for (key, rule) in rulesByKey where !keep.contains(key) {
+                context.delete(rule)
+                rulesByKey[key] = nil
+            }
+        }
         for rule in snapshot.rules {
             if let mine = rulesByKey[rule.key] {
-                guard rule.updatedAt > mine.updatedAt else { continue }
+                guard mode == .replace || rule.updatedAt > mine.updatedAt else { continue }
                 mine.categoryRaw = rule.category
                 mine.updatedAt = rule.updatedAt
             } else {
@@ -288,47 +411,9 @@ nonisolated enum Backup {
                                        category: SpendCategory(rawValue: rule.category) ?? .other)
                 new.updatedAt = rule.updatedAt
                 context.insert(new)
+                rulesByKey[rule.key] = new
             }
             result.rules += 1
         }
-
-        try context.save()
-
-        // Cards: add any this phone doesn't have. Never drop one, or a
-        // restore could orphan purchases that point at it.
-        if !snapshot.cards.isEmpty {
-            let mine = CardBook.shared.cards
-            let known = Set(mine.map(\.id))
-            let missing = snapshot.cards.filter { !known.contains($0.id) }
-            if mode == .replace {
-                CardBook.shared.replaceAll(snapshot.cards)
-                result.cards = snapshot.cards.count
-            } else if !missing.isEmpty {
-                CardBook.shared.replaceAll(mine + missing)
-                result.cards = missing.count
-            }
-        }
-
-        for (key, setting) in snapshot.settings where settingKeys.contains(key) {
-            // On merge, don't stomp a setting the user has already chosen here.
-            if mode == .merge, defaults.object(forKey: key) != nil { continue }
-            defaults.set(setting.value, forKey: key)
-            result.settings += 1
-        }
-        // The restored amounts and budget are already in `homeAfter`. Without this,
-        // FXService.ensureConverted would convert the restored budget a second time
-        // and wipe every converted amount.
-        if mode == .replace || homeAfter != homeBefore {
-            if mode == .merge {
-                // This phone's own purchases were converted to the old currency.
-                for t in try context.fetch(FetchDescriptor<Transaction>()) where existing.contains(t.id) {
-                    t.audAmount = t.currencyCode == homeAfter ? t.amount : nil
-                }
-                try context.save()
-            }
-            defaults.set(homeAfter, forKey: FXService.convertedKey)
-        }
-
-        return result
     }
 }

@@ -16,7 +16,7 @@ struct GmailSection: View {
                     HStack(spacing: 12) {
                         Image(systemName: "envelope.fill").foregroundStyle(Color.ink)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(account.email).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(account.email).foregroundStyle(Color.ink).lineLimit(1).truncationMode(.middle)
                             Text(status(account)).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
                         }
                         Spacer()
@@ -48,7 +48,7 @@ struct GmailSection: View {
         } header: {
             BoldHeader("Email Receipts")
         } footer: {
-            Text("Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone.")
+            Text("Finds receipts and bank alerts in your Gmail and reads them on this iPhone.")
         }
         .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) {
             if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) }
@@ -56,7 +56,7 @@ struct GmailSection: View {
         .confirmationDialog("Disconnect \(disconnecting?.email ?? "")?", isPresented: Binding(
             get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
             Button("Disconnect") { disconnect(deleting: false) }
-            Button("Disconnect and Delete Its Purchases", role: .destructive) { disconnect(deleting: true) }
+            Button("Disconnect and Delete Purchases", role: .destructive) { disconnect(deleting: true) }
         } message: {
             Text("Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way.")
         }
@@ -96,7 +96,7 @@ struct ConnectGmailSheet: View {
                         .accessibilityHidden(true)
                     Text("Add purchases from your email")
                         .font(.title2.weight(.bold))
-                    Text("Sortd finds receipts and bank alerts in your Gmail — food delivery, rides, app stores, online shops — and adds them as purchases.")
+                    Text("Sortd finds receipts and bank alerts in your Gmail and adds them as purchases.")
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 14) {
                         point("magnifyingglass", "Only receipts", "It searches for receipts and bank alerts. Other email is never opened.")
@@ -112,7 +112,8 @@ struct ConnectGmailSheet: View {
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Color.down)
                     }
-                    Text("Google will show a warning that the app isn't verified yet while Sortd is being reviewed by Google.")
+                    // Remove once Google's verification clears.
+                    Text("Google may say Sortd isn't verified yet. That's expected while Google reviews it.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -188,7 +189,7 @@ struct GoogleButtonLabel: View {
                 Image("GoogleG").resizable().frame(width: 20, height: 20).accessibilityHidden(true)
             }
             Text(working ? "Connecting…" : "Continue with Google")
-                .font(.system(size: 17, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(Color(hex: dark ? 0xE3E3E3 : 0x1F1F1F))
         }
         .padding(.leading, 16)

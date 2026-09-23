@@ -24,16 +24,41 @@ final class Router {
     var tab: AppTab = .home
     var sheet: Sheet?
     var settingsPath: [Destination] = []
+    /// Settings is a sheet over the tabs, opened from the gear on Home.
+    var showingSettings = false
+    /// "Run Setup Again" was tapped: setup opens once Settings has closed.
+    var pendingRerun = false
 
-    private init() {}
+    private init() {
+        #if DEBUG
+        showingSettings = ProcessInfo.processInfo.environment["SPEND_TAB"] == "settings"
+        #endif
+    }
 
     /// Handles a `sortd://` URL from a widget. Unknown links just open the
     /// app on Home rather than doing nothing, which is the friendlier miss.
     func open(_ url: URL) {
         guard url.scheme == "sortd" else { return }
+        // Setup comes first: while it's on screen, links would open behind it.
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: OnboardingView.doneKey), !defaults.bool(forKey: SetupProfile.rerunKey) else { return }
         // "sortd://add" puts "add" in the host, not the path.
         let name = url.host() ?? url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
+        // Settings is a sheet: close it first for links that go somewhere
+        // else, then follow the link once it's out of the way.
+        if showingSettings, name != "bills", name != "import" {
+            showingSettings = false
+            Task {
+                try? await Task.sleep(for: .milliseconds(450))
+                follow(name)
+            }
+            return
+        }
+        follow(name)
+    }
+
+    private func follow(_ name: String) {
         switch name {
         case "add", "scan":
             tab = .home
@@ -46,11 +71,11 @@ final class Router {
         case "insights":
             tab = .insights
         case "bills":
-            tab = .settings
             settingsPath = [.recurring]
+            showingSettings = true
         case "import":
-            tab = .settings
             settingsPath = [.importing]
+            showingSettings = true
         default:
             tab = .home
         }

@@ -34,6 +34,7 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
+                            if !demo { FinishSetupCard() }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
@@ -44,15 +45,31 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                     }
+                    .refreshable {
+                        _ = await GmailSync.syncAll(in: context)
+                        await FXService.ensureConverted(in: context)
+                    }
                 }
             }
             .background(Color.page)
             .navigationTitle("Home")
-            .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
+            // Home draws its own title; the bar only carries the gear.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(removing: .title)
+            .toolbar(transactions.isEmpty || NavLayout.current == .toolbar ? .visible : .hidden, for: .navigationBar)
             .toolbar {
+                // Top right, where the header puts it on the full Home.
+                ToolbarItem(placement: .topBarTrailing) {
+                    if NavOption.current.gearOnHome {
+                        Button("Settings", systemImage: "gearshape") { Router.shared.showingSettings = true }
+                            .tint(Color.ink)
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add Purchase", systemImage: "plus") { showingAdd = true }
-                        .tint(Color.ink)
+                    if NavLayout.current == .header || NavLayout.current == .toolbar {
+                        Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+                            .tint(Color.ink)
+                    }
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -60,12 +77,11 @@ struct HomeView: View {
                 CardDetailView(card: card)
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
+            // "add" links open from RootView (one add sheet for the whole
+            // app); Home only handles its own budget sheet.
             .onChange(of: Router.shared.sheet, initial: true) { _, pending in
-                switch pending {
-                case .add: showingAdd = true
-                case .budget: showingBudget = true
-                case nil: return
-                }
+                guard pending == .budget else { return }
+                showingBudget = true
                 Router.shared.clearSheet()
             }
             .sheet(isPresented: $showingSetup) {
@@ -94,7 +110,7 @@ struct HomeView: View {
             Image(systemName: "sparkles").foregroundStyle(Color.ink)
             VStack(alignment: .leading, spacing: 2) {
                 Text("You're looking at sample data").font(.subheadline.weight(.semibold))
-                Text("Clear it when you're ready to use your own.").font(.caption).foregroundStyle(.secondary)
+                Text("Clear it to set up Sortd with your own.").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             Button("Clear") {
@@ -148,6 +164,10 @@ struct HomeView: View {
         return (0..<12).compactMap { cal.date(byAdding: .month, value: -$0, to: start) }
     }
 
+    /// A card takes a bit over half the screen, so the next one peeks the
+    /// same amount on an SE and a Pro Max (216pt was right only for 402pt).
+    static func cardWidth(_ screen: CGFloat) -> CGFloat { min(screen * 0.54, 300) }
+
     // MARK: Header
 
     /// Setup-style title: the month (tap to change), logo bar, a round "+",
@@ -176,7 +196,20 @@ struct HomeView: View {
                     BrandBar(width: 14, height: 3)
                 }
                 Spacer()
-                RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
+                if NavLayout.current != .toolbar, NavOption.current.gearOnHome { HStack(spacing: 10) {
+                    Button { Router.shared.showingSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .tint(Color.ink)
+                    .accessibilityLabel("Settings")
+                    if NavLayout.current == .header {
+                        RoundIconButton(symbol: "plus", label: "Add Purchase") { showingAdd = true }
+                    }
+                } }
             }
             .padding(.top, 8)
 
@@ -216,7 +249,8 @@ struct HomeView: View {
 
     /// One line about categories over their limit, this month only.
     private var overLimitLine: String? {
-        guard isCurrentMonth, !limits.isEmpty else { return nil }
+        // Category limits are Pro: a lapsed subscription hides the warning too.
+        guard isCurrentMonth, !limits.isEmpty, ProStore.shared.isPro else { return nil }
         let over = CategoryBudgets.progress(for: monthItems, limits: limits)
             .filter { $0.value.status == .over }
             .sorted { $0.value.left < $1.value.left }
@@ -235,7 +269,8 @@ struct HomeView: View {
         guard isCurrentMonth else { return "\(Money.format(Decimal(left), Money.home, cents: false)) under your \(b) budget" }
         let daysLeft = max(1, (cal.range(of: .day, in: .month, for: .now)?.count ?? 30) - cal.component(.day, from: .now) + 1)
         let monthEnd = cal.dateInterval(of: .month, for: .now)?.end ?? .now
-        let bills = recurring.filter { $0.status == .active && $0.nextDate < monthEnd }.reduce(0) { $0 + $1.audAmount.double }
+        // Every time a bill still falls this month (a weekly one can be 4-5 times).
+        let bills = recurring.stillToCharge(before: monthEnd, calendar: cal).double
         let perDay = max(0, left - bills) / Double(daysLeft)
         return "\(Money.format(Decimal(left), Money.home, cents: false)) left of \(b) · \(Money.format(Decimal(perDay), Money.home, cents: false)) a day"
     }
@@ -253,11 +288,12 @@ struct HomeView: View {
             Button { showingBudget = true } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     SegmentedBar(segments: segments, total: max(budget, spent), height: 10)
-                    HStack(spacing: 12) {
+                    // Wraps instead of truncating on a small iPhone or at big text.
+                    FlowLayout(spacing: 12) {
                         ForEach(byCategory.prefix(3), id: \.category) { c in
                             HStack(spacing: 5) {
                                 Circle().fill(c.category.color).frame(width: 7, height: 7)
-                                Text(c.category.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(c.category.name).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -281,19 +317,19 @@ struct HomeView: View {
             .sorted { $0.1.audTotal > $1.1.audTotal }
         let ids = ["all"] + ranked.map(\.0.rawValue)
         return VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Your cards")
+            SectionHeader(title: "Your Cards")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     Button { tab = .activity } label: {
                         WalletCard(card: nil, transactions: monthItems)
-                            .frame(width: 216)
+                            .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w) }
                     }
                     .buttonStyle(CardPressStyle())
                     .id("all")
                     ForEach(ranked, id: \.0) { card, items in
                         NavigationLink(value: card) {
                             WalletCard(card: card, transactions: items)
-                                .frame(width: 216)
+                                .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w) }
                         }
                         .buttonStyle(CardPressStyle())
                         .id(card.rawValue)
@@ -340,7 +376,7 @@ struct HomeView: View {
         } else {
             let top = rows[0].total.double
             VStack(spacing: 10) {
-                SectionHeader(title: title("Where it went")) { tab = .insights }
+                SectionHeader(title: title("Where It Went")) { tab = .insights }
                 VStack(spacing: 0) {
                     ForEach(rows, id: \.category) { row in
                         HStack(spacing: 14) {
@@ -364,7 +400,7 @@ struct HomeView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home)), \(row.count) purchases")
+                        .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home)), \(row.count == 1 ? "1 purchase" : "\(row.count) purchases")")
                     }
                 }
                 .padding(.vertical, 4)
@@ -413,15 +449,33 @@ struct HomeView: View {
         }
     }
 
+    /// Straight after setup: a welcome, the same checklist the plan showed,
+    /// and a way to add the first purchase by hand.
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("No Purchases Yet", systemImage: "creditcard")
-        } description: {
-            Text("Set up the Apple Pay automation once, and every tap lands here by itself.")
-        } actions: {
-            Button("Set Up Auto-Logging") { showingSetup = true }
-                .buttonStyle(.borderedProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
-            Button("Add a Purchase") { showingAdd = true }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Welcome to Sortd").font(.title.weight(.bold))
+                    BrandBar(width: 14, height: 3)
+                    Text("Your purchases show up here.").font(.body).foregroundStyle(.secondary)
+                }
+                FinishSetupCard(canHide: false)
+                Button { showingAdd = true } label: {
+                    HStack(spacing: 12) {
+                        RowIcon("square.and.pencil")
+                        Text("Add a Purchase").font(.body).foregroundStyle(Color.ink)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
     }
 }
@@ -436,8 +490,8 @@ enum DayTitle {
     }
 }
 
-/// Section title with an optional "See all".
-/// Bold black section title, like the headings in setup ("Your cards").
+/// Section title with an optional "See All".
+/// Bold black section title, like the headings in setup ("Your Cards").
 struct SectionHeader: View {
     let title: String
     var action: (() -> Void)? = nil
@@ -451,11 +505,11 @@ struct SectionHeader: View {
             Spacer()
             if let action {
                 Button(action: action) {
-                    Text("See all").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                    Text("See All").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                         .frame(minHeight: 44).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("See all, \(title)")
+                .accessibilityLabel("See All, \(title)")
             }
         }
     }
@@ -542,7 +596,7 @@ struct WalletCard: View {
                 if let card, !typeSize.isAccessibilitySize,
                    !card.shortLabel.localizedCaseInsensitiveContains(card.isCredit ? "credit" : "debit") {
                     Text(card.isCredit ? "CREDIT" : "DEBIT")
-                        .font(.system(size: 9, weight: .heavy))
+                        .font(.caption2.weight(.heavy))
                         .tracking(1)
                         .opacity(0.75)
                 }
@@ -578,7 +632,7 @@ struct WalletCard: View {
                               lineWidth: style.systemFace ? 1 : 0.5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(card?.name ?? "All cards"), \(Money.format(total, Money.home)) this month, \(transactions.count) purchases")
+        .accessibilityLabel("\(card?.name ?? "All cards"), \(Money.format(total, Money.home)) this month, \(transactions.count == 1 ? "1 purchase" : "\(transactions.count) purchases")")
         .accessibilityHint(card == nil ? "Shows all purchases" : "Shows this card's purchases")
     }
 
@@ -628,13 +682,16 @@ struct SpendChart: View {
             switch self {
             case .week: "Last week"
             case .month: "Last month"
-            case .quarter: "3 months before"
+            case .quarter: "Previous 3 months"
             }
         }
     }
 
     @State private var range: Range = .month
     @State private var selected: Date?
+    /// Chart and empty-bars heights grow with Dynamic Type so the axis labels keep room.
+    @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 190
+    @ScaledMetric(relativeTo: .caption) private var placeholderHeight: CGFloat = 180
 
     private struct Point: Identifiable {
         let date: Date
@@ -743,7 +800,7 @@ struct SpendChart: View {
             }
 
             if now == 0 && previous.last?.total ?? 0 == 0 {
-                PlaceholderBars().frame(height: 180)
+                PlaceholderBars().frame(height: placeholderHeight)
             } else {
                 chart
             }
@@ -827,7 +884,7 @@ struct SpendChart: View {
                 }
             }
         }
-        .frame(height: 190)
+        .frame(height: chartHeight)
         .sensoryFeedback(.selection, trigger: selected.map { cal.startOfDay(for: $0) })
         .accessibilityLabel("Running total, \(range.title.lowercased())")
         .accessibilityValue("\(Money.format(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.format(Decimal(previous.last?.total ?? 0), Money.home)).")

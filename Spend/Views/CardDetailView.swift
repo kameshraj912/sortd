@@ -7,6 +7,8 @@ import Charts
 struct CardDetailView: View {
     let card: Card
     @Query(sort: \Transaction.date, order: .reverse) private var all: [Transaction]
+    /// The month-bar chart grows with Dynamic Type so its month letters keep room.
+    @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 64
 
     private var cal: Calendar { .current }
 
@@ -129,7 +131,7 @@ struct CardDetailView: View {
                 }
             }
         }
-        .frame(height: 64)
+        .frame(height: chartHeight)
         .accessibilityLabel("Spending over the last 6 months")
         .accessibilityValue(months.map { "\($0.month.formatted(.dateTime.month(.wide))) \(Money.format(Decimal($0.total), Money.home, cents: false))" }.joined(separator: ", "))
     }
@@ -142,7 +144,7 @@ struct CardDetailView: View {
                 Text("Recent")
                     .font(.headline)
                 Spacer()
-                NavigationLink("See all") {
+                NavigationLink("See All") {
                     TransactionsScreen(fixedCard: card)
                 }
                 .font(.subheadline)
@@ -151,8 +153,8 @@ struct CardDetailView: View {
             .padding(.top, 12)
 
             if transactions.isEmpty {
-                ContentUnavailableView("No Purchases Yet", systemImage: "creditcard",
-                                       description: Text("Tap \(card.name) with Apple Pay and it shows up here."))
+                EmptyState("No purchases yet", symbol: "creditcard",
+                           message: "Pay with \(card.name) and it shows up here.")
             } else {
                 let shown = Array(transactions.prefix(8))
                 VStack(spacing: 0) {

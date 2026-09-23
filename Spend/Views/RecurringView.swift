@@ -18,7 +18,7 @@ struct RecurringView: View {
         let stopped = all.filter { $0.status != .active }
 
         List {
-            ListPageTitle(title: "Recurring", subtitle: "Subscriptions and bills, predicted from your payments.")
+            ListPageTitle(title: "Subscriptions & Bills")
             if !all.isEmpty {
                 Section {
                     summary(active)
@@ -73,14 +73,14 @@ struct RecurringView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
-        .brandedTitle("Recurring")
+        .brandedTitle("Subscriptions & Bills")
         // Cancelled, undone or "not recurring": update reminders now, not on
         // the next launch, so a cancelled bill doesn't still ping tomorrow.
         .onChange(of: revision) { Task { await Reminders.reschedule(transactions.recurring()) } }
         .overlay {
             if all.isEmpty {
-                ContentUnavailableView("No Recurring Payments Yet", systemImage: "arrow.triangle.2.circlepath",
-                                       description: Text("Subscriptions and bills show up here after they've charged twice, or once with an App Store receipt. \(SortdVoice.noRecurring)"))
+                EmptyState("No subscriptions or bills yet", symbol: "arrow.triangle.2.circlepath",
+                           message: "They show up here once they've charged a couple of times, or a receipt says when they renew.")
             }
         }
     }
@@ -103,7 +103,7 @@ struct RecurringView: View {
             }
             if bills > 0 {
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout())) {
-                    Label("Bills & rent", systemImage: "house")
+                    Label("Bills & Rent", systemImage: "house")
                     if !typeSize.isAccessibilitySize { Spacer() }
                     Text("\(Money.format(Decimal(bills), Money.home, cents: false)) a month").monospacedDigit()
                 }
@@ -122,7 +122,7 @@ struct RecurringView: View {
         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 12))) {
             CategoryIcon(category: r.category, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(r.merchant).lineLimit(1)
+                Text(r.merchant).lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                 Text(showNext ? Self.when(r.nextDate) : "\(r.cadence.name) · \(r.card.shortLabel)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -133,7 +133,7 @@ struct RecurringView: View {
                 if showNext {
                     Text(r.cadence.name).font(.caption).foregroundStyle(.secondary)
                 } else if r.status == .active {
-                    Text("next \(Self.shortDate(r.nextDate))")
+                    Text("Next \(Self.shortDate(r.nextDate))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -141,9 +141,9 @@ struct RecurringView: View {
         .accessibilityElement(children: .combine)
         .swipeActions {
             if r.status == .cancelled {
-                Button("Undo") { RecurringPrefs.undoCancel(r.key); revision += 1 }
+                Button("Not Cancelled") { RecurringPrefs.undoCancel(r.key); revision += 1 }
             } else {
-                Button("Cancelled") { RecurringPrefs.markCancelled(r.key); revision += 1 }
+                Button("Mark Cancelled") { RecurringPrefs.markCancelled(r.key); revision += 1 }
                     .tint(.orange)
                 Button("Not Recurring") { RecurringPrefs.ignore(r.key); revision += 1 }
                     .tint(.gray)
@@ -175,7 +175,7 @@ struct RecurringView: View {
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: "globe").foregroundStyle(Color.orange).font(.title3)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(list.count) still billing in \(currencies)").font(.body.weight(.semibold))
+                Text("\(list.count) still charging in \(currencies)").font(.body.weight(.semibold))
                 Text("\(names). About \(Money.format(Decimal(monthly), Money.home, cents: false)) a month. Still need them where you are now?")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
@@ -199,10 +199,10 @@ struct RecurringView: View {
         if r.chargedAfterCancel {
             return "Charged \(Money.format(r.amount, r.currency)) on \(r.lastDate.formatted(.dateTime.day().month())) after you marked it cancelled."
         }
-        if let change = r.priceChange, change > 0, let old = r.previousAmount {
-            return "Went up from \(Money.format(old, r.currency)) to \(Money.format(r.amount, r.currency))."
-        }
-        return "Still charging in \(r.currency) while you're using \(LocalCurrency.current()). Still need it?"
+        // Only cancelled and price-rise rows get here (`single` in body);
+        // currency rows go to `awayRow`. A price rise always has an old amount.
+        let old = r.previousAmount ?? r.amount
+        return "Went up from \(Money.format(old, r.currency)) to \(Money.format(r.amount, r.currency))."
     }
 
     /// "7 Oct", or "15 Sep 2027" when it isn't this year.
@@ -234,9 +234,9 @@ struct UpcomingSection: View {
                     ProGate(feature: .recurring) { RecurringView() }
                 } label: {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Coming up").font(.title3.weight(.bold)).foregroundStyle(Color.ink)
+                        Text("Coming Up").font(.title3.weight(.bold)).foregroundStyle(Color.ink)
                         Spacer()
-                        Text("See all").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        Text("See All").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                             .accessibilityLabel("See all, coming up")
                     }
                 }
@@ -247,7 +247,7 @@ struct UpcomingSection: View {
                         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 12))) {
                             CategoryIcon(category: r.category, size: 36)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(r.merchant).lineLimit(1)
+                                Text(r.merchant).lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                                 Text(RecurringView.when(r.nextDate)).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
