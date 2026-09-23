@@ -35,6 +35,18 @@ enum Money {
         return "\(sign)\(symbol)\(n)"
     }
 
+    /// The same amount for VoiceOver to read aloud.
+    ///
+    /// `format` writes a foreign currency as "S$25.00" so two dollars can't
+    /// be confused by eye. VoiceOver reads that leading letter as a letter —
+    /// "S, dollars twenty-five" — so every spoken label uses the currency's
+    /// full name instead: "25.00 Singapore dollars".
+    static func spoken(_ value: Decimal, _ code: String, cents: Bool = true) -> String {
+        value.formatted(.currency(code: code)
+            .presentation(.fullName)
+            .precision(.fractionLength(cents ? 2 : 0)))
+    }
+
     /// Just the symbol, for amount entry fields ("$", "S$", "£").
     static func symbol(_ code: String) -> String {
         let text = format(0, code, cents: false)
@@ -137,12 +149,12 @@ struct TransactionRow: View {
     private var accessibilityText: String {
         var parts = [
             transaction.merchant,
-            transaction.needsReview ? "amount missing" : Money.format(transaction.amount, transaction.currencyCode),
+            transaction.needsReview ? "amount missing" : Money.spoken(transaction.amount, transaction.currencyCode),
             transaction.category.name,
             transaction.paidWithLabel,
         ]
         if transaction.currencyCode != Money.home, !transaction.needsRate {
-            parts.insert("about \(Money.format(transaction.audValue, Money.home))", at: 2)
+            parts.insert("about \(Money.spoken(transaction.audValue, Money.home))", at: 2)
         }
         return parts.joined(separator: ", ")
     }

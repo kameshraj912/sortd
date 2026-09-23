@@ -32,6 +32,7 @@ struct AddTransactionView: View {
     @State private var aiCategoryMerchant = ""
     /// Shown under the quick line when nothing could be read from it.
     @State private var quickProblem: String?
+    @State private var confirmingDiscard = false
     /// Keystrokes the amount field refused (too long, a third decimal).
     @State private var refusedKeys = 0
 
@@ -191,7 +192,9 @@ struct AddTransactionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    Button("Cancel", systemImage: "xmark") {
+                        if hasInput { confirmingDiscard = true } else { dismiss() }
+                    }
                 }
                 .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
@@ -200,6 +203,20 @@ struct AddTransactionView: View {
                         .disabled(!isValid)
                         .opacity(isValid ? 1 : 0.3)
                 }
+                // The number pad has no Return key, so without this there was
+                // no way to put it away and reach the rest of the form.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { amountFocused = false; quickFocused = false }
+                        .fontWeight(.semibold)
+                }
+            }
+            // A half-typed purchase is real work; swiping the sheet away used
+            // to bin it without a word.
+            .interactiveDismissDisabled(hasInput)
+            .confirmationDialog("Discard this purchase?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
             .sheet(isPresented: $showingScanner) {
                 if ProStore.shared.isPro { ReceiptScanView(onRead: apply) } else { PaywallView(feature: .camera) }
@@ -221,6 +238,13 @@ struct AddTransactionView: View {
         }
     }
 
+    /// Anything typed that would be lost by closing the sheet.
+    private var hasInput: Bool {
+        !amountText.isEmpty || !merchant.trimmingCharacters(in: .whitespaces).isEmpty
+            || !note.trimmingCharacters(in: .whitespaces).isEmpty
+            || !quick.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// Big centred amount like Cash App, with a small currency switch below.
     private var amountField: some View {
         VStack(spacing: 10) {
@@ -231,13 +255,11 @@ struct AddTransactionView: View {
                 // Sized by a hidden copy of the text, so the field always
                 // grows to fit an amount filled in from Quick entry or a scan.
                 Text(amountText.isEmpty ? "0" : amountText)
-                    .font(.largeTitle.weight(.bold))
-                    .monospacedDigit()
+                    .font(.money)
                     .hidden()
                     .overlay(alignment: .leading) {
                         TextField("0", text: $amountText)
-                            .font(.largeTitle.weight(.bold))
-                            .monospacedDigit()
+                            .font(.money)
                             .keyboardType(.decimalPad)
                             .focused($amountFocused)
                             .accessibilityLabel("Amount in \(currency)")

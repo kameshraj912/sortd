@@ -238,16 +238,26 @@ struct PaywallView: View {
             Text(terms(plan, trial: trial))
                 .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
-            HStack(spacing: 18) {
-                Button("Restore Purchases") { Task { await restore() } }
-                Button("Terms") { openURL(URL(string: "https://sortd.page/terms")!) }
-                Button("Privacy") { openURL(URL(string: "https://sortd.page/privacy")!) }
+            // Apple's 44pt minimum. These were the height of the text alone
+            // (~16pt), and Restore Purchases is one App Review looks for.
+            HStack(spacing: 12) {
+                Button { Task { await restore() } } label: { legalLabel("Restore Purchases") }
+                Button { openURL(URL(string: "https://sortd.page/terms")!) } label: { legalLabel("Terms") }
+                Button { openURL(URL(string: "https://sortd.page/privacy")!) } label: { legalLabel("Privacy") }
             }
-            .font(.caption.weight(.semibold))
+            .buttonStyle(.plain)
             .foregroundStyle(Color.ink)
         }
         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
         .background(Color.page)
+    }
+
+    private func legalLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
     }
 
     private func cta(_ p: PlanDisplay?, trial: String?) -> String {
