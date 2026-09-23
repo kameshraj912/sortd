@@ -28,7 +28,7 @@ struct SetupGuideView: View {
         Step(id: 1, symbol: "square.stack.3d.up", title: "Open Shortcuts, then Automation",
              detail: "It's the middle tab at the bottom. Tap + at the top right (or New Automation if you have none)."),
         Step(id: 2, symbol: "wallet.pass", title: "Tap “Wallet”",
-             detail: "Scroll down to find it. On iOS 17 and 18 it's called “Transaction”."),
+             detail: "Scroll down to find it."),
         Step(id: 3, symbol: "creditcard", title: "Choose your cards",
              detail: "Tap Choose next to Cards, tick every card you pay with, then Done. Leave Categories and Merchants as they are."),
         Step(id: 4, symbol: "bolt", title: "Tap “Run Immediately”, then Next",
@@ -43,7 +43,7 @@ struct SetupGuideView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Auto-Logging")
+            ListPageTitle(title: "Apple Pay Logging")
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Image(systemName: "wave.3.right.circle.fill")
@@ -109,14 +109,14 @@ struct SetupGuideView: View {
                 } header: {
                     BoldHeader("Last Tap Received")
                 } footer: {
-                    Text("Exactly what Apple Pay sent Sortd. Useful if a tap shows the wrong shop, amount or card.")
+                    Text("What Apple Pay sent. Helps if a tap shows the wrong shop, amount or card.")
                 }
             }
 
             Section(bold: "Good to Know") {
                 Label(Features.gmail
-                      ? "Only tapping your phone or watch in a shop triggers this. Apple Pay in apps and online (Uber, DoorDash) comes from your email receipts instead."
-                      : "Only tapping your phone or watch in a shop triggers this. Add Apple Pay in apps and online (Uber, DoorDash) by hand.",
+                      ? "This only works when you tap your phone or watch in a shop. Apple Pay in apps and online (like Uber) comes from your email receipts."
+                      : "This only works when you tap your phone or watch in a shop. Add Apple Pay in apps and online (like Uber) by hand.",
                       systemImage: "info.circle")
                 Label("If Apple Pay ever sends a purchase without an amount, Sortd still saves it and marks it “Add amount”.",
                       systemImage: "exclamationmark.circle")
@@ -127,7 +127,7 @@ struct SetupGuideView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
-        .brandedTitle("Auto-Logging")
+        .brandedTitle("Apple Pay Logging")
         .toolbar {
             if isPresentedAsSheet {
                 ToolbarItem(placement: .confirmationAction) {

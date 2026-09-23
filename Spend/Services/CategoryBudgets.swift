@@ -41,15 +41,15 @@ enum CategoryBudgets {
 
     // MARK: Currency
 
-    /// The home currency changed: multiply each limit by `rate` and round to a
-    /// whole amount, like the monthly budget. Only limits still equal to
+    /// The home currency changed: multiply each limit by `rate` and round to
+    /// the cent, like the monthly budget. Only limits still equal to
     /// `before` change; one set again while the rate loaded is already in the
     /// new currency.
     static func convert(from before: [String: Double], rate: Double, _ defaults: UserDefaults = .standard) {
         guard rate > 0, !before.isEmpty else { return }
         var raw = stored(defaults)
         for (k, v) in raw where before[k] == v && v > 0 {
-            raw[k] = max(1, (v * rate).rounded())
+            raw[k] = FXService.convertSetting(v, rate: rate)
         }
         defaults.set(raw, forKey: key)
     }

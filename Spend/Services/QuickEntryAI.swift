@@ -53,21 +53,26 @@ enum QuickEntryAI {
 
     /// The model's answer, checked against the line and the plain reader.
     static func merge(_ fields: QuickEntryFields, typed text: String) -> Reading? {
+        // A line with a minus ("refund -5") is not a purchase of 5, whatever
+        // the model says. Nothing is filled; the Add screen says it couldn't
+        // read it.
+        guard !QuickEntry.hasNegativeAmount(in: text) else { return nil }
         let plain = QuickEntry.read(text)
 
-        // A written number beats the model's reading of it. A line with a
-        // minus ("refund -5") is not a purchase of 5, whatever the model says.
-        let modelAmount = Decimal(string: fields.amount.trimmingCharacters(in: .whitespaces)
-            .replacingOccurrences(of: ",", with: ""))
-        let amount = plain?.amount ?? (QuickEntry.hasNegativeAmount(in: text) ? nil
-            : modelAmount.flatMap { $0 > 0 && $0 < QuickEntry.limit ? $0 : nil })
+        // A written number beats the model's reading of it.
+        let amount = plain?.amount ?? modelAmount(fields.amount)
 
         // Only keep a currency the line actually shows.
         let code = fields.currency.uppercased()
         let modelCurrency = code.count == 3 && Money.supported.contains(code) && mentionsCurrency(code, in: text) ? code : nil
 
+        // A line with no letters ("12.5") names no shop and no kind of
+        // purchase: anything the model says about either is made up.
+        let hasLetters = text.contains(where: \.isLetter)
         let merchant = fields.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = merchant.isEmpty ? plain?.merchant ?? "" : String(merchant.prefix(60))
+        let name = hasLetters && isGrounded(merchant, in: text)
+            ? String(merchant.prefix(60))
+            : hasLetters ? plain?.merchant ?? "" : ""
         guard !name.isEmpty || amount != nil else { return nil }
 
         // A date phrase the plain reader understood ("today", "this morning",
@@ -81,7 +86,42 @@ enum QuickEntryAI {
             amount: amount,
             currency: plain?.currency ?? modelCurrency,
             daysAgo: daysAgo,
-            category: SpendCategory.allCases.first { $0.name == fields.category }.flatMap { $0 == .other ? nil : $0 })
+            category: hasLetters
+                ? SpendCategory.allCases.first { $0.name == fields.category }.flatMap { $0 == .other ? nil : $0 }
+                : nil)
+    }
+
+    /// The model's amount, only when it looks like money: digits with at
+    /// most two decimals, at least 0.01 and under the limit. "0.001" and
+    /// "999999999999" are refused rather than rounded or trusted.
+    static func modelAmount(_ raw: String) -> Decimal? {
+        let digits = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
+        guard digits.range(of: #"^\d+(\.\d{1,2})?$"#, options: .regularExpression) != nil,
+              let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")),
+              value >= Decimal(string: "0.01")!, value < QuickEntry.limit else { return nil }
+        return value
+    }
+
+    /// Names the model uses when it has nothing to go on.
+    private static let placeholders: Set<String> = [
+        "unknown", "merchant", "na", "none", "purchase", "null", "nil", "unspecified",
+        "notspecified", "notprovided", "unknownmerchant", "item", "payment",
+    ]
+
+    /// True when the model's shop name came from the line, not from the
+    /// model: at least one of its words (3+ letters, ignoring case, accents
+    /// and punctuation) is in what was typed. "Coffee" for "12.5" fails.
+    static func isGrounded(_ merchant: String, in text: String) -> Bool {
+        let whole = SearchText.fold(merchant)
+        guard !whole.isEmpty, !placeholders.contains(whole) else { return false }
+        let line = SearchText.fold(text)
+        let words = merchant
+            .split(whereSeparator: { $0.isWhitespace || $0 == "-" || $0 == "/" })
+            .map { SearchText.fold(String($0)) }
+            .filter { $0.count >= 3 && $0.contains(where: \.isLetter) }
+        // "BP", "Go": too short to have a 3-letter word, so the whole name.
+        if words.isEmpty { return whole.count >= 2 && line.contains(whole) }
+        return words.contains { line.contains($0) }
     }
 
     /// "sgd", "S$", "euros"… anything in the line that points at `code`.

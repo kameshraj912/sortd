@@ -71,8 +71,53 @@ struct QuickEntryAITests {
         #expect(sameDay.daysAgo == 0)
     }
 
-    @Test func aMinusLineDoesNotTakeTheModelsAmount() throws {
-        let r = try #require(QuickEntryAI.merge(fields("Refund", "5"), typed: "refund -5"))
-        #expect(r.amount == nil)
+    @Test func aMinusLineIsNotReadAtAll() {
+        // Nothing is filled; the Add screen says it couldn't read the line.
+        #expect(QuickEntryAI.merge(fields("Refund", "5"), typed: "refund -5") == nil)
+    }
+
+    @Test func aLineWithNoLettersGetsNoMerchantOrCategory() throws {
+        let r = try #require(QuickEntryAI.merge(fields("Coffee", "12.5", category: "Eating Out"), typed: "12.5"))
+        #expect(r.merchant == "")
+        #expect(r.category == nil)
+        #expect(r.amount == Decimal(string: "12.5"))
+    }
+
+    @Test func tooManyDecimalsIsNotAnAmount() {
+        #expect(QuickEntryAI.merge(fields("Coffee", "0.001", category: "Eating Out"), typed: "0.001") == nil)
+        #expect(QuickEntryAI.modelAmount("0.001") == nil)
+        #expect(QuickEntryAI.modelAmount("0") == nil)
+        #expect(QuickEntryAI.modelAmount("5.50") == Decimal(string: "5.50"))
+    }
+
+    @Test func aHugeNumberWithAPlaceholderNameReadsAsNothing() {
+        #expect(QuickEntryAI.merge(fields("Unknown", "999999999999"), typed: "999999999999") == nil)
+    }
+
+    @Test func refusesPlaceholderNames() throws {
+        for name in ["Unknown", "Merchant", "N/A", "Purchase", "unknown merchant"] {
+            #expect(!QuickEntryAI.isGrounded(name, in: "unknown merchant purchase n/a 5"), "\(name)")
+        }
+        // A placeholder falls back to the plain reader's name.
+        let r = try #require(QuickEntryAI.merge(fields("Unknown", "5"), typed: "coffee 5"))
+        #expect(r.merchant == "Coffee")
+    }
+
+    @Test func onlyKeepsAMerchantTheLineMentions() throws {
+        #expect(QuickEntryAI.isGrounded("Nando's", in: "lunch at nandos 18"))
+        #expect(QuickEntryAI.isGrounded("McDonald's", in: "MCDONALDS 9"))
+        #expect(QuickEntryAI.isGrounded("Café Nero", in: "cafe nero 4"))
+        #expect(!QuickEntryAI.isGrounded("Starbucks", in: "coffee 5"))
+        // The model's invention is dropped for the plain reader's name.
+        let r = try #require(QuickEntryAI.merge(fields("Starbucks", "5"), typed: "coffee 5"))
+        #expect(r.merchant == "Coffee")
+    }
+
+    @Test func fiveKIsFiveThousand() throws {
+        // The written "5k" beats whatever the model says.
+        let r = try #require(QuickEntryAI.merge(fields("Coffee", "5"), typed: "coffee 5k"))
+        #expect(r.amount == 5000)
+        #expect(QuickEntry.fieldText(5000) == "5000")
+        #expect(AddTransactionView.isTypeable(QuickEntry.fieldText(5000)))
     }
 }

@@ -35,7 +35,7 @@ struct FinishSetupCard: View {
         if !SetupChecklist.isComplete(tasks), !(canHide && hidden) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Finish setup").font(.headline)
+                    Text("Finish Setup").font(.headline)
                     Text("\(SetupChecklist.doneCount(tasks)) of \(tasks.count) done")
                         .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
                     Spacer()

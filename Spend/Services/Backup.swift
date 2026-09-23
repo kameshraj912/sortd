@@ -161,10 +161,16 @@ nonisolated enum Backup {
     @MainActor
     static func data(in context: ModelContext,
                      defaults: UserDefaults = .standard) throws -> Data {
+        try encode(try snapshot(in: context, defaults: defaults))
+    }
+
+    /// The file's bytes. Safe off the main thread, so the slow part of
+    /// saving a big backup doesn't freeze the screen.
+    static func encode(_ snapshot: Snapshot) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(try snapshot(in: context, defaults: defaults))
+        return try encoder.encode(snapshot)
     }
 
     // MARK: - Reading one back
@@ -221,7 +227,8 @@ nonisolated enum Backup {
     @MainActor
     @discardableResult
     static func restore(_ data: Data, mode: Mode, into context: ModelContext,
-                        defaults: UserDefaults = .standard) throws -> Result {
+                        defaults: UserDefaults = .standard,
+                        cardBook: CardBook = .shared) throws -> Result {
         let snapshot = try decode(data)
         var result = Result()
         // `homeAmount` in the file is in the backup phone's home currency.
@@ -244,17 +251,19 @@ nonisolated enum Backup {
             throw error
         }
 
-        // Cards: add any this phone doesn't have. Never drop one, or a
-        // restore could orphan purchases that point at it.
-        if !snapshot.cards.isEmpty {
-            let mine = CardBook.shared.cards
+        // Cards. Replace: the backup's list, and nothing else (an empty list
+        // if the backup has none), so old cards don't linger. A card of this
+        // phone's stays only if a restored purchase still points at it.
+        // Merge: add any this phone doesn't have, never drop one.
+        let mine = cardBook.cards
+        if mode == .replace {
+            cardBook.replaceAll(replacementCards(snapshot, current: mine))
+            result.cards = snapshot.cards.count
+        } else {
             let known = Set(mine.map(\.id))
             let missing = snapshot.cards.filter { !known.contains($0.id) }
-            if mode == .replace {
-                CardBook.shared.replaceAll(snapshot.cards)
-                result.cards = snapshot.cards.count
-            } else if !missing.isEmpty {
-                CardBook.shared.replaceAll(mine + missing)
+            if !missing.isEmpty {
+                cardBook.replaceAll(mine + missing)
                 result.cards = missing.count
             }
         }
@@ -282,6 +291,50 @@ nonisolated enum Backup {
         }
 
         return result
+    }
+
+    /// The card list after a Replace: the backup's cards, plus any card on
+    /// this phone that a restored purchase uses but the backup didn't list
+    /// (so no purchase is left pointing at nothing).
+    static func replacementCards(_ snapshot: Snapshot, current: [CardInfo]) -> [CardInfo] {
+        let listed = Set(snapshot.cards.map(\.id))
+        let used = Set(snapshot.transactions.map(\.card))
+        let kept = current.filter { used.contains($0.id) && !listed.contains($0.id) }
+        return snapshot.cards + kept
+    }
+
+    /// What a backup holds, for the Replace warning.
+    struct Contents: Equatable {
+        var purchases: Int
+        var cards: Int
+        var createdAt: Date
+    }
+
+    static func contents(of data: Data) -> Contents? {
+        guard let s = try? decode(data) else { return nil }
+        return Contents(purchases: s.transactions.count, cards: s.cards.count, createdAt: s.createdAt)
+    }
+
+    /// The Replace confirmation, said plainly: what's here now, and what the
+    /// backup will leave. An empty backup says Sortd will be left empty.
+    static func replaceWarning(backup: Contents, purchasesHere: Int) -> (title: String, message: String) {
+        func purchases(_ n: Int) -> String { n == 1 ? "1 purchase" : "\(n) purchases" }
+        func cards(_ n: Int) -> String { n == 0 ? "no cards" : n == 1 ? "1 card" : "\(n) cards" }
+        let made = backup.createdAt.formatted(date: .abbreviated, time: .shortened)
+        let title = purchasesHere == 0
+            ? "Replace this iPhone's data with this backup?"
+            : "Replace the \(purchases(purchasesHere)) on this iPhone?"
+        var message: String
+        if backup.purchases == 0 {
+            message = "This backup has no purchases. Replacing will leave Sortd empty."
+            if backup.cards > 0 { message += " It has \(cards(backup.cards))." }
+            message += " Backup made \(made)."
+        } else {
+            message = "This backup from \(made) has \(purchases(backup.purchases)) and \(cards(backup.cards)). "
+                + "They'll take the place of everything here, and anything added since will be lost."
+        }
+        message += " This can't be undone."
+        return (title, message)
     }
 
     /// The store changes for `restore`, left unsaved so the caller can save

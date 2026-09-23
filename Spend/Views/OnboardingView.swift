@@ -35,6 +35,17 @@ struct OnboardingView: View {
     @State private var checkInChosen = false
     /// Asking iOS for notification permission; one tap is enough.
     @State private var requesting = false
+    /// Notifications aren't allowed, so no check-in will come: the building
+    /// and plan pages say so instead of promising one.
+    @State private var notificationsOff = false
+    /// When the step last changed. A double tap on a bottom button would
+    /// otherwise land its second tap on the next screen's button in the same
+    /// spot (e.g. skip Apple Pay by accident).
+    @State private var stepChangedAt = Date.distantPast
+    /// finish() has run: ignore every tap after that.
+    @State private var finished = false
+    /// Each new step opens at the top, title in view.
+    @State private var scroll = ScrollPosition(edge: .top)
     /// The budget before setup started, so un-ticking "Spend less" undoes
     /// a limit set a moment ago without wiping one set weeks ago.
     @State private var budgetBefore: Double?
@@ -60,6 +71,9 @@ struct OnboardingView: View {
     /// "S$25.00 ≈ A$28.40 today", once a rate has come in.
     @State private var ratePreview: String?
     @FocusState private var budgetFocused: Bool
+    /// The budget amount grows with the text-size setting, within reason.
+    @ScaledMetric(relativeTo: .largeTitle) private var budgetAmountSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .title) private var budgetSymbolSize: CGFloat = 30
 
     private var book: CardBook { .shared }
     private var region: String { Locale.current.region?.identifier ?? "AU" }
@@ -78,14 +92,21 @@ struct OnboardingView: View {
             if typeSize.isAccessibilitySize, step != .building { bottomBar }
             }
         }
+        .scrollPosition($scroll)
         .scrollDismissesKeyboard(.interactively)
         .scrollBounceBehavior(.basedOnSize)
+        // Text scrolling under Back / progress / Skip gets a backdrop.
+        .scrollEdgeEffectStyle(.hard, for: .top)
         // Glass controls float over the page, and the page scrolls under them.
         // Bars (not plain insets) so the page blurs softly under them as it
         // scrolls, instead of text running into the buttons.
         .safeAreaBar(edge: .top, spacing: 0) { topBar }
         .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
         .onAppear { if budgetBefore == nil { budgetBefore = budget } }
+        // A budget already set (Run Setup Again) is in the old currency.
+        // Convert it now, so the budget step and the plan show what will be
+        // saved, not the old number with a new symbol.
+        .onChange(of: home) { _, new in rebaseForSetup(to: new) }
         .background {
             ZStack {
                 Color.page.ignoresSafeArea()
@@ -110,6 +131,42 @@ struct OnboardingView: View {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
         .sensoryFeedback(.selection, trigger: step)
+        .onChange(of: step) {
+            stepChangedAt = .now
+            scroll.scrollTo(edge: .top)
+        }
+        // The real permission, for the building and plan text (it may have
+        // been turned off in Settings, or asked in an earlier setup).
+        .task(id: step) {
+            guard step == .building || step == .plan else { return }
+            notificationsOff = !(await Self.notificationsAllowed())
+        }
+    }
+
+    /// True just after a step change, and for good once setup has finished.
+    private var tapsLocked: Bool {
+        finished || Date.now.timeIntervalSince(stepChangedAt) < 0.4
+    }
+
+    /// The check-in that will actually be saved: skipped or never answered
+    /// means none (as finish() does), and none without notifications.
+    private var effectiveCheckIn: SetupProfile.CheckIn {
+        if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil { return .needed }
+        return checkIn
+    }
+
+    static func notificationsAllowed() async -> Bool {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return status == .authorized || status == .provisional || status == .ephemeral
+    }
+
+    /// The check-in line for the building and plan pages.
+    private var checkInLine: (symbol: String, text: String) {
+        let choice = effectiveCheckIn
+        if choice != .needed, notificationsOff {
+            return ("bell.slash", "Check-ins off (notifications are off)")
+        }
+        return (choice.symbol, choice == .needed ? "No regular check-ins" : choice.summary)
     }
 
     // MARK: Answers
@@ -162,7 +219,7 @@ struct OnboardingView: View {
                 .buttonBorderShape(.circle)
                 .accessibilityLabel("Close")
             } else if step != .welcome && step != .building {
-                Button { go(-1) } label: {
+                Button { if !tapsLocked { go(-1) } } label: {
                     Image(systemName: "chevron.left").font(.body.weight(.semibold))
                         .frame(width: 30, height: 30)
                 }
@@ -170,7 +227,7 @@ struct OnboardingView: View {
                 .buttonBorderShape(.circle)
                 .accessibilityLabel("Back")
             } else {
-                Color.clear.frame(width: 44, height: 44)
+                placeholderCircle
             }
             // One bar that fills, counting only steps this person will see.
             Capsule()
@@ -190,6 +247,7 @@ struct OnboardingView: View {
             if questionSteps.contains(step) {
                 // Straight to the plan with sensible defaults.
                 Button("Skip") {
+                    guard !tapsLocked else { return }
                     budgetFocused = false
                     forward = true
                     withAnimation(.snappy) { step = .plan }
@@ -197,7 +255,7 @@ struct OnboardingView: View {
                 .font(.subheadline.weight(.medium))
                 .buttonStyle(.glass)
             } else {
-                Color.clear.frame(width: 44, height: 44)
+                placeholderCircle
             }
         }
         .tint(Color.ink)
@@ -205,8 +263,18 @@ struct OnboardingView: View {
         .padding(.vertical, 6)
     }
 
+    /// An invisible copy of the round back button, so the progress bar
+    /// stays put on steps with nothing on one side.
+    private var placeholderCircle: some View {
+        Button {} label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .hidden()
+            .accessibilityHidden(true)
+    }
+
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { if !tapsLocked { action() } } label: {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.onBrand)
@@ -218,7 +286,7 @@ struct OnboardingView: View {
     }
 
     private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { if !tapsLocked { action() } } label: {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.ink)
@@ -230,7 +298,7 @@ struct OnboardingView: View {
 
     /// Quiet text button under the main one. 44pt tall: Apple's minimum.
     private func tertiaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { if !tapsLocked { action() } } label: {
             Text(title)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -257,9 +325,9 @@ struct OnboardingView: View {
                 case .welcome:
                     primaryButton(primaryTitle, action: primaryAction)
                     secondaryButton("Bring In Past Spending") { showingImport = true }
-                    // Not when setup is run again over real purchases: sample
-                    // data would mix into them.
-                    if transactions.isEmpty {
+                    // Not when setup is run again: sample data would mix into
+                    // real purchases, and its Clear forces a full setup.
+                    if transactions.isEmpty, !rerun {
                         tertiaryButton("Look around with sample data") {
                             DemoData.load(in: context)
                             finish()
@@ -313,6 +381,7 @@ struct OnboardingView: View {
     }
 
     private func primaryAction() {
+        guard !finished else { return }
         if step == .checkIn {
             checkInRaw = checkIn.rawValue   // keep the pre-picked default too
             checkInChosen = true
@@ -322,7 +391,9 @@ struct OnboardingView: View {
                 requesting = true
                 let from = step
                 Task {
-                    _ = await Reminders.requestPermission()
+                    let allowed = await Reminders.requestPermission()
+                    let actual = await Self.notificationsAllowed()
+                    notificationsOff = !(allowed || actual)
                     requesting = false
                     if step == from { go(1) }
                 }
@@ -333,6 +404,7 @@ struct OnboardingView: View {
     }
 
     private func go(_ delta: Int) {
+        guard !finished else { return }
         budgetFocused = false
         forward = delta > 0
         guard let next = neighbour(of: step, delta) else {
@@ -342,7 +414,32 @@ struct OnboardingView: View {
         withAnimation(.snappy) { step = next }
     }
 
+    /// Converts the saved budget (and category limits) to the new home
+    /// currency straight away. FXService runs one rebase at a time, so
+    /// flicking between currencies can't convert twice.
+    private func rebaseForSetup(to new: String) {
+        let beforeRebase = budget
+        Task {
+            await FXService.rebase(to: new, in: context)
+            // Picked another currency while this one ran: that call updates.
+            guard home == new else { return }
+            let after = UserDefaults.standard.double(forKey: FXService.budgetKey)
+            // Keep the "undo" value in step with the budget it came from.
+            if let before = budgetBefore, before > 0 {
+                if before == beforeRebase {
+                    budgetBefore = after
+                } else if beforeRebase > 0, after > 0 {
+                    budgetBefore = FXService.convertSetting(before, rate: after / beforeRebase)
+                }
+            }
+            customBudget = BudgetSheet.text(for: after, currency: new)
+        }
+    }
+
     private func finish() {
+        // Once only: a second tap must not run setup's ending again.
+        guard !finished else { return }
+        finished = true
         Task { await FXService.rebase(to: home, in: context) }
         // Skipped the question: keep an earlier answer, otherwise no check-in.
         if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil {
@@ -411,7 +508,7 @@ struct OnboardingView: View {
         } else {
             lines.append("Putting where your money goes first")
         }
-        lines.append(checkIn.summary)
+        lines.append(checkInLine.text)
         lines.append("Keeping everything on this iPhone. No bank login, ever.")
         return lines
     }
@@ -422,7 +519,7 @@ struct OnboardingView: View {
         var chips = [(Self.currencySymbol(home), "Totals in \(home)"
                       + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", others converted daily" : ""))]
         if effectiveBudget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(effectiveBudget), home, cents: false) + " monthly limit")) }
-        chips.append((checkIn.symbol, checkIn == .needed ? "No regular check-ins" : checkIn.summary))
+        chips.append((checkInLine.symbol, checkInLine.text))
         if billIntent { chips.append(("bell.badge", pro.isPro ? "Bill heads-ups" : "Bill heads-ups with Pro")) }
         return chips
     }
@@ -578,7 +675,15 @@ struct OnboardingView: View {
         case "KRW": "wonsign.circle"
         case "THB": "bahtsign.circle"
         case "PHP": "pesosign.circle"
-        default: "dollarsign.circle"
+        case "CHF": "francsign.circle"
+        case "RUB": "rublesign.circle"
+        case "TRY": "turkishlirasign.circle"
+        case "ILS": "shekelsign.circle"
+        case "BRL": "brazilianrealsign.circle"
+        case "VND": "dongsign.circle"
+        // Only dollar currencies get the dollar sign.
+        case "AUD", "USD", "SGD", "NZD", "HKD", "CAD", "TWD", "BND", "FJD": "dollarsign.circle"
+        default: "banknote"
         }
     }
 
@@ -1030,16 +1135,20 @@ struct OnboardingView: View {
             VStack(spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(Money.symbol(home))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetSymbolSize, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $customBudget)
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetAmountSize, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .keyboardType(.numberPad)
                         .focused($budgetFocused)
                         .fixedSize()
                         .onChange(of: customBudget) { _, text in
-                            budget = Double(text.filter(\.isNumber)) ?? 0
+                            // Same cap as the budget sheet, so a 19-digit
+                            // typo can't be saved.
+                            let limited = BudgetSheet.limitInput(text, currency: home)
+                            if limited != text { customBudget = limited; return }
+                            budget = BudgetSheet.sanitized(Double(limited) ?? 0, currency: home)
                         }
                 }
                 .onTapGesture { budgetFocused = true }
@@ -1059,7 +1168,7 @@ struct OnboardingView: View {
                 ForEach(budgetPresets, id: \.self) { value in
                     Button {
                         budget = value
-                        customBudget = String(Int(value))
+                        customBudget = BudgetSheet.text(for: value, currency: home)
                         budgetFocused = false
                     } label: {
                         Text(Money.format(Decimal(value), home, cents: false))
@@ -1083,7 +1192,7 @@ struct OnboardingView: View {
             .frame(minHeight: 44)
             .padding(.top, 4)
         }
-        .onAppear { if budget > 0, customBudget.isEmpty { customBudget = String(Int(budget)) } }
+        .onAppear { if budget > 0, customBudget.isEmpty { customBudget = BudgetSheet.text(for: budget, currency: home) } }
     }
 
     /// Sortd Pro, offered once during setup.
@@ -1233,8 +1342,20 @@ struct CardDetailForm: View {
     @State private var digits: String
     @State private var payDigits: String
     @State private var showHelp = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Sizes that grow with the text size, so large text isn't clipped.
+    @ScaledMetric(relativeTo: .footnote) private var previewWidth: CGFloat = 92
+    @ScaledMetric(relativeTo: .footnote) private var previewHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .body) private var digitsWidth: CGFloat = 90
 
     var needsPay = false
+
+    /// Side by side normally; stacked at the accessibility text sizes.
+    private var rowLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 14))
+    }
 
     init(info: CardInfo, needsPay: Bool = false) {
         self.needsPay = needsPay
@@ -1249,7 +1370,7 @@ struct CardDetailForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
+            rowLayout {
                 preview
                 VStack(alignment: .leading, spacing: 8) {
                     // Looks like a field so people know they can call it
@@ -1332,7 +1453,7 @@ struct CardDetailForm: View {
         }
         .foregroundStyle(isCredit ? Color.white : Color.ink)
         .padding(8)
-        .frame(width: 92, height: 58, alignment: .leading)
+        .frame(width: previewWidth, height: previewHeight, alignment: .leading)
         .background(isCredit ? Color.creditFill : Color.page, in: .rect(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
             .strokeBorder(isCredit ? .clear : Color.secondary.opacity(0.35), lineWidth: 1))
@@ -1341,25 +1462,28 @@ struct CardDetailForm: View {
     }
 
     private func digitRow(_ title: String, text: Binding<String>, required: Bool) -> some View {
-        HStack {
+        let stacked = typeSize.isAccessibilitySize
+        return (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                 Text(required ? (title == "Apple Pay number" ? "Required — tells same-bank cards apart" : "Required") : "Recommended")
                     .font(.caption)
                     .foregroundStyle(required && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
             }
-            Spacer()
+            if !stacked { Spacer() }
             TextField("Last 4", text: text)
                 .keyboardType(.numberPad)
                 .onChange(of: text.wrappedValue) { _, new in
                     let clean = String(new.filter(\.isNumber).prefix(4))
                     if clean != new { text.wrappedValue = clean }
                 }
-                .multilineTextAlignment(.trailing)
+                .multilineTextAlignment(stacked ? .leading : .trailing)
                 .font(.body.monospacedDigit())
-                .frame(width: 90)
+                .frame(width: stacked ? nil : digitsWidth)
+                .frame(maxWidth: stacked ? .infinity : nil, alignment: .leading)
         }
         .padding(.horizontal, 14)
+        .padding(.vertical, stacked ? 8 : 0)
         .frame(minHeight: 52)
     }
 

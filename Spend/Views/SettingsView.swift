@@ -62,7 +62,7 @@ struct SettingsView: View {
                     NavigationLink {
                         LearnedRulesView()
                     } label: {
-                        SettingsRowLabel(title: "Categories", subtitle: categoriesSubtitle, symbol: "brain")
+                        SettingsRowLabel(title: "Learned Categories", subtitle: categoriesSubtitle, symbol: "brain")
                     }
                     NavigationLink {
                         PrivacySecuritySettingsView()
@@ -109,9 +109,9 @@ struct SettingsView: View {
 
     private var sourcesSubtitle: String {
         guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
-            return "Not set up yet"
+            return "No taps yet"
         }
-        return "Last tap \(last.date.formatted(date: .omitted, time: .shortened))"
+        return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
     }
 
     private var cardsSubtitle: String {

@@ -178,13 +178,38 @@ struct MoneyFixesTests {
         #expect(d.string(forKey: FXService.convertedKey) == "SGD")
     }
 
-    @Test func categoryLimitsConvertAndRoundToWholeAmounts() {
+    @Test func categoryLimitsConvertAndRoundToCents() {
         let d = defaults()
         let before = ["eatingOut": 300.0, "groceries": 45.0, "transport": 500.0]
         d.set(before, forKey: CategoryBudgets.key)
         CategoryBudgets.set(420, for: .transport, d)             // changed while the rate loaded
 
         CategoryBudgets.convert(from: before, rate: 0.87, d)
-        #expect(CategoryBudgets.all(d) == [.eatingOut: 261, .groceries: 39, .transport: 420])
+        #expect(CategoryBudgets.all(d) == [.eatingOut: 261, .groceries: 39.15, .transport: 420])
+    }
+
+    /// S$1,000 → USD → SGD used to come back as S$990 (rounded to tens).
+    @Test func budgetSurvivesACurrencyRoundTrip() async throws {
+        let ctx = try store()
+        let d = defaults()
+        d.set("SGD", forKey: FXService.convertedKey)
+        d.set("SGD", forKey: Money.homeKey)
+        d.set(1000.0, forKey: FXService.budgetKey)
+        d.set(["eatingOut": 300.0], forKey: CategoryBudgets.key)
+
+        // ECB-style cross rates, 5 decimals each way.
+        let rates: FXService.RateSource = { from, _ in from == "SGD" ? 0.77650 : 1.28783 }
+        await FXService.rebase(to: "USD", in: ctx, defaults: d, rate: rates)
+        #expect(d.double(forKey: FXService.budgetKey) == 776.5)
+        await FXService.rebase(to: "SGD", in: ctx, defaults: d, rate: rates)
+        #expect(d.double(forKey: FXService.budgetKey) == 1000)
+        #expect(CategoryBudgets.stored(d)["eatingOut"] == 300)
+    }
+
+    @Test func convertedSettingsRoundToCentsNotTens() {
+        #expect(FXService.convertSetting(1000, rate: 0.7765) == 776.5)
+        #expect(FXService.convertSetting(1000, rate: 0.77777) == 777.77)
+        #expect(FXService.convertSetting(0.001, rate: 1) == 0.01)
+        #expect(FXService.convertSetting(.infinity, rate: 1) == 0)
     }
 }
