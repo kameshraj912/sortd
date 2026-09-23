@@ -128,7 +128,7 @@ struct ConnectGmailSheet: View {
                         Text("Done").primaryPill(enabled: true)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(working)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)

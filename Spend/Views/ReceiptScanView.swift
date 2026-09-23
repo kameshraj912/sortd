@@ -46,7 +46,7 @@ struct ReceiptScanView: View {
                                 Label("Use Camera", systemImage: "camera")
                                     .primaryPill()
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                         }
                         PhotosPicker(selection: $photo, matching: .images) {
                             Label("Choose Photo", systemImage: "photo")
@@ -55,7 +55,7 @@ struct ReceiptScanView: View {
                                 .foregroundStyle(Color.ink)
                                 .surface(radius: 26)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
                 }
 
