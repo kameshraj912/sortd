@@ -27,39 +27,36 @@ struct WalletSetupGuide: View {
              detail: "Tap the grey word Transaction. Then tap Select Variable above the keyboard."),
         Page(id: 4, title: "Tap the blue Transaction",
              detail: "It's just under “When Any Card is tapped”. That's the only one you pick."),
-        Page(id: 5, title: "Tap back. Done.",
+        Page(id: 5, title: "Go back. You're done.",
              detail: "It saves by itself. Now pay with Apple Pay in a shop. The ▶ button only runs a test."),
     ]
 
+    /// The drawn Shortcuts screen grows with Dynamic Type so its text never clips.
+    @ScaledMetric(relativeTo: .subheadline) private var mockHeight: CGFloat = 220
+
+    /// The pager scrolls by id; `page` stays a plain Int for the dots and chevrons.
+    private var scrolledPage: Binding<Int?> {
+        Binding(get: { page }, set: { if let new = $0 { page = new } })
+    }
+
     var body: some View {
         VStack(spacing: 4) {
-            TabView(selection: $page) {
-                ForEach(Self.pages) { p in
-                    VStack(alignment: .leading, spacing: 12) {
-                        ShortcutsMock(step: p.id)
-                            .frame(height: 220)
-                            .accessibilityHidden(true)
-                        HStack(alignment: .top, spacing: 10) {
-                            Text("\(p.id + 1)")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Color.onBrand)
-                                .frame(width: 28, height: 28)
-                                .background(Color.ink, in: .circle)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(p.title).font(.headline)
-                                Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Step \(p.id + 1) of \(Self.pages.count). \(p.title). \(p.detail)")
-                        Spacer(minLength: 0)
+            // A paging scroll view instead of a page-style TabView: it takes the
+            // height of its tallest page, so nothing clips at large text sizes
+            // and no empty band is left on bigger phones.
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(Self.pages) { p in
+                        pageView(p)
+                            .containerRelativeFrame(.horizontal, alignment: .topLeading)
+                            .id(p.id)
                     }
-                    .tag(p.id)
                 }
+                .scrollTargetLayout()
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 320)
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: scrolledPage)
+            .scrollIndicators(.hidden)
 
             HStack {
                 Button { withAnimation { page -= 1 } } label: {
@@ -86,6 +83,28 @@ struct WalletSetupGuide: View {
             .font(.body.weight(.semibold))
             .foregroundStyle(Color.ink)
             .buttonStyle(.plain)
+        }
+    }
+
+    private func pageView(_ p: Page) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ShortcutsMock(step: p.id)
+                .frame(height: mockHeight)
+                .accessibilityHidden(true)
+            HStack(alignment: .top, spacing: 10) {
+                Text("\(p.id + 1)")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.onBrand)
+                    .frame(width: 28, height: 28)
+                    .background(Color.ink, in: .circle)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.title).font(.headline)
+                    Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Step \(p.id + 1) of \(Self.pages.count). \(p.title). \(p.detail)")
         }
     }
 }

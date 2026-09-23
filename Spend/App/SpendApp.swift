@@ -115,7 +115,7 @@ struct SpendApp: App {
 }
 
 enum AppTab: Hashable, CaseIterable {
-    case home, activity, insights, search, add
+    case home, activity, insights, search, you, add
 
     var title: String {
         switch self {
@@ -123,6 +123,7 @@ enum AppTab: Hashable, CaseIterable {
         case .activity: "Activity"
         case .insights: "Insights"
         case .search: "Search"
+        case .you: "You"
         case .add: "Add"
         }
     }
@@ -133,6 +134,7 @@ enum AppTab: Hashable, CaseIterable {
         case .activity: "list.bullet"
         case .insights: "chart.bar"
         case .search: "magnifyingglass"
+        case .you: "person.crop.circle"
         case .add: "plus"
         }
     }
@@ -159,8 +161,12 @@ struct RootView: View {
     /// is forcing it open.
     @State private var setupFinished = false
     @State private var showingAdd = false
+    /// When setup closed: a second tap from a double-tap on setup's last
+    /// button mustn't land on the tab bar underneath.
+    @State private var setupClosedAt: Date = .distantPast
     @State private var searchQuery = ""
     private let layout = NavLayout.current
+    private let nav = NavOption.current
     #if DEBUG
     @State private var tab: AppTab = .debugStart
     #else
@@ -169,7 +175,10 @@ struct RootView: View {
 
     private var coverState: CoverState {
         if lock.isLocked { return .locked }
-        if onboarded, !Self.forceSetup, scenePhase != .active { return .cover }
+        // Not behind iOS's own permission alerts (they make the scene
+        // inactive for a moment; the app isn't going anywhere).
+        if onboarded, !Self.forceSetup, scenePhase != .active,
+           !(scenePhase == .inactive && SystemPrompt.shared.active) { return .cover }
         return .none
     }
 
@@ -177,7 +186,15 @@ struct RootView: View {
         // The system Liquid Glass tab bar. Settings is a sheet from the gear
         // on Home (tabs are for places people go often), and Search gets the
         // trailing search tab, as the HIG suggests.
-        tabs
+        Group {
+            // First launch: nothing behind setup, so Home doesn't flash for
+            // a moment before the setup cover slides up.
+            if !onboarded, !setupFinished {
+                Color.page.ignoresSafeArea()
+            } else {
+                tabs
+            }
+        }
             .tint(Color.brand)
             .tabBarMinimizeBehavior(.onScrollDown)
             .modifier(RootSearch(enabled: layout.rootSearch, query: $searchQuery))
@@ -189,6 +206,15 @@ struct RootView: View {
                         .padding(.trailing, 20)
                         .padding(.bottom, 72)
                         .transition(.scale.combined(with: .opacity))
+                }
+            }
+            // Settings in the same top-right spot on every tab (nav options
+            // that don't keep it on Home or in a You tab).
+            .overlay(alignment: .topTrailing) {
+                if nav.gearOnEveryTab {
+                    SettingsButton()
+                        .padding(.trailing, 16)
+                        .padding(.top, 2)
                 }
             }
             .animation(.spring(duration: 0.3), value: tab)
@@ -236,7 +262,10 @@ struct RootView: View {
         .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
         .onChange(of: rerun) { _, again in if again { setupFinished = false } }
         .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || rerun || Self.forceSetup))) {
-            OnboardingView { setupFinished = true }
+            OnboardingView {
+                setupClosedAt = .now
+                setupFinished = true
+            }
         }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
@@ -271,6 +300,7 @@ extension RootView {
     /// empty tab, one haptic).
     var tabSelection: Binding<AppTab> {
         Binding(get: { tab }, set: { new in
+            guard Date.now.timeIntervalSince(setupClosedAt) > 0.6 else { return }
             if new == .add { showingAdd = true } else { tab = new }
         })
     }
@@ -285,7 +315,12 @@ extension RootView {
                 Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
                     ProGate(feature: .insights) { InsightsView() }
                 }
-                Tab(value: AppTab.search, role: .search) { SearchView() }
+                if nav.hasYouTab {
+                    Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
+                }
+                if nav.hasSearchTab {
+                    Tab(value: AppTab.search, role: .search) { SearchView() }
+                }
             }
         } else if layout == .prominent {
             // iOS 26 has no prominent tab, but it draws the search-role tab
@@ -298,7 +333,12 @@ extension RootView {
                 Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
                     ProGate(feature: .insights) { InsightsView() }
                 }
-                Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
+                if nav.hasYouTab {
+                    Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
+                }
+                if nav.hasSearchTab {
+                    Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
+                }
                 Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) { Color.clear }
             }
         } else {
@@ -321,7 +361,7 @@ private struct RootSearch: ViewModifier {
     @Binding var query: String
     func body(content: Content) -> some View {
         if enabled {
-            content.searchable(text: $query, prompt: "Merchant, category or note")
+            content.searchable(text: $query, prompt: "Shop, category or note")
         } else {
             content
         }

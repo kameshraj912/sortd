@@ -10,7 +10,7 @@ struct PrivacySecuritySettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Privacy & Security", subtitle: "Lock the app, and see what Sortd stores.")
+            ListPageTitle(title: "Privacy & Security")
             Section {
                 Toggle(isOn: Binding(
                     get: { lockEnabled },
@@ -33,7 +33,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 BoldHeader("Security")
             } footer: {
-                Text("Sortd locks when you open it, and when you come back after more than a minute. Widgets hide amounts on the Lock Screen and in StandBy unless you turn that on.")
+                Text("With the lock on, Sortd locks when you open it or come back after a minute. Widgets hide amounts on the Lock Screen and in StandBy unless Show Amounts When Locked is on.")
             }
 
             Section {
@@ -43,13 +43,47 @@ struct PrivacySecuritySettingsView: View {
                     Label("Privacy", systemImage: "hand.raised")
                 }
             } header: {
-                BoldHeader("Privacy")
-            } footer: {
-                Text("What Sortd stores, and where.")
+                BoldHeader("What Sortd Stores")
             }
+
+            Section {
+                row("checklist", "Your setup answers",
+                    "Kept only on this iPhone. They choose your setup steps and check-in time. Change them in Help & Feedback › Run Setup Again. Delete All Data removes them.")
+                row("bell", "Notifications",
+                    "Made on this iPhone, with no push server. Your check-in never shows amounts. Bill reminders show the shop and amount.")
+                row("sparkles", "Apple Intelligence",
+                    "Where your iPhone has it, reads what you type, scan or get in a receipt email, on this iPhone. Nothing is sent anywhere. Check what it fills in.")
+                row("square.grid.2x2", "Widgets",
+                    "Show a summary kept on this iPhone. Only Sortd and its widgets can open it.")
+            } header: {
+                BoldHeader("Stays on This iPhone")
+            }
+
+            Section {
+                Link(destination: URL(string: "https://sortd.page/privacy")!) {
+                    Label("Privacy Policy", systemImage: "hand.raised")
+                }
+                Link(destination: URL(string: "https://sortd.page/terms")!) {
+                    Label("Terms of Use", systemImage: "doc.text")
+                }
+            }
+            .tint(Color.ink)
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Privacy & Security")
+    }
+
+    private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol).frame(width: 24).foregroundStyle(Color.ink).padding(.top, 2)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.body.weight(.semibold))
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

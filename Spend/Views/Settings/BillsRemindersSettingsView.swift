@@ -13,14 +13,14 @@ struct BillsRemindersSettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Bills & Reminders", subtitle: "Subscriptions, bills, and your check-in.")
+            ListPageTitle(title: "Bills & Reminders")
             Section {
                 Picker(selection: $checkIn) {
                     ForEach(SetupProfile.CheckIn.allCases) { c in
                         Text(c == .needed ? "Off" : c.title).tag(c.rawValue)
                     }
                 } label: {
-                    Label("Check-in", systemImage: "calendar.badge.clock")
+                    Label("Check-In", systemImage: "calendar.badge.clock")
                 }
                 .onChange(of: checkIn) { _, raw in
                     let choice = SetupProfile.CheckIn(rawValue: raw) ?? .needed
@@ -35,10 +35,9 @@ struct BillsRemindersSettingsView: View {
                         await CheckInReminder.schedule(choice)
                     }
                 }
-            } header: {
-                BoldHeader("Check-in")
             } footer: {
-                Text((SetupProfile.CheckIn(rawValue: checkIn) ?? .needed).detail + ". A short nudge to take a look. Free.")
+                let choice = SetupProfile.CheckIn(rawValue: checkIn) ?? .needed
+                Text(choice == .needed ? "Get a short reminder to check your spending." : choice.detail + ".")
             }
             Section {
                 NavigationLink {
@@ -58,9 +57,9 @@ struct BillsRemindersSettingsView: View {
                     }
                 }
             } header: {
-                BoldHeader("Recurring")
+                BoldHeader("Bills")
             } footer: {
-                Text("A notification at 9 am the day before a subscription or bill is due.")
+                Text("Part of Sortd Pro. A notification at 9 am the day before each subscription or bill.")
             }
         }
         .scrollContentBackground(.hidden)

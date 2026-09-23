@@ -10,28 +10,25 @@ import SwiftUI
 struct WidgetsGuideView: View {
     var body: some View {
         List {
-            ListPageTitle(title: "Widgets",
-                          subtitle: "Your spending on the Home and Lock Screen.")
+            ListPageTitle(title: "Widgets")
 
             Section {
                 widget("chart.bar.xaxis", "Spending",
-                       "What you've spent today against what a day is worth, with the month in your category colours.")
+                       "What you've spent against what you have to spend, in your category colours.")
                 widget("plus.circle", "Quick Add",
-                       "Add a purchase, scan a receipt or open Import — one tap, without finding the app first.")
+                       "Add a purchase, scan a receipt or import a statement in one tap.")
                 widget("calendar.badge.clock", "Bills",
                        "Subscriptions and bills about to charge, with a countdown.")
                 widget("lock", "Lock Screen",
                        "Today's total as a small dial, a line under the clock, or plain text.")
-            } header: {
-                BoldHeader("What There Is")
             }
 
             Section {
                 step(1, "Touch and hold an empty part of your Home Screen until the icons wobble.")
-                step(2, "Tap the button at the top left, then Add Widget.")
+                step(2, "Tap Edit at the top left, then Add Widget.")
                 step(3, "Search for Sortd and pick the one you want.")
             } header: {
-                BoldHeader("Adding One")
+                BoldHeader("How to Add")
             }
 
             Section {
@@ -40,7 +37,7 @@ struct WidgetsGuideView: View {
                 row("calendar", "Today, this week or this month",
                     "The Spending widget can show any of the three. Same place: Edit Widget, then Show.")
             } header: {
-                BoldHeader("Changing It")
+                BoldHeader("Options")
             }
 
             Section {

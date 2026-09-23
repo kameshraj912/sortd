@@ -139,7 +139,7 @@ struct CardEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name, e.g. Everyday Debit", text: $draft.name)
+                    TextField("Name, like Everyday Debit", text: $draft.name)
                     TextField("Bank (optional)", text: $draft.bank)
                     Picker("Type", selection: $draft.isCredit) {
                         Text("Debit").tag(false)
@@ -166,24 +166,24 @@ struct CardEditor: View {
                 }
 
                 Section {
-                    LabeledContent("Card number") {
+                    LabeledContent("Card Number") {
                         TextField("Last 4", text: $digits)
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("Apple Pay number") {
+                    LabeledContent("Apple Pay Number") {
                         TextField("Last 4", text: $payDigits)
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    BoldHeader("Last 4 digits")
+                    BoldHeader("Last 4 Digits")
                 } footer: {
-                    Text("Bank emails show the card number. Apple Pay receipts often show Wallet's own number instead — Wallet › this card › ••• › Card Details. Add both so every receipt finds this card.")
+                    Text("Bank emails show the card number. Apple Pay receipts often show a different one (Wallet › this card › ••• › Card Details). Add both.")
                 }
 
                 Section {
-                    TextField("e.g. Everyday Visa Debit", text: $words)
+                    TextField("Like Everyday Visa Debit", text: $words)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {

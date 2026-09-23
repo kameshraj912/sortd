@@ -9,20 +9,29 @@ struct SettingsRowLabel: View {
     let title: String
     var subtitle: String? = nil
     let symbol: String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } icon: {
-            Image(systemName: symbol)
+        // At the largest text sizes the icon goes, so the title has the
+        // whole row and words aren't broken in the middle ("Pur-chase").
+        if typeSize.isAccessibilitySize {
+            text.accessibilityElement(children: .combine)
+        } else {
+            Label { text } icon: { Image(systemName: symbol) }
+                .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }

@@ -8,7 +8,7 @@ struct CardsAppearanceSettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Cards & Appearance", subtitle: "Your cards, how they look, and where they show up.")
+            ListPageTitle(title: "Cards & Appearance")
             Section {
                 NavigationLink {
                     CardsSettingsView()
@@ -49,10 +49,8 @@ struct CardsAppearanceSettingsView: View {
                         Image(systemName: "square.grid.2x2")
                     }
                 }
-            } header: {
-                BoldHeader("Cards")
             } footer: {
-                Text("Cards are coloured by what you spend on them. Appearance follows your iPhone unless you pick Light or Dark.")
+                Text("Cards are coloured by what you spend on them.")
             }
         }
         .scrollContentBackground(.hidden)

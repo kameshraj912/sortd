@@ -46,6 +46,7 @@ extension AppTab {
         case "activity": .activity
         case "insights": .insights
         case "search": .search
+        case "you": .you
         default: .home
         }
     }

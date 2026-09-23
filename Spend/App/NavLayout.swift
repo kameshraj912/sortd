@@ -30,6 +30,53 @@ enum NavLayout: String {
     var rootSearch: Bool { false }
 }
 
+/// Which tabs there are and where Settings lives. Three candidates from the
+/// navigation research, tried side by side; DEBUG picks one with
+/// SPEND_NAVOPT=<rawValue>. Release uses `today` until one is chosen.
+enum NavOption: String {
+    /// Home, Activity, Insights, Search + the + circle; gear on Home only.
+    case today
+    /// Home, Activity, Insights + the + circle; search at the top of
+    /// Activity; the gear in the same top-right spot on every tab.
+    case threeTabs
+    /// Today's tabs, with the gear top-right on every tab.
+    case gearEverywhere
+    /// Home, Activity, Insights, You (Settings as a tab) + the + circle.
+    case youTab
+
+    static let current: NavOption = {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["SPEND_NAVOPT"], let option = NavOption(rawValue: raw) {
+            return option
+        }
+        #endif
+        return .today
+    }()
+
+    var hasSearchTab: Bool { self == .today || self == .gearEverywhere }
+    var hasYouTab: Bool { self == .youTab }
+    /// The gear floats top-right over every tab (like the account button in
+    /// Apple's own apps), instead of sitting in Home's header.
+    var gearOnEveryTab: Bool { self == .threeTabs || self == .gearEverywhere }
+    var gearOnHome: Bool { self == .today }
+    var searchInActivity: Bool { self == .threeTabs }
+}
+
+/// The Settings button, the same glass circle wherever it appears.
+struct SettingsButton: View {
+    var body: some View {
+        Button { Router.shared.showingSettings = true } label: {
+            Image(systemName: "gearshape")
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .tint(Color.ink)
+        .accessibilityLabel("Settings")
+    }
+}
+
 /// The floating add button: tap to add, hold for the other ways in.
 struct AddFAB: View {
     let add: () -> Void

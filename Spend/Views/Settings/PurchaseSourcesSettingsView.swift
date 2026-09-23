@@ -8,14 +8,14 @@ struct PurchaseSourcesSettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Purchase Sources", subtitle: "Where Sortd finds what you spend.")
+            ListPageTitle(title: "Purchase Sources")
             Section {
                 NavigationLink {
                     SetupGuideView()
                 } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Apple Pay Auto-Logging")
+                            Text("Apple Pay Logging")
                             Text(lastTapText)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -25,7 +25,7 @@ struct PurchaseSourcesSettingsView: View {
                     }
                 }
             } header: {
-                BoldHeader("Sources")
+                BoldHeader("Apple Pay")
             } footer: {
                 Text("Logs in-store Apple Pay taps the moment you pay.")
             }
@@ -39,8 +39,8 @@ struct PurchaseSourcesSettingsView: View {
 
     private var lastTapText: String {
         guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
-            return "Not set up yet"
+            return "No taps yet"
         }
-        return "Last tap logged \(last.date.formatted(.relative(presentation: .named)))"
+        return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
     }
 }

@@ -12,7 +12,7 @@ struct AboutSettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "About", subtitle: "Sortd, and what's stored where.")
+            ListPageTitle(title: "About")
             Section {
                 LabeledContent("Purchases", value: "\(transactions.count)")
                 LabeledContent("Stored", value: "On this iPhone only")
@@ -29,8 +29,6 @@ struct AboutSettingsView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .accessibilityHidden(true)
-            } header: {
-                BoldHeader("About")
             } footer: {
                 #if DEBUG
                 if let hint = knock.hint {
@@ -43,6 +41,23 @@ struct AboutSettingsView: View {
                 }
                 #endif
             }
+
+            Section {
+                Link(destination: URL(string: "https://sortd.page/privacy")!) {
+                    Label("Privacy Policy", systemImage: "hand.raised")
+                }
+                Link(destination: URL(string: "https://sortd.page/terms")!) {
+                    Label("Terms of Use", systemImage: "doc.text")
+                }
+                Link(destination: URL(string: "https://sortd.page/support")!) {
+                    Label("Support", systemImage: "questionmark.circle")
+                }
+            } header: {
+                BoldHeader("Legal")
+            } footer: {
+                Text("No Sortd account and no server. Your purchases, cards, settings and setup answers stay on this iPhone.")
+            }
+            .tint(Color.ink)
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)

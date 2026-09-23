@@ -1,5 +1,32 @@
 import Foundation
+import Observation
 import UserNotifications
+
+/// True while an iOS permission alert is on screen. The alert makes the scene
+/// go `.inactive`, which would otherwise show the privacy cover behind it.
+/// RootView reads `SystemPrompt.shared.active` to skip the cover then.
+@MainActor
+@Observable
+final class SystemPrompt {
+    static let shared = SystemPrompt()
+    private(set) var active = false
+    private var depth = 0
+
+    /// Runs `work` (which shows a system alert) with `active` set. It stays
+    /// set a moment after, while the scene returns to `.active`, so the cover
+    /// doesn't flash as the alert closes.
+    func showing<T>(_ work: () async -> T) async -> T {
+        depth += 1
+        active = true
+        let result = await work()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            depth -= 1
+            if depth == 0 { active = false }
+        }
+        return result
+    }
+}
 
 /// Local notifications the day before a predicted payment. Nothing leaves
 /// the phone. Rebuilt each time the app opens, so they follow the latest
@@ -11,9 +38,14 @@ enum Reminders {
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
+    /// True while Apple's notification alert is up (see `SystemPrompt`).
+    static var isAskingPermission: Bool { SystemPrompt.shared.active }
+
     /// Asks once; returns whether reminders are allowed.
     static func requestPermission() async -> Bool {
-        (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        await SystemPrompt.shared.showing {
+            (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        }
     }
 
     /// The rebuild running now. App open and the Settings toggle can both
