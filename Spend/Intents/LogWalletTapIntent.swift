@@ -13,23 +13,41 @@ struct LogWalletTapIntent: AppIntent {
     )
     static let openAppWhenRun = false
 
-    @Parameter(title: "Transaction", description: "Pick Shortcut Input (the Wallet transaction).")
+    @Parameter(title: "Transaction", description: "The whole Wallet transaction as text, if you have it.")
     var transaction: String?
 
+    /// iOS hands the Wallet automation a Transaction, which Shortcuts can't
+    /// turn into text ("couldn't convert from Transaction to Text"). So each
+    /// part can be set on its own: drag the transaction's Amount, Merchant
+    /// and Card into these.
+    @Parameter(title: "Amount", description: "The transaction's amount.")
+    var amount: String?
+
+    @Parameter(title: "Shop", description: "The transaction's merchant.")
+    var merchant: String?
+
+    @Parameter(title: "Card", description: "The card that was tapped.")
+    var card: String?
+
     static var parameterSummary: some ParameterSummary {
-        Summary("Log \(\.$transaction) in Sortd")
+        Summary("Log \(\.$amount) at \(\.$merchant) in Sortd") {
+            \.$card
+            \.$transaction
+        }
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let r = try await Self.handle(transaction, in: SpendStore.container.mainContext, book: .shared)
+        let r = try await Self.handle(transaction, amount: amount, merchant: merchant, card: card,
+                                      in: SpendStore.container.mainContext, book: .shared)
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: SpendStore.container.mainContext)
         return .result(dialog: IntentDialog(stringLiteral: r.message))
     }
 
     @MainActor
-    static func handle(_ text: String?, in context: ModelContext, book: CardBook,
+    static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
+                       in context: ModelContext, book: CardBook,
                        now: Date = .now) async throws -> LogPurchaseIntent.Outcome {
         var parts = WalletTapText.parse(text ?? "")
         // Test runs send nothing; any text at all is a real tap, so never drop it.
@@ -37,6 +55,15 @@ struct LogWalletTapIntent: AppIntent {
         if parts.merchant == nil, parts.amount == nil, !raw.isEmpty {
             parts.merchant = String(raw.prefix(60))
         }
+        // Fields set on their own win: they came straight from the
+        // transaction, not from text somebody had to format.
+        func kept(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (trimmed?.isEmpty ?? true) ? nil : trimmed
+        }
+        if let amount = kept(amount) { parts.amount = amount }
+        if let merchant = kept(merchant) { parts.merchant = merchant }
+        if let card = kept(card) { parts.card = card }
         return try await LogPurchaseIntent.handle(merchant: parts.merchant, amount: parts.amount,
                                                   card: parts.card, in: context, book: book, now: now)
     }
