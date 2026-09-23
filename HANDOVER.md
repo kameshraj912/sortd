@@ -1,117 +1,220 @@
-# Sortd — handover (24 Sep 2026)
+# Sortd — handover
 
-Read this first, then `CLAUDE.md`. Written by the "Sortd agent graph and pipeline" session.
-Everything below was checked with commands on 24 Sep 2026, not taken from memory.
+Last updated 24 September 2026. Written for whoever picks this up next.
+Everything below was verified, not assumed — where I could not verify
+something, it says so.
 
-## 1. Where everything lives now
+## Where things are
 
-- **Repo:** `~/Developer/Sortd` (moved out of iCloud on purpose — iCloud "Optimize Mac Storage"
-  was evicting `.git` files, which made git hang and time out). Never put the repo back in `~/Documents`.
-- **Worktrees:** `~/Developer/Sortd/.claude/worktrees/<branch>` (gitignored on `rename-sortd`).
-- **Media:** `~/Developer/Sortd/media/` — reels, ads, launch pack, profile images (moved from
-  `~/Downloads/sortd-*`). Ignored via `.git/info/exclude`, not in git.
-- **GitHub:** `kameshraj912/sortd` (private). On GitHub: `main`, `beta-prep`, `ux-refresh`,
-  `abuse-findings`, `rename-sortd`. **Most branches exist only on this Mac** — push them before any risky change.
-- **Main folder checkout:** `main` = `origin/main` (`71b07f7`). Untracked there, carried from the old
-  folder: `claude-project/reels/out/ad06.mp4`, `docs/YC-W27-application.md`, `docs/drafts/`.
+| | |
+|---|---|
+| Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
+| Branch | `main` @ `829b74a` — **pushed**, nothing outstanding |
+| Tests | **369 passing** |
 
-### Move check (done)
-- `git fsck` clean. All 23 local branches copied; every branch tip matches the old repo except
-  `main` (now = GitHub, old tip is contained in it) and `rename-sortd` (deliberately rebuilt).
-- Every uncommitted file in every old worktree was carried over and compared byte for byte:
-  1,213 files, 0 differences. Build caches (`.build-dd`, `build/dd`) were skipped on purpose.
+Branches still holding work:
 
-### Old copies — safe to delete once Raj has looked
-- `~/Documents/Spend`, `Spend-beta-rc1`, `Spend-copy`, `Spend-launch`, `Spend-paywall`,
-  `Spend-refresh`, `Spend-speed`, `Spend-ux`, `Spend-rename`, `Spend-abuse` (half-made, empty)
-- `~/Developer/Sortd-partial-leftover` (pieces of an interrupted move; all identical to the repo)
-- A safety hook blocks `rm -rf` under the home folder, so Raj deletes these himself.
+- **`abuse-findings`** — 1,191 lines of adversarial tests. **21 fail.** Deliberately
+  not merged so CI stays green. They document real bugs; see below.
+- **`ux-refresh`** — reports "14 commits not in main". **Ignore that.** A rebase
+  during the push gave those commits new SHAs; the content is on `main` and I
+  verified it file by file.
+- **`beta-prep`** — fully caught up with `main`, nothing unique.
 
-## 2. Branches: what is still not in `main`
+---
 
-Counted with `git cherry main <branch>` (compares changes, not commit ids). A "not in main" commit
-may still have been redone differently in `ux-refresh` — check the diff before merging anything.
+## What got done
 
-| Branch | Worktree | Not in main | Uncommitted | What it is |
-|---|---|---|---|---|
-| `ux-refresh` | yes | 14 | 4 untracked | **Newest code.** Onboarding + UI polish. 369 tests passed (other session's count). Pushed to GitHub 24 Sep. |
-| `rename-sortd` | yes | 14 + rename | — | `ux-refresh` + Spend→Sortd rename (section 3). |
-| `abuse-findings` | yes | 15 | — | `ux-refresh` + the abuse tests (commit `d5b6afb`, pushed). Fails on purpose until fixed. |
-| `beta-rc1` | yes | 14 of 21 | 87 untracked (Roadmap.md, QA screenshots) | Merges copy-trim and more. |
-| `copy-trim` | yes | 8 of 12 | 14 untracked (screenshots) | Copy trimming. |
-| `forwarding-inbox` | yes | 10 | — | Cloudflare email-forwarding inbox. **Not deployed, not wired into Settings.** See `docs/ForwardingInbox.md` on that branch. |
-| `launch-screen` | yes | 6 of 10 | 17 changes (1,035 screenshot files) | Branded launch screen, rework in progress. |
-| `pull-refresh` | yes | 6 of 10 | 1 | Pull-to-refresh + confetti. |
-| `speed-loading` | yes | 6 of 10 | 1 | Faster Gmail connect/sync. |
-| `paywall-steps` | yes | 5 of 9 | 19 changes | Paywall rework in progress (PaywallModel, tests). |
-| `tapfix` | no | 1 | — | "Never drop a real Apple Pay tap". Check whether `ux-refresh` already covers it. |
-| `beta-ops` | yes | 1 | — | Crash reporting, preflight flag check. |
-| `pro-beta-offer-codes` | no | 1 | — | Free beta Pro, offer codes. |
-| `settings-redesign` | yes | 0 | 1 untracked | Already in main. |
-| `beta-prep` | no | 0 | — | **Stale** — 27 behind main. Old CLAUDE.md said branch from it; the new one says `main`. |
-| `ci-tests`, `claude/objective-banach-827182`, `worktree-agent-*` | no | 0–1 | — | Dead or duplicates of the above. Delete after checking. |
+### The Apple Pay bug — fixed
 
-## 3. The Spend → Sortd rename (branch `rename-sortd`, commit `35c3e45`, pushed, NOT merged)
+Raj reported that real Apple Pay taps logged nothing.
 
-Built on `ux-refresh`. Changes: folders `Spend/`→`Sortd/`, `SpendTests/`→`SortdTests/`,
-`Spend.xcodeproj`→`Sortd.xcodeproj`, scheme/target/module `Spend`→`Sortd`, `SpendApp`/`SpendStore`/
-`SpendMigrationPlan`→`Sortd…`, all `SPEND_*` debug env vars→`SORTD_*`, and **bundle IDs**
-`com.kameshraj.spend*`→`com.kameshraj.sortd*` (app, widget, tests, app group, Keychain service,
-StoreKit product ids, logger). Words about money (`SpendCategory`, `SpendSummary`, "Spend less") stay.
+**Root cause:** the ready-made shortcut's field mappings were **silently dropped
+on import**. A parameter written as a bare `WFTextTokenAttachment` is discarded
+by Shortcuts. It has to be a `WFTextTokenString` holding the variable as an
+attachment at position 0. Confirmed by importing the file on an iOS 26.4
+simulator before and after — every field came back a grey placeholder before,
+intact after.
 
-Test result on the rename (24 Sep): **all 369 tests pass** on a fresh simulator (`Sortd-rename`),
-Release build succeeds. First run on a brand-new simulator fails the 6 StoreKit tests — known, passes
-on re-run. A first attempt failed `matchesWalletNames` because the scheme still set `SPEND_IN_MEMORY`;
-fixed in the commit. The CI workflow is renamed too.
+**Design now: one mapping only.** A Text action holds the whole Shortcut Input
+and passes it to the intent's `transaction` parameter, where
+`WalletTapText.parse` splits it.
 
-**Before the rename ships (Raj's actions, outside the code):**
-1. **Apple Pay shortcut:** `scripts/build-apple-pay-shortcut.py` now targets `com.kameshraj.sortd`.
-   Rebuild and re-sign `site/apple-pay.shortcut`, deploy the site, and every user must re-download it.
-   Until then the live shortcut only works with the old app.
-2. **Google OAuth:** the iOS OAuth client in Google Cloud is registered to `com.kameshraj.spend`.
-   Update it to `com.kameshraj.sortd`. Unverified: whether this touches the restricted-scope review
-   submitted 20 Sep — check before changing.
-3. **App Store Connect:** register the App ID and the three Pro product ids with the new prefix.
-4. Anyone with an older build loses their data, Keychain token and widget data (new app container).
-   Fine now — no TestFlight testers yet.
-5. Every other branch still uses `Spend/` paths. Merge them **before** the rename, or expect conflicts.
+> The three property mappings (Amount, Merchant, Card or Pass) do survive import
+> now, but their property *sub-selection* does not — so all three would receive
+> the whole transaction and the shop name would be a blob.
+> **Do not re-add them without testing on a real device.**
 
-## 4. Open work and decisions (in order)
+- Builder: `scripts/build-apple-pay-shortcut.py`
+- Sign: `shortcuts sign --mode anyone --input <out> --output site/apple-pay.shortcut`
+- Live at `https://sortd.page/apple-pay.shortcut` — 22,243 bytes,
+  sha256 `8e91834720c17f2b6b722c9dc8b0b1f5a91b38b6619f2f05a96a764fd1c79b99`
 
-1. **PR #8 is open: `rename-sortd` → `main`** (https://github.com/kameshraj912/sortd/pull/8, opened 24 Sep).
-   It carries all of `ux-refresh` plus the rename, so it replaces a separate `ux-refresh` PR. All 369
-   tests passed locally (StoreKit on re-run). Not merged — Raj merges it once CI is green. Note item 5
-   below: merging the rename now means the old branches will conflict on `Spend/` paths. Raj chose
-   to open it anyway, so old branches get ported onto the renamed paths, not merged as they are.
-2. **Abuse findings:** 21 findings in `SpendTests/AbuseMoneyAgentTests.swift` and
-   `AbuseDataAgentTests.swift`, committed on `abuse-findings` (`d5b6afb`, pushed). One confirmed
-   wrong-money bug: currency guessed from letters inside a merchant name. Fix them, then move the tests
-   to `main`. Copies are still untracked in the `ux-refresh` worktree — and because the project uses
-   folder-synced groups, **they get compiled into any `ux-refresh` test run there** (445 tests, ~50
-   failures). Delete those two untracked copies before trusting a `ux-refresh` test run.
-3. **Apple Pay auto-log real-world test:** the fixed shortcut went live after Raj's vending-machine
-   test. Raj must re-download the shortcut (Replace), then pay at a staffed till. Decides whether the
-   fix works or it is Apple's timeout.
-4. Triage the old branches in section 2 (merge or drop), then delete dead branches and worktrees.
-5. After PR #8 merges, do the section 3 outside steps.
-6. **Next big task (Raj's request):** one main Claude chat with expert agents under it (testing,
-   simulator, abuse/security, debugging, release, growth) plus a fixed pipeline script
-   (build → tests → preflight), covering the whole app lifecycle. Build it on `main` after PR #8.
-7. Undecided: Sentry, privacy-policy naming, UI adversarial pass (never ran), AX5 visual check,
-   backup (CloudKit, not built), `SORTD_BETA` removal before App Store.
-8. Flaky test seen 23 Sep: `matchesWalletNames` (YouTrip/Maybank) failed once on a reused simulator;
-   StoreKit tests fail on a brand-new simulator's first run, pass on re-run.
+Also added: a 5-page picture guide for the setup, a **Send a Test Tap** button
+(proves Sortd's half only — it works even with no shortcut installed, and the
+copy says so), and a three-state connected status so a configured user stops
+seeing "Waiting for your first tap".
 
-## 5. Disk
-- Free: ~74 GB. Big items: simulators 43 GB (`xcrun simctl delete unavailable`, old clones like
-  `Sortd-ux-Max`, `Sortd-ux-SE`, `Sortd-rename`), old iOS DeviceSupport 13 GB.
-- Build folders to delete when done: `.claude/worktrees/rename-sortd/build` (7.1 GB),
-  `.claude/worktrees/ux-refresh/build` (3.6 GB), and `/tmp/claude-501/dd-rename*` (7 GB).
-- Each `derivedDataPath` is ~3.5 GB. Put it inside the worktree (`build/dd`, gitignored) and delete it
-  when the branch is done.
+**Not fixable by us:** Apple's Wallet trigger waits for the issuer to push
+transaction details and silently gives up on timeout — radars FB14035016 /
+FB16379100, broken since iOS 18. Unattended terminals (vending machines,
+transit, parking) are the worst case. FinanceKit is US/UK only, so there is no
+alternative for AU/SG.
 
-## 6. Traps (so they are not repeated)
-- Don't put git repos in iCloud folders. Don't wrap iCloud downloads in wait loops (the auto-mode
-  classifier blocks it). Check cloud-only files with `find -flags +dataless` (the `+` matters).
-- Don't give two agents the same worktree or simulator.
-- Verify which checkout an agent looked at — earlier research agents surveyed the wrong one.
+### Polish — six passes, measured not guessed
+
+| What | Before | After |
+|---|---|---|
+| `Color.down` as text | 3.66:1 — **failed WCAG AA** | 5.83:1 |
+| `Color.up` as text | 3.09:1 — **failed** | 5.03:1 |
+| Setup buttons | 62.7pt | 51pt |
+| Restore Purchases / Terms / Privacy | ~16pt | 44pt |
+
+- VoiceOver read "S$25.00" as "S, dollars twenty-five" → added `Money.spoken()`
+  and switched every label that speaks an amount.
+- Home's spending chart announced three category names and nothing else. Now
+  labelled, with individually navigable points.
+- One `Font.money` — amounts had been split between SF Rounded and plain SF, so
+  numbers changed shape between screens.
+- Primary CTAs use `.glassProminent`. Apple's `PrimitiveButtonStyle` owns the
+  press animation *and* Reduce Motion. **I first wrote a custom scale style and
+  research corrected me — never stack a custom scale on a system glass style.**
+- Activity search → `.searchable`; no results → `ContentUnavailableView.search`.
+- Row → detail uses `matchedTransitionSource` + `navigationTransition(.zoom)`.
+- Reduce Motion and `accessibilityPrefersCrossFadeTransitions` (26.4,
+  availability-gated) honoured.
+- Data loss stopped: the add sheet no longer bins typed input on swipe-away;
+  number pads got a keyboard Done; "Not Recurring" got an undo; sample-data
+  Clear got a confirmation.
+- Pull-to-refresh was **completely silent** — ran the sync, threw the result
+  away. Now reports what it found or that it failed.
+- Import set `busy` true and false in one runloop turn, so the spinner never
+  drew and a big statement looked like a freeze.
+- Delete All Data and Replace Everything are **alerts**, not dialogs. A dialog
+  anchored to a row renders as a narrow popover that wrapped the message into
+  five ragged lines and hid Cancel.
+- SE/Pro/Pro Max clipping: budget overflow, bank grid truncation, Insights row
+  wrap, sheet detent clipping Remove, `FlowLayout` placing chips off-screen.
+
+---
+
+## Still to do
+
+### 1. The 21 abuse findings — on `abuse-findings`, none fixed
+
+```
+git checkout abuse-findings
+xcodebuild test -scheme Spend -destination 'id=E8041708-8F0E-4714-9738-B9AF194C5B61'
+```
+
+**Confirmed real** (`Spend/Services/Parsing.swift:30-36`): `AmountParser.currency(in:)`
+matches its markers as **substrings, not words**.
+
+| Merchant | Contains | Booked as |
+|---|---|---|
+| **MYR**TLE CAFE 8.00 | `MYR` | Malaysian ringgit |
+| CA**RM**ENS 12.00 | `RM` | Malaysian ringgit |
+| HOU**RS.** 12.00 | `RS.` | Indian rupees |
+
+Wrong currency, then run through FX. Needs word-boundary matching. **Fix this
+one regardless of what you do with the rest.**
+
+**The other 20 are untriaged** — some may assert behaviour nobody wanted. Check
+each before "fixing":
+
+*Money* — `isNegative` only checks the start of the string, so `A$-4.50` is not
+seen as a refund; `12.345` parses as 12,345; a 16-digit card number parses as an
+amount; `2 x A$4.50` takes the 2; JPY/THB/CHF/PHP/CNY currency dropped;
+zero-decimal currencies shown with cents.
+
+*Data* — a Gmail receipt merging into a purchase pending delete is lost forever;
+duplicate ids in a backup survive restore and **double the total**; restoring the
+same backup twice adds everything again; a negative amount in a backup takes a
+month below zero; re-importing a statement adds it again; rows with no date are
+dropped; absurd dates import; two payments at one shop collapse into one; a
+recharge after a refund is not counted.
+
+### 2. UI adversarial pass — never ran
+
+Three agents were launched; Claude crashed and killed them. Two left the test
+files above. The third — drive the simulator and break the UI by hand —
+produced nothing.
+
+### 3. No backup, no CloudKit
+
+Local-only SwiftData: losing the phone loses every transaction. The biggest
+structural gap and the clearest miss against HIG Agency.
+
+### 4. Dynamic Type at AX5 — never verified visually
+
+`simctl` has no content-size option; it needs the Settings app driven inside the
+simulator. Issues were found by reading code. **Nobody has looked at the screens.**
+
+### 5. Smaller, all traceable to Apple docs
+
+`navigationSubtitle` (0 uses), `SnippetIntent` on the Siri intents,
+`UndoableIntent` on `LogWalletTapIntent`, `accessibilityChartDescriptor`,
+`ViewThatFits` instead of `minimumScaleFactor` on money rows, concentric
+corners, layered app icon in Icon Composer, widget accented-rendering check.
+
+### 6. `SORTD_BETA` still on in Release
+
+Right for TestFlight, fatal for the App Store — App Review would never see the
+paywall. `scripts/preflight.sh --appstore` correctly exits 1 on it.
+
+---
+
+## The one thing only Raj can do
+
+His vending-machine test used the **old** shortcut, before the fix. The fixed
+file went live afterwards. Nobody has retested.
+
+1. Sortd → Apple Pay step → **Get the Shortcut**
+2. Choose **Replace**
+3. Buy something small at a **staffed till** on a Visa — not a vending machine
+4. Read Settings → Purchase Sources → Apple Pay Logging → **Last Tap Received**
+
+That line decides whether the fix worked or whether it is Apple's timeout.
+
+## Decisions still open
+
+1. **Abuse findings** — fix the 21 then merge, or merge now and accept a red CI
+   as a visible to-do list. Asked twice, not answered.
+2. **Sentry** — still linked. Either remove the package and
+   `CrashReporting.swift`, or change the App Privacy label to Crash Data (not
+   linked). Preflight fails on it today.
+3. **Privacy policy** — whether it names a person or a business entity. Needs a
+   lawyer.
+
+---
+
+## Traps — read before spending a day on these
+
+- **Two research agents surveyed the wrong checkout** and reported a "P0
+  FlatTabBar" that did not exist on the branch being worked on. Always verify an
+  agent's survey against the actual worktree before acting.
+- **Do not give several agents the same worktree.** Their test files land in the
+  shared `SpendTests/`, folder-synced groups compile everything, and one
+  half-written file breaks every build.
+- **One simulator each**, or they fight over it.
+- **StoreKit tests are simulator-dependent.** `ProStoreTests` fails on the
+  iPhone 17 Pro / iOS 26.4 sim (`DCA7DC0C-…`) with `Product.products(for:)`
+  returning nil, and passes on iPhone 18 Pro / iOS 27 (`E8041708-…`). It is not
+  a code fault. **Use the iOS 27 simulator.**
+- **Disk.** It filled to 98% and git began failing with `mmap failed`. Each
+  `derivedDataPath` is ~3.5 GB — delete them when done.
+- **Apple doc bugs.** The symbol is `.searchToolbarBehavior(.minimize)`, not
+  `.minimized` (Apple's own sample is wrong), and it is
+  `toolbarMinimizationBehavior(_:for:)`, not `toolbarMinimizeBehavior`.
+
+## Things I got wrong
+
+Listed so nobody repeats them:
+
+- I said `preflight.sh` prints "Not ready" but exits 0. **False** — it exits 1.
+  My test was reading `tail`'s exit status.
+- I said the SE Activity list clipped rows under the tab bar. **False** — I
+  scrolled to the end and it clears.
+- I acted on an agent survey of the wrong checkout before verifying it.
+- I first replaced `.buttonStyle(.plain)` with a hand-rolled scale on primary
+  buttons; Apple's own styles already do it better.
