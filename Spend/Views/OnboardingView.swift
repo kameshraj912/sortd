@@ -280,7 +280,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.onBrand)
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
         .tint(Color.brand)
@@ -292,7 +292,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.ink)
-                .frame(maxWidth: .infinity, minHeight: 28)
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glass)
         .controlSize(.large)
@@ -961,7 +961,7 @@ struct OnboardingView: View {
                     Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                         .font(.headline)
                         .foregroundStyle(Color.onBrand)
-                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
                 .tint(Color.brand)
@@ -976,7 +976,7 @@ struct OnboardingView: View {
                     Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
                         .font(.headline)
                         .foregroundStyle(Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
                 .controlSize(.large)
