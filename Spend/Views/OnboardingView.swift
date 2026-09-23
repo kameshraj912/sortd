@@ -954,7 +954,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
                         miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
-                        miniStep(3, "Fill the blue word", "Tap Transaction, then pick Shortcut Input above the keyboard. It should look like this:")
+                        miniStep(3, "Fill the three fields", "Tap Amount → Select Variable → Shortcut Input, then tap that blue word again and choose Amount. Same for Shop (Merchant) and Card (Card or Pass).")
                         actionMock.padding(.leading, 38)
                     }
                     .setupCard()
@@ -1021,7 +1021,9 @@ struct OnboardingView: View {
             // Same wording as the real action in Shortcuts.
             FlowLayout(spacing: 4) {
                 Text("Log").font(.footnote)
-                token("Shortcut Input")
+                token("Amount")
+                Text("at").font(.footnote)
+                token("Merchant")
                 Text("in Sortd").font(.footnote)
             }
         }
@@ -1029,7 +1031,7 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Log Shortcut Input in Sortd")
+        .accessibilityLabel("Log Amount at Merchant in Sortd")
     }
 
     /// A Shortcuts variable token (blue, like in the Shortcuts app).
