@@ -31,6 +31,11 @@ struct OnboardingView: View {
     @AppStorage(SetupProfile.billsKey) private var billIntent = false
     @AppStorage(SetupProfile.rerunKey) private var rerun = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// iOS 26.4 added a precise signal for "cross-fade instead of slide";
+    /// before that, Reduce Motion is the only thing to go on.
+    @Environment(\.self) private var environment
+
     /// They answered the check-in question this time (not skipped, not "Not now").
     @State private var checkInChosen = false
     /// Asking iOS for notification permission; one tap is enough.
@@ -56,6 +61,12 @@ struct OnboardingView: View {
     #else
     @State private var step: Step = .welcome
     #endif
+    /// Either setting means: no sliding.
+    private var crossFade: Bool {
+        if #available(iOS 26.4, *), environment.accessibilityPrefersCrossFadeTransitions { return true }
+        return reduceMotion
+    }
+
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
     @State private var showingImport = false
@@ -88,9 +99,13 @@ struct OnboardingView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
                 .id(step)
-                .transition(.asymmetric(
-                    insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
+                // Sliding pages are exactly what "Prefer Cross-Fade
+                // Transitions" asks apps not to do; fade instead of moving.
+                .transition(crossFade
+                    ? .opacity
+                    : .asymmetric(
+                        insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                        removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
             if typeSize.isAccessibilitySize, step != .building { bottomBar }
             }
         }
