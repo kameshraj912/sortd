@@ -1,5 +1,32 @@
 import Foundation
+import Observation
 import UserNotifications
+
+/// True while an iOS permission alert is on screen. The alert makes the scene
+/// go `.inactive`, which would otherwise show the privacy cover behind it.
+/// RootView reads `SystemPrompt.shared.active` to skip the cover then.
+@MainActor
+@Observable
+final class SystemPrompt {
+    static let shared = SystemPrompt()
+    private(set) var active = false
+    private var depth = 0
+
+    /// Runs `work` (which shows a system alert) with `active` set. It stays
+    /// set a moment after, while the scene returns to `.active`, so the cover
+    /// doesn't flash as the alert closes.
+    func showing<T>(_ work: () async -> T) async -> T {
+        depth += 1
+        active = true
+        let result = await work()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            depth -= 1
+            if depth == 0 { active = false }
+        }
+        return result
+    }
+}
 
 /// Local notifications the day before a predicted payment. Nothing leaves
 /// the phone. Rebuilt each time the app opens, so they follow the latest
@@ -11,12 +38,37 @@ enum Reminders {
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
+    /// True while Apple's notification alert is up (see `SystemPrompt`).
+    static var isAskingPermission: Bool { SystemPrompt.shared.active }
+
     /// Asks once; returns whether reminders are allowed.
     static func requestPermission() async -> Bool {
-        (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        await SystemPrompt.shared.showing {
+            (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        }
     }
 
+    /// The rebuild running now. App open and the Settings toggle can both
+    /// call `reschedule` at once; without this, an app-open rebuild still
+    /// adding reminders could finish after "off" had cleared them.
+    private static var rebuilding: Task<Void, Never>?
+
+    /// One at a time: a newer call stops the one in progress, waits for it,
+    /// then clears and rebuilds from scratch.
     static func reschedule(_ recurring: [Recurring], now: Date = .now) async {
+        let previous = rebuilding
+        previous?.cancel()
+        let task = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }   // an even newer call will do it
+            await rebuild(recurring, now: now)
+        }
+        rebuilding = task
+        await task.value
+        if rebuilding == task { rebuilding = nil }
+    }
+
+    private static func rebuild(_ recurring: [Recurring], now: Date) async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
@@ -31,6 +83,8 @@ enum Reminders {
             guard let dayBefore = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: r.nextDate)),
                   let fireAt = cal.date(bySettingHour: 9, minute: 0, second: 0, of: dayBefore),
                   fireAt > now else { continue }
+            // Superseded: the newer call clears whatever this one added.
+            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = "\(r.merchant) tomorrow"
             content.body = "\(Money.format(r.amount, r.currency)) on \(r.card.shortLabel). \(r.cadence.name)."

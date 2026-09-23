@@ -23,6 +23,17 @@ struct AddTransactionView: View {
     @State private var saveError: String?
     @State private var quick = ""
     @FocusState private var quickFocused: Bool
+    /// True while Apple Intelligence reads the quick line.
+    @State private var reading = false
+    /// Apple Intelligence's category, used when the merchant rules have none.
+    @State private var aiCategory: SpendCategory?
+    /// The merchant name `aiCategory` was read for. Once the name is edited
+    /// by hand the guess no longer applies.
+    @State private var aiCategoryMerchant = ""
+    /// Shown under the quick line when nothing could be read from it.
+    @State private var quickProblem: String?
+    /// Keystrokes the amount field refused (too long, a third decimal).
+    @State private var refusedKeys = 0
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -35,15 +46,19 @@ struct AddTransactionView: View {
     /// wrong guess should cost a glance, not a wrong total.
     private var quickField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "text.cursor")
+            Image(systemName: QuickEntryAI.isAvailable ? "sparkles" : "text.cursor")
                 .foregroundStyle(.secondary)
+                .symbolEffect(.pulse, isActive: reading)
                 .accessibilityHidden(true)
-            TextField("coffee 5.50", text: $quick)
+            TextField("Coffee 5.50 yesterday", text: $quick)
                 .focused($quickFocused)
                 .submitLabel(.done)
                 .autocorrectionDisabled()
                 .onSubmit(applyQuick)
-            if !quick.isEmpty {
+                .onChange(of: quick) { quickProblem = nil }
+            if reading {
+                ProgressView()
+            } else if !quick.isEmpty {
                 Button("Fill", action: applyQuick)
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.plain)
@@ -55,20 +70,50 @@ struct AddTransactionView: View {
     }
 
     private func applyQuick() {
-        guard let reading = QuickEntry.read(quick) else { return }
-        merchant = reading.merchant
-        // Decimal prints 5.50 as "5.5", which looks like a different number
-        // on a money screen.
-        let number = NSDecimalNumber(decimal: reading.amount).doubleValue
-        amountText = number == number.rounded()
-            ? String(Int(number))
-            : String(format: "%.2f", number)
-        if let code = reading.currency { currency = code }
-        if reading.daysAgo > 0 {
-            date = Calendar.current.date(byAdding: .day, value: -reading.daysAgo, to: .now) ?? date
-        }
-        quick = ""
+        let line = quick
+        guard !line.trimmingCharacters(in: .whitespaces).isEmpty, !reading else { return }
         quickFocused = false
+        Task {
+            if QuickEntryAI.isAvailable {
+                reading = true
+                let ai = await QuickEntryAI.read(line)
+                reading = false
+                if let ai {
+                    fill(merchant: ai.merchant, amount: ai.amount, currency: ai.currency,
+                         daysAgo: ai.daysAgo, category: ai.category)
+                    quick = ""
+                    return
+                }
+            }
+            // No Apple Intelligence (or it couldn't read it): the plain reader.
+            guard let plain = QuickEntry.read(line) else {
+                withAnimation(.snappy) { quickProblem = "Couldn't read that. Try \u{2018}coffee 5.50\u{2019}." }
+                quickFocused = true
+                return
+            }
+            fill(merchant: plain.merchant, amount: plain.amount, currency: plain.currency,
+                 daysAgo: plain.daysAgo, category: nil)
+            quick = ""
+        }
+    }
+
+    private func fill(merchant name: String, amount: Decimal?, currency code: String?,
+                      daysAgo: Int, category guess: SpendCategory?) {
+        withAnimation(.snappy) {
+            if !name.isEmpty { merchant = name }
+            // "5.50", not "5.5"; formatted from the Decimal so a huge number
+            // can't crash it.
+            if let amount { amountText = QuickEntry.fieldText(amount) }
+            if let code { currency = code }
+            if daysAgo > 0 {
+                date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now) ?? date
+            }
+            // The model's category, only where the merchant rules have none,
+            // and only for the name it read (see the merchant field).
+            aiCategory = guess
+            aiCategoryMerchant = name.isEmpty ? merchant : name
+            if let guess, !categoryTouched, category == .other { category = guess }
+        }
     }
 
     var body: some View {
@@ -83,18 +128,29 @@ struct AddTransactionView: View {
                 Section {
                     quickField
                 } footer: {
-                    Text("Type it the way you'd say it: \u{201C}seven seeds coffee 5.50\u{201D}.")
+                    if let quickProblem {
+                        Label(quickProblem, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text(QuickEntryAI.isAvailable
+                             ? "Type it how you'd say it. Apple Intelligence fills in the rest on this iPhone."
+                             : "Type it how you'd say it, then tap Fill.")
+                    }
                 }
 
                 Section {
-                    TextField("Merchant", text: $merchant)
+                    TextField("Paid to", text: $merchant)
                         .textInputAutocapitalization(.words)
                         .onChange(of: merchant) { _, name in
+                            // A retyped name drops the model's guess for the old one.
+                            // fill() records the name it set, so its own change keeps it.
+                            if name != aiCategoryMerchant { aiCategory = nil }
                             // Suggest a category while typing until Raj picks one himself.
                             guard !categoryTouched else { return }
                             let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
                             withAnimation(.snappy) {
-                                category = Categorizer.category(for: name, learned: learned)
+                                let rule = Categorizer.category(for: name, learned: learned)
+                                category = rule == .other ? aiCategory ?? .other : rule
                             }
                         }
                     Button { showingCategories = true } label: {
@@ -149,7 +205,7 @@ struct AddTransactionView: View {
                 if ProStore.shared.isPro { ReceiptScanView(onRead: apply) } else { PaywallView(feature: .camera) }
             }
             .sheet(isPresented: $showingCategories) {
-                CategoryPickerSheet(selected: category) { picked in
+                CategoryPickerSheet(selected: category, footer: CategoryPickerSheet.moveAllFooter) { picked in
                     category = picked
                     categoryTouched = true
                 }
@@ -159,7 +215,7 @@ struct AddTransactionView: View {
                 amountFocused = true
             }
             .sensoryFeedback(.success, trigger: saved)
-            .alert("Not saved", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            .alert("Couldn't Save Purchase", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
         }
@@ -172,14 +228,30 @@ struct AddTransactionView: View {
                 Text(Self.symbol(currency))
                     .font(.title.weight(.bold))
                     .foregroundStyle(amountText.isEmpty ? .tertiary : .secondary)
-                TextField("0", text: $amountText)
+                // Sized by a hidden copy of the text, so the field always
+                // grows to fit an amount filled in from Quick entry or a scan.
+                Text(amountText.isEmpty ? "0" : amountText)
                     .font(.largeTitle.weight(.bold))
                     .monospacedDigit()
-                    .keyboardType(.decimalPad)
-                    .focused($amountFocused)
-                    .fixedSize()
-                    .accessibilityLabel("Amount in \(currency)")
+                    .hidden()
+                    .overlay(alignment: .leading) {
+                        TextField("0", text: $amountText)
+                            .font(.largeTitle.weight(.bold))
+                            .monospacedDigit()
+                            .keyboardType(.decimalPad)
+                            .focused($amountFocused)
+                            .accessibilityLabel("Amount in \(currency)")
+                    }
+                    .padding(.trailing, 4)
             }
+            .onChange(of: amountText) { old, new in
+                // Under 1,000,000 with at most two decimals; anything else
+                // typed is ignored.
+                guard !Self.isTypeable(new) else { return }
+                amountText = Self.isTypeable(old) ? old : ""
+                refusedKeys += 1
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: refusedKeys)
             .frame(maxWidth: .infinity)
             .contentShape(.rect)
             .onTapGesture { amountFocused = true }
@@ -220,7 +292,7 @@ struct AddTransactionView: View {
             .buttonStyle(.plain)
 
             if scanned {
-                Label("Filled from your receipt — check it", systemImage: "doc.text.viewfinder")
+                Label("Filled in from your receipt. Check it before you add.", systemImage: "doc.text.viewfinder")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -230,7 +302,9 @@ struct AddTransactionView: View {
 
     /// Fills in what the scan found. Never saves: Raj checks and taps the tick.
     private func apply(_ r: ReceiptReading) {
-        if let amount = r.amount { amountText = amount }
+        if let amount = r.amount {
+            amountText = AmountParser.parse(amount).map { QuickEntry.fieldText($0.amount) } ?? amount
+        }
         if let code = r.currency, Self.currencies.contains(code) { currency = code }
         if let name = r.merchant { merchant = name }   // suggests a category via onChange
         if let when = r.date { date = min(when, .now) }
@@ -242,8 +316,17 @@ struct AddTransactionView: View {
     private static func symbol(_ code: String) -> String { Money.symbol(code) }
 
     private var parsedAmount: Decimal? {
-        guard let r = AmountParser.parse(amountText), r.amount > 0 else { return nil }
+        guard let r = AmountParser.parse(amountText), r.amount > 0, r.amount < QuickEntry.limit else { return nil }
         return r.amount
+    }
+
+    /// What the amount field accepts: digits and one decimal point (or
+    /// comma), at most two decimals, and less than 1,000,000.
+    nonisolated static func isTypeable(_ text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        guard text.range(of: #"^\d*([.,]\d{0,2})?$"#, options: .regularExpression) != nil else { return false }
+        let whole = text.prefix { $0.isNumber }.drop { $0 == "0" }
+        return whole.count <= 6 && text.count <= 12
     }
 
     private var isValid: Bool {
@@ -259,7 +342,9 @@ struct AddTransactionView: View {
     }
 
     private func save() {
-        guard let amount = parsedAmount else { return }
+        // A double tap on Add must not save twice: hand-typed purchases are
+        // never merged as duplicates, so nothing else would catch it.
+        guard saved == 0, let amount = parsedAmount else { return }
         let purchase = IncomingPurchase(
             date: date,
             merchant: merchant.trimmingCharacters(in: .whitespaces).isEmpty
@@ -282,7 +367,7 @@ struct AddTransactionView: View {
             dismiss()
         } catch {
             log.error("Manual add failed: \(error.localizedDescription)")
-            saveError = "Couldn't save this purchase. Please try again."
+            saveError = "Please try again."
         }
     }
 }

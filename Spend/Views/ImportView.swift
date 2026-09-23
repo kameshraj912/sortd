@@ -20,11 +20,18 @@ struct ImportView: View {
     @State private var card = Card.other
     @State private var wasScanned = false
     @State private var error: String?
+    /// The file was read but had no purchases in it. Changes the alert title.
+    @State private var foundNothing = false
     @State private var busy = false
     @State private var pickingFile = false
     @State private var photo: PhotosPickerItem?
     @State private var backup: Data?
     @State private var done: String?
+    @State private var confirmingReplace = false
+    /// Purchases on this phone now, and what the backup holds, for the
+    /// Replace warning.
+    @State private var replaceCount = 0
+    @State private var backupContents: Backup.Contents?
 
     private enum Stage { case start, review, backup }
 
@@ -37,8 +44,7 @@ struct ImportView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Import",
-                          subtitle: "A bank statement, a screenshot, or a Sortd backup.")
+            ListPageTitle(title: "Import")
             switch stage {
             case .start: startSection
             case .review: reviewSections
@@ -68,7 +74,9 @@ struct ImportView: View {
                 return try await StatementReader.read(fileAt: url)
             }
         }
-        .alert("Import", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .alert(foundNothing ? "No Purchases Found" : "Couldn't Import",
+               isPresented: Binding(get: { error != nil },
+                                    set: { if !$0 { error = nil; foundNothing = false } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(error ?? "")
@@ -77,6 +85,12 @@ struct ImportView: View {
             Button("OK") { dismiss() }
         } message: {
             Text(done ?? "")
+        }
+        .confirmationDialog(replaceTitle, isPresented: $confirmingReplace, titleVisibility: .visible) {
+            Button("Replace Everything", role: .destructive) { restore(.replace) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(replaceMessage)
         }
     }
 
@@ -106,8 +120,6 @@ struct ImportView: View {
                     Image(systemName: "photo")
                 }
             }
-        } header: {
-            BoldHeader("Add From")
         } footer: {
             Text("Read on this iPhone. Nothing uploads, and nothing saves until you tap Add.")
         }
@@ -120,13 +132,6 @@ struct ImportView: View {
                 }
             }
         }
-
-        Section {
-            Text("Export a statement from your bank as CSV or PDF, then pick it here. A screenshot of your bank app works too.")
-                .font(.footnote).foregroundStyle(.secondary)
-        } header: {
-            BoldHeader("How")
-        }
     }
 
     // MARK: - Check before saving
@@ -137,17 +142,15 @@ struct ImportView: View {
                 ForEach(Card.mine) { c in Text(c.name).tag(c) }
                 Text("Card not known").tag(Card.other)
             } label: {
-                Label("Paid with", systemImage: "creditcard")
+                Label("Paid With", systemImage: "creditcard")
             }
-        } header: {
-            BoldHeader("Which Card")
         } footer: {
             Text("Statements don't always say which card.")
         }
 
         if wasScanned {
             Section {
-                Label("Read from a picture, so check the amounts.", systemImage: "eye")
+                Label("Read from a picture. Check the amounts.", systemImage: "eye")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -199,7 +202,7 @@ struct ImportView: View {
             Button("Start Again") { reset() }
                 .foregroundStyle(.secondary)
         } footer: {
-            Text("Anything Sortd already has from a tap or a receipt is matched and counted once.")
+            Text("Purchases Sortd already has won't be added twice.")
         }
     }
 
@@ -237,12 +240,26 @@ struct ImportView: View {
         }
         Section {
             Button("Add What's Missing") { restore(.merge) }
-            Button("Replace Everything", role: .destructive) { restore(.replace) }
-                .foregroundStyle(Color.down)
+            Button("Replace Everything", role: .destructive) {
+                replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
+                backupContents = backup.flatMap(Backup.contents(of:))
+                confirmingReplace = true
+            }
+            .foregroundStyle(Color.down)
             Button("Cancel") { reset() }.foregroundStyle(.secondary)
         } footer: {
-            Text("Add keeps what's here and fills the gaps. Replace wipes it first — for a new phone.")
+            Text("Add What's Missing keeps what's on this iPhone. Replace Everything clears it first. Use that on a new phone.")
         }
+    }
+
+    private var replaceTitle: String {
+        guard let backupContents else { return "Replace this iPhone's data with this backup?" }
+        return Backup.replaceWarning(backup: backupContents, purchasesHere: replaceCount).title
+    }
+
+    private var replaceMessage: String {
+        guard let backupContents else { return "Everything on this iPhone will be replaced. This can't be undone." }
+        return Backup.replaceWarning(backup: backupContents, purchasesHere: replaceCount).message
     }
 
     // MARK: - Work
@@ -251,6 +268,7 @@ struct ImportView: View {
     private func load(_ work: @escaping () async throws -> StatementReader.Reading) {
         busy = true
         error = nil
+        foundNothing = false
         Task {
             do {
                 let reading = try await work()
@@ -262,6 +280,7 @@ struct ImportView: View {
                         ? StatementImport.rows(fromText: reading.text)
                         : StatementImport.rows(fromCSV: reading.text)
                     guard !found.isEmpty else {
+                        foundNothing = true
                         error = SortdVoice.importFoundNothing
                         busy = false
                         photo = nil
@@ -309,7 +328,7 @@ struct ImportView: View {
         Task { await FXService.backfill(in: context) }
         busy = false
         done = merged > 0
-            ? "\(added) added. \(merged) matched a purchase Sortd already had."
+            ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
             : "\(added) added."
     }
 

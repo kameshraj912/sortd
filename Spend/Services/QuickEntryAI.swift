@@ -1,0 +1,154 @@
+import Foundation
+import FoundationModels
+
+/// What the on-device model is asked to pull out of one typed line.
+@Generable(description: "A purchase someone typed in their own words")
+struct QuickEntryFields {
+    @Guide(description: "The shop, restaurant, app or service paid, as a short proper name (for example Nando's, Uber, Woolworths). If no business is named, a short plain description of what was bought (for example Coffee, Parking).")
+    var merchant: String
+    @Guide(description: "The amount paid, digits only with up to two decimals, e.g. 5.50 or 20. Convert number words: \"twenty bucks\" is 20. Empty if no amount is given.")
+    var amount: String
+    @Guide(description: "Three-letter currency code only if the text names or shows one (sgd, S$, £, euros), else empty.")
+    var currency: String
+    @Guide(description: "How many days ago it happened: 0 for today or no date, 1 for yesterday or last night, 2 for the day before yesterday, up to 30.")
+    var daysAgo: Int
+    @Guide(description: "The best category for the purchase.", .anyOf(SpendCategory.allCases.map(\.name)))
+    var category: String
+}
+
+/// Reads a typed line with Apple Intelligence, on the device.
+///
+/// `QuickEntry` stays the source of truth for anything it can read with
+/// certainty (a written number, a currency symbol, "yesterday"). The model
+/// adds what a pattern can't: a tidy shop name out of a sentence, amounts
+/// written as words, and a category. The result still lands in the Add form
+/// for checking, never straight in the store.
+enum QuickEntryAI {
+    struct Reading: Equatable, Sendable {
+        var merchant: String
+        var amount: Decimal?
+        var currency: String?
+        var daysAgo: Int
+        var category: SpendCategory?
+    }
+
+    static var isAvailable: Bool { ReceiptAI.isAvailable }
+
+    static func read(_ input: String) async -> Reading? {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isAvailable, !text.isEmpty else { return nil }
+        let session = LanguageModelSession(instructions: """
+            You turn one short line someone typed about a purchase into its details. \
+            Only use what the line says. Never invent an amount or a date.
+            """)
+        do {
+            let fields = try await session.respond(to: String(text.prefix(300)), generating: QuickEntryFields.self,
+                                                   options: GenerationOptions(temperature: 0)).content
+            return merge(fields, typed: text)
+        } catch {
+            log.error("Quick entry reading failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// The model's answer, checked against the line and the plain reader.
+    static func merge(_ fields: QuickEntryFields, typed text: String) -> Reading? {
+        // A line with a minus ("refund -5") is not a purchase of 5, whatever
+        // the model says. Nothing is filled; the Add screen says it couldn't
+        // read it.
+        guard !QuickEntry.hasNegativeAmount(in: text) else { return nil }
+        let plain = QuickEntry.read(text)
+
+        // A written number beats the model's reading of it.
+        let amount = plain?.amount ?? modelAmount(fields.amount)
+
+        // Only keep a currency the line actually shows.
+        let code = fields.currency.uppercased()
+        let modelCurrency = code.count == 3 && Money.supported.contains(code) && mentionsCurrency(code, in: text) ? code : nil
+
+        // A line with no letters ("12.5") names no shop and no kind of
+        // purchase: anything the model says about either is made up.
+        let hasLetters = text.contains(where: \.isLetter)
+        let merchant = fields.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = hasLetters && isGrounded(merchant, in: text)
+            ? String(merchant.prefix(60))
+            : hasLetters ? plain?.merchant ?? "" : ""
+        guard !name.isEmpty || amount != nil else { return nil }
+
+        // A date phrase the plain reader understood ("today", "this morning",
+        // "friday") wins, even when it means 0 days ago. The model's date is
+        // only used for a time phrase the plain reader can't work out.
+        let daysAgo = QuickEntry.daysAgo(in: text)
+            ?? (mentionsWhen(text) ? min(max(fields.daysAgo, 0), 30) : 0)
+
+        return Reading(
+            merchant: name,
+            amount: amount,
+            currency: plain?.currency ?? modelCurrency,
+            daysAgo: daysAgo,
+            category: hasLetters
+                ? SpendCategory.allCases.first { $0.name == fields.category }.flatMap { $0 == .other ? nil : $0 }
+                : nil)
+    }
+
+    /// The model's amount, only when it looks like money: digits with at
+    /// most two decimals, at least 0.01 and under the limit. "0.001" and
+    /// "999999999999" are refused rather than rounded or trusted.
+    static func modelAmount(_ raw: String) -> Decimal? {
+        let digits = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
+        guard digits.range(of: #"^\d+(\.\d{1,2})?$"#, options: .regularExpression) != nil,
+              let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")),
+              value >= Decimal(string: "0.01")!, value < QuickEntry.limit else { return nil }
+        return value
+    }
+
+    /// Names the model uses when it has nothing to go on.
+    private static let placeholders: Set<String> = [
+        "unknown", "merchant", "na", "none", "purchase", "null", "nil", "unspecified",
+        "notspecified", "notprovided", "unknownmerchant", "item", "payment",
+    ]
+
+    /// True when the model's shop name came from the line, not from the
+    /// model: at least one of its words (3+ letters, ignoring case, accents
+    /// and punctuation) is in what was typed. "Coffee" for "12.5" fails.
+    static func isGrounded(_ merchant: String, in text: String) -> Bool {
+        let whole = SearchText.fold(merchant)
+        guard !whole.isEmpty, !placeholders.contains(whole) else { return false }
+        let line = SearchText.fold(text)
+        let words = merchant
+            .split(whereSeparator: { $0.isWhitespace || $0 == "-" || $0 == "/" })
+            .map { SearchText.fold(String($0)) }
+            .filter { $0.count >= 3 && $0.contains(where: \.isLetter) }
+        // "BP", "Go": too short to have a 3-letter word, so the whole name.
+        if words.isEmpty { return whole.count >= 2 && line.contains(whole) }
+        return words.contains { line.contains($0) }
+    }
+
+    /// "sgd", "S$", "euros"… anything in the line that points at `code`.
+    private static func mentionsCurrency(_ code: String, in text: String) -> Bool {
+        let lower = text.lowercased()
+        if lower.contains(code.lowercased()) { return true }
+        let hints: [String: [String]] = [
+            "SGD": ["s$", "sing"], "AUD": ["a$", "aussie"], "USD": ["us$", "usd", "us dollar"],
+            "GBP": ["£", "pound", "quid"], "EUR": ["€", "euro"], "MYR": ["rm", "ringgit"],
+            "INR": ["₹", "rupee"], "NZD": ["nz$"], "HKD": ["hk$"], "JPY": ["¥", "yen"],
+        ]
+        return hints[code]?.contains { has($0, in: lower) } ?? false
+    }
+
+    /// Only trust the model's date when the line talks about time at all.
+    static func mentionsWhen(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let words = ["ago", "yesterday", "last", "night", "week", "morning", "day",
+                     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+                     "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        return words.contains { has($0, in: lower) }
+    }
+
+    /// `word` as a whole word (or symbol) in `text`, so "rm" isn't found in "farm".
+    private static func has(_ word: String, in text: String) -> Bool {
+        guard word.first?.isLetter == true else { return text.contains(word) }
+        let pattern = "(?<![\\p{L}])" + NSRegularExpression.escapedPattern(for: word) + "(?![\\p{L}])"
+        return text.range(of: pattern, options: .regularExpression) != nil
+    }
+}

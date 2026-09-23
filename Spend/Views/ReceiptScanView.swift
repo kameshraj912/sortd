@@ -30,7 +30,7 @@ struct ReceiptScanView: View {
                     Text("Scan a receipt")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(Color.ink)
-                    Text("Sortd reads the shop, total, date and card on your iPhone. The photo isn't saved or sent.")
+                    Text("Sortd reads the shop, total, date and card on this iPhone. The photo isn't saved or sent.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -113,7 +113,7 @@ struct ReceiptScanView: View {
             let result = await ReceiptScanner.read(text: text)
             reading = false
             if text.isEmpty || result.isEmpty {
-                problem = "Couldn't read any text. Try again in better light, or type it in."
+                problem = "Couldn't read this receipt. Try again in better light, or type it in."
                 return
             }
             if result.amount == nil {

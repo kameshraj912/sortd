@@ -1,4 +1,9 @@
-// sortd.page Worker. Static pages are served straight from assets; only /api/* runs here.
+// sortd.page Worker. Runs first on every request (see wrangler.jsonc).
+//
+// www.sortd.page gets a permanent (301) redirect to https://sortd.page, so Google sees one
+// copy of each page, not two. Everything else is served straight from assets.
+// http -> https is not done here: it's "Always Use HTTPS" in the Cloudflare dashboard
+// (SSL/TLS -> Edge Certificates), which runs before the Worker.
 //
 // POST /api/beta takes the "Join the beta" form and emails it to Raj through Cloudflare
 // Email Routing. Nothing is stored: the email is the only copy.
@@ -22,6 +27,9 @@ const TURNSTILE_HOSTS = ["sortd.page", "www.sortd.page"];
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.hostname === "www.sortd.page") {
+      return Response.redirect(`https://sortd.page${url.pathname}${url.search}`, 301);
+    }
     if (url.pathname === "/api/beta") {
       if (request.method !== "POST") return json({ ok: false, error: "Use POST." }, 405);
       return handleBeta(request, env);

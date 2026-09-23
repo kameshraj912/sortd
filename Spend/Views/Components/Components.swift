@@ -122,7 +122,7 @@ struct TransactionRow: View {
     private var trailingDetail: String {
         if transaction.refunded { return "Refunded" }
         if transaction.currencyCode != Money.home, !transaction.needsReview {
-            return transaction.needsRate ? "converting…" : "≈ " + Money.format(transaction.audValue, Money.home)
+            return transaction.needsRate ? "Converting…" : "≈ " + Money.format(transaction.audValue, Money.home)
         }
         return showTime ? transaction.date.formatted(date: .omitted, time: .shortened) : shortDay
     }
