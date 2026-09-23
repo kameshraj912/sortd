@@ -7,6 +7,27 @@ struct TransactionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingCategories = false
     @State private var confirmingDelete = false
+    /// The Amount field works on text and only writes back a valid amount
+    /// when you leave it. Binding straight to the number saved each keystroke,
+    /// so clearing "21.90" left "2" behind.
+    @State private var amountText = ""
+    @FocusState private var amountFocused: Bool
+
+    /// Largest amount the detail screen accepts.
+    static let maxAmount: Decimal = 1_000_000
+
+    /// The amount to save for what was typed, or nil to keep the old one
+    /// (empty, unreadable, zero, or over the limit).
+    static func committedAmount(from text: String) -> Decimal? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let parsed = AmountParser.parse(trimmed)?.amount,
+              parsed > 0, parsed <= maxAmount else { return nil }
+        return parsed
+    }
+
+    static func amountText(_ amount: Decimal) -> String {
+        amount == 0 ? "" : amount.formatted(.number.precision(.fractionLength(2)))
+    }
 
     private static var currencies: [String] {
         Array(NSOrderedSet(array: [Money.home, LocalCurrency.current()] + Money.supported)) as! [String]
@@ -20,11 +41,14 @@ struct TransactionDetailView: View {
             .listRowBackground(Color.clear)
 
             Section(bold: "Details") {
-                TextField("Merchant", text: $transaction.merchant)
+                TextField("Paid to", text: $transaction.merchant)
                     .textInputAutocapitalization(.words)
                 LabeledContent("Amount") {
-                    TextField("0.00", value: $transaction.amount, format: .number.precision(.fractionLength(2)))
+                    TextField("0.00", text: $amountText)
                         .keyboardType(.decimalPad)
+                        .focused($amountFocused)
+                        .onSubmit(commitAmount)
+                        .accessibilityLabel("Amount")
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                 }
@@ -61,13 +85,13 @@ struct TransactionDetailView: View {
                 Timeline(steps: timelineSteps)
                     .padding(.vertical, 4)
                 if transaction.rawMerchant != transaction.merchant {
-                    LabeledContent("Original name", value: transaction.rawMerchant)
+                    LabeledContent("Original Name", value: transaction.rawMerchant)
                         .font(.footnote)
                 }
             } header: {
-                BoldHeader("Updates")
+                BoldHeader("History")
             } footer: {
-                Text("When two sources report the same purchase, Sortd keeps one copy.")
+                Text("If a purchase comes in twice, Sortd keeps one.")
             }
 
             Section {
@@ -81,6 +105,9 @@ struct TransactionDetailView: View {
         .background(Color.page)
         .navigationTitle(transaction.merchant.isEmpty ? "Purchase" : transaction.merchant)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { amountText = Self.amountText(transaction.amount) }
+        .onChange(of: amountFocused) { _, focused in if !focused { commitAmount() } }
+        .onDisappear(perform: commitAmount)
         .onChange(of: transaction.amount) { _, _ in refreshAUD() }
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
@@ -142,10 +169,10 @@ struct TransactionDetailView: View {
             } else if !t.refunded, t.amount > 0, let converted = t.audAmount {
                 let rate = (converted / t.amount).rounded(4)
                 steps.append(.init(title: "Converted to \(Money.format(t.audValue, Money.home))",
-                                   detail: "1 \(t.currencyCode) = \(rate) \(Money.home) (ECB rate)", state: .done))
+                                   detail: "1 \(t.currencyCode) = \(rate) \(Money.home), the rate that day", state: .done))
             }
         }
-        steps.append(.init(title: "Filed under \(t.category.name)", detail: "Change it above; Sortd learns for next time", state: .done))
+        steps.append(.init(title: "Filed under \(t.category.name)", detail: "Change it above and Sortd will remember.", state: .done))
         return steps
     }
 
@@ -157,6 +184,14 @@ struct TransactionDetailView: View {
         case .bank: "Confirmed by your bank feed"
         case .manual: "You added this yourself"
         }
+    }
+
+    /// Saves a valid amount; otherwise keeps the old one and puts its text back.
+    private func commitAmount() {
+        if let amount = Self.committedAmount(from: amountText), amount != transaction.amount {
+            transaction.amount = amount
+        }
+        if !amountFocused { amountText = Self.amountText(transaction.amount) }
     }
 
     private func refreshAUD() {

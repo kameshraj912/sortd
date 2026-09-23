@@ -37,7 +37,7 @@ struct SearchView: View {
                        message: "Purchases you log show up here.")
                 .listRowBackground(Color.clear)
         } else {
-            Section("Top merchants this month") {
+            Section("Top shops this month") {
                 ForEach(topMerchants, id: \.name) { m in
                     Button { query = m.name } label: {
                         HStack {
@@ -77,7 +77,7 @@ struct SearchView: View {
         } else {
             Section {
                 ForEach(found) { t in
-                    NavigationLink(value: t) { TransactionRow(transaction: t) }
+                    NavigationLink(value: t) { TransactionRow(transaction: t, showTime: false) }
                         .listRowBackground(Color.card)
                 }
             } header: {
@@ -96,12 +96,8 @@ struct SearchView: View {
     private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
 
     private var matches: [Transaction] {
-        let q = trimmed.lowercased()
-        return transactions.filter {
-            $0.merchant.lowercased().contains(q)
-            || $0.category.name.lowercased().contains(q)
-            || $0.note.lowercased().contains(q)
-        }
+        let q = SearchText.fold(trimmed)
+        return transactions.filter { SearchText.matches($0, folded: q) }
     }
 
     private var thisMonth: [Transaction] {
@@ -127,9 +123,33 @@ private struct OwnSearchField: ViewModifier {
     @Binding var query: String
     func body(content: Content) -> some View {
         if enabled {
-            content.searchable(text: $query, prompt: "Merchant, category or note")
+            // Always showing: the whole point of this tab is the field.
+            content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                               prompt: "Shop, category or note")
         } else {
             content
         }
+    }
+}
+
+/// Search that forgives how a name is written: "mcdonalds" finds
+/// "McDonald's", "cafe" finds "Café", "7 eleven" finds "7-Eleven".
+nonisolated enum SearchText {
+    /// Lowercase, accents folded, and only letters and digits kept.
+    static func fold(_ text: String) -> String {
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                                  locale: nil)
+        return String(folded.unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map(Character.init)).lowercased()
+    }
+
+    /// True when `folded` (already run through `fold`) is in the shop,
+    /// category or note. An empty query matches everything.
+    static func matches(_ t: Transaction, folded q: String) -> Bool {
+        q.isEmpty
+            || fold(t.merchant).contains(q)
+            || fold(t.category.name).contains(q)
+            || fold(t.note).contains(q)
     }
 }

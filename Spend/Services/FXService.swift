@@ -72,7 +72,7 @@ enum FXService {
         if !settingsDone, let r = try? await rate(old, home), r > 0 {
             // Changed while the rate loaded: typed in the new currency already.
             if budget > 0, defaults.double(forKey: budgetKey) == budget {
-                defaults.set((budget * r / 10).rounded() * 10, forKey: budgetKey)
+                defaults.set(convertSetting(budget, rate: r), forKey: budgetKey)
             }
             CategoryBudgets.convert(from: limits, rate: r, defaults)
             settingsDone = true
@@ -85,6 +85,14 @@ enum FXService {
         }
         try? context.save()
         await backfill(in: context)
+    }
+
+    /// A budget or limit in the new currency, rounded to the cent. Rounding
+    /// to the nearest 10 made S$1,000 → USD → SGD come back as S$990.
+    static func convertSetting(_ value: Double, rate: Double) -> Double {
+        let converted = value * rate
+        guard converted.isFinite, converted > 0 else { return 0 }
+        return max(0.01, (converted * 100).rounded() / 100)
     }
 
     /// Converts every purchase still missing a home-currency value. Safe to call often.

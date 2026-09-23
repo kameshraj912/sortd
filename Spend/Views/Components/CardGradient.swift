@@ -314,10 +314,7 @@ struct CardStyleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PageTitle(title: "Card Style")
-                Text("Coloured styles follow what you spend by category. Plain styles stay the same.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                group("Coloured by spending", SpendGradient.Style.allCases.filter { !$0.isPlain })
+                group("Coloured by Spending", SpendGradient.Style.allCases.filter { !$0.isPlain })
                 group("Plain", SpendGradient.Style.allCases.filter(\.isPlain))
             }
             .padding(20)

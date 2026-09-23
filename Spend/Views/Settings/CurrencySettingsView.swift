@@ -10,9 +10,9 @@ struct CurrencySettingsView: View {
 
     var body: some View {
         List {
-            ListPageTitle(title: "Currency", subtitle: "What Sortd totals in, and how it converts.")
+            ListPageTitle(title: "Currency")
             Section {
-                Picker("Totals shown in", selection: $home) {
+                Picker("Show Totals In", selection: $home) {
                     ForEach(Money.supported, id: \.self) { code in
                         Text("\(code) · \(Locale.current.localizedString(forCurrencyCode: code) ?? code)").tag(code)
                     }
@@ -24,7 +24,7 @@ struct CurrencySettingsView: View {
                         refreshing = false
                     }
                 }
-                LabeledContent("Purchase currency", value: "\(LocalCurrency.current()) (from your time zone)")
+                LabeledContent("Local Currency", value: "\(LocalCurrency.current()), from your time zone")
                 Button {
                     Task {
                         refreshing = true
@@ -39,8 +39,6 @@ struct CurrencySettingsView: View {
                     }
                 }
                 .disabled(refreshing)
-            } header: {
-                BoldHeader("Currency")
             } footer: {
                 Text("Purchases in other currencies are converted to \(home) at that day's European Central Bank rate.")
             }

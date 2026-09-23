@@ -11,8 +11,61 @@ struct BudgetSheet: View {
 
     private static let presets: [Double] = [500, 800, 1000, 1500, 2000]
 
+    /// The largest monthly budget Sortd accepts: 1,000,000, scaled up for
+    /// currencies with big numbers (the same steps as the setup presets, so
+    /// a ₩3,000,000 or Rp30,000,000 budget still fits). Anything bigger is a
+    /// typo, and huge values used to crash this sheet when turned into text.
+    static func maxBudget(_ currency: String = Money.home) -> Double {
+        1_000_000 * currencyScale(currency)
+    }
+
+    /// Round-number steps for currencies with big numbers.
+    static func currencyScale(_ currency: String) -> Double {
+        ["JPY": 100, "KRW": 1000, "IDR": 10000, "INR": 50, "PHP": 40, "THB": 25, "HUF": 250, "ISK": 100][currency] ?? 1
+    }
+
+    /// A stored budget that is safe to show: bad values (too big, NaN,
+    /// infinity, negative) become 0 so a broken install recovers.
+    static func sanitized(_ budget: Double, currency: String = Money.home) -> Double {
+        guard budget.isFinite, budget > 0, budget <= maxBudget(currency) else { return 0 }
+        return budget
+    }
+
+    /// Text for the field. Never uses Int(), which traps on huge values.
+    static func text(for budget: Double, currency: String = Money.home) -> String {
+        let safe = sanitized(budget, currency: currency)
+        guard safe > 0 else { return "" }
+        return safe.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)
+            .locale(Locale(identifier: "en_US_POSIX")))
+    }
+
+    /// Keeps what was typed to the digits the limit allows before the decimal
+    /// point (7 for 1,000,000) and 2 after, and never more than the limit.
+    static func limitInput(_ raw: String, currency: String = Money.home) -> String {
+        let limit = maxBudget(currency)
+        let maxDigits = String(format: "%.0f", limit).count
+        var whole = ""
+        var fraction: String?
+        for ch in raw {
+            if ch.isASCII, ch.isNumber {
+                if fraction == nil {
+                    if whole.count < maxDigits { whole.append(ch) }
+                } else if fraction!.count < 2 {
+                    fraction!.append(ch)
+                }
+            } else if ch == "." || ch == ",", fraction == nil {
+                fraction = ""
+            }
+        }
+        // Drop leading zeros ("0005" → "5") but keep a single "0".
+        while whole.count > 1, whole.first == "0" { whole.removeFirst() }
+        if let w = Double(whole), w >= limit { return String(format: "%.0f", limit) }
+        guard let fraction else { return whole }
+        return (whole.isEmpty ? "0" : whole) + "." + fraction
+    }
+
     private var value: Double {
-        (AmountParser.parse(text)?.amount.double) ?? 0
+        Self.sanitized((AmountParser.parse(text)?.amount.double) ?? 0)
     }
 
     private var range: String {
@@ -48,7 +101,11 @@ struct BudgetSheet: View {
                         .keyboardType(.numberPad)
                         .focused($focused)
                         .fixedSize()
-                        .accessibilityLabel("Monthly budget in Australian dollars")
+                        .onChange(of: text) { _, new in
+                            let limited = Self.limitInput(new)
+                            if limited != new { text = limited }
+                        }
+                        .accessibilityLabel("Monthly budget in \(Locale.current.localizedString(forCurrencyCode: Money.home) ?? Money.home)")
                     Image(systemName: "pencil")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -66,7 +123,7 @@ struct BudgetSheet: View {
                     ForEach(Self.presets, id: \.self) { preset in
                         let selected = value == preset
                         Button {
-                            text = String(Int(preset))
+                            text = Self.text(for: preset)
                         } label: {
                             Text(Money.format(Decimal(preset), Money.home, cents: false))
                                 .font(.subheadline.weight(.semibold))
@@ -112,7 +169,10 @@ struct BudgetSheet: View {
         }
         .padding(20)
         .onAppear {
-            if budget > 0 { text = String(Int(budget)) }
+            // Recover installs that saved a huge or broken budget.
+            let safe = Self.sanitized(budget)
+            if safe != budget { budget = safe }
+            if safe > 0 { text = Self.text(for: safe) }
         }
         .sensoryFeedback(.success, trigger: saved)
         .presentationDetents([.medium, .large])

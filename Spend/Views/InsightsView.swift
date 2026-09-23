@@ -23,7 +23,7 @@ struct InsightsView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
-                            PageTitle(title: "Insights", subtitle: "Where your money goes, and how this month compares.")
+                            PageTitle(title: "Insights")
                             SpendChart(transactions: transactions)
                             breakdown
                             InsightCarousel(transactions: thisMonth)
@@ -61,21 +61,8 @@ struct InsightsView: View {
         let max = rows.first?.total.double ?? 1
         let total = thisMonth.audTotal.double
 
-        // One dry line, and only when a single category really ran away
-        // with the month. Most months it says nothing.
-        let quip = rows.first.flatMap { row -> String? in
-            guard total > 0 else { return nil }
-            return SortdVoice.topCategory(row.category.name, share: row.total.double / total)
-        }
-
         return VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Categories this month")
-            if let quip {
-                Text(quip)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            SectionHeader(title: "Categories This Month")
             VStack(spacing: 0) {
                 ForEach(rows, id: \.category) { row in
                     let progress = limits[row.category].map { CategoryBudgets.progress(spent: row.total.double, limit: $0) }
@@ -122,7 +109,7 @@ struct InsightsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) purchases")
+                    .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
                     .accessibilityHint("Shows these purchases")
                 }
             }
@@ -159,7 +146,7 @@ struct CategoryDetailView: View {
                         .font(.largeTitle.weight(.bold))
                         .monospacedDigit()
                     BrandBar(width: 14, height: 3)
-                    Text("this month · \(month.count) \(month.count == 1 ? "purchase" : "purchases")")
+                    Text("This month · \(month.count) \(month.count == 1 ? "purchase" : "purchases")")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -169,7 +156,7 @@ struct CategoryDetailView: View {
             Section {
                 Button { editingLimit = true } label: {
                     HStack {
-                        Text("Monthly limit")
+                        Text("Monthly Limit")
                         Spacer()
                         if let limit {
                             let p = CategoryBudgets.progress(spent: month.audTotal.double, limit: limit)

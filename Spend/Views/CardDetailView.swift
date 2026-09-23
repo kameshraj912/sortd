@@ -7,6 +7,8 @@ import Charts
 struct CardDetailView: View {
     let card: Card
     @Query(sort: \Transaction.date, order: .reverse) private var all: [Transaction]
+    /// The month-bar chart grows with Dynamic Type so its month letters keep room.
+    @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 64
 
     private var cal: Calendar { .current }
 
@@ -129,7 +131,7 @@ struct CardDetailView: View {
                 }
             }
         }
-        .frame(height: 64)
+        .frame(height: chartHeight)
         .accessibilityLabel("Spending over the last 6 months")
         .accessibilityValue(months.map { "\($0.month.formatted(.dateTime.month(.wide))) \(Money.format(Decimal($0.total), Money.home, cents: false))" }.joined(separator: ", "))
     }
@@ -142,7 +144,7 @@ struct CardDetailView: View {
                 Text("Recent")
                     .font(.headline)
                 Spacer()
-                NavigationLink("See all") {
+                NavigationLink("See All") {
                     TransactionsScreen(fixedCard: card)
                 }
                 .font(.subheadline)

@@ -180,10 +180,25 @@ enum TransactionLogger {
         Deduper.isBarePlatformName(t.rawMerchant) ? MerchantName.key(t.merchant) : MerchantName.key(t.rawMerchant)
     }
 
-    static func recategorise(_ t: Transaction, to category: SpendCategory, in context: ModelContext) throws {
+    /// Other purchases a new category for `t` would also move: the ones
+    /// sharing its rule key (same shop). Empty when the shop has no name.
+    static func samePlace(as t: Transaction, in context: ModelContext) throws -> [Transaction] {
+        let key = ruleKey(t)
+        guard !key.isEmpty else { return [] }
+        return try context.fetch(FetchDescriptor<Transaction>())
+            .filter { $0.id != t.id && ruleKey($0) == key }
+    }
+
+    /// Raj picked a new category for one purchase.
+    ///
+    /// `applyToOthers` true: remember it as a rule for the shop and move his
+    /// other purchases there too. False ("Just This One"): change only `t`,
+    /// learn nothing.
+    static func recategorise(_ t: Transaction, to category: SpendCategory, in context: ModelContext,
+                             applyToOthers: Bool = true) throws {
         t.category = category
         let key = ruleKey(t)
-        guard !key.isEmpty else { try context.save(); return }
+        guard applyToOthers, !key.isEmpty else { try context.save(); return }
 
         let existing = try context.fetch(FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.key == key }))
         if let rule = existing.first {
@@ -193,8 +208,7 @@ enum TransactionLogger {
             context.insert(MerchantRule(key: key, category: category))
         }
 
-        let all = try context.fetch(FetchDescriptor<Transaction>())
-        for other in all where other.id != t.id && ruleKey(other) == key {
+        for other in try samePlace(as: t, in: context) {
             other.category = category
         }
         try context.save()

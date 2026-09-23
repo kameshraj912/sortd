@@ -68,6 +68,12 @@ struct PaywallView: View {
             BrandBar()
             Text(feature.map { "\($0.title) is part of Sortd Pro." } ?? subtitle)
                 .font(.body).foregroundStyle(.secondary)
+            // The monthly figure comes second and smaller: what's billed is
+            // the yearly price, so that leads.
+            if feature == nil, let perMonth = yearlyPlan?.perMonth {
+                Text("That works out to about \(perMonth) a month.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
         }
         .padding(.top, 8)
     }
@@ -94,14 +100,15 @@ struct PaywallView: View {
         .surface(radius: 16)
     }
 
-    /// "Less than a coffee a month" was true of the yearly plan and not the
-    /// monthly one, said as though it covered both. Quotes the real
-    /// per-month figure instead, from whatever the App Store returns.
+    private var yearlyPlan: PlanDisplay? {
+        displayPlans.first { $0.id == ProStore.ID.yearly }
+    }
+
+    /// Leads with the price actually billed (the App Store's yearly
+    /// displayPrice), not the per-month figure, which is never charged.
     private var subtitle: String {
-        guard let perMonth = displayPlans.first(where: { $0.id == ProStore.ID.yearly })?.perMonth else {
-            return "Everything Sortd can do."
-        }
-        return "Everything Sortd can do, from \(perMonth) a month on the yearly plan."
+        guard let yearly = yearlyPlan else { return "Everything Sortd can do." }
+        return "Everything Sortd can do, for \(yearly.price) a year on the yearly plan."
     }
 
     private var displayPlans: [PlanDisplay] {
@@ -126,7 +133,7 @@ struct PaywallView: View {
                 Text(store.loadError ?? "Loading plans…").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
                 if store.loadError != nil {
-                    Button("Retry") { Task { await store.load() } }.font(.subheadline.weight(.semibold))
+                    Button("Try Again") { Task { await store.load() } }.font(.subheadline.weight(.semibold))
                 }
             }
             .padding(16).surface(radius: 16)
@@ -183,7 +190,7 @@ struct PaywallView: View {
         if p.id == ProStore.ID.lifetime { return "Pay once. Yours for good." }
         var parts: [String] = []
         if let t = p.trial { parts.append(t) }
-        if let perMonth = p.perMonth { parts.append("\(perMonth) a month") }
+        if let perMonth = p.perMonth { parts.append("About \(perMonth) a month") }
         if p.id == ProStore.ID.monthly { parts.append("Cancel any time") }
         return parts.joined(separator: " · ")
     }
@@ -203,7 +210,7 @@ struct PaywallView: View {
     }
 
     private var freeNote: some View {
-        Text("Free forever: Apple Pay logging, adding by hand, cards, export and delete.")
+        Text("Always free: Apple Pay logging, adding by hand, your monthly budget, statement import, widgets and backups.")
             .font(.footnote).foregroundStyle(.secondary)
     }
 
@@ -246,12 +253,8 @@ struct PaywallView: View {
     private func cta(_ p: PlanDisplay?, trial: String?) -> String {
         guard let p else { return "Continue" }
         if p.id == ProStore.ID.lifetime { return "Buy for \(p.price)" }
-        if let trial {
-            let length = trial.replacingOccurrences(of: " free", with: "")
-                .replacingOccurrences(of: " days", with: "-day").replacingOccurrences(of: " week", with: "-week")
-                .replacingOccurrences(of: " month", with: "-month")
-            return "Start \(length) free trial"
-        }
+        // The trial's length is in the line under the button.
+        if trial != nil { return "Start Free Trial" }
         return "Subscribe for \(p.price)"
     }
 
@@ -261,7 +264,7 @@ struct PaywallView: View {
         if p.id == ProStore.ID.lifetime { return "One payment of \(p.price). No subscription." }
         let period = p.id == ProStore.ID.yearly ? "year" : "month"
         let start = trial.map { "\($0), then " } ?? ""
-        return "\(start)\(p.price) a \(period). Renews automatically until you cancel in Settings › Apple Account › Subscriptions, at least 24 hours before it renews."
+        return "\(start)\(p.price) a \(period). Renews until you cancel. Cancel at least 24 hours before it renews, in Settings › Apple Account › Subscriptions."
     }
 
     private func buy(_ p: Product) async {
@@ -270,7 +273,7 @@ struct PaywallView: View {
         do {
             switch try await store.buy(p) {
             case .purchased: dismiss()
-            case .pending: message = "Waiting for approval (for example Ask to Buy). Pro unlocks as soon as it's approved."
+            case .pending: message = "Waiting for approval, like Ask to Buy. Pro unlocks once it's approved."
             case .cancelled: break
             }
         } catch {
