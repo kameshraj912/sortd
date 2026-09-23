@@ -85,6 +85,7 @@ struct CategoryLimitSheet: View {
                     Text("Save")
                         .primaryPill(enabled: value > 0)
                 }
+                .primaryGlass()
                 .disabled(value <= 0)
 
                 if current > 0 {
