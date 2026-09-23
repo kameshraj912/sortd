@@ -78,6 +78,8 @@ struct InsightsView: View {
                                         Text("\(Money.format(row.total, Money.home, cents: false)) of \(Money.format(Decimal(progress.limit), Money.home, cents: false))")
                                             .font(.body)
                                             .monospacedDigit()
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.7)
                                             .foregroundStyle(progress.status == .over ? Color.down : Color.ink)
                                     } else {
                                         Text(Money.format(row.total, Money.home))
@@ -109,7 +111,7 @@ struct InsightsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(row.category.name), \(Money.format(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
+                    .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
                     .accessibilityHint("Shows these purchases")
                 }
             }
@@ -143,8 +145,7 @@ struct CategoryDetailView: View {
                 VStack(spacing: 8) {
                     CategoryIcon(category: category, size: 56)
                     Text(Money.format(month.audTotal, Money.home))
-                        .font(.largeTitle.weight(.bold))
-                        .monospacedDigit()
+                        .font(.money)
                     BrandBar(width: 14, height: 3)
                     Text("This month · \(month.count) \(month.count == 1 ? "purchase" : "purchases")")
                         .font(.subheadline)

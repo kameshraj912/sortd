@@ -23,6 +23,8 @@ struct ImportView: View {
     /// The file was read but had no purchases in it. Changes the alert title.
     @State private var foundNothing = false
     @State private var busy = false
+    /// Bumped on a finished import, for the haptic.
+    @State private var imported = 0
     @State private var pickingFile = false
     @State private var photo: PhotosPickerItem?
     @State private var backup: Data?
@@ -54,6 +56,7 @@ struct ImportView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Import")
+        .sensoryFeedback(.success, trigger: imported)
         .fileImporter(isPresented: $pickingFile,
                       allowedContentTypes: StatementReader.readableTypes) { result in
             switch result {
@@ -320,28 +323,41 @@ struct ImportView: View {
         stage = .start
     }
 
+    /// Both of these write into the main SwiftData context, so the work
+    /// itself has to stay on the main actor. Yielding first at least lets the
+    /// spinner draw — before, `busy` went true and false inside one runloop
+    /// turn, so a big statement looked like the app had frozen.
     private func save(_ found: [StatementImport.Row]) {
+        guard !busy else { return }
         busy = true
-        let (added, merged) = StatementImport.save(found, card: card, in: context)
-        try? TransactionLogger.refreshUncategorised(in: context)
-        WidgetBridge.refresh(from: context)
-        Task { await FXService.backfill(in: context) }
-        busy = false
-        done = merged > 0
-            ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
-            : "\(added) added."
+        Task {
+            await Task.yield()
+            let (added, merged) = StatementImport.save(found, card: card, in: context)
+            try? TransactionLogger.refreshUncategorised(in: context)
+            WidgetBridge.refresh(from: context)
+            Task { await FXService.backfill(in: context) }
+            busy = false
+            imported += 1
+            done = merged > 0
+                ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
+                : "\(added) added."
+        }
     }
 
     private func restore(_ mode: Backup.Mode) {
-        guard let data = backup else { return }
+        guard let data = backup, !busy else { return }
         busy = true
-        do {
-            let result = try Backup.restore(data, mode: mode, into: context)
-            Task { await FXService.backfill(in: context) }
-            done = result.summary
-        } catch {
-            self.error = error.localizedDescription
+        Task {
+            await Task.yield()
+            do {
+                let result = try Backup.restore(data, mode: mode, into: context)
+                Task { await FXService.backfill(in: context) }
+                imported += 1
+                done = result.summary
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
         }
-        busy = false
     }
 }

@@ -27,6 +27,8 @@ struct TransactionsScreen: View {
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pendingDeletes: [Transaction] = []
+    /// What the last pull-to-refresh found.
+    @State private var refreshNote: RefreshNote?
     @State private var undoTask: Task<Void, Never>?
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
@@ -104,9 +106,9 @@ struct TransactionsScreen: View {
             // merge into a purchase that is about to go.
             commitDelete()
             // Pull down to fetch new Gmail receipts and exchange rates.
-            _ = await GmailSync.syncAll(in: context)
-            await FXService.ensureConverted(in: context)
+            refreshNote = await RefreshNote.run(in: context)
         }
+        .refreshNote($refreshNote, bottomPadding: 16)
         .onDisappear { commitDelete() }
         // Leaving the app ends the Undo window: save the delete now, or the
         // 6-second timer may never fire and the widgets keep the purchase.
@@ -283,9 +285,6 @@ struct TransactionsScreen: View {
                 if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
                 Text(title)
             }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
             .chip(selected: selected)
         }
         .buttonStyle(.plain)
@@ -424,11 +423,12 @@ struct CategoryPickerSheet: View {
 /// "Deleted Uber Eats · Undo", in glass above the tab bar.
 struct UndoToast: View {
     let text: String
+    var symbol = "trash"
     let undo: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
-            Label(text, systemImage: "trash")
+            Label(text, systemImage: symbol)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(Color.ink)
@@ -458,8 +458,7 @@ struct TransactionPreview: View {
                 }
             }
             Text(transaction.needsReview ? "Amount missing" : Money.format(transaction.amount, transaction.currencyCode))
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .monospacedDigit()
+                .font(.money)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             VStack(alignment: .leading, spacing: 4) {

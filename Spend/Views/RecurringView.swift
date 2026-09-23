@@ -8,6 +8,8 @@ struct RecurringView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     /// Bumped after a change to Raj's choices so the list recomputes.
     @State private var revision = 0
+    /// The last thing hidden with "Not Recurring", so it can come back.
+    @State private var hidden: (key: String, name: String)?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -77,11 +79,34 @@ struct RecurringView: View {
         // Cancelled, undone or "not recurring": update reminders now, not on
         // the next launch, so a cancelled bill doesn't still ping tomorrow.
         .onChange(of: revision) { Task { await Reminders.reschedule(transactions.recurring()) } }
+        .overlay(alignment: .bottom) {
+            if let hidden {
+                UndoToast(text: "\(hidden.name) hidden", symbol: "eye.slash") {
+                    RecurringPrefs.unignore(hidden.key)
+                    self.hidden = nil
+                    revision += 1
+                }
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: hidden?.key)
         .overlay {
             if all.isEmpty {
                 EmptyState("No subscriptions or bills yet", symbol: "arrow.triangle.2.circlepath",
                            message: "They show up here once they've charged a couple of times, or a receipt says when they renew.")
             }
+        }
+    }
+
+    /// Hides one, and keeps it for a few seconds so it can come back.
+    private func hide(_ r: Recurring) {
+        RecurringPrefs.ignore(r.key)
+        revision += 1
+        hidden = (r.key, r.merchant)
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            if hidden?.key == r.key { withAnimation(.snappy) { hidden = nil } }
         }
     }
 
@@ -95,8 +120,7 @@ struct RecurringView: View {
         return VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text(Money.format(Decimal(subs), Money.home, cents: false))
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .monospacedDigit()
+                    .font(.money)
                 Text("a month on subscriptions · \(Money.format(Decimal(subs * 12), Money.home, cents: false)) a year")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -145,13 +169,13 @@ struct RecurringView: View {
             } else {
                 Button("Mark Cancelled") { RecurringPrefs.markCancelled(r.key); revision += 1 }
                     .tint(.orange)
-                Button("Not Recurring") { RecurringPrefs.ignore(r.key); revision += 1 }
+                Button("Not Recurring") { hide(r) }
                     .tint(.gray)
             }
         }
         .contextMenu {
             Button("I Cancelled This", systemImage: "xmark.circle") { RecurringPrefs.markCancelled(r.key); revision += 1 }
-            Button("Not a Recurring Payment", systemImage: "eye.slash") { RecurringPrefs.ignore(r.key); revision += 1 }
+            Button("Not a Recurring Payment", systemImage: "eye.slash") { hide(r) }
         }
     }
 
