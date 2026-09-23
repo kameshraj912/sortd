@@ -89,7 +89,9 @@ struct ImportView: View {
         } message: {
             Text(done ?? "")
         }
-        .confirmationDialog(replaceTitle, isPresented: $confirmingReplace, titleVisibility: .visible) {
+        // An alert, like Delete All Data: the message names counts and a date,
+        // which is too much for the narrow popover a dialog renders in.
+        .alert(replaceTitle, isPresented: $confirmingReplace) {
             Button("Replace Everything", role: .destructive) { restore(.replace) }
             Button("Cancel", role: .cancel) {}
         } message: {
