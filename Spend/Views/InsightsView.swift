@@ -135,6 +135,29 @@ struct CategoryDetailView: View {
     @State private var limit: Double?
     @State private var editingLimit = false
 
+    /// Spent against the limit, with "over" or "left" spelled out — near and
+    /// over used to be amber vs red and nothing else.
+    @ViewBuilder
+    private func limitCell(_ limit: Double, spent: Decimal) -> some View {
+        let p = CategoryBudgets.progress(spent: spent.double, limit: limit)
+        let spentText = Money.format(spent, Money.home, cents: false)
+        let limitText = Money.format(Decimal(limit), Money.home, cents: false)
+        let over = p.status == .over
+        let note = over
+            ? Money.format(Decimal(-p.left), Money.home, cents: false) + " over"
+            : Money.format(Decimal(p.left), Money.home, cents: false) + " left"
+        VStack(alignment: .trailing, spacing: 1) {
+            Text("\(spentText) of \(limitText)")
+                .monospacedDigit()
+                .foregroundStyle(p.status == .ok ? Color.secondary : p.status.color(category))
+            if p.status != .ok {
+                Text(note).font(.caption).foregroundStyle(p.status.color(category))
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
     var body: some View {
         let items = all.filter { $0.category == category }
         let start = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
@@ -160,10 +183,7 @@ struct CategoryDetailView: View {
                         Text("Monthly Limit")
                         Spacer()
                         if let limit {
-                            let p = CategoryBudgets.progress(spent: month.audTotal.double, limit: limit)
-                            Text("\(Money.format(month.audTotal, Money.home, cents: false)) of \(Money.format(Decimal(limit), Money.home, cents: false))")
-                                .monospacedDigit()
-                                .foregroundStyle(p.status == .ok ? Color.secondary : p.status.color(category))
+                            limitCell(limit, spent: month.audTotal)
                         } else {
                             Text("None").foregroundStyle(.secondary)
                         }
