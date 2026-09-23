@@ -29,6 +29,7 @@ struct TransactionsScreen: View {
     @State private var pendingDeletes: [Transaction] = []
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
+    @Namespace private var zoom
     @State private var undoTask: Task<Void, Never>?
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
@@ -199,15 +200,23 @@ struct TransactionsScreen: View {
 
             if filtered.isEmpty {
                 Section {
-                    VStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").font(.title2).foregroundStyle(.secondary)
-                        Text(search.isEmpty ? "No purchases match these filters." : "No results for “\(search)”.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Button("Clear") { search = ""; cardFilter = nil; categoryFilter = nil }
-                            .font(.subheadline.weight(.semibold))
+                    // The system's own no-results view, so it reads and
+                    // behaves the way it does everywhere else on iOS.
+                    Group {
+                        if search.isEmpty {
+                            ContentUnavailableView {
+                                Label("No purchases match", systemImage: "line.3.horizontal.decrease.circle")
+                            } description: {
+                                Text("Nothing here with these filters on.")
+                            } actions: {
+                                Button("Clear Filters") { cardFilter = nil; categoryFilter = nil }
+                            }
+                        } else {
+                            ContentUnavailableView.search(text: search)
+                        }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 8)
                     .listRowBackground(Color.clear)
                 }
             }
@@ -216,10 +225,16 @@ struct TransactionsScreen: View {
                     ForEach(day.items) { t in
                         ZStack {
                             // Hidden link so the row has no chevron.
-                            NavigationLink { TransactionDetailView(transaction: t) } label: { EmptyView() }
+                            NavigationLink {
+                                TransactionDetailView(transaction: t)
+                                    .navigationTransition(.zoom(sourceID: t.persistentModelID, in: zoom))
+                            } label: { EmptyView() }
                                 .opacity(0)
                             TransactionRow(transaction: t)
                         }
+                        // The detail grows out of the row you tapped instead
+                        // of sliding in from the side.
+                        .matchedTransitionSource(id: t.persistentModelID, in: zoom)
                         .listRowBackground(Color.card)
                         .alignmentGuide(.listRowSeparatorLeading) { _ in 48 }
                         .swipeActions(edge: .leading) {

@@ -131,7 +131,7 @@ struct TransactionDetailView: View {
             CategoryIcon(category: transaction.category, size: 64)
             Text(Money.format(transaction.amount, transaction.currencyCode))
                 .font(.money)
-                .contentTransition(.numericText())
+                .contentTransition(.numericText(value: transaction.amount.double))
             BrandBar(width: 14, height: 3)
             HStack(spacing: 6) {
                 Text(transaction.paidWithLabel)
