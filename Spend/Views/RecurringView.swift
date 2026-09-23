@@ -91,6 +91,7 @@ struct RecurringView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: hidden?.key)
+        .animation(.snappy, value: revision)
         .overlay {
             if all.isEmpty {
                 EmptyState("No subscriptions or bills yet", symbol: "arrow.triangle.2.circlepath",

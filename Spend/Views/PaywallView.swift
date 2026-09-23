@@ -174,7 +174,7 @@ struct PaywallView: View {
             }
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -232,7 +232,7 @@ struct PaywallView: View {
                 }
                 .primaryPill(enabled: plan != nil)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(plan == nil || working)
 
             Text(terms(plan, trial: trial))
@@ -245,7 +245,7 @@ struct PaywallView: View {
                 Button { openURL(URL(string: "https://sortd.page/terms")!) } label: { legalLabel("Terms") }
                 Button { openURL(URL(string: "https://sortd.page/privacy")!) } label: { legalLabel("Privacy") }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .foregroundStyle(Color.ink)
         }
         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
@@ -315,7 +315,7 @@ struct ProLockedView: View {
             Text(feature.title).font(.title2.weight(.bold))
             Text(feature.detail).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button { showing = true } label: { Text("Unlock with Sortd Pro").primaryPill() }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.top, 6)
             Spacer()
         }
