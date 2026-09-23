@@ -50,7 +50,10 @@ enum NavOption: String {
             return option
         }
         #endif
-        return .today
+        // Three tabs, search where the purchases are, and Settings in the
+        // same top-right spot on every tab: what Apple's own apps and most
+        // finance apps do (docs/ux-research/07-nav-options.md).
+        return .threeTabs
     }()
 
     var hasSearchTab: Bool { self == .today || self == .gearEverywhere }
