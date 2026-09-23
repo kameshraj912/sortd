@@ -111,6 +111,75 @@ struct BackupTests {
         #expect(names == ["Woolworths"])
     }
 
+    @Test func replacingWithTheSameBackupTwiceKeepsOneCopy() throws {
+        // Replace deletes and adds the same purchases in one save.
+        let from = try store()
+        add(from, "Woolworths", 58.30, "2026-09-01")
+        let data = try Backup.data(in: from, defaults: scratch())
+
+        let to = try store()
+        try Backup.restore(data, mode: .replace, into: to, defaults: scratch())
+        try Backup.restore(data, mode: .replace, into: to, defaults: scratch())
+
+        #expect(try to.fetch(FetchDescriptor<Transaction>()).map(\.merchant) == ["Woolworths"])
+        #expect(!to.hasChanges)
+    }
+
+    @Test func replaceTakesTheBackupsLearnedCategories() throws {
+        let from = try store()
+        let old = MerchantRule(key: "woolworths", category: .groceries)
+        old.updatedAt = date("2026-09-01")
+        from.insert(old)
+        try from.save()
+        let data = try Backup.data(in: from, defaults: scratch())
+
+        // This phone has a newer rule for the same shop, and one the backup lacks.
+        let to = try store()
+        let mine = MerchantRule(key: "woolworths", category: .shopping)
+        mine.updatedAt = date("2026-09-10")
+        to.insert(mine)
+        to.insert(MerchantRule(key: "coles", category: .groceries))
+        try to.save()
+
+        try Backup.restore(data, mode: .replace, into: to, defaults: scratch())
+        let rules = try to.fetch(FetchDescriptor<MerchantRule>())
+        #expect(rules.map(\.key) == ["woolworths"])
+        #expect(rules.first?.category == .groceries)
+    }
+
+    @Test func replaceClearsABudgetTheBackupDoesNotHave() throws {
+        // A budget set here in AUD must not carry over as SGD.
+        let fromDefaults = scratch()
+        fromDefaults.set("SGD", forKey: Money.homeKey)
+        let data = try Backup.data(in: try store(), defaults: fromDefaults)
+
+        let toDefaults = scratch()
+        toDefaults.set("AUD", forKey: Money.homeKey)
+        toDefaults.set(900.0, forKey: "monthlyBudget")
+        toDefaults.set(["eatingOut": 300.0], forKey: CategoryBudgets.key)
+        toDefaults.set(true, forKey: "appLockEnabled")
+        try Backup.restore(data, mode: .replace, into: try store(), defaults: toDefaults)
+
+        #expect(toDefaults.string(forKey: Money.homeKey) == "SGD")
+        #expect(toDefaults.object(forKey: "monthlyBudget") == nil)
+        #expect(toDefaults.object(forKey: CategoryBudgets.key) == nil)
+        // The app lock is never switched off by a restore.
+        #expect(toDefaults.bool(forKey: "appLockEnabled"))
+    }
+
+    @Test func replaceFromABackupWithNoCurrencyKeepsThisPhonesOne() throws {
+        let data = try Backup.data(in: try store(), defaults: scratch())
+
+        let toDefaults = scratch()
+        toDefaults.set("AUD", forKey: Money.homeKey)
+        toDefaults.set(900.0, forKey: "monthlyBudget")
+        try Backup.restore(data, mode: .replace, into: try store(), defaults: toDefaults)
+
+        #expect(toDefaults.string(forKey: Money.homeKey) == "AUD")
+        #expect(toDefaults.string(forKey: FXService.convertedKey) == "AUD")
+        #expect(toDefaults.object(forKey: "monthlyBudget") == nil)
+    }
+
     // MARK: Details that are easy to drop
 
     @Test func refundsFlagsAndRenewalsSurvive() throws {

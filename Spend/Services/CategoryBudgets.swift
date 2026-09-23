@@ -34,6 +34,26 @@ enum CategoryBudgets {
         set(0, for: category, defaults)
     }
 
+    /// The limits exactly as saved, keyed by `SpendCategory.rawValue`.
+    static func stored(_ defaults: UserDefaults = .standard) -> [String: Double] {
+        defaults.dictionary(forKey: key) as? [String: Double] ?? [:]
+    }
+
+    // MARK: Currency
+
+    /// The home currency changed: multiply each limit by `rate` and round to
+    /// the cent, like the monthly budget. Only limits still equal to
+    /// `before` change; one set again while the rate loaded is already in the
+    /// new currency.
+    static func convert(from before: [String: Double], rate: Double, _ defaults: UserDefaults = .standard) {
+        guard rate > 0, !before.isEmpty else { return }
+        var raw = stored(defaults)
+        for (k, v) in raw where before[k] == v && v > 0 {
+            raw[k] = FXService.convertSetting(v, rate: rate)
+        }
+        defaults.set(raw, forKey: key)
+    }
+
     // MARK: Progress
 
     enum Status: Equatable {

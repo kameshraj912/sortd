@@ -45,7 +45,9 @@ extension AppTab {
         switch ProcessInfo.processInfo.environment["SPEND_TAB"] {
         case "activity": .activity
         case "insights": .insights
-        case "settings": .settings
+        // Only start on a tab this nav option actually shows.
+        case "search" where NavOption.current.hasSearchTab: .search
+        case "you" where NavOption.current.hasYouTab: .you
         default: .home
         }
     }

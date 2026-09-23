@@ -14,6 +14,8 @@ struct ActivityView: View {
 struct TransactionsScreen: View {
     let fixedCard: Card?
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     @State private var search = ""
@@ -22,15 +24,25 @@ struct TransactionsScreen: View {
     @State private var showingAdd = false
     @State private var recategorising: Transaction?
     @State private var deleted = 0
+    /// Swiped away but kept for a few seconds so Undo can bring them back.
+    /// Each new delete restarts the timer; Undo brings back all of them.
+    @State private var pendingDeletes: [Transaction] = []
+    @State private var undoTask: Task<Void, Never>?
+    /// A category picked in the sheet, waiting for the sheet to close.
+    @State private var stagedChange: CategoryChange?
+    /// Asks "Change all N … purchases?" when other purchases share the shop.
+    @State private var confirmingChange: CategoryChange?
 
     var body: some View {
         Group {
             if transactions.isEmpty {
-                ContentUnavailableView(
-                    "No Purchases Yet",
-                    systemImage: "list.bullet.rectangle.portrait",
-                    description: Text("Purchases you log, or that come in from Apple Pay, show up here. \(SortdVoice.noPurchases)")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    PageTitle(title: fixedCard?.name ?? "Activity")
+                        .padding(.horizontal, 20)
+                    EmptyState("No purchases yet", symbol: "list.bullet.rectangle.portrait",
+                               message: "Your purchases will show up here.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 // The list always shows (title, search box, chips), with a
                 // "nothing matches" message inside it, so a search can be cleared.
@@ -41,20 +53,115 @@ struct TransactionsScreen: View {
         .brandedTitle(fixedCard?.name ?? "Activity")
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { filterMenu }
-                .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+            if fixedCard == nil, !transactions.isEmpty {
+                ToolbarItem(placement: .topBarLeading) { filterMenu }
+                    .sharedBackgroundVisibility(.hidden)
             }
-            .sharedBackgroundVisibility(.hidden)
+            if NavLayout.current == .header || NavLayout.current == .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add Purchase", systemImage: "plus") { showingAdd = true }
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
         }
         .sheet(isPresented: $showingAdd) { AddTransactionView() }
-        .sheet(item: $recategorising) { t in
-            CategoryPickerSheet(selected: t.category) { category in
-                try? TransactionLogger.recategorise(t, to: category, in: context)
+        .sheet(item: $recategorising, onDismiss: {
+            // The question waits until the sheet is gone, or it can't show.
+            confirmingChange = stagedChange
+            stagedChange = nil
+        }) { t in
+            CategoryPickerSheet(selected: t.category, footer: CategoryPickerSheet.askFooter) { category in
+                pick(category, for: t)
             }
         }
+        .confirmationDialog(confirmingChange.map { "Change all \($0.total) \($0.transaction.merchant) purchases?" } ?? "",
+                            isPresented: Binding(get: { confirmingChange != nil },
+                                                 set: { if !$0 { confirmingChange = nil } }),
+                            titleVisibility: .visible,
+                            presenting: confirmingChange) { change in
+            Button("All \(change.total)") {
+                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context)
+            }
+            Button("Just This One") {
+                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
+                                                    applyToOthers: false)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { change in
+            Text("\"All\" also puts new \(change.transaction.merchant) purchases in \(change.category.name).")
+        }
         .sensoryFeedback(.impact(weight: .medium), trigger: deleted)
+        .overlay(alignment: .bottom) {
+            if !pendingDeletes.isEmpty {
+                UndoToast(text: undoText) { undoDelete() }
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: pendingDeletes.isEmpty)
+        .refreshable {
+            // Finish a pending delete first, so a receipt from the sync can't
+            // merge into a purchase that is about to go.
+            commitDelete()
+            // Pull down to fetch new Gmail receipts and exchange rates.
+            _ = await GmailSync.syncAll(in: context)
+            await FXService.ensureConverted(in: context)
+        }
+        .onDisappear { commitDelete() }
+        // Leaving the app ends the Undo window: save the delete now, or the
+        // 6-second timer may never fire and the widgets keep the purchase.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { commitDelete() }
+        }
+    }
+
+    // MARK: Delete with undo
+
+    private func delete(_ t: Transaction) {
+        guard !pendingDeletes.contains(where: { $0.persistentModelID == t.persistentModelID }) else { return }
+        pendingDeletes.append(t)
+        deleted += 1
+        // A new delete gives the whole batch a fresh 6 seconds.
+        undoTask?.cancel()
+        undoTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            commitDelete()
+        }
+    }
+
+    private func undoDelete() {
+        undoTask?.cancel()
+        pendingDeletes = []
+    }
+
+    private func commitDelete() {
+        undoTask?.cancel()
+        guard !pendingDeletes.isEmpty else { return }
+        let gone = pendingDeletes
+        pendingDeletes = []
+        for t in gone { context.delete(t) }
+        try? context.save()
+        WidgetBridge.refresh(from: context)
+    }
+
+    /// "Deleted Woolworths" or "Deleted 2 purchases".
+    private var undoText: String {
+        if pendingDeletes.count == 1, let t = pendingDeletes.first { return "Deleted \(t.merchant)" }
+        return "Deleted \(pendingDeletes.count) purchases"
+    }
+
+    // MARK: Category
+
+    /// No other purchases from the shop: change it and learn, as before.
+    /// Otherwise ask first, once the sheet has closed.
+    private func pick(_ category: SpendCategory, for t: Transaction) {
+        let others = (try? TransactionLogger.samePlace(as: t, in: context)) ?? []
+        if others.allSatisfy({ $0.category == category }) {
+            try? TransactionLogger.recategorise(t, to: category, in: context)
+        } else {
+            stagedChange = CategoryChange(transaction: t, category: category, total: others.count + 1)
+        }
     }
 
     // MARK: List
@@ -62,10 +169,12 @@ struct TransactionsScreen: View {
     private var list: some View {
         List {
             ListPageTitle(title: fixedCard?.name ?? "Activity")
-            Section {
+            // A card's own list always has search; the main list has it when
+            // there's no Search tab (nav option A).
+            if fixedCard != nil || NavOption.current.searchInActivity { Section {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Merchant, category or note", text: $search)
+                    TextField("Shop, category or note", text: $search)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
@@ -83,7 +192,7 @@ struct TransactionsScreen: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-            }
+            } }
             // Category chips, like the reference's outlined pills.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -104,7 +213,7 @@ struct TransactionsScreen: View {
                 Section {
                     VStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").font(.title2).foregroundStyle(.secondary)
-                        Text(search.isEmpty ? "No purchases fit these filters." : "No results for “\(search)”.")
+                        Text(search.isEmpty ? "No purchases match these filters." : "No results for “\(search)”.")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Button("Clear") { search = ""; cardFilter = nil; categoryFilter = nil }
                             .font(.subheadline.weight(.semibold))
@@ -125,20 +234,30 @@ struct TransactionsScreen: View {
                         }
                         .listRowBackground(Color.card)
                         .alignmentGuide(.listRowSeparatorLeading) { _ in 52 }
-                        .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                context.delete(t)
-                                try? context.save()
-                                deleted += 1
-                            }
+                        .swipeActions(edge: .leading) {
                             Button("Category", systemImage: "tag") { recategorising = t }
-                                .tint(Color(.systemGray))
+                                .tint(t.category.color)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+                                .tint(.red)
+                        }
+                        .contextMenu {
+                            Button("Change Category", systemImage: "tag") { recategorising = t }
+                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+                        } preview: {
+                            TransactionPreview(transaction: t)
                         }
                     }
                 } header: {
-                    HStack {
+                    // At the largest text sizes the day gets its own line, so
+                    // "September" isn't broken in the middle.
+                    let big = typeSize.isAccessibilitySize
+                    let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                                     : AnyLayout(HStackLayout())
+                    layout {
                         Text(dayTitle(day.date))
-                        Spacer()
+                        if !big { Spacer() }
                         Text(Money.format(day.items.audTotal, Money.home))
                             .monospacedDigit()
                     }
@@ -181,12 +300,6 @@ struct TransactionsScreen: View {
                     ForEach(Card.mine) { Text($0.name).tag(Card?.some($0)) }
                 }
             }
-            Picker("Category", selection: $categoryFilter) {
-                Text("All Categories").tag(SpendCategory?.none)
-                ForEach(SpendCategory.allCases) {
-                    Label($0.name, systemImage: $0.symbol).tag(SpendCategory?.some($0))
-                }
-            }
             if isFiltering {
                 Divider()
                 Button("Clear Filters", systemImage: "xmark.circle") {
@@ -206,15 +319,14 @@ struct TransactionsScreen: View {
     private var isFiltering: Bool { cardFilter != nil || categoryFilter != nil }
 
     private var filtered: [Transaction] {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let q = SearchText.fold(search)
+        let hidden = Set(pendingDeletes.map(\.persistentModelID))
         return transactions.filter { t in
-            (fixedCard == nil || t.card == fixedCard)
+            !hidden.contains(t.persistentModelID)
+            && (fixedCard == nil || t.card == fixedCard)
             && (cardFilter == nil || t.card == cardFilter)
             && (categoryFilter == nil || t.category == categoryFilter)
-            && (q.isEmpty
-                || t.merchant.lowercased().contains(q)
-                || t.category.name.lowercased().contains(q)
-                || t.note.lowercased().contains(q))
+            && SearchText.matches(t, folded: q)
         }
     }
 
@@ -234,9 +346,24 @@ struct TransactionsScreen: View {
     }
 }
 
+/// A category picked for one purchase, waiting on "All N" or "Just This One".
+struct CategoryChange: Identifiable {
+    let transaction: Transaction
+    let category: SpendCategory
+    /// This purchase plus the others from the same shop.
+    let total: Int
+    var id: PersistentIdentifier { transaction.persistentModelID }
+}
+
 /// Grid of categories. Choosing one also teaches the app for next time.
 struct CategoryPickerSheet: View {
+    /// Where picking moves every purchase from the shop straight away.
+    static let moveAllFooter = "Other purchases from this shop move too. New ones will use this category."
+    /// Where Raj is asked first (Activity).
+    static let askFooter = "You can move other purchases from this shop too. Then new ones will use this category."
+
     let selected: SpendCategory
+    var footer: String = CategoryPickerSheet.moveAllFooter
     let onPick: (SpendCategory) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var picked = 0
@@ -274,7 +401,7 @@ struct CategoryPickerSheet: View {
                     }
                 }
                 .padding()
-                Text("Other purchases at this merchant will move too, and new ones will use this category.")
+                Text(footer)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
@@ -291,5 +418,60 @@ struct CategoryPickerSheet: View {
             .sensoryFeedback(.selection, trigger: picked)
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// "Deleted Uber Eats · Undo", in glass above the tab bar.
+struct UndoToast: View {
+    let text: String
+    let undo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Label(text, systemImage: "trash")
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(Color.ink)
+            Button("Undo", action: undo)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.ink)
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// What a long press shows above the menu: the purchase at a glance.
+struct TransactionPreview: View {
+    let transaction: Transaction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                CategoryIcon(category: transaction.category, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(transaction.merchant).font(.headline)
+                    Text(transaction.category.name).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            Text(transaction.needsReview ? "Amount missing" : Money.format(transaction.amount, transaction.currencyCode))
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                Label(transaction.date.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                Label(transaction.paidWithLabel, systemImage: "creditcard")
+                if !transaction.note.isEmpty { Label(transaction.note, systemImage: "note.text") }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(idealWidth: 300, maxWidth: 340, alignment: .leading)
+        .background(Color.card)
     }
 }

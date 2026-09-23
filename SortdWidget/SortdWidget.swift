@@ -71,7 +71,7 @@ struct SortdProvider: TimelineProvider {
     }
 
     private func current() -> SortdEntry {
-        SortdEntry(date: .now, summary: WidgetSummary.read()?.asOf(.now))
+        SortdEntry(date: .now, summary: WidgetSummary.readNow())
     }
 }
 
