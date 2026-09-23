@@ -176,7 +176,7 @@ struct CardDetailView: View {
                         }
                         .buttonStyle(.plain)
                         if t.id != shown.last?.id {
-                            Divider().padding(.leading, 68)
+                            Divider().padding(.leading, 64)
                         }
                     }
                 }

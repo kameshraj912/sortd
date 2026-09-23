@@ -22,13 +22,6 @@ struct AboutSettingsView: View {
                     .onTapGesture { knock.knock() }
                     .accessibilityHint("Tapped five times, opens a code screen")
                     #endif
-                // The flat tab bar sits over the last row otherwise, and
-                // the last row is the one with the hidden door in it.
-                Color.clear
-                    .frame(height: 1)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .accessibilityHidden(true)
             } footer: {
                 #if DEBUG
                 if let hint = knock.hint {
@@ -61,6 +54,9 @@ struct AboutSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
+        // A 1pt clear row used to stand in for this. It can't clear a 49pt
+        // (SE) or 83pt (Pro Max) bar; the list just needs the real inset.
+        .contentMargins(.bottom, 24, for: .scrollContent)
         .brandedTitle("About")
         #if DEBUG
         .sheet(isPresented: $knock.isOpen) { SecretCodeSheet() }
