@@ -233,7 +233,7 @@ struct HomeView: View {
                 .font(.system(size: totalSize, weight: .bold))
                 .foregroundStyle(Color.ink)
                 .monospacedDigit()
-                .contentTransition(.numericText())
+                .contentTransition(.numericText(value: monthItems.audTotal.double))
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .padding(.top, 6)
