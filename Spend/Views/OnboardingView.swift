@@ -62,8 +62,15 @@ struct OnboardingView: View {
     @State private var step: Step = .welcome
     #endif
     /// Either setting means: no sliding.
+    ///
+    /// `accessibilityPrefersCrossFadeTransitions` runs on iOS 26.4+, but the
+    /// name only ships in the Xcode 27 SDK (Swift 6.4). An `#available` check
+    /// alone is not enough: Xcode 26.x cannot compile the name at all, which
+    /// broke CI. The compiler guard keeps both toolchains building.
     private var crossFade: Bool {
+        #if compiler(>=6.4)
         if #available(iOS 26.4, *), environment.accessibilityPrefersCrossFadeTransitions { return true }
+        #endif
         return reduceMotion
     }
 

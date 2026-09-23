@@ -16,10 +16,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Use the newest Xcode on the runner
+    # Pinned on purpose. "latest-stable" moved under us once and broke the
+    # build. Bump this line when the app moves to a newer Xcode, and check
+    # the runner image has it first:
+    # https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md
+    - name: Use a pinned Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: latest-stable
+        xcode-version: '26.6'
     - name: Show Xcode version
       run: xcodebuild -version
     - name: Build
@@ -37,9 +41,10 @@ jobs:
         echo "Using $device on $runtime"
         echo "SIM_ID=$(xcrun simctl create ci-tests "$device" "$runtime")" >> "$GITHUB_ENV"
     - name: Test
-      # ProStoreTests is skipped for now: on Xcode 27 / iOS 27 simulators,
-      # SKTestSession loads no products from SortdPro.storekit (cause not found
-      # yet; the product IDs match). Put it back once that is fixed.
+      # ProStoreTests is skipped in CI: it depends on which simulator runtime
+      # the runner has (it fails on iOS 26.x sims and passes on iOS 27, see
+      # HANDOVER.md "StoreKit tests are simulator-dependent"). Run it locally
+      # on an iOS 27 simulator instead.
       run: >
         xcodebuild -project Spend.xcodeproj -scheme Spend
         -destination "id=$SIM_ID"
