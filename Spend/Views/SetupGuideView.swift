@@ -35,8 +35,8 @@ struct SetupGuideView: View {
              detail: "Turn off Notify When Run if you don't want a banner each time."),
         Step(id: 5, symbol: "plus.square.on.square", title: "Tap “Create New Shortcut”",
              detail: "Then type Sortd in the search box at the bottom and tap Log Wallet Tap."),
-        Step(id: 6, symbol: "arrow.triangle.branch", title: "Fill in Transaction",
-             detail: "Tap the word Transaction. Above the keyboard, tap Shortcut Input. That's the only one."),
+        Step(id: 6, symbol: "arrow.triangle.branch", title: "Fill in the three fields",
+             detail: "Tap Amount, then Select Variable, then Shortcut Input — then tap that blue word again and choose Amount. Do the same for Shop (Merchant) and, behind ›, Card (Card or Pass)."),
         Step(id: 7, symbol: "checkmark.seal", title: "Tap Done, then pay for something",
              detail: "It shows up in Sortd within a few seconds."),
     ]
