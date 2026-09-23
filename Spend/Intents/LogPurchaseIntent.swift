@@ -43,6 +43,17 @@ struct LogPurchaseIntent: AppIntent {
 
     static let lastTapKey = "lastTapReceived"
 
+    /// When Shortcuts last reached Sortd at all — including a ▶ test run that
+    /// carried no purchase. Setup uses it to tell "not set up yet" apart from
+    /// "set up, waiting for a real tap", which look the same from the
+    /// transaction list alone.
+    static let lastTapAtKey = "lastTapReceivedAt"
+
+    /// True once Shortcuts has reached the app, whether or not it logged.
+    static var shortcutHasReachedApp: Bool {
+        UserDefaults.standard.object(forKey: lastTapAtKey) != nil
+    }
+
     /// The whole tap-handling logic, callable from tests.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
@@ -58,6 +69,7 @@ struct LogPurchaseIntent: AppIntent {
         // Keep exactly what arrived, for checking the setup (Settings shows it).
         let seen = "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
         UserDefaults.standard.set("\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", forKey: lastTapKey)
+        UserDefaults.standard.set(now, forKey: lastTapAtKey)
         UserDefaults.standard.synchronize()
         // No amount and no shop: a test run (the ▶ button in Shortcuts), not a
         // shop tap — a real tap always has an amount. Nothing is saved.

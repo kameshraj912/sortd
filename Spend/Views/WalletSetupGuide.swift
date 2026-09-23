@@ -34,7 +34,7 @@ struct WalletSetupGuide: View {
         Page(id: 3, title: "Add Run Shortcut",
              detail: "Search Run Shortcut, tap it, then tap the blue word and pick Log Apple Pay in Sortd."),
         Page(id: 4, title: "Done. Go back.",
-             detail: "It saves by itself. Now pay with Apple Pay in a shop. The ▶ button only runs a test — it never logs."),
+             detail: "It saves by itself. To check it, open the shortcut and press ▶ once — Sortd will say it's connected. Real purchases only come from tapping your card in a shop."),
     ]
 
     /// The long way, for anyone who would rather not install a shortcut.
