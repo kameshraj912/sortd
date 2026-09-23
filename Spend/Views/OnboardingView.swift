@@ -621,9 +621,7 @@ struct OnboardingView: View {
                 ForEach(SetupProfile.Abroad.allCases) { a in
                     Button { withAnimation(.snappy) { abroadRaw = a.rawValue } } label: {
                         Text(a.title)
-                            .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
                             .chip(selected: abroad == a)
                     }
                     .buttonStyle(.plain)
@@ -784,7 +782,6 @@ struct OnboardingView: View {
                                     .foregroundStyle(.white)
                             }
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 9)
                         .chip(selected: bankCountry == c)
                     }
                     .buttonStyle(.plain)
@@ -799,7 +796,7 @@ struct OnboardingView: View {
     /// Banks in the chosen country, two per row. Each tap adds one card.
     private func bankGrid(_ country: String) -> some View {
         let banks = BankPreset.all.filter { $0.country == country }
-        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
             ForEach(banks) { bank in
                 let count = book.active.filter { $0.bank == bank.name }.count
                 Button { addCard(from: bank) } label: {
@@ -1187,14 +1184,15 @@ struct OnboardingView: View {
             VStack(spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(Money.symbol(home))
-                        .font(.system(size: budgetSymbolSize, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetSymbolSize, weight: .bold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $customBudget)
-                        .font(.system(size: budgetAmountSize, weight: .bold, design: .rounded))
+                        .font(.system(size: budgetAmountSize, weight: .bold))
                         .monospacedDigit()
                         .keyboardType(.numberPad)
                         .focused($budgetFocused)
-                        .fixedSize()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                         .onChange(of: customBudget) { _, text in
                             // Same cap as the budget sheet, so a 19-digit
                             // typo can't be saved.
@@ -1224,9 +1222,6 @@ struct OnboardingView: View {
                         budgetFocused = false
                     } label: {
                         Text(Money.format(Decimal(value), home, cents: false))
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
                             .chip(selected: budget == value)
                     }
                     .buttonStyle(.plain)
@@ -1343,11 +1338,20 @@ struct OnboardingView: View {
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
+    /// Measured against the row width, not the item's ideal width: a single
+    /// chip wider than the row (a long amount at accessibility text sizes)
+    /// used to be placed at its ideal size and run off the screen.
+    private func size(of s: LayoutSubview, in width: CGFloat) -> CGSize {
+        let ideal = s.sizeThatFits(.unspecified)
+        guard width.isFinite, ideal.width > width else { return ideal }
+        return s.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
         for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
+            let size = size(of: s, in: width)
             if x > 0, x + size.width > width { y += row + spacing; x = 0; row = 0 }
             x += size.width + spacing
             row = max(row, size.height)
@@ -1359,7 +1363,7 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
         for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
+            let size = size(of: s, in: bounds.width)
             if x > bounds.minX, x + size.width > bounds.maxX { y += row + spacing; x = bounds.minX; row = 0 }
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing

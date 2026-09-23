@@ -302,6 +302,7 @@ struct GradientLab: View {
 /// Settings › Card Style: every look side by side, on a sample spending mix.
 struct CardStyleView: View {
     @AppStorage("cardStyle") private var styleRaw = SpendGradient.Style.satin.rawValue
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private let sample: [SpendGradient.Share] = [
         .init(color: SpendCategory.foodDelivery.color, fraction: 0.42),
@@ -351,7 +352,7 @@ struct CardStyleView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .aspectRatio(1.586, contentMode: .fit)
+            .aspectRatio(typeSize.isAccessibilitySize ? nil : 1.586, contentMode: .fit)
             .background { SpendGradient(shares: sample, style: style) }
             .clipShape(.rect(cornerRadius: 12, style: .continuous))
             .overlay {

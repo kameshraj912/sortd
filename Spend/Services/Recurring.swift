@@ -277,6 +277,9 @@ enum RecurringPrefs {
     static func markCancelled(_ key: String) { cancelled[key] = .now }
     static func undoCancel(_ key: String) { cancelled[key] = nil }
     static func ignore(_ key: String) { ignored.insert(key) }
+    /// Puts one back. Without this, "Not Recurring" was the only
+    /// action in the app with no way back.
+    static func unignore(_ key: String) { ignored.remove(key) }
 }
 
 extension Array where Element == Transaction {

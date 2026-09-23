@@ -130,8 +130,7 @@ struct TransactionDetailView: View {
         VStack(spacing: 10) {
             CategoryIcon(category: transaction.category, size: 64)
             Text(Money.format(transaction.amount, transaction.currencyCode))
-                .font(.largeTitle.weight(.bold))
-                .monospacedDigit()
+                .font(.money)
                 .contentTransition(.numericText())
             BrandBar(width: 14, height: 3)
             HStack(spacing: 6) {

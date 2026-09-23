@@ -48,7 +48,7 @@ struct SearchView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityLabel("\(m.name), \(Money.format(m.total, Money.home)) this month")
+                    .accessibilityLabel("\(m.name), \(Money.spoken(m.total, Money.home)) this month")
                 }
             }
             Section("Categories") {

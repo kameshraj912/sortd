@@ -97,7 +97,7 @@ struct BudgetSheet: View {
                         .font(.title.weight(.bold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $text)
-                        .font(.largeTitle.weight(.bold))
+                        .font(.money)
                         .keyboardType(.numberPad)
                         .focused($focused)
                         .fixedSize()
@@ -126,9 +126,6 @@ struct BudgetSheet: View {
                             text = Self.text(for: preset)
                         } label: {
                             Text(Money.format(Decimal(preset), Money.home, cents: false))
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
                                 .chip(selected: selected)
                         }
                         .buttonStyle(.plain)
@@ -174,8 +171,16 @@ struct BudgetSheet: View {
             if safe != budget { budget = safe }
             if safe > 0 { text = Self.text(for: safe) }
         }
+        .toolbar {
+            // The number pad has no Return key; without this there is
+            // no way to put it away and reach Save underneath.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focused = false }.fontWeight(.semibold)
+            }
+        }
         .sensoryFeedback(.success, trigger: saved)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.height(420), .large])
         // Solid, so the cards behind don't bleed through the glass.
         .presentationBackground(Color(.systemBackground))
         .presentationDragIndicator(.visible)

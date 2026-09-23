@@ -89,8 +89,9 @@ struct BackupDataSettingsView: View {
                 }
                 sharing = nil
             }
-            .ignoresSafeArea()
-            .presentationDetents([.medium, .large])
+            // UIActivityViewController lays itself out. Forcing a medium
+            // detent cropped its app row on an SE, and ignoring the safe
+            // area let its bottom row sit under the home indicator.
         }
         .alert("Couldn't Save a Backup", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}

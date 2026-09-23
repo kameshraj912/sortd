@@ -35,6 +35,9 @@ enum EmailSync {
         var checked = 0
         /// More emails are waiting than one sync reads.
         var incomplete = false
+        /// Accounts whose sync threw. Pull-to-refresh says so instead of
+        /// finishing silently and looking identical to "nothing new".
+        var failed = 0
         /// Gmail: the oldest email listed when `incomplete`, where the next sync carries on.
         var oldestListed: Date?
 

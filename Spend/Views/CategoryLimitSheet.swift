@@ -40,7 +40,7 @@ struct CategoryLimitSheet: View {
                         .font(.title.weight(.bold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $text)
-                        .font(.largeTitle.weight(.bold))
+                        .font(.money)
                         .keyboardType(.numberPad)
                         .focused($focused)
                         .fixedSize()
@@ -64,9 +64,6 @@ struct CategoryLimitSheet: View {
                             text = String(Int(preset))
                         } label: {
                             Text(Money.format(Decimal(preset), Money.home, cents: false))
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
                                 .chip(selected: selected)
                         }
                         .buttonStyle(.plain)
@@ -110,8 +107,16 @@ struct CategoryLimitSheet: View {
             current = CategoryBudgets.limit(for: category) ?? 0
             if current > 0 { text = String(Int(current)) }
         }
+        .toolbar {
+            // The number pad has no Return key; without this there is
+            // no way to put it away and reach Save underneath.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focused = false }.fontWeight(.semibold)
+            }
+        }
         .sensoryFeedback(.success, trigger: saved)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.height(420), .large])
         .presentationBackground(Color(.systemBackground))
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
