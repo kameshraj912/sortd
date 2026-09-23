@@ -44,7 +44,7 @@
   <p>Answers to common questions. If yours isn't here, email <a href="mailto:support@sortd.page">support@sortd.page</a>.</p>
 
   <h2 id="apple-pay">How do I log Apple Pay taps automatically?</h2>
-  <p>You set up one automation in Apple's Shortcuts app. It takes about two minutes, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Apple Pay Auto-Logging.</p>
+  <p>You set up one automation in Apple's Shortcuts app. It takes about two minutes, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Purchase Sources › Apple Pay Logging.</p>
   <h3>iOS 27</h3>
   <ol>
     <li>Open Shortcuts and tap <strong>+</strong> at the bottom. On the next screen tap <strong>Edit</strong> at the top right.</li>
@@ -63,10 +63,10 @@
   <p class="note">Pressing ▶ in Shortcuts is only a test: it has no purchase in it, so Sortd replies "connected" and saves nothing. Pay with Apple Pay in a shop to log a real one. Only in-store taps trigger the automation. Online and in-app purchases come in from email receipts if you connect Gmail.</p>
 
   <h3>A tap shows the wrong shop, amount or card</h3>
-  <p>Open Settings › Apple Pay Auto-Logging in Sortd. Under <strong>Last Tap Received</strong> you'll see exactly what Apple Pay sent. If Apple Pay sent no amount, Sortd still saves the purchase and marks it so you can add the amount.</p>
+  <p>Open Settings › Purchase Sources › Apple Pay Logging in Sortd. Under <strong>Last Tap Received</strong> you'll see exactly what Apple Pay sent. If Apple Pay sent no amount, Sortd still saves the purchase and marks it so you can add the amount.</p>
 
   <h2>How do I connect Gmail?</h2>
-  <p>Gmail is optional. In Sortd, go to Settings › Email Receipts › Connect Gmail, read the short explanation, and tap "Continue with Google". Sign in and allow Sortd to read your email. Sortd can only read; it can't send, delete or change anything.</p>
+  <p>Gmail is optional. In Sortd, go to Settings › Purchase Sources › Connect Gmail, read the short explanation, and tap "Continue with Google". Sign in and allow Sortd to read your email. Sortd can only read; it can't send, delete or change anything.</p>
   <p>Sortd then searches for receipts and bank alerts from the last 120 days and adds them. After that it checks for new ones when you open the app, or when you tap Sync Now.</p>
 
   <h3>Google says the app isn't verified</h3>
@@ -97,16 +97,23 @@
   <h2>How do currencies work?</h2>
   <ul>
     <li><strong>Purchase currency</strong> follows your iPhone's time zone, so spending while you travel is recorded in the local currency.</li>
-    <li><strong>Totals</strong> are shown in your home currency. Change it in Settings › Currency › "Totals shown in".</li>
+    <li><strong>Totals</strong> are shown in your home currency. Change it in Settings › Currency › Show Totals In.</li>
     <li>Purchases in other currencies are converted using that day's European Central Bank rate, downloaded from frankfurter.dev. On weekends and holidays the most recent earlier rate is used. Tap Update Exchange Rates if a conversion is missing.</li>
   </ul>
   <p>Converted amounts are estimates. Your bank's rate and fees may differ.</p>
 
+  <h2 id="check-in">How do I change my check-in or setup answers?</h2>
+  <ul>
+    <li><strong>Check-in:</strong> Settings › Bills &amp; Reminders › Check-in. Pick morning, evening, Sunday, or Off. It's free, and it never shows amounts.</li>
+    <li><strong>Setup answers:</strong> Settings › Help &amp; Feedback › Run Setup Again. Your purchases and cards stay as they are.</li>
+  </ul>
+  <p>If the check-in never arrives, notifications may be off for Sortd. Turn them on in your iPhone's Settings › Notifications › Sortd.</p>
+
   <h2>How do I delete my data?</h2>
   <ul>
-    <li><strong>Everything:</strong> Settings › Your Data › Delete All Data. This removes every purchase, card, budget and setting from your iPhone and disconnects Gmail. It can't be undone.</li>
-    <li><strong>One Gmail account:</strong> Settings › Email Receipts, tap the account, then Disconnect. You can also delete the purchases only that account added.</li>
-    <li><strong>A copy first:</strong> Settings › Your Data › Export Purchases (CSV).</li>
+    <li><strong>Everything:</strong> Settings › Backup &amp; Data › Delete All Data. This removes every purchase, card, budget, setting and setup answer from your iPhone, turns off your check-in and reminders, and disconnects Gmail. It can't be undone.</li>
+    <li><strong>One Gmail account:</strong> Settings › Purchase Sources, find the account under Email Receipts, then tap Disconnect. You can also delete the purchases only that account added.</li>
+    <li><strong>A copy first:</strong> Settings › Backup &amp; Data › Save a Backup, or Export as Spreadsheet.</li>
   </ul>
   <p>Your data is only on your iPhone, so we can't delete it for you, and we can't restore it after you delete it.</p>
 
