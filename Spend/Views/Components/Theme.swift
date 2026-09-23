@@ -77,8 +77,23 @@ extension Color {
         Color(red: 0.169, green: 0.690, blue: 0.478),   // #2BB07A
     ]
 
-    nonisolated static let up = Color(red: 0.13, green: 0.63, blue: 0.42)
-    nonisolated static let down = Color(red: 0.90, green: 0.28, blue: 0.30)
+    /// Money in / money out. Both are used as small text ("over your budget",
+    /// "$12 less than last month"), so the light shades are darkened to clear
+    /// 4.5:1 on the off-white page — the flat #21A06B and #E64749 sat at
+    /// about 3.3:1. Dark mode keeps the brighter shades, which read well on
+    /// near-black, and high contrast goes one step further each way.
+    nonisolated static let up = Color(UIColor { t in
+        let high = t.accessibilityContrast == .high
+        return t.userInterfaceStyle == .dark
+            ? UIColor(red: high ? 0.36 : 0.29, green: high ? 0.86 : 0.78, blue: high ? 0.64 : 0.56, alpha: 1)
+            : UIColor(red: high ? 0.02 : 0.055, green: high ? 0.40 : 0.478, blue: high ? 0.26 : 0.310, alpha: 1)
+    })
+    nonisolated static let down = Color(UIColor { t in
+        let high = t.accessibilityContrast == .high
+        return t.userInterfaceStyle == .dark
+            ? UIColor(red: high ? 1.00 : 0.96, green: high ? 0.56 : 0.45, blue: high ? 0.57 : 0.46, alpha: 1)
+            : UIColor(red: high ? 0.64 : 0.741, green: high ? 0.06 : 0.114, blue: high ? 0.09 : 0.153, alpha: 1)
+    })
 }
 
 /// The four logo colours as short bars, like under the wordmark.
@@ -119,15 +134,35 @@ struct Surface: ViewModifier {
 }
 
 /// Pill chip: filled black when selected, outlined otherwise.
+/// Carries its own size and weight so every chip in the app matches — they
+/// had drifted to four paddings and three fonts across seven call sites.
 struct ChipStyle: ViewModifier {
     let selected: Bool
 
     func body(content: Content) -> some View {
         content
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .foregroundStyle(selected ? Color.onBrand : Color.ink)
             .background(selected ? Color.brand : Color.clear, in: .capsule)
             .overlay(Capsule().strokeBorder(selected ? Color.clear : Color.hairline, lineWidth: 1))
     }
+}
+
+extension Font {
+    /// Every amount the eye lands on: the month total, a card's total, a
+    /// purchase's headline figure. One typeface, so a number doesn't change
+    /// shape as you move between screens. Monospaced digits stop it jittering
+    /// while it animates.
+    ///
+    /// Plain SF, not SF Rounded: the app's own rule is "simple and neutral,
+    /// colourful only where it matters", and half these amounts were already
+    /// plain.
+    static var money: Font { .largeTitle.weight(.bold).monospacedDigit() }
+
+    /// The same, one step down, for card tiles and list heroes.
+    static var moneySmall: Font { .title2.weight(.bold).monospacedDigit() }
 }
 
 /// Full-width primary button.

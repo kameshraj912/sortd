@@ -113,6 +113,7 @@ enum GmailSync {
                 }
                 list[i].lastResult = s.incomplete ? s.text + " · more next sync" : s.text
             } catch {
+                total.failed += 1
                 list[i].lastResult = error.localizedDescription
                 log.error("Gmail sync failed for \(list[i].email): \(error.localizedDescription)")
             }
