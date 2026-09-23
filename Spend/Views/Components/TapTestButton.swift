@@ -59,6 +59,8 @@ struct TapTestButton: View {
                 // A test must not leave a purchase behind in real totals.
                 Button("Remove Test Purchase") { remove(outcome) }
                     .font(.footnote.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
                     .buttonStyle(.borderless)
             }
             if outcome.transaction != nil, !removed {

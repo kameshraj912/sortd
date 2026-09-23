@@ -53,6 +53,12 @@ struct TransactionsScreen: View {
         }
         .background(Color.page)
         .brandedTitle(fixedCard?.name ?? "Activity")
+        // A card's own list always has search; the main list has it when
+        // there's no Search tab (nav option A). Hand-rolling this field lost
+        // the Cancel button and scroll-to-reveal, and left the app with two
+        // different searches — the Search tab already uses .searchable.
+        .modifier(ActivitySearch(enabled: fixedCard != nil || NavOption.current.searchInActivity,
+                                 text: $search))
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
@@ -101,6 +107,10 @@ struct TransactionsScreen: View {
             }
         }
         .animation(.spring(duration: 0.35), value: pendingDeletes.isEmpty)
+        // The list used to jump on every keystroke and every chip tap.
+        .animation(.snappy, value: search)
+        .animation(.snappy, value: categoryFilter)
+        .animation(.snappy, value: cardFilter)
         .refreshable {
             // Finish a pending delete first, so a receipt from the sync can't
             // merge into a purchase that is about to go.
@@ -171,30 +181,6 @@ struct TransactionsScreen: View {
     private var list: some View {
         List {
             ListPageTitle(title: fixedCard?.name ?? "Activity")
-            // A card's own list always has search; the main list has it when
-            // there's no Search tab (nav option A).
-            if fixedCard != nil || NavOption.current.searchInActivity { Section {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Shop, category or note", text: $search)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                    if !search.isEmpty {
-                        Button { search = "" } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Clear search")
-                    }
-                }
-                .padding(.horizontal, 12)
-                .frame(minHeight: 40)
-                .background(Color.card, in: .capsule)
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            } }
             // Category chips, like the reference's outlined pills.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -472,5 +458,22 @@ struct TransactionPreview: View {
         .padding(20)
         .frame(idealWidth: 300, maxWidth: 340, alignment: .leading)
         .background(Color.card)
+    }
+}
+
+
+/// `.searchable` only when this list is the one that carries search.
+private struct ActivitySearch: ViewModifier {
+    let enabled: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $text, prompt: "Shop, category or note")
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        } else {
+            content
+        }
     }
 }
