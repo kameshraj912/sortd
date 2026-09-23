@@ -25,7 +25,10 @@ struct FinishSetupCard: View {
         let flow = SetupFlow(goals: SetupProfile.goals(goalsRaw), payment: SetupProfile.Payment(rawValue: paymentRaw),
                              hasCards: !CardBook.shared.active.isEmpty, gmailFeature: Features.gmail, isPro: pro.isPro)
         return SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards,
-                                    tapped: transactions.contains { $0.seenIn.contains(.tap) },
+                                    // A finished setup counts even before the first shop tap:
+                                    // Shortcuts reaching the app at all is the proof.
+                                    tapped: transactions.contains { $0.seenIn.contains(.tap) }
+                                        || LogPurchaseIntent.shortcutHasReachedApp,
                                     widgetAdded: widgetAdded, gmailConnected: !GmailSync.accounts.isEmpty)
     }
 

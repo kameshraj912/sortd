@@ -341,7 +341,7 @@ struct OnboardingView: View {
                 case .email where gmail.isEmpty:
                     primaryButton("Connect Gmail") { connectingGmail = true }
                     tertiaryButton("I'll do this later") { go(1) }
-                case .applePay where !tapConnected:
+                case .applePay where !tapConnected && !shortcutReached:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     }
@@ -375,7 +375,8 @@ struct OnboardingView: View {
         case .plan: return book.active.isEmpty ? "Add My First Card" : "Continue Setup"
         case .cards where book.active.isEmpty: return "Add Cards Later"
         case .cardDetails where !detailsComplete: return "Add Digits Later"
-        case .applePay where !tapConnected: return last ? "Do This Later and Start" : "I'll Do This Later"
+        case .applePay where !tapConnected && !shortcutReached:
+            return last ? "Do This Later and Start" : "I'll Do This Later"
         case .email where gmail.isEmpty: return "I'll Do This Later"
         case .pro where !pro.isPro: return "Maybe Later"
         default: return last ? "Start Using Sortd" : "Continue"
@@ -527,7 +528,8 @@ struct OnboardingView: View {
     }
 
     private var setupTasks: [SetupTask] {
-        SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty, tapped: tapConnected,
+        SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty,
+                             tapped: tapConnected || shortcutReached,
                              widgetAdded: false, gmailConnected: !gmail.isEmpty)
     }
 
@@ -944,6 +946,10 @@ struct OnboardingView: View {
     private var firstTap: Transaction? { transactions.first { $0.seenIn.contains(.tap) } }
     private var tapConnected: Bool { firstTap != nil }
 
+    /// Shortcuts has reached the app, even if nothing was logged yet (a ▶ test
+    /// run does this). Enough to say the setup is done.
+    private var shortcutReached: Bool { LogPurchaseIntent.shortcutHasReachedApp }
+
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay by itself", "Two steps, about a minute.")
@@ -985,6 +991,15 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.glass)
                 .controlSize(.large)
+
+                // The only way to prove the wiring before buying something.
+                // ▶ logs nothing on purpose, but it does reach the app, and
+                // that is what flips the status above to "Connected".
+                Label("Not sure it worked? Open the shortcut and press ▶ once. It won't log a purchase, but Sortd will say it's connected.",
+                      systemImage: "play.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .setupCard()
             .padding(.top, 10)
@@ -1007,13 +1022,16 @@ struct OnboardingView: View {
 
     /// Checks itself: listens for the first tap and celebrates when it lands.
     private var tapStatus: some View {
+        // Three states, not two. Without the middle one, someone who has
+        // finished the setup but not yet paid for anything sees the same
+        // screen as someone who has done nothing — so it reads as broken.
         HStack(spacing: 14) {
-            Image(systemName: tapConnected ? "checkmark" : "wave.3.right")
+            Image(systemName: tapConnected ? "checkmark" : (shortcutReached ? "link" : "wave.3.right"))
                 .font(.title3.weight(.bold))
                 .foregroundStyle(Color.onBrand)
                 .frame(width: 46, height: 46)
                 .background(tapConnected ? Color.up : Color.brand, in: .circle)
-                .symbolEffect(.variableColor.iterative, isActive: !tapConnected)
+                .symbolEffect(.variableColor.iterative, isActive: !tapConnected && !shortcutReached)
                 .symbolEffect(.bounce, value: tapConnected)
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 2) {
@@ -1021,6 +1039,11 @@ struct OnboardingView: View {
                     Text("Connected").font(.headline)
                     Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
                         .font(.subheadline).foregroundStyle(.secondary)
+                } else if shortcutReached {
+                    Text("Connected and running").font(.headline)
+                    Text("The shortcut reached Sortd. Your next Apple Pay tap in a shop gets logged.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("Waiting for your first tap").font(.headline)
                     Text("Do the steps below, then pay with Apple Pay.")
@@ -1032,7 +1055,8 @@ struct OnboardingView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tapConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .background(tapConnected || shortcutReached ? Color.up.opacity(0.12) : Color.card,
+                    in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: tapConnected)
         .sensoryFeedback(.success, trigger: tapConnected)
         .accessibilityElement(children: .combine)
