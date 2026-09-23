@@ -59,8 +59,27 @@ struct SetupGuideView: View {
             }
             .listRowBackground(Color.clear)
 
+            // The quick way: the shortcut arrives with the amount, shop and
+            // card already matched to the parts of the tap.
+            Section {
+                Button {
+                    openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
+                } label: {
+                    Label("Get the Ready-Made Shortcut", systemImage: "square.and.arrow.down")
+                }
+                Button {
+                    if let url = URL(string: "shortcuts://") { openURL(url) }
+                } label: {
+                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                }
+            } header: {
+                BoldHeader("The Quick Way")
+            } footer: {
+                Text("Add the shortcut, then in Shortcuts: Automation › + › Wallet › your cards › Run Immediately. Add the action Run Shortcut and pick Log Apple Pay in Sortd.")
+            }
+
             if #available(iOS 27.0, *) {
-                Section(bold: "Steps") {
+                Section(bold: "Or Do It By Hand") {
                     WalletSetupGuide().padding(.vertical, 8)
                 }
             } else {
