@@ -91,7 +91,7 @@ struct ConnectGmailSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "envelope.badge")
-                        .font(.system(size: 40))
+                        .font(.largeTitle)
                         .foregroundStyle(Color.ink)
                         .accessibilityHidden(true)
                     Text("Add purchases from your email")
@@ -146,8 +146,9 @@ struct ConnectGmailSheet: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol).frame(width: 22).foregroundStyle(Color.ink)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
+                Text(title).font(.body.weight(.semibold))
                 Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)
