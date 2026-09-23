@@ -132,7 +132,7 @@ struct CardDetailView: View {
         }
         .frame(height: chartHeight)
         .accessibilityLabel("Spending over the last 6 months")
-        .accessibilityValue(months.map { "\($0.month.formatted(.dateTime.month(.wide))) \(Money.format(Decimal($0.total), Money.home, cents: false))" }.joined(separator: ", "))
+        .accessibilityValue(months.map { "\($0.month.formatted(.dateTime.month(.wide))) \(Money.spoken(Decimal($0.total), Money.home, cents: false))" }.joined(separator: ", "))
     }
 
     // MARK: Recent
