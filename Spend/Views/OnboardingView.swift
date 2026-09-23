@@ -969,7 +969,12 @@ struct OnboardingView: View {
 
                 Divider()
 
-                miniStep(2, "Turn it on for your cards", "Shortcuts › Automation › + › Wallet › your cards › Run Immediately. Add the action Run Shortcut and pick Log Apple Pay in Sortd.")
+                miniStep(2, "Turn it on for your cards", "Swipe through the pictures — they show every screen in Shortcuts.")
+                // Reading the path ("Automation › + › Wallet › …") was the
+                // part people got lost in, so show the screens instead.
+                if #available(iOS 27.0, *) {
+                    WalletSetupGuide(route: .quick)
+                }
                 Button {
                     if let url = URL(string: "shortcuts://") { openURL(url) }
                 } label: {
