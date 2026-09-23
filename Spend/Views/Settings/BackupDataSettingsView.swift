@@ -98,7 +98,10 @@ struct BackupDataSettingsView: View {
         } message: {
             Text(failure ?? "")
         }
-        .confirmationDialog("Delete all data?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+        // An alert, not a confirmation dialog: this is the one irreversible
+        // action in the app, and a dialog anchored to the row renders in a
+        // narrow popover that wrapped three sentences into ragged lines.
+        .alert("Delete all data?", isPresented: $confirmingDelete) {
             Button("Delete Everything", role: .destructive) {
                 DataReset.deleteEverything(in: context)
                 // Setup can't open over the Settings sheet: close it.
@@ -108,8 +111,8 @@ struct BackupDataSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(GmailSync.accounts.isEmpty
-                 ? "Every purchase, card, budget and setting on this iPhone will be deleted. You can't undo this. Save a backup first if you want a copy."
-                 : "Every purchase, card, budget and setting on this iPhone will be deleted, and Gmail disconnected. You can't undo this. Save a backup first if you want a copy.")
+                 ? "Every purchase, card and budget on this iPhone goes. There's no undo."
+                 : "Every purchase, card and budget on this iPhone goes, and Gmail is disconnected. There's no undo.")
         }
     }
 
