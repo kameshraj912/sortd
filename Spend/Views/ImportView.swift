@@ -229,7 +229,7 @@ struct ImportView: View {
                     .foregroundStyle(Color.ink)
             }
         }
-        .accessibilityLabel("\(picked.wrappedValue.row.detail), \(picked.wrappedValue.row.amount) on \(picked.wrappedValue.row.date.formatted(date: .abbreviated, time: .omitted))")
+        .accessibilityLabel("\(picked.wrappedValue.row.detail), \(Money.spoken(picked.wrappedValue.row.amount, picked.wrappedValue.row.currency ?? Money.home)) on \(picked.wrappedValue.row.date.formatted(date: .abbreviated, time: .omitted))")
         .accessibilityValue(picked.wrappedValue.include ? "Will be added" : "Skipped")
     }
 

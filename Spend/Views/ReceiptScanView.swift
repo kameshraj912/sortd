@@ -46,7 +46,7 @@ struct ReceiptScanView: View {
                                 Label("Use Camera", systemImage: "camera")
                                     .primaryPill()
                             }
-                            .buttonStyle(.pressable)
+                            .primaryGlass()
                         }
                         PhotosPicker(selection: $photo, matching: .images) {
                             Label("Choose Photo", systemImage: "photo")
@@ -89,6 +89,7 @@ struct ReceiptScanView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .presentationBackground(Color.page)
     }
 

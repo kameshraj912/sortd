@@ -232,7 +232,7 @@ struct PaywallView: View {
                 }
                 .primaryPill(enabled: plan != nil)
             }
-            .buttonStyle(.pressable)
+            .primaryGlass()
             .disabled(plan == nil || working)
 
             Text(terms(plan, trial: trial))
@@ -313,10 +313,10 @@ struct ProLockedView: View {
             Spacer()
             Image(systemName: feature.symbol).font(.largeTitle).foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text(feature.title).font(.title2.weight(.bold))
+            Text(feature.title).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
             Text(feature.detail).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button { showing = true } label: { Text("Unlock with Sortd Pro").primaryPill() }
-                .buttonStyle(.pressable)
+                .primaryGlass()
                 .padding(.top, 6)
             Spacer()
         }
