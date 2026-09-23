@@ -1,7 +1,7 @@
 # 01 — Current UI audit (Sortd, branch `ux-refresh`)
 
 Date: 22 Sep 2026. Read-only audit of the code as it is on `ux-refresh`. Every claim cites
-`file:line`. Paths are relative to the repo root (`Spend/…`). Nothing was run in the
+`file:line`. Paths are relative to the repo root (`Sortd/…`). Nothing was run in the
 simulator for this pass, so anything about how it *feels* is inferred from the code and
 marked as such.
 
@@ -10,14 +10,14 @@ marked as such.
 ## 1. Onboarding
 
 Presented as a `fullScreenCover` from `RootView` while `onboardingDone` is false
-(`Spend/App/SpendApp.swift:202-204`). Steps are an enum
-(`Spend/Views/OnboardingView.swift:26`):
+(`Sortd/App/SortdApp.swift:202-204`). Steps are an enum
+(`Sortd/Views/OnboardingView.swift:26`):
 
 `welcome → currency → cards → cardDetails → applePay → email → budget → reminders → pro → finish`
 
 `cardDetails` is skipped when no cards were added, and `email` is skipped when
 `Features.gmail` is false (`OnboardingView.swift:86-92`, `209-218`). `Features.gmail` is true in
-DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so today it is shown.
+DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Sortd/App/Features.swift:8-14`), so today it is shown.
 
 ### Chrome (every step)
 - Top bar: back chevron, a segmented progress bar (one capsule per step shown, coloured with
@@ -37,7 +37,7 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 | 1 | Currency (`:305-328`) | Pick home currency. Detected one first ("From your iPhone"), 8 more rows, "Other currencies" menu | "Continue" | Pre-filled from the phone (`:21`). |
 | 2 | Cards (`:352-368`) | Pick a bank per card from a country chip row + 2-column bank grid; "Other bank" adds a generic card | "Continue" | Each tap adds one card (`:490-497`). List of added cards shows under the grid (`:358-362`). |
 | 3 | Card details (`:532-541`, form `:1045-1196`) | For **every** card: nickname, Debit/Credit, last 4 of card number (required), Apple Pay device number (required when two cards share a bank) | "Continue" — **disabled** and relabelled "Add digits for N more cards" until every card is complete (`:164-168`, `:195`, `:509-520`) | No Skip on this step (`:119`). Only way out without typing digits is Back and removing cards. |
-| 4 | Apple Pay (`:586-650`) | Set up a Shortcuts Wallet automation in Apple's Shortcuts app. iOS 27: 6-page drawn walkthrough (`WalletSetupGuide`, `Spend/Views/WalletSetupGuide.swift:19-32`); older: 3 mini-steps (`:594-601`) | "I'll Do This Later" until a tap arrives, then "Continue" (`:196`) | "Open Shortcuts" deep-links `shortcuts://` (`:605-613`). "Detailed Steps" opens `SetupGuideView` sheet (`:614`, `:77-79`). A live status card flips from spinner "Waiting for your first tap" to green "Connected" with a success haptic (`:626-648`). Header says "takes about two minutes" (`:588`). |
+| 4 | Apple Pay (`:586-650`) | Set up a Shortcuts Wallet automation in Apple's Shortcuts app. iOS 27: 6-page drawn walkthrough (`WalletSetupGuide`, `Sortd/Views/WalletSetupGuide.swift:19-32`); older: 3 mini-steps (`:594-601`) | "I'll Do This Later" until a tap arrives, then "Continue" (`:196`) | "Open Shortcuts" deep-links `shortcuts://` (`:605-613`). "Detailed Steps" opens `SetupGuideView` sheet (`:614`, `:77-79`). A live status card flips from spinner "Waiting for your first tap" to green "Connected" with a success haptic (`:626-648`). Header says "takes about two minutes" (`:588`). |
 | 5 | Email (`:702-733`) | "Connect Gmail" | "I'll Do This Later" / "Continue" (`:197`) | Tapping Connect opens `ConnectGmailSheet` **if Pro, otherwise the paywall** (`:67`). The button does not say it is Pro. |
 | 6 | Budget (`:741-803`) | Monthly budget: big number field + 5 preset chips + "No budget for now" | "Continue" | Shows "About $X a day" live with `numericText` (`:762-767`). |
 | 7 | Reminders (`:884-918`) | Bill reminders the day before, 9 am. Sample "Netflix tomorrow" card | "Not Now" / "Continue" (`:198`) | "Turn On Reminders" **opens the paywall if not Pro** (`:903`); only Pro users get the system notification prompt (`:904`). |
@@ -46,25 +46,25 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 
 ### Taps before value
 - **Fastest real path:** Get Started → Skip setup → Start Using Sortd = **3 taps**, and the user
-  lands on an **empty Home** (`Spend/Views/HomeView.swift:31-32`, `:416-426`). No purchases, so
+  lands on an **empty Home** (`Sortd/Views/HomeView.swift:31-32`, `:416-426`). No purchases, so
   no numbers, chart or cards.
 - **Full path, no cards:** 9 taps across 9 screens (welcome + 7 steps + finish; card details skipped).
 - **Full path, with N cards:** 10 screens, plus a bank tap per card, plus 4 digits per card
   (8 if two cards share a bank), all mandatory before Continue enables.
 - **Sample data:** 1 tap from Welcome gives a populated Home with a "You're looking at sample
   data" banner (`HomeView.swift:37`, `:90-110`). "Clear" wipes it and **reopens onboarding
-  from the start** (`HomeView.swift:100-103`, `SpendApp.swift:199-201`).
+  from the start** (`HomeView.swift:100-103`, `SortdApp.swift:199-201`).
 
 ### Where permissions and the paywall appear
 | Thing | Where | Gate |
 |---|---|---|
 | Shortcuts / Wallet automation | Onboarding step 4 (`OnboardingView.swift:586-650`); later Settings › Apple Pay Auto-Logging (`SettingsView.swift:43-56`) and Home empty state (`HomeView.swift:422`) | Free. External app, manual. |
 | Gmail OAuth | Onboarding step 5 (`OnboardingView.swift:723`); Settings › Gmail section (`SettingsView.swift:63`) | Pro. Non-Pro gets paywall (`OnboardingView.swift:67`). |
-| Notifications | Onboarding step 7 (`OnboardingView.swift:904`); Settings toggle (`SettingsView.swift:71-81`) | Pro. Non-Pro gets paywall first (`OnboardingView.swift:903`, `SettingsView.swift:75`). Request is `alert, sound, badge` (`Spend/Services/Reminders.swift:16`). |
-| Camera | **Not in onboarding.** Only Add Purchase › "Scan Receipt" (`Spend/Views/AddTransactionView.swift:212`, `:148-150`), using `VNDocumentCameraViewController` (`Spend/Views/ReceiptScanView.swift:153-154`) | Pro. Non-Pro gets paywall (`AddTransactionView.swift:149`). |
-| Photos | Import › PhotosPicker (`Spend/Views/ImportView.swift:98`) | Free. |
+| Notifications | Onboarding step 7 (`OnboardingView.swift:904`); Settings toggle (`SettingsView.swift:71-81`) | Pro. Non-Pro gets paywall first (`OnboardingView.swift:903`, `SettingsView.swift:75`). Request is `alert, sound, badge` (`Sortd/Services/Reminders.swift:16`). |
+| Camera | **Not in onboarding.** Only Add Purchase › "Scan Receipt" (`Sortd/Views/AddTransactionView.swift:212`, `:148-150`), using `VNDocumentCameraViewController` (`Sortd/Views/ReceiptScanView.swift:153-154`) | Pro. Non-Pro gets paywall (`AddTransactionView.swift:149`). |
+| Photos | Import › PhotosPicker (`Sortd/Views/ImportView.swift:98`) | Free. |
 | Face ID | Settings › Security toggle (`SettingsView.swift:177-190`) | Free. |
-| Paywall | Onboarding steps 5, 7, 8 (three entry points); Settings top row (`SettingsView.swift:26-41`); whole Insights tab (`SpendApp.swift:172`); Subscriptions & Bills (`SettingsView.swift:67`, `RecurringView.swift:236-237`); category limit (`InsightsView.swift:204`); scan receipt | See §6. |
+| Paywall | Onboarding steps 5, 7, 8 (three entry points); Settings top row (`SettingsView.swift:26-41`); whole Insights tab (`SortdApp.swift:172`); Subscriptions & Bills (`SettingsView.swift:67`, `RecurringView.swift:236-237`); category limit (`InsightsView.swift:204`); scan receipt | See §6. |
 
 ### What feels rushed or asks for commitment before value
 - **Cards + digits come before anything is shown.** Step 2–3 ask for bank, type and last-4
@@ -89,9 +89,9 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 ## 2. Navigation
 
 ### Tabs
-- `TabView(selection:)` with the iOS 18+ `Tab(value:)` API, 4 tabs (`SpendApp.swift:169-174`).
+- `TabView(selection:)` with the iOS 18+ `Tab(value:)` API, 4 tabs (`SortdApp.swift:169-174`).
 - **The system tab bar is hidden on every tab** (`hideSystemTabBar` → `toolbarVisibility(.hidden, for: .tabBar)`,
-  `SpendApp.swift:270-274`) and replaced by a custom **`FlatTabBar`** in `safeAreaInset(edge: .bottom)`
+  `SortdApp.swift:270-274`) and replaced by a custom **`FlatTabBar`** in `safeAreaInset(edge: .bottom)`
   (`:175-177`, `:230-268`). Comment: "iOS 27 always draws the system bar as floating Liquid
   Glass" (`:167-168`).
 - FlatTabBar: plain `Color.card` background + top `Divider`, selected = `Color.brand`, else
@@ -105,7 +105,7 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 | insights | Insights | `chart.bar` (`chart.bar.fill`) | `ProGate(.insights) { InsightsView }` |
 | settings | Settings | `gearshape` (`gearshape.fill`) | `SettingsView` |
 
-(`SpendApp.swift:115-135`, `:241`)
+(`SortdApp.swift:115-135`, `:241`)
 
 ### Where "add" lives
 - Home, with data: round black "+" `RoundIconButton` in the page header (`HomeView.swift:179`).
@@ -115,8 +115,8 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 - Activity: toolbar `.primaryAction` "+" (`ActivityView.swift:46-49`).
 - **Not on Insights or Settings.** No persistent add button across tabs.
 - Outside the app: Quick Add widget (`SortdWidget/SortdWidget.swift:472-484`), Spending widget
-  "+" link (`:415`), Siri "Log a purchase in Sortd" (`Spend/Intents/LogPurchaseIntent.swift:127-132`),
-  and `sortd://add` → Home + add sheet (`Spend/Services/Router.swift:39-42`).
+  "+" link (`:415`), Siri "Log a purchase in Sortd" (`Sortd/Intents/LogPurchaseIntent.swift:127-132`),
+  and `sortd://add` → Home + add sheet (`Sortd/Services/Router.swift:39-42`).
 - Note: `sortd://scan` routes to the **add sheet, not the scanner** (`Router.swift:39-42`).
 
 ### Toolbars and titles
@@ -153,7 +153,7 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 ### iOS 26 API use
 | API | Used? | Where |
 |---|---|---|
-| `Tab(value:)` | Yes | `SpendApp.swift:170-173` |
+| `Tab(value:)` | Yes | `SortdApp.swift:170-173` |
 | `Tab(role: .search)` | No | — |
 | `tabViewBottomAccessory` | No | — |
 | `tabBarMinimizeBehavior` | No | (system tab bar hidden, so N/A) |
@@ -169,7 +169,7 @@ DEBUG, SORTD_BETA and SORTD_GMAIL builds (`Spend/App/Features.swift:8-14`), so t
 
 ## 3. Screens
 
-### Home (`Spend/Views/HomeView.swift`)
+### Home (`Sortd/Views/HomeView.swift`)
 Vertical `ScrollView`, 28 pt between sections, 20 pt side padding (`:34-46`). Order:
 1. **Header** (`:155-215`): month `Menu` with a `Picker` of the last 12 months (`:161-176`),
    `BrandBar`, round "+", then the **big month total** (ScaledMetric 52 pt, rounded, bold,
@@ -199,7 +199,7 @@ width animation (`:318`), `CardPressStyle` = opacity 0.7 on press, no scale (`:5
 Empty state: `ContentUnavailableView` "No Purchases Yet" with "Set Up Auto-Logging" and "Add a
 Purchase" (`:416-426`). Category-level empty: "No purchases this month." (`:334-339`).
 
-### Activity (`Spend/Views/ActivityView.swift`)
+### Activity (`Sortd/Views/ActivityView.swift`)
 `List(.insetGrouped)` with hidden background (`:62-154`):
 - `ListPageTitle("Activity")`, custom search field (`:65-86`), horizontal category chips with
   colour dots (`:88-101`).
@@ -217,8 +217,8 @@ Purchase" (`:416-426`). Category-level empty: "No purchases this month." (`:334-
 - Category picker sheet: grid, "Other purchases at this merchant will move too" (`:238-295`),
   selection haptic.
 
-### Insights (`Spend/Views/InsightsView.swift`) — Pro only
-Whole tab wrapped in `ProGate` (`SpendApp.swift:172`); free users see `ProLockedView`
+### Insights (`Sortd/Views/InsightsView.swift`) — Pro only
+Whole tab wrapped in `ProGate` (`SortdApp.swift:172`); free users see `ProLockedView`
 (`PaywallView.swift:294-314`): icon, title, detail, "Unlock with Sortd Pro".
 For Pro:
 1. `PageTitle("Insights", subtitle:)` (`:25`).
@@ -233,7 +233,7 @@ For Pro:
 - Always **current month** (`InsightsView.swift:11-14`) — ignores the month chosen on Home.
 - Empty: `ContentUnavailableView` "No Insights Yet", no action (`:19-21`).
 
-### Settings (`Spend/Views/SettingsView.swift`)
+### Settings (`Sortd/Views/SettingsView.swift`)
 One long `List`, 11 blocks (`:24-286`): Pro row → Sources (Apple Pay Auto-Logging with "Last tap
 logged …") → Gmail → **Recurring (Subscriptions & Bills + reminder toggle)** → Cards (Cards,
 Appearance, Card Style, Widgets) → Currency → Learning → Security (Face ID, widget amounts when
@@ -242,7 +242,7 @@ Delete All with `confirmationDialog`, `:302-308`) → About. Swipe-to-delete on 
 Categories (`:352-355`); move/delete on Cards (`CardsSettingsView.swift:34-35`). Card Style
 picker with 8 finishes and selection haptic (`CardGradient.swift:303-327`).
 
-### Add Purchase (`Spend/Views/AddTransactionView.swift`)
+### Add Purchase (`Sortd/Views/AddTransactionView.swift`)
 `Form` in a sheet: big centred amount (auto-focused, `:157-160`, `:169-207`) + currency capsule
 menu; "Scan Receipt" (Pro); **quick entry** "coffee 5.50" field in its own section (`:83-87`,
 `:36-72`); merchant (auto-suggests category, `:90-99`); category row → picker sheet; card
@@ -250,7 +250,7 @@ picker + date; note. Add is disabled until amount is valid (`:141-146`, `:249-25
 haptic on save (`:161`).
 
 ### Haptics (`sensoryFeedback`) — complete list
-Tab change (`SpendApp.swift:266`), onboarding step (`OnboardingView.swift:80`), first tap
+Tab change (`SortdApp.swift:266`), onboarding step (`OnboardingView.swift:80`), first tap
 connected (`:648`), card carousel (`HomeView.swift:307`), chart scrub (`:831`), add saved
 (`AddTransactionView.swift:161`), delete (`ActivityView.swift:57`), category picked (`:291`),
 budget saved (`BudgetSheet.swift:117`), category limit saved (`CategoryLimitSheet.swift:113`),
@@ -275,7 +275,7 @@ Version (`SettingsView.swift:260-264`).
 | Apple Pay auto-log | Shortcuts Wallet automation → `LogWalletTapIntent` | `SetupGuideView.swift`, `WalletSetupGuide.swift` |
 | Monthly budget | Free; Home line + daily allowance after bills | `HomeView.swift:230-241` |
 | Category budgets | Pro | `InsightsView.swift:204`, `Services/CategoryBudgets.swift` |
-| Gmail background sync | Runs on every app foreground only | `SpendApp.swift:205-218` |
+| Gmail background sync | Runs on every app foreground only | `SortdApp.swift:205-218` |
 | Milestone copy | **Written but unused**: `SortdVoice.hundredPurchases`, `SortdVoice.firstImport` | `Services/SortdVoice.swift:188-190` (no call sites) |
 | Weekly summary | **None** | — |
 | Streaks | **None** | — |
@@ -312,7 +312,7 @@ used by `Timeline` (`Components/Timeline.swift:52`) and `.tint` in `SetupGuideVi
 Mostly system text styles (Dynamic Type): `.title2.bold` page titles, `.title3.bold` section
 headers (`HomeView.swift:448`), `.body` rows, `.subheadline`/`.footnote`/`.caption` secondary.
 Fixed sizes that do **not** scale: wordmark 40 heavy (`OnboardingView.swift:268`), budget entry
-52/30 rounded (`:749`, `:752`), tab bar icon 20 / label 10 (`SpendApp.swift:242`, `:248`),
+52/30 rounded (`:749`, `:752`), tab bar icon 20 / label 10 (`SortdApp.swift:242`, `:248`),
 card badge 9 heavy (`HomeView.swift:545`), guide icon 44 (`SetupGuideView.swift:50`).
 Money: `.monospacedDigit()` throughout; Home total and card totals use `.rounded` design
 (`HomeView.swift:184`, `:555`), but the Insights chart total (`:732`) and Add amount
@@ -350,17 +350,17 @@ Swift Charts, `ShareLink`, `PhotosPicker`, `fileImporter`, `confirmationDialog`,
    user will fail ("We'll wait", `:851`).
 
 3. **A whole tab is locked for free users.** Insights is `ProGate`'d at the tab level
-   (`SpendApp.swift:172`, `PaywallView.swift:317-324`). Home's "See all" and over-limit links
+   (`SortdApp.swift:172`, `PaywallView.swift:317-324`). Home's "See all" and over-limit links
    send free users there (`HomeView.swift:203`, `:343`). The only chart in the app lives there
    (`InsightsView.swift:26`), so free users never see a trend line.
 
 4. **Opts out of the iOS 26 system look.** System tab bar hidden and replaced by `FlatTabBar`
-   (`SpendApp.swift:167-177`, `:230-268`); glass stripped from toolbar items
+   (`SortdApp.swift:167-177`, `:230-268`); glass stripped from toolbar items
    (`sharedBackgroundVisibility(.hidden)`, e.g. `HomeView.swift:57`); Theme bans glass
    (`Theme.swift:7`). Nav bars hidden on 3 of 4 tabs (`HomeView.swift:51`,
    `InsightsView.swift:38`, `SettingsView.swift:296`). Loses tab-bar minimise, the search tab
    role, `tabViewBottomAccessory`, large-title collapse, scroll-edge effects, and Dynamic Type
-   on tab labels (10 pt fixed, `SpendApp.swift:248`). Tab bar also needed a spacer hack so it
+   on tab labels (10 pt fixed, `SortdApp.swift:248`). Tab bar also needed a spacer hack so it
    doesn't cover the last Settings row (`SettingsView.swift:265-271`).
 
 5. **"Add" is not always one tap away.** The Home "+" scrolls off with the header
@@ -389,7 +389,7 @@ Swift Charts, `ShareLink`, `PhotosPicker`, `fileImporter`, `confirmationDialog`,
    card both open the same sheet (`:192`, `:253`). Category rows aren't tappable (`:345-368`).
    "All cards" switches tabs (`:287`) while other cards push (`:294`), and the jump to Activity
    drops the card/month context. No swipe/context actions on Home rows, no pull-to-refresh
-   anywhere (Gmail only syncs on foreground, `SpendApp.swift:205-218`).
+   anywhere (Gmail only syncs on foreground, `SortdApp.swift:205-218`).
 
 9. **Retention is Pro-only and thin.** All notifications need Pro (`Reminders.swift:25`, `:50`).
    No weekly summary, streak, Live Activity, Control widget, TipKit or review prompt (none in
@@ -400,7 +400,7 @@ Swift Charts, `ShareLink`, `PhotosPicker`, `fileImporter`, `confirmationDialog`,
 
 10. **No real design tokens; small inconsistencies add up.** 15 corner radii, spacing literals,
     `Surface` default 24 but mostly overridden to 16 (`Theme.swift:113`). Fixed font sizes that
-    ignore Dynamic Type (`SpendApp.swift:242`, `:248`; `HomeView.swift:545`). Money is rounded
+    ignore Dynamic Type (`SortdApp.swift:242`, `:248`; `HomeView.swift:545`). Money is rounded
     on Home (`HomeView.swift:184`) but default on Insights and Add (`:732`,
     `AddTransactionView.swift:176`). Insights is locked to the current month
     (`InsightsView.swift:11-14`) while Home has a 12-month picker (`HomeView.swift:12`, `:161`),

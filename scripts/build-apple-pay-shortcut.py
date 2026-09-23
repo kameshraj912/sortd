@@ -74,11 +74,11 @@ whole_input_as_text = {
 }
 
 log = {
-    "WFWorkflowActionIdentifier": "com.kameshraj.spend.LogWalletTapIntent",
+    "WFWorkflowActionIdentifier": "com.kameshraj.sortd.LogWalletTapIntent",
     "WFWorkflowActionParameters": {
         "AppIntentDescriptor": {
             "AppIntentIdentifier": "LogWalletTapIntent",
-            "BundleIdentifier": "com.kameshraj.spend",
+            "BundleIdentifier": "com.kameshraj.sortd",
             "Name": "Sortd",
             "TeamIdentifier": "None",
         },

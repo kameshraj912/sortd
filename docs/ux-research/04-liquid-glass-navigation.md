@@ -13,7 +13,7 @@ WWDC25/WWDC26 session pages. Anything I could not check against those is marked
 
 ## 0. Where Sortd is today (from the code, `ux-refresh` worktree)
 
-- `SpendApp.swift` uses a `TabView` with 4 tabs (Home, Activity, Insights, Settings), but
+- `SortdApp.swift` uses a `TabView` with 4 tabs (Home, Activity, Insights, Settings), but
   **hides the system tab bar** (`.hideSystemTabBar()`) and draws its own `FlatTabBar`
   (white, hairline, no glass). The comment says this was done because iOS 27 always draws
   the system bar as floating Liquid Glass. So today Sortd has opted *out* of the look the
