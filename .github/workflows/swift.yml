@@ -24,7 +24,7 @@ jobs:
       run: xcodebuild -version
     - name: Build
       run: >
-        xcodebuild -project Spend.xcodeproj -scheme Spend
+        xcodebuild -project Sortd.xcodeproj -scheme Sortd
         -destination 'generic/platform=iOS Simulator'
         CODE_SIGNING_ALLOWED=NO
         build
@@ -41,8 +41,8 @@ jobs:
       # SKTestSession loads no products from SortdPro.storekit (cause not found
       # yet; the product IDs match). Put it back once that is fixed.
       run: >
-        xcodebuild -project Spend.xcodeproj -scheme Spend
+        xcodebuild -project Sortd.xcodeproj -scheme Sortd
         -destination "id=$SIM_ID"
-        -skip-testing:SpendTests/ProStoreTests
+        -skip-testing:SortdTests/ProStoreTests
         CODE_SIGNING_ALLOWED=NO
         test

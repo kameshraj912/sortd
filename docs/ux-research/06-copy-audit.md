@@ -2,11 +2,11 @@
 
 Date: 23 Sep 2026. Read-only. No Swift file was changed.
 
-**What was checked:** every user-facing string in `Spend/Views/**/*.swift` (except onboarding),
-plus `Spend/Services/SortdVoice.swift`. For each: is it needed, can it be shorter, plainer,
+**What was checked:** every user-facing string in `Sortd/Views/**/*.swift` (except onboarding),
+plus `Sortd/Services/SortdVoice.swift`. For each: is it needed, can it be shorter, plainer,
 kinder, and does it say what the code really does.
 
-**Skipped:** `Spend/Views/OnboardingView.swift` and `Spend/Views/Onboarding/` (already done),
+**Skipped:** `Sortd/Views/OnboardingView.swift` and `Sortd/Views/Onboarding/` (already done),
 code comments, and anything inside `#if DEBUG` (`SecretCodeSheet.swift`, the DEBUG card-style
 gallery in `CardGradient.swift`, the About-page knock hints). Plain system words (OK, Cancel,
 Done, Save, Delete, Close, Undo) are only listed when there is a problem with them.
@@ -682,7 +682,7 @@ I couldn't check the iOS 27 Shortcuts screens myself.
 | SearchView.swift:54 | Categories | keep | |
 | SearchView.swift:74-75 | No results / Nothing matches "{query}". | keep | |
 | SearchView.swift:85 | {n} result(s) | keep | |
-| SearchView.swift:130 | Merchant, category or note | rewrite | Shop, category or note *(also `App/SpendApp.swift:302`)* |
+| SearchView.swift:130 | Merchant, category or note | rewrite | Shop, category or note *(also `App/SortdApp.swift:302`)* |
 
 ### ReceiptScanView.swift
 

@@ -87,9 +87,9 @@ Fill in App Store Connect directly (name, phone, email). Review notes: docs/AppR
 
 | Reference name | Product ID | Type | Price | Offer |
 |---|---|---|---|---|
-| Sortd Pro Yearly | com.kameshraj.spend.pro.yearly | Auto-renewable, group "Sortd Pro", level 1 | US$49.99 | Intro: 2-week free trial |
-| Sortd Pro Monthly | com.kameshraj.spend.pro.monthly | Auto-renewable, group "Sortd Pro", level 2 | US$6.99 | none |
-| Sortd Pro Lifetime | com.kameshraj.spend.pro.lifetime | Non-consumable | US$99.99 | — |
+| Sortd Pro Yearly | com.kameshraj.sortd.pro.yearly | Auto-renewable, group "Sortd Pro", level 1 | US$49.99 | Intro: 2-week free trial |
+| Sortd Pro Monthly | com.kameshraj.sortd.pro.monthly | Auto-renewable, group "Sortd Pro", level 2 | US$6.99 | none |
+| Sortd Pro Lifetime | com.kameshraj.sortd.pro.lifetime | Non-consumable | US$99.99 | — |
 
 Turn on Family Sharing for all three. Each needs a display name, description and a review
 screenshot of the paywall (docs/screenshots/paywall.png).

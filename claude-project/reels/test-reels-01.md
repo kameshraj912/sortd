@@ -2,7 +2,7 @@
 
 20 Sep 2026 · Instagram Reels, 1080×1920 (9:16) · 12–20 s each
 Keep all text and the logo inside the middle 1080×1350. Burn in captions. Each Reel must make sense with the sound off.
-Footage: real app screens with sample data only. Record them in the simulator with `SPEND_DEMO=1`, or with "Explore with sample data". Show the recordings full-screen, with no phone frame. The Apple Pay tap can't be recorded in the app, so screen-record the looping demo on the sortd.page hero instead.
+Footage: real app screens with sample data only. Record them in the simulator with `SORTD_DEMO=1`, or with "Explore with sample data". Show the recordings full-screen, with no phone frame. The Apple Pay tap can't be recorded in the app, so screen-record the looping demo on the sortd.page hero instead.
 End card on every Reel: black `#111113` background, **sortd** wordmark with the four bars, then "In beta. Link in bio." No App Store badge and no Apple Pay logo.
 
 ---

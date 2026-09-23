@@ -6,7 +6,7 @@ OAuth docs. "Done" means built and tested in the simulator.
 ## Before any App Store build — do not skip
 
 - [ ] **Remove `SORTD_BETA`** from `SWIFT_ACTIVE_COMPILATION_CONDITIONS` in the app target's
-      Release config (`Spend.xcodeproj/project.pbxproj`). It gives Pro away free to anything
+      Release config (`Sortd.xcodeproj/project.pbxproj`). It gives Pro away free to anything
       running against the App Store sandbox, which includes TestFlight **and App Review**.
       Leave it in and reviewers never see the paywall work, and the IAPs go untested.
       Run `scripts/preflight.sh --appstore` — it fails while the flag is still there.
@@ -34,7 +34,7 @@ All three are settings, not code. Do them once the paid developer account clears
 
 ## Beta crash reports — Sentry (added 21 Sep 2026)
 
-Built into TestFlight builds only (`Spend/Services/CrashReporting.swift`, `#if SORTD_BETA`).
+Built into TestFlight builds only (`Sortd/Services/CrashReporting.swift`, `#if SORTD_BETA`).
 Sends the stack trace, device model and OS. No purchases, merchants, emails, screenshots,
 breadcrumbs or IP.
 
