@@ -16,7 +16,7 @@ struct LockView: View {
             } label: {
                 Text("Unlock").primaryPill(enabled: !lock.authenticating)
             }
-            .buttonStyle(.pressable)
+            .primaryGlass()
             .disabled(lock.authenticating)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)

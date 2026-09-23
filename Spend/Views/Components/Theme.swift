@@ -165,16 +165,16 @@ extension Font {
     static var moneySmall: Font { .title2.weight(.bold).monospacedDigit() }
 }
 
-/// Full-width primary button.
+/// The label of a full-width primary button. The capsule itself comes from
+/// the system glass style — see `primaryGlass()`.
 struct PrimaryPill: ViewModifier {
     var enabled = true
 
     func body(content: Content) -> some View {
         content
             .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity)
             .foregroundStyle(enabled ? Color.onBrand : Color.secondary)
-            .background(enabled ? Color.brand : Color.track, in: .capsule)
     }
 }
 
@@ -232,6 +232,20 @@ extension View {
     func surface(radius: CGFloat = 24) -> some View { modifier(Surface(radius: radius)) }
     func chip(selected: Bool) -> some View { modifier(ChipStyle(selected: selected)) }
     func primaryPill(enabled: Bool = true) -> some View { modifier(PrimaryPill(enabled: enabled)) }
+
+    /// The app's primary button. Apple's own styles own the gesture, so they
+    /// give the full system press behaviour — including the Reduce Motion
+    /// handling a hand-rolled scale would have to reimplement. Setup already
+    /// used this; the rest of the app was drawing its own capsule and then
+    /// switching the press effect off with `.buttonStyle(.plain)`.
+    func primaryGlass() -> some View {
+        buttonStyle(.glassProminent).tint(Color.brand).controlSize(.large)
+    }
+
+    /// The quieter twin, for a second action under the primary one.
+    func secondaryGlass() -> some View {
+        buttonStyle(.glass).controlSize(.large)
+    }
 }
 
 /// List section heading in the setup style: bold, normal case, ink colour

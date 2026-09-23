@@ -403,6 +403,7 @@ struct CategoryPickerSheet: View {
             .sensoryFeedback(.selection, trigger: picked)
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
