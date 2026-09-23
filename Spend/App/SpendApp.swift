@@ -307,6 +307,10 @@ extension RootView {
 
     @ViewBuilder
     var tabs: some View {
+        // The prominent tab is in the iOS 27 SDK only, so the code is compiled
+        // in only by Xcode 27 (Swift 6.4). Older Xcode — and iOS 26 at run
+        // time — uses the search-role slot below, which looks the same.
+        #if compiler(>=6.4)
         if layout == .prominent, #available(iOS 27, *) {
             TabView(selection: tabSelection) {
                 Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
@@ -323,34 +327,50 @@ extension RootView {
                 }
             }
         } else if layout == .prominent {
-            // iOS 26 has no prominent tab, but it draws the search-role tab
-            // as the same separate glass circle. So + goes in that slot and
-            // Search sits inside the bar: the same look as iOS 27. Tapping +
-            // never shows this tab; onChange turns it into the add sheet.
-            TabView(selection: tabSelection) {
-                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
-                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
-                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                    ProGate(feature: .insights) { InsightsView() }
-                }
-                if nav.hasYouTab {
-                    Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
-                }
-                if nav.hasSearchTab {
-                    Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
-                }
-                Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) { Color.clear }
-            }
+            legacyPlusTabs
         } else {
-            TabView(selection: tabSelection) {
-                Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
-                Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
-                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                    ProGate(feature: .insights) { InsightsView() }
-                }
-                Tab(value: AppTab.search, role: .search) {
-                    SearchView(external: layout.rootSearch ? $searchQuery : nil)
-                }
+            searchTabOnlyTabs
+        }
+        #else
+        if layout == .prominent {
+            legacyPlusTabs
+        } else {
+            searchTabOnlyTabs
+        }
+        #endif
+    }
+
+    /// iOS 26, and any Xcode older than 27: iOS 26 draws the search-role tab
+    /// as the same separate glass circle, so + goes in that slot and Search
+    /// sits inside the bar. The same look as iOS 27's prominent tab. Tapping
+    /// + never shows this tab; the selection binding opens the add sheet.
+    var legacyPlusTabs: some View {
+        TabView(selection: tabSelection) {
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                ProGate(feature: .insights) { InsightsView() }
+            }
+            if nav.hasYouTab {
+                Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
+            }
+            if nav.hasSearchTab {
+                Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) { SearchView() }
+            }
+            Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) { Color.clear }
+        }
+    }
+
+    /// The other nav layouts (no + circle): Search keeps the system slot.
+    var searchTabOnlyTabs: some View {
+        TabView(selection: tabSelection) {
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
+                ProGate(feature: .insights) { InsightsView() }
+            }
+            Tab(value: AppTab.search, role: .search) {
+                SearchView(external: layout.rootSearch ? $searchQuery : nil)
             }
         }
     }
