@@ -952,7 +952,7 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay by itself", "Two steps, about a minute.")
+            header("Log Apple Pay by itself", "Three steps, about a minute.")
             tapStatus
 
             // Step 1: the ready-made shortcut. It arrives with the amount,
@@ -992,14 +992,12 @@ struct OnboardingView: View {
                 .buttonStyle(.glass)
                 .controlSize(.large)
 
-                // The only way to prove the wiring before buying something.
-                // ▶ logs nothing on purpose, but it does reach the app, and
-                // that is what flips the status above to "Connected".
-                Label("Not sure it worked? Open the shortcut and press ▶ once. It won't log a purchase, but Sortd will say it's connected.",
-                      systemImage: "play.circle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Divider()
+
+                // Without this, the only way to know whether any of it worked
+                // was to go and buy something.
+                miniStep(3, "Check it works", "Runs a made-up purchase through the same code a real tap uses, then lets you delete it.")
+                TapTestButton()
             }
             .setupCard()
             .padding(.top, 10)
