@@ -9,3 +9,8 @@
 
 /img/*
   Cache-Control: public, max-age=604800
+
+/apple-pay.shortcut
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment; filename="Log Apple Pay in Sortd.shortcut"
+  Cache-Control: public, max-age=3600
