@@ -37,7 +37,7 @@ struct SearchView: View {
                        message: "Purchases you log show up here.")
                 .listRowBackground(Color.clear)
         } else {
-            Section("Top shops this month") {
+            Section(bold: "Top Shops This Month") {
                 ForEach(topMerchants, id: \.name) { m in
                     Button { query = m.name } label: {
                         HStack {
@@ -51,7 +51,7 @@ struct SearchView: View {
                     .accessibilityLabel("\(m.name), \(Money.spoken(m.total, Money.home)) this month")
                 }
             }
-            Section("Categories") {
+            Section(bold: "Categories") {
                 ForEach(usedCategories) { c in
                     Button { query = c.name } label: {
                         Label {

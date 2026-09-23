@@ -468,7 +468,7 @@ struct HomeView: View {
                                 }
                                 .buttonStyle(.plain)
                                 if t.id != rows.last?.id {
-                                    Divider().padding(.leading, 68)
+                                    Divider().padding(.leading, 64)
                                 }
                             }
                         }

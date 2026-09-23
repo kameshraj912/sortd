@@ -221,7 +221,7 @@ struct TransactionsScreen: View {
                             TransactionRow(transaction: t)
                         }
                         .listRowBackground(Color.card)
-                        .alignmentGuide(.listRowSeparatorLeading) { _ in 52 }
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 48 }
                         .swipeActions(edge: .leading) {
                             Button("Category", systemImage: "tag") { recategorising = t }
                                 .tint(t.category.color)

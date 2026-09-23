@@ -311,7 +311,8 @@ struct ProLockedView: View {
     var body: some View {
         VStack(spacing: 14) {
             Spacer()
-            Image(systemName: feature.symbol).font(.system(size: 40)).foregroundStyle(.secondary)
+            Image(systemName: feature.symbol).font(.largeTitle).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(feature.title).font(.title2.weight(.bold))
             Text(feature.detail).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button { showing = true } label: { Text("Unlock with Sortd Pro").primaryPill() }
