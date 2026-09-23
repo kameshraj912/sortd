@@ -18,7 +18,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## Promotional text (170)
 
-Pay with Apple Pay and Sortd writes it down. See every subscription before it charges you. No bank login, no account, nothing leaves your iPhone.
+Pay with Apple Pay and Sortd writes it down. With Sortd Pro, see every subscription before it charges you. No bank login, no account, nothing leaves your iPhone.
 
 ## Description (4000)
 
@@ -30,17 +30,20 @@ LOGGED FOR YOU
 • Apple Pay taps log themselves through one Shortcuts automation. Setup shows a picture for every step and takes about three minutes.
 • Works with every card in Apple Wallet, on iPhone and Apple Watch.
 • Two cards from the same bank? Sortd tells them apart by their Apple Pay number.
-• Add anything by hand in a couple of taps.
+• Add anything by hand in a couple of taps, or type it the way you'd say it ("coffee 5.50 yesterday"). On iPhones with Apple Intelligence, the line is read on your iPhone and fills in the form for you to check.
+• Bring in past spending from a CSV or PDF statement, or a screenshot of your bank app. Read on your iPhone.
 
 SEE WHERE IT WENT
 • This month at a glance, by category and by card.
 • Every card gets its own page.
 • 30+ currencies, converted to your home currency at that day's European Central Bank rate. Handy if you live or travel across countries.
 • Categories learn: change one purchase and that shop stays fixed.
+• Home Screen and Lock Screen widgets: today, this month and what's about to charge you. Amounts are hidden on the Lock Screen unless you choose to show them.
+• An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it. Free.
 
 SORTD PRO
 • Gmail receipts: deliveries, rides, app stores and bank alerts, read from your inbox on your iPhone. Read-only.
-• Receipt camera: point at a paper receipt and Sortd fills in the shop and total.
+• Receipt camera: point at a paper receipt and Sortd fills in the shop and total. Read on your iPhone; the photo isn't kept.
 • Insights: this month next to last month, day by day.
 • Subscriptions and bills: every repeat charge found, price rises flagged, and a reminder the day before it charges.
 • Category budgets for eating out, shopping or anything else.
@@ -49,10 +52,11 @@ PRIVATE BY DESIGN
 • No bank passwords, ever. Sortd only keeps the last 4 digits of a card.
 • Your data is stored on your iPhone. We don't run a server, so there is nothing for us to see, sell or lose.
 • No ads, no analytics, no trackers.
-• Face ID lock, export everything as a spreadsheet, or delete it all in one tap.
+• Your setup answers and notifications stay on your iPhone too. Apple Intelligence runs on the device.
+• Face ID lock, save a backup file, export everything as a spreadsheet, or delete it all in one tap.
 
 PRICING
-Sortd is free to use, including Apple Pay auto-logging. Sortd Pro is available monthly, yearly (with a free trial for new subscribers) or as a one-time purchase. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the period, in Settings › Apple Account › Subscriptions.
+Sortd is free to use, including Apple Pay auto-logging, check-ins and widgets. Sortd Pro is available monthly, yearly or as a one-time purchase; the App Store shows the price in your currency before you buy. The yearly plan has a free trial for new subscribers. When the trial ends, the yearly price is charged unless you cancel at least 24 hours before it ends. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the period. Cancel any time in Settings › your name › Subscriptions; Pro keeps working until the end of the period you paid for.
 
 Terms of Use: https://sortd.page/terms
 Privacy Policy: https://sortd.page/privacy

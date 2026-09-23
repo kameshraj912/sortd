@@ -77,6 +77,45 @@ Apple's site.
 - [ ] Optional: read `docs/` in that repo before each submission. Don't install its hook
       without reading the scripts first.
 
+## Compliance pass, 23 Sep 2026 (ux-refresh branch)
+
+Checked in code, not on a device. Not legal advice; items marked "lawyer" need one.
+
+**App Privacy label: still "Data Not Collected".** Nothing new leaves the phone:
+- [x] Setup answers (`setup.*`: goals, how you pay, feeling about spending, check-in time, spend
+      abroad) are stored only on the iPhone in UserDefaults, never sent anywhere, not in backup
+      files. They pick setup steps, Pro feature order and the check-in time. Editable via Settings ›
+      Help & Feedback › Run Setup Again and Settings › Bills & Reminders; removed by Delete All Data.
+- [x] Check-in, bill reminders and category limit alerts are local (UNUserNotificationCenter).
+      No APNs, no push entitlement, no server. The check-in has fixed text and no amounts.
+- [x] Quick entry with Apple Intelligence (`QuickEntryAI`, FoundationModels) runs on the device;
+      output is checked against the typed line and only fills the Add form.
+- [x] "Finish setup" widget check uses `WidgetCenter.currentConfigurations()`, on the device.
+- [x] Only network calls in the app: Google OAuth/Gmail, frankfurter.dev, and StoreKit (Apple).
+- [x] sortd.page/privacy, terms and support updated for all of the above (not deployed).
+- [ ] Sentry is linked in the app target even though the DSN is empty. Its privacy manifest may
+      put "Crash Data" into Xcode's privacy report and clash with "Data Not Collected". Check the
+      generated report on the archive; remove the package for the App Store build (already planned).
+- [ ] The in-app Privacy page (`PrivacyView` in `Views/DataControlsView.swift`) doesn't mention
+      setup answers, notifications or Apple Intelligence yet. Settings › Privacy & Security now has
+      a short section for them; fold it into PrivacyView when that file is free.
+- [ ] Help & Feedback links `https://sortd.page/support.html`; use `https://sortd.page/support`.
+- [ ] Notification permission (4.5.4): asked only after the user picks a check-in or bill
+      reminders, with "Not now" beside it. Keep check-ins free of promotions (no "try Pro" text),
+      or 4.5.4 needs separate opt-in consent.
+- [ ] Pricing (3.1.2, ACCC): the paywall subtitle and the site lead with "$4.17 a month" for a
+      yearly plan. Apple wants the billed amount most prominent. Site now says "then $49.99 a year
+      (about $4.17 a month)"; check the paywall subtitle too.
+- [ ] Site prices are in US dollars on a site aimed at Australia and Singapore. Lawyer: is a USD
+      "guide" price OK under the ACL single-price rule, or should the site show AUD/SGD or just say
+      "see the App Store"?
+- [ ] Privacy policy names no person or business, only "the makers of Sortd" and an email. APP 5
+      and PDPA want the identity and contact of whoever is responsible. Decide what name to show
+      (the App Store will show Raj's name anyway). Lawyer: whether the small-business exemption
+      means the Privacy Act applies at all, and what the PDPA DPO notice needs.
+- [ ] New promise in the privacy policy: support emails are deleted on request. Confirm you're
+      happy to honour it (the inbox is Gmail, via Cloudflare forwarding).
+
 ## Launch extras from web research, 21 Sep 2026
 
 - [x] Review notes: say plainly that no money moves, no bank link, all data stays on the phone
@@ -140,7 +179,9 @@ needs a backend, and isn't worth one until there's revenue to protect.
 ## Done in the app
 - [x] No empty first launch: guided setup + "Explore with sample data" for reviewers (Guideline 2.1, 4.2)
 - [x] Works fully offline; nothing needs an account
-- [x] Delete All Data (Settings › Your Data) — wipes purchases, cards, settings, email keys, reminders
+- [x] Delete All Data (Settings › Backup & Data) — wipes purchases, cards, settings, setup answers,
+      email keys, the check-in and reminders (checked in code 23 Sep 2026: it clears the whole
+      UserDefaults domain, so every `setup.*` key goes)
 - [x] Export all purchases as CSV
 - [x] In-app Privacy page + "not financial advice" note
 - [x] No placeholder or personal text on screen; generic examples only
