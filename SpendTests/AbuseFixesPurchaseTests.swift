@@ -87,3 +87,41 @@ struct AmountKeypadTests {
         }
     }
 }
+
+/// The Wallet automation on iOS 27 hands Shortcuts a Transaction it can't
+/// turn into text, so the action takes the parts on their own too.
+@MainActor
+struct WalletTapFieldsTests {
+    private func store() -> ModelContext {
+        let container = try! ModelContainer(for: Transaction.self, MerchantRule.self, FXRate.self,
+                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        return ModelContext(container)
+    }
+
+    @Test func separateFieldsLogAPurchase() async throws {
+        let ctx = store()
+        let out = try await LogWalletTapIntent.handle(nil, amount: "A$12.34", merchant: "Test Cafe",
+                                                      card: "NAB Visa Debit", in: ctx, book: CardBook())
+        let saved = try #require(out.transaction)
+        #expect(saved.merchant == "Test Cafe")
+        #expect(saved.amount == Decimal(string: "12.34"))
+    }
+
+    @Test func separateFieldsBeatTheTextBlob() async throws {
+        let ctx = store()
+        let out = try await LogWalletTapIntent.handle("Old Shop\n$1.00", amount: "5.50", merchant: "New Shop",
+                                                      in: ctx, book: CardBook())
+        let saved = try #require(out.transaction)
+        #expect(saved.merchant == "New Shop")
+        #expect(saved.amount == Decimal(string: "5.50"))
+    }
+
+    @Test func emptyFieldsFallBackToTheText() async throws {
+        let ctx = store()
+        let out = try await LogWalletTapIntent.handle("Seven Seeds\nA$5.50", amount: "  ", merchant: "",
+                                                      in: ctx, book: CardBook())
+        let saved = try #require(out.transaction)
+        #expect(saved.merchant == "Seven Seeds")
+        #expect(saved.amount == Decimal(string: "5.50"))
+    }
+}
