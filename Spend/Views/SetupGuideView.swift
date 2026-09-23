@@ -75,12 +75,22 @@ struct SetupGuideView: View {
             } header: {
                 BoldHeader("The Quick Way")
             } footer: {
-                Text("Add the shortcut, then in Shortcuts: Automation › + › Wallet › your cards › Run Immediately. Add the action Run Shortcut and pick Log Apple Pay in Sortd.")
+                Text("Add the shortcut, then build the automation. The pictures below show every screen.")
+            }
+
+            if #available(iOS 27.0, *) {
+                Section {
+                    WalletSetupGuide(route: .quick).padding(.vertical, 8)
+                } header: {
+                    BoldHeader("After the Shortcut Is Added")
+                } footer: {
+                    Text("Swipe through the steps. The ▶ button in Shortcuts only runs a test — a purchase is only logged when you tap your card in a shop.")
+                }
             }
 
             if #available(iOS 27.0, *) {
                 Section(bold: "Or Do It By Hand") {
-                    WalletSetupGuide().padding(.vertical, 8)
+                    WalletSetupGuide(route: .byHand).padding(.vertical, 8)
                 }
             } else {
             Section(bold: "Steps") {
