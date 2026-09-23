@@ -63,6 +63,8 @@ struct OnboardingView: View {
     @State private var trialText: String?
     @State private var forward = true
     @State private var showingGuide = false
+    /// They've been sent to the ready-made shortcut at least once.
+    @State private var shortcutOpened = false
     @State private var customBudget = ""
     @State private var bankCountry: String = Locale.current.region?.identifier ?? "AU"
     @State private var editing: CardInfo?
@@ -944,27 +946,48 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay by itself", "A 2-minute setup in Apple's Shortcuts app.")
+            header("Log Apple Pay by itself", "Two steps, about a minute.")
             tapStatus
-            Group {
-                if #available(iOS 27.0, *) {
-                    WalletSetupGuide()
-                        .setupCard()
-                } else {
-                    VStack(alignment: .leading, spacing: 16) {
-                        miniStep(1, "Shortcuts → Automation → +", "Tap Wallet, choose your cards, then Run Immediately and Next.")
-                        miniStep(2, "Create New Shortcut", "Search Sortd and tap Log Wallet Tap.")
-                        miniStep(3, "Fill the three fields", "Tap Amount → Select Variable → Shortcut Input, then tap that blue word again and choose Amount. Same for Shop (Merchant) and Card (Card or Pass).")
-                        actionMock.padding(.leading, 38)
-                    }
-                    .setupCard()
+
+            // Step 1: the ready-made shortcut. It arrives with the amount,
+            // shop and card already matched to the parts of the tap, which
+            // is the part people get wrong by hand.
+            VStack(alignment: .leading, spacing: 12) {
+                miniStep(1, "Add the Sortd shortcut", "Opens Safari, then tap the download and Add Shortcut.")
+                Button {
+                    openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
+                    shortcutOpened = true
+                } label: {
+                    Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
+                        .font(.headline)
+                        .foregroundStyle(Color.onBrand)
+                        .frame(maxWidth: .infinity, minHeight: 32)
                 }
+                .buttonStyle(.glassProminent)
+                .tint(Color.brand)
+                .controlSize(.large)
+
+                Divider()
+
+                miniStep(2, "Turn it on for your cards", "Shortcuts › Automation › + › Wallet › your cards › Run Immediately. Add the action Run Shortcut and pick Log Apple Pay in Sortd.")
+                Button {
+                    if let url = URL(string: "shortcuts://") { openURL(url) }
+                } label: {
+                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                        .font(.headline)
+                        .foregroundStyle(Color.ink)
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                }
+                .buttonStyle(.glass)
+                .controlSize(.large)
             }
+            .setupCard()
             .padding(.top, 10)
+
             Button { showingGuide = true } label: {
                 HStack(spacing: 12) {
                     RowIcon("list.number")
-                    Text("Every step in detail").font(.body).foregroundStyle(Color.ink)
+                    Text("Rather do it by hand?").font(.body).foregroundStyle(Color.ink)
                     Spacer()
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 }

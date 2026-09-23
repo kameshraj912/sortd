@@ -45,20 +45,22 @@
 
   <h2 id="apple-pay">How do I log Apple Pay taps automatically?</h2>
   <p>You set up one automation in Apple's Shortcuts app. It takes about two minutes, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Purchase Sources › Apple Pay Logging.</p>
-  <h3>iOS 27</h3>
+  <h3>The quick way</h3>
+  <ol>
+    <li><a href="/apple-pay.shortcut"><strong>Get the ready-made shortcut</strong></a> on your iPhone, then tap the download, then <strong>Add Shortcut</strong>. It already knows which part of the tap is the amount, the shop and the card.</li>
+    <li>In Shortcuts, open <strong>Automation</strong> and tap <strong>+</strong>.</li>
+    <li>Choose <strong>Wallet</strong>, pick the cards you pay with, choose <strong>Run Immediately</strong>, and turn <strong>Notify When Run</strong> off.</li>
+    <li>Add the action <strong>Run Shortcut</strong>, choose <strong>Log Apple Pay in Sortd</strong>, and set its input to <strong>Shortcut Input</strong>.</li>
+    <li>Tap back to save. Pay with Apple Pay in a shop and it shows up in Sortd.</li>
+  </ol>
+  <h3>By hand</h3>
   <ol>
     <li>Open Shortcuts and tap <strong>+</strong> at the bottom. On the next screen tap <strong>Edit</strong> at the top right.</li>
-    <li>Tap the blue <strong>Automation</strong> chip under the search box, type <em>wallet</em>, then tap <strong>Wallet</strong> ("When I tap a Wallet Card or Pass"). The shortcut now starts with "When Any Card is tapped".</li>
+    <li>Tap the blue <strong>Automation</strong> chip under the search box, type <em>wallet</em>, then tap <strong>Wallet</strong>. The shortcut now starts with "When Any Card is tapped".</li>
     <li>In the search box at the bottom, type <em>Sortd</em> and tap <strong>Log Wallet Tap</strong>.</li>
-    <li>Tap the grey word <strong>Transaction</strong>, tap <strong>Select Variable</strong> above the keyboard, then tap the blue <strong>Transaction</strong> just under "When Any Card is tapped".</li>
+    <li>Tap <strong>Amount</strong>, then <strong>Select Variable</strong>, then <strong>Shortcut Input</strong>. Now tap that blue word again and choose <strong>Amount</strong>. This second tap is the part people miss: without it, iOS says "couldn't convert from Transaction to Text" and nothing is logged.</li>
+    <li>Do the same for <strong>Shop</strong> (choose Merchant). Tap <strong>&rsaquo;</strong> to show <strong>Card</strong> and choose <strong>Card or Pass</strong>.</li>
     <li>Tap back to save. That's it.</li>
-  </ol>
-  <h3>iOS 26</h3>
-  <ol>
-    <li>Open Shortcuts, go to the Automation tab and tap <strong>+</strong>.</li>
-    <li>Choose <strong>Wallet</strong>, pick every card you pay with, choose <strong>Run Immediately</strong>, then Next.</li>
-    <li>Choose Create New Shortcut, search for Sortd and add <strong>Log Wallet Tap</strong>.</li>
-    <li>Tap <strong>Transaction</strong> and pick <strong>Shortcut Input</strong> above the keyboard. Tap Done.</li>
   </ol>
   <p class="note">Pressing ▶ in Shortcuts is only a test: it has no purchase in it, so Sortd replies "connected" and saves nothing. Pay with Apple Pay in a shop to log a real one. Only in-store taps trigger the automation. Online and in-app purchases come in from email receipts if you connect Gmail.</p>
 
