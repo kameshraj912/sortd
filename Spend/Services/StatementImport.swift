@@ -210,20 +210,31 @@ nonisolated enum StatementImport {
     /// Saves chosen rows through `TransactionLogger`. A row may match a
     /// purchase Sortd already had (the tap), but never another row from this
     /// same import: two identical lines are two purchases.
+    /// One save at the end (and one every 50 rows, so a very long
+    /// statement never holds much unsaved). `progress` hears rows done.
     @MainActor
-    static func save(_ rows: [Row], card: Card, in context: ModelContext) -> (added: Int, merged: Int) {
+    static func save(_ rows: [Row], card: Card, in context: ModelContext,
+                     progress: (Int) -> Void = { _ in }) -> (added: Int, merged: Int) {
+        let span = Perf.begin("statement.save")
         var added = 0, merged = 0
         var touched: Set<UUID> = []
-        for row in rows {
+        let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
+        for (i, row) in rows.enumerated() {
             let purchase = IncomingPurchase(date: row.date, merchant: row.detail, amount: row.amount,
                                             currency: row.currency ?? Spend.Money.home, card: card, source: .csv)
-            guard let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched) else { continue }
-            touched.insert(outcome.transaction.id)
-            switch outcome {
-            case .added: added += 1
-            case .merged: merged += 1
+            if let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched,
+                                                        learned: learned, save: false) {
+                touched.insert(outcome.transaction.id)
+                switch outcome {
+                case .added: added += 1
+                case .merged: merged += 1
+                }
             }
+            if (i + 1) % 50 == 0 { try? context.save() }
+            progress(i + 1)
         }
+        try? context.save()
+        span.end("\(rows.count) rows")
         return (added, merged)
     }
 
