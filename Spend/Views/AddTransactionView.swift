@@ -350,8 +350,9 @@ struct AddTransactionView: View {
         return r.amount
     }
 
-    /// What the amount field accepts; the purchase detail uses the same rule.
-    nonisolated static func isTypeable(_ text: String) -> Bool { AmountEntry.isTypeable(text) }
+    /// What the amount field accepts: the shared rule, with 6 whole digits
+    /// because this sheet saves under 1,000,000 (`parsedAmount`).
+    nonisolated static func isTypeable(_ text: String) -> Bool { AmountEntry.isTypeable(text, wholeDigits: 6) }
 
     private var isValid: Bool {
         // Only the amount is needed; a nameless purchase is saved under its category.

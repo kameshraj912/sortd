@@ -13,15 +13,17 @@ struct TransactionDetailView: View {
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
 
-    /// Largest amount the detail screen accepts.
-    static let maxAmount: Decimal = 1_000_000
+    /// Amounts must be under this: the same 9 whole digits the field lets
+    /// you type (`AmountEntry.detailWholeDigits`). Imports have no cap, so
+    /// a bigger existing amount still shows; it just can't be typed back.
+    static let maxAmount: Decimal = 1_000_000_000
 
     /// The amount to save for what was typed, or nil to keep the old one
     /// (empty, unreadable, zero, or over the limit).
     static func committedAmount(from text: String) -> Decimal? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let parsed = AmountParser.parse(trimmed)?.amount,
-              parsed > 0, parsed <= maxAmount else { return nil }
+              parsed > 0, parsed < maxAmount else { return nil }
         return parsed
     }
 
@@ -51,9 +53,11 @@ struct TransactionDetailView: View {
                         .keyboardType(.decimalPad)
                         .focused($amountFocused)
                         .onSubmit(commitAmount)
-                        // Same cap as the add sheet: a key past the limit is
-                        // refused on the spot, never taken and reverted later.
+                        // A key past the limit is refused on the spot, never
+                        // taken and reverted later. Only typing is checked:
+                        // the text set from the stored amount always shows.
                         .onChange(of: amountText) { old, new in
+                            guard amountFocused else { return }
                             let kept = AmountEntry.accepted(new, replacing: old)
                             if kept != new { amountText = kept }
                         }
