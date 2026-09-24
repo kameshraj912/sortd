@@ -205,7 +205,8 @@ struct HomeView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(monthTitle)
-                                .lineLimit(1)
+                                // "Sep 2025" may need two lines at AX5 on an SE.
+                                .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                             Image(systemName: "chevron.down").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
                         }
                         .font(.title2.weight(.bold))
