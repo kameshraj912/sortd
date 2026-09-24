@@ -10,12 +10,12 @@ something, it says so.
 |---|---|
 | Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
 | Branch | `main` @ `829b74a` — **pushed**, nothing outstanding |
-| Tests | **369 passing** |
+| Tests | **413 passing**, 28 known bugs skipped (`scripts/test.sh --known-bugs` runs them) |
 
 Branches still holding work:
 
-- **`abuse-findings`** — 1,191 lines of adversarial tests. **21 fail.** Deliberately
-  not merged so CI stays green. They document real bugs; see below.
+- **`abuse-findings`** — its two test files move to `main` as known-bug tests
+  via `abuse-known-bugs` (see "Still to do → 1"). Nothing else unique on it.
 - **`ux-refresh`** — reports "14 commits not in main". **Ignore that.** A rebase
   during the push gave those commits new SHAs; the content is on `main` and I
   verified it file by file.
@@ -100,39 +100,29 @@ alternative for AU/SG.
 
 ## Still to do
 
-### 1. The 21 abuse findings — on `abuse-findings`, none fixed
+### 1. The abuse findings — on `main` as known-bug tests
+
+`SpendTests/AbuseMoneyAgentTests.swift` and `AbuseDataAgentTests.swift` come
+onto `main` with branch `abuse-known-bugs`. Every test that fails is tagged `.knownBug` and skipped unless you ask:
 
 ```
-git checkout abuse-findings
-xcodebuild test -scheme Spend -destination 'id=E8041708-8F0E-4714-9738-B9AF194C5B61'
+scripts/test.sh --known-bugs
 ```
 
-**Confirmed real** (`Spend/Services/Parsing.swift:30-36`): `AmountParser.currency(in:)`
-matches its markers as **substrings, not words**.
+CI does not run them, so it stays green. **28 tagged tests fail.** (This file
+used to say 21; the run on 24 Sep 2026 found 29, and one is now fixed.) Each
+test's doc comment says what is wrong and where. Fixing one means removing its tag.
 
-| Merchant | Contains | Booked as |
-|---|---|---|
-| **MYR**TLE CAFE 8.00 | `MYR` | Malaysian ringgit |
-| CA**RM**ENS 12.00 | `RM` | Malaysian ringgit |
-| HOU**RS.** 12.00 | `RS.` | Indian rupees |
+**Fixed:** `AmountParser.currency(in:)` matched markers as substrings
+(MYRTLE → ringgit, CARMENS → ringgit, HOURS. → rupees). Markers must now
+stand alone.
 
-Wrong currency, then run through FX. Needs word-boundary matching. **Fix this
-one regardless of what you do with the rest.**
-
-**The other 20 are untriaged** — some may assert behaviour nobody wanted. Check
-each before "fixing":
-
-*Money* — `isNegative` only checks the start of the string, so `A$-4.50` is not
-seen as a refund; `12.345` parses as 12,345; a 16-digit card number parses as an
-amount; `2 x A$4.50` takes the 2; JPY/THB/CHF/PHP/CNY currency dropped;
-zero-decimal currencies shown with cents.
-
-*Data* — a Gmail receipt merging into a purchase pending delete is lost forever;
-duplicate ids in a backup survive restore and **double the total**; restoring the
-same backup twice adds everything again; a negative amount in a backup takes a
-month below zero; re-importing a statement adds it again; rows with no date are
-dropped; absurd dates import; two payments at one shop collapse into one; a
-recharge after a refund is not counted.
+**7 are marked DISPUTED** — check before "fixing": `extraDecimalsAreNotTurnedIntoThousands`
+(in part), `agarbageRateDoesNotWipeTheBudget`, `aZeroRateIsRefused`,
+`twoSeparatePaymentsAtOneShopAreTwoPurchases`, `theSameRefundTwiceLeavesOneRow`,
+`shopsThatDifferOnlyByANumberAreNotTreatedAsOne`, and
+`aStatementOfPurchasesSortdAlreadyHasAddsNothing` (a test-setup fault: it assumes
+the home currency is AUD and passes when it is).
 
 ### 2. UI adversarial pass — never ran
 
@@ -178,8 +168,9 @@ That line decides whether the fix worked or whether it is Apple's timeout.
 
 ## Decisions still open
 
-1. **Abuse findings** — fix the 21 then merge, or merge now and accept a red CI
-   as a visible to-do list. Asked twice, not answered.
+1. **Abuse findings** — the `abuse-known-bugs` PR brings them onto `main` as
+   known-bug tests with CI green. Merge is Raj's call. The 7 DISPUTED tests
+   still need a keep-or-delete decision.
 2. **Sentry** — still linked. Either remove the package and
    `CrashReporting.swift`, or change the App Privacy label to Crash Data (not
    linked). Preflight fails on it today.
