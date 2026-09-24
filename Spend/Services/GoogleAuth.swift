@@ -44,8 +44,9 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     private var session: ASWebAuthenticationSession?
 
     /// Opens Google's sign-in page. Returns the account's email and saves the
-    /// refresh token in the Keychain under that email.
-    func signIn() async throws -> String {
+    /// refresh token in the Keychain under that email. `onAuthorized` runs
+    /// when Google's page closes with a yes, before the token exchange.
+    func signIn(onAuthorized: () -> Void = {}) async throws -> String {
         let verifier = Self.randomString(64)
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URL
         let state = Self.randomString(24)
@@ -61,8 +62,10 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
             .init(name: "prompt", value: "consent select_account"),
         ]
 
+        let sheet = Perf.begin("auth.googleSheet")
         let callback: URL = try await withCheckedThrowingContinuation { cont in
             let s = ASWebAuthenticationSession(url: url.url!, callback: .customScheme(Self.redirectScheme)) { url, error in
+                sheet.end(url == nil ? "closed" : "")
                 if let url { cont.resume(returning: url) }
                 else if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { cont.resume(throwing: AuthError.cancelled) }
                 else { cont.resume(throwing: error ?? AuthError.noCode) }
@@ -77,7 +80,10 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
               let code = items.first(where: { $0.name == "code" })?.value else {
             throw AuthError.noCode
         }
+        onAuthorized()
 
+        let exchange = Perf.begin("auth.tokenExchange")
+        defer { exchange.end() }
         let tokens = try await Self.tokenRequest([
             "grant_type": "authorization_code", "code": code, "client_id": Self.clientID,
             "redirect_uri": Self.redirectURI, "code_verifier": verifier,
@@ -167,6 +173,7 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.httpBody = form(fields)
+        req.timeoutInterval = 20
         let (data, response) = try await session.data(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             // Google's error JSON, e.g. {"error":"invalid_grant"} when access was revoked.
