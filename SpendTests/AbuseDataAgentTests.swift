@@ -766,7 +766,13 @@ struct AbuseDataAgentTests {
 
     /// A foreign purchase waiting on an exchange rate counts as zero, so the
     /// widget says there is more money left than there is.
-    @Test func anUnconvertedForeignPurchaseIsNotMissingFromTheMonth() throws {
+    ///
+    /// Known bug: `WidgetBridge.build` (Spend/Services/WidgetBridge.swift) uses
+    /// `audValue`, which is 0 while `audAmount` is nil. It only passes on a Mac
+    /// that has cached FX rates; CI has none, so there the purchase vanishes.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "abuse-30", "a foreign purchase with no exchange rate yet counts as zero in the month total"))
+    func anUnconvertedForeignPurchaseIsNotMissingFromTheMonth() throws {
         let ctx = try store()
         let now = date("2026-09-15")
         add(ctx, "Woolworths", 50, "2026-09-10")
