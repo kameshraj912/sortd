@@ -482,14 +482,46 @@ struct TransactionPreview: View {
 private struct ActivitySearch: ViewModifier {
     let enabled: Bool
     @Binding var text: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
         if enabled {
-            content.searchable(text: $text, prompt: "Shop, category or note")
+            content
+                .background(SearchStateReporter())
+                // The long prompt has no room at accessibility sizes and the
+                // field showed as an empty pill (UI pass finding 8).
+                .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
+                .searchFocused($focused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .task {
+                    #if DEBUG
+                    // Screenshots: SPEND_SEARCH=1 opens with the field active.
+                    if ProcessInfo.processInfo.environment["SPEND_SEARCH"] == "1" {
+                        try? await Task.sleep(for: .milliseconds(600))
+                        focused = true
+                    }
+                    #endif
+                }
         } else {
             content
         }
+    }
+}
+
+/// Sits under the searchable list and tells the Router when the search
+/// field is active, so the floating Settings gear gets out of the way of
+/// the field's Cancel button.
+private struct SearchStateReporter: View {
+    @Environment(\.isSearching) private var isSearching
+
+    var body: some View {
+        Color.clear
+            .onChange(of: isSearching, initial: true) { _, active in
+                withAnimation(.snappy) { Router.shared.searchActive = active }
+            }
+            .onDisappear { Router.shared.searchActive = false }
     }
 }

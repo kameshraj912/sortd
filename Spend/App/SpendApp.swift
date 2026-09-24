@@ -219,10 +219,11 @@ struct RootView: View {
             // Settings in the same top-right spot on every tab (nav options
             // that don't keep it on Home or in a You tab).
             .overlay(alignment: .topTrailing) {
-                if nav.gearOnEveryTab {
+                if nav.gearOnEveryTab, !router.searchActive {
                     SettingsButton()
                         .padding(.trailing, 16)
                         .padding(.top, 2)
+                        .transition(.opacity)
                 }
             }
 
