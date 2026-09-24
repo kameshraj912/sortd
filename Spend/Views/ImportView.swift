@@ -34,6 +34,8 @@ struct ImportView: View {
     /// Replace warning.
     @State private var replaceCount = 0
     @State private var backupContents: Backup.Contents?
+    /// Purchases being added right now, for "Adding 42 purchases…".
+    @State private var saving: Int?
 
     private enum Stage { case start, review, backup }
 
@@ -133,7 +135,7 @@ struct ImportView: View {
             Section {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Reading…").foregroundStyle(.secondary)
+                    Text("Reading your statement…").foregroundStyle(.secondary)
                 }
             }
         }
@@ -197,7 +199,11 @@ struct ImportView: View {
                 save(spend.filter(\.include).map(\.row))
             } label: {
                 HStack {
-                    Text("Add \(spend.filter(\.include).count) Purchase\(spend.filter(\.include).count == 1 ? "" : "s")")
+                    if let saving {
+                        Text("Adding \(saving) purchase\(saving == 1 ? "" : "s")…")
+                    } else {
+                        Text("Add \(spend.filter(\.include).count) Purchase\(spend.filter(\.include).count == 1 ? "" : "s")")
+                    }
                     Spacer()
                     if busy { ProgressView() }
                 }
@@ -274,9 +280,10 @@ struct ImportView: View {
         busy = true
         error = nil
         foundNothing = false
+        AccessibilityNotification.Announcement("Reading your statement").post()
         Task {
             do {
-                let reading = try await work()
+                let reading = try await Perf.measure("statement.read") { try await work() }
                 if StatementReader.looksLikeBackup(reading.text) {
                     backup = Data(reading.text.utf8)
                     stage = .backup
@@ -326,23 +333,29 @@ struct ImportView: View {
     }
 
     /// Both of these write into the main SwiftData context, so the work
-    /// itself has to stay on the main actor. Yielding first at least lets the
+    /// itself has to stay on the main actor. Pausing a moment first lets the
     /// spinner draw — before, `busy` went true and false inside one runloop
     /// turn, so a big statement looked like the app had frozen.
     private func save(_ found: [StatementImport.Row]) {
         guard !busy else { return }
         busy = true
+        saving = found.count
         Task {
-            await Task.yield()
+            // Let "Adding N purchases…" reach the screen before the work starts.
+            try? await Task.sleep(for: .milliseconds(30))
+            WidgetBridge.hold()
             let (added, merged) = StatementImport.save(found, card: card, in: context)
             try? TransactionLogger.refreshUncategorised(in: context)
-            WidgetBridge.refresh(from: context)
+            // Refreshes the widget once for the whole import.
+            WidgetBridge.release()
             Task { await FXService.backfill(in: context) }
             busy = false
+            saving = nil
             imported += 1
             done = merged > 0
                 ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
                 : "\(added) added."
+            AccessibilityNotification.Announcement(done ?? "").post()
         }
     }
 
