@@ -2,32 +2,16 @@ import Testing
 import Foundation
 @testable import Spend
 
-// Pins finding 14 (P3): editing "Paid to" in the purchase detail view binds
-// straight to `transaction.merchant` (see
-// `TextField("Paid to", text: $transaction.merchant)` in
-// Spend/Views/TransactionDetailView.swift) with no cleaning at all, so a
-// 200+ character name containing a newline is saved verbatim.
+// `MerchantName.clean` (Spend/Services/Parsing.swift) on typed or pasted
+// input, as reached from the "Paid to" field in
+// Spend/Views/TransactionDetailView.swift: newlines, tabs and other C0/C1
+// control characters become one space, runs of whitespace collapse to one,
+// the result is trimmed and capped at 80 characters. Format characters
+// (emoji joiners, ZWNJ, soft hyphens) are part of a name and stay.
 //
-// Contract for swift-builder: extend `MerchantName.clean(_:)`
-// (Spend/Services/Parsing.swift) — the pure function these tests call — so
-// that, in addition to what it already does, it also:
-//   - replaces newlines and other control characters with a single space
-//   - collapses any run of whitespace into one space
-//   - trims leading/trailing whitespace (already does this)
-//   - caps the result at 80 characters
-// Then call `MerchantName.clean` from the "Paid to" field's save path in
-// TransactionDetailView (and anywhere else a merchant name is set from typed
-// user input), instead of writing the raw text straight into `merchant`.
-// These tests deliberately call the existing `MerchantName.clean` rather
-// than a new symbol, so a missing-feature failure shows up as the wrong
-// string, not a compile error.
-//
-// Finding 7 (P2) is pinned by the extended
+// Zero-decimal money display (JPY, KRW, IDR…) is covered by
 // `AbuseMoneyFormatTests.zeroDecimalCurrenciesAreShownWithoutCents` in
-// SpendTests/AbuseMoneyAgentTests.swift (that test already existed as a
-// known-bug placeholder for JPY/KRW/IDR `Money.format`; it has been promoted
-// to a plain failing test and extended to cover `Money.spoken` and the
-// "≈ converted" form, per the router's brief, rather than duplicated here).
+// SpendTests/AbuseMoneyAgentTests.swift.
 struct MoneyFormatTests {
 
     /// A newline typed or pasted into "Paid to" becomes a single space, not
@@ -48,6 +32,19 @@ struct MoneyFormatTests {
     /// multi-line text doesn't leave a run of blanks.
     @Test func runsOfNewlinesCollapseToOneSpace() {
         #expect(MerchantName.clean("Woolworths\n\n\nMetro") == "Woolworths Metro")
+    }
+
+    /// Format characters are not control characters: the joiner inside a
+    /// family emoji, a soft hyphen and the ZWNJ in a Persian name all stay,
+    /// so the launch re-clean cannot rewrite a stored name or its key.
+    @Test func formatCharactersAreKept() {
+        let family = "👨‍👩‍👧 Family Cafe"
+        #expect(MerchantName.clean(family) == family)
+        let softHyphen = "Wool\u{AD}worths"
+        #expect(MerchantName.clean(softHyphen) == softHyphen)
+        let persian = "کافه\u{200C}چی"
+        #expect(MerchantName.clean(persian) == persian)
+        #expect(MerchantName.key(persian) == MerchantName.key(MerchantName.clean(persian)))
     }
 
     /// A name over 80 characters is capped, not saved in full.
