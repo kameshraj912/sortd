@@ -1,0 +1,58 @@
+#!/bin/bash
+# Hard gate before every commit. No judgement here; fix the problem or the
+# commit does not happen. Bypass only with --no-verify and a good reason.
+set -uo pipefail
+fail=0
+bad() { printf 'pre-commit FAIL  %s\n' "$*" >&2; fail=1; }
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+# 1. Secrets: file names that must never be committed.
+while IFS= read -r f; do
+  case "$f" in
+    .env|.env.*|*.p8|*.p12|*.mobileprovision|*Secrets.xcconfig|*.pem|*.key)
+      bad "$f looks like a secret. Unstage it." ;;
+  esac
+done <<< "$staged"
+
+# 2. Secrets: patterns inside the staged diff (added lines only).
+added="$(git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+')"
+if printf '%s' "$added" | grep -nE \
+  'AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[A-Za-z0-9]{36}|AIza[0-9A-Za-z_-]{35}|GOCSPX-[A-Za-z0-9_-]{20,}|"refresh_token"\s*:\s*"[^"]{20,}' \
+  >/dev/null; then
+  bad "a staged line looks like an API key or private key. Remove it; use the Keychain."
+fi
+
+# 3. Size: nothing over 50 MB (App Store assets are not source).
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  size=$(stat -f%z "$f" 2>/dev/null || echo 0)
+  [ "$size" -gt 52428800 ] && bad "$f is $((size/1048576)) MB. Keep it out of git."
+done <<< "$staged"
+
+# 4. Debug escapes stay inside #if DEBUG. Any Swift file that names one must
+#    also contain "#if DEBUG". (ProStore.swift is the documented exception.)
+while IFS= read -r f; do
+  case "$f" in
+    Spend/*.swift|SortdWidget/*.swift) ;;
+    *) continue ;;
+  esac
+  [ "$f" = "Spend/Services/ProStore.swift" ] && continue
+  if git show ":$f" | grep -qE 'SPEND_(PRO|DEMO|PAYWALL_DEMO|REEL_TAP|ONBOARD_STEP)'; then
+    git show ":$f" | grep -q '#if DEBUG' || bad "$f uses a debug flag with no #if DEBUG."
+  fi
+done <<< "$staged"
+
+# 5. Swift syntax of staged Swift files (fast; a real build runs in CI).
+if command -v swiftc >/dev/null; then
+  while IFS= read -r f; do
+    case "$f" in *.swift) ;; *) continue ;; esac
+    if ! git show ":$f" | swiftc -parse - 2>/dev/null; then
+      bad "$f does not parse."
+    fi
+  done <<< "$staged"
+fi
+
+[ $fail -eq 0 ] || { printf 'pre-commit: commit blocked.\n' >&2; exit 1; }
+exit 0

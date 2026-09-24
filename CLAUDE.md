@@ -16,31 +16,35 @@ Google OAuth restricted-scope review submitted 20 Sep 2026.
 ## Several Claude sessions at once — read before editing
 
 Raj often runs several Claude sessions (and forks) on Sortd at the same time. They share
-this folder, git, the simulator and the live website. Follow this order every time.
+this folder, git, the simulators and the live website. The rules are enforced by scripts in
+`scripts/`; use them instead of typing git, xcodebuild or simctl by hand.
+Full design: `docs/AgentPipeline.md`.
 
-**1. Start: get your own copy.** One task = one git worktree + one branch.
-- Check first: `git status`. If it shows changes you didn't make, another session is working here.
-- Make your copy: `git worktree add ../Spend-<task> -b <task> beta-prep`, then work only
-  inside `~/Documents/Spend-<task>`. (In the Claude app, "start in a worktree" does the same.)
-- The main `~/Documents/Spend` folder is for Raj and for merging. Don't do task work there
-  while another session is active.
+**1. Start: get your own copy.** One task = one worktree + one branch + one simulator.
+- Check first: `git status`. Changes you didn't make mean another session is working here.
+- `scripts/worktree-new.sh <task>` makes `.claude/worktrees/<task>` on branch `<task>` from
+  `main`, installs the git hooks, and clones simulator `Sortd-<task>`. Work only inside it.
+- The main folder `~/Developer/Sortd` is for Raj and for merging. No task work there.
 
-**2. Test on your own simulator.**
-- Each worktree already gets its own build folder. Also use your own simulator:
-  `xcrun simctl clone "iPhone 18 Pro" "Sortd-<task>"`, then test with `name=Sortd-<task>`.
-- "Invalid device state" or "server died" means another session is using that simulator.
-  That's not a code failure. Switch simulator and run again.
+**2. Build and test with the scripts.**
+- `scripts/build.sh` compiles. `scripts/test.sh` runs the suite on this worktree's simulator
+  (`--known-bugs` also runs the tests tagged as known bugs, `--storekit` adds ProStoreTests,
+  `--only Suite` runs one suite). Logs land in `.build/`.
+- "Invalid device state" or "server died" means two sessions share a simulator. Use your own.
 
 **3. Commit only your own work.**
 - Stage files by name: `git add <file> <file>`. Never `git add -A`, `git add .` or `git commit -a`.
-- If a file has your change mixed with another session's, don't commit their part. Tell Raj.
-- After committing, run `git show --stat HEAD` and check that every file listed is yours.
+- The pre-commit hook blocks secrets, files over 50 MB, debug flags outside `#if DEBUG`, and
+  Swift that does not parse. Fix the cause; do not bypass it.
+- If a file mixes your change with another session's, commit only your part or tell Raj.
+- After committing, `git show --stat HEAD` and check every file listed is yours.
 - Commit and push only when Raj asks.
 
-**4. Push safely.**
-- `git pull --rebase origin <branch>` first, then `git push`. Never force-push a shared branch.
-- Run the full test suite on a clean copy of what you're pushing, not a folder with other
-  sessions' uncommitted edits.
+**4. Push through a pull request.**
+- `git pull --rebase origin <branch>` first, then `git push -u origin <branch>`, then
+  `gh pr create --base main`. The pre-push hook refuses direct pushes to `main`.
+- Merge only when CI is green and Raj says so: `gh pr merge <n> --merge --delete-branch`.
+- Never force-push a shared branch. Never rewrite pushed history; fix with a new commit.
 
 **5. Deploy the website from one place only.**
 - `npx wrangler deploy` uploads the files on disk, **including other sessions' uncommitted
@@ -48,15 +52,18 @@ this folder, git, the simulator and the live website. Follow this order every ti
 - One session deploys at a time.
 
 **6. Finish.**
-- When Raj says merge: merge the branch into `beta-prep` from the main folder with tests
-  passing, then `git worktree remove ../Spend-<task>` and delete the branch.
-- Don't leave background jobs running (no "wait until a file exists" loops). Stop anything
-  you started before you finish.
+- `scripts/worktree-done.sh <task>` removes the worktree, its simulator and its build folder,
+  and deletes the branch once `main` has it. It refuses while there is uncommitted work.
+- `scripts/worktree-audit.sh` shows what every worktree still holds. `scripts/clean.sh --yes`
+  frees disk (each build folder is ~3.5 GB).
+- Don't leave background jobs running. Stop anything you started before you finish.
 
 ## Build / test
 - Open: `open Spend.xcodeproj` (Xcode 27, iOS 26+ target, SwiftUI + SwiftData + Swift Charts + App Intents).
-- Build: `xcodebuild -project Spend.xcodeproj -scheme Spend -destination 'generic/platform=iOS Simulator' build`
-- Test: `xcodebuild -project Spend.xcodeproj -scheme Spend -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test` (Swift Testing, in-memory store).
+- Build: `scripts/build.sh`. Test: `scripts/test.sh` (Swift Testing, in-memory store, on an iOS 27
+  simulator: StoreKit tests fail on iOS 26.x simulators, see HANDOVER.md).
+- CI (`.github/workflows/swift.yml`) builds and tests on a pinned Xcode. Code must compile on
+  that Xcode too: an SDK-only symbol needs `#if compiler(>=...)`, not just `#available`.
 - Sample data in the simulator: launch with env `SPEND_DEMO=1` (DEBUG only), or tap "Explore with sample data" on the first screen.
 - On the phone: Xcode → Signing & Capabilities → pick Raj's team. Free team = re-install every 7 days.
 
