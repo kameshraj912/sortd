@@ -103,6 +103,9 @@ struct SpendApp: App {
             #endif
             }
             .foregroundStyle(Color.ink)
+            // Same colour as LaunchBackground (the static launch screen), so
+            // there's no flash between the launch screen and the first frame.
+            .background(Color.page.ignoresSafeArea())
             // Set on the windows directly: SwiftUI's preferredColorScheme
             // doesn't always repaint when going back to "System" (needed a
             // restart). The window override applies at once, sheets included.
