@@ -1,6 +1,7 @@
 # Sortd — handover
 
-Last updated 24 September 2026. Written for whoever picks this up next.
+Last updated 24 September 2026, morning. Written for whoever picks this up next.
+Read `docs/AgentPipeline.md` first: it is how work gets done here now.
 Everything below was verified, not assumed — where I could not verify
 something, it says so.
 
@@ -9,21 +10,49 @@ something, it says so.
 | | |
 |---|---|
 | Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
-| Branch | `main` @ `829b74a` — **pushed**, nothing outstanding |
-| Tests | **412 passing**, 29 known bugs skipped (`scripts/test.sh --known-bugs` runs them) |
+| Branch | `main` @ `ed752cc` — **pushed**, CI green, nothing outstanding |
+| Tests | **445 passing**, 29 known bugs skipped, 474 in the run; measured with `scripts/test.sh` on 24 Sep (`--known-bugs` runs the 29, `--storekit` adds ProStoreTests) |
+| Pipeline | `docs/AgentPipeline.md` · agents in `.claude/agents/` · skills `sortd-*` · scripts in `scripts/` |
 
-Branches still holding work:
+Branches still holding work (`scripts/worktree-audit.sh` shows the live picture; all
+are pushed to origin now, and `docs/AgentPipeline.md` says why none should be merged whole):
 
-- **`abuse-findings`** — its two test files move to `main` as known-bug tests
-  via `abuse-known-bugs` (see "Still to do → 1"). Nothing else unique on it.
-- **`ux-refresh`** — reports "14 commits not in main". **Ignore that.** A rebase
-  during the push gave those commits new SHAs; the content is on `main` and I
-  verified it file by file.
-- **`beta-prep`** — fully caught up with `main`, nothing unique.
+- **Ported to `main` overnight on 24 Sep** (each through its own PR, CI green): the
+  preflight debug-flag check, the static launch screen and "App Lock off"
+  (`launch-screen`), beta Pro cached + Redeem Code + `BetaAccessTests` (`358c363`),
+  the faster Gmail sync with `SyncStatus`, `Perf` and Gmail tests (`speed-loading`),
+  and the abuse findings as known-bug tests (`abuse-findings`).
+- **Raj's call, not merged:** `forwarding-inbox` (6,300 lines: a Cloudflare Worker
+  that receives forwarded receipts, not wired into the app), `paywall-steps` (a
+  multi-step paywall, now committed, depends on `isBetaFree` which main has since),
+  confetti and `RefreshCoordinator` in `pull-refresh`, `LaunchOverlay` in
+  `launch-screen`, and PR #8 `rename-sortd` (only the `Spend/`→`Sortd/` folder rename
+  is not on main; the PR conflicts and would undo the CI fix, so redo it fresh if wanted).
+- **Nothing left to port:** `ux-refresh`, `settings-redesign`, `copy-trim`, `beta-ops`,
+  `beta-rc1` (a merge of the others). Their worktrees hold only screenshot folders.
+- `beta-prep` is retired. The base branch is `main`.
 
 ---
 
 ## What got done
+
+### 24 Sep, overnight — the agent pipeline, and the old branches sorted
+
+- **CI was red** on every push since 23 Sep. One cause: `accessibilityPrefersCrossFadeTransitions`
+  only ships in the Xcode 27 SDK and GitHub's `latest-stable` was Xcode 26.6. Fixed with a
+  `#if compiler(>=6.4)` guard; CI now pins Xcode 26.6 (PR #9).
+- **Scripts and hooks** (PR #10): `scripts/worktree-new.sh`, `worktree-done.sh`, `build.sh`,
+  `test.sh`, `sim.sh`, `worktree-audit.sh`, `clean.sh`; pre-commit blocks secrets, big files,
+  debug flags outside `#if DEBUG`; pre-push refuses direct pushes to `main`. GitHub branch
+  protection is refused on this private repo without a paid plan (Raj has the Student plan;
+  the benefit is not active on the account).
+- **Ten agents** in `.claude/agents/` (PR #11) and **ten skills** `sortd-idea` … `sortd-status`
+  plus the `bug-hunt` workflow and `docs/testing/attacks.md` (PR #12).
+- **The abuse findings are on `main`** as known-bug tests, 29 of them, CI green (PR #13). The
+  currency substring bug is fixed.
+- **Ports from old branches** (PRs #14, #15, #16), listed under "Where things are".
+- **The UI adversarial pass ran** (PR #17, `docs/UIPass-2026-09-24.md`): no crashes, 2 P1,
+  11 P2, 3 P3. See "Still to do → 2".
 
 ### The Apple Pay bug — fixed
 
@@ -102,8 +131,8 @@ alternative for AU/SG.
 
 ### 1. The abuse findings — on `main` as known-bug tests
 
-`SpendTests/AbuseMoneyAgentTests.swift` and `AbuseDataAgentTests.swift` come
-onto `main` with branch `abuse-known-bugs`. Every test that fails is tagged `.knownBug` and skipped unless you ask:
+`SpendTests/AbuseMoneyAgentTests.swift` and `AbuseDataAgentTests.swift` are on
+`main`. Every test that fails is tagged `.knownBug` and skipped unless you ask:
 
 ```
 scripts/test.sh --known-bugs
@@ -124,21 +153,37 @@ stand alone.
 `aStatementOfPurchasesSortdAlreadyHasAddsNothing` (a test-setup fault: it assumes
 the home currency is AUD and passes when it is).
 
-### 2. UI adversarial pass — never ran
+### 2. UI adversarial pass — ran on 24 Sep, findings not fixed
 
-Three agents were launched; Claude crashed and killed them. Two left the test
-files above. The third — drive the simulator and break the UI by hand —
-produced nothing.
+Full table in `docs/UIPass-2026-09-24.md`. iPhone SE, 18 Pro and 18 Pro Max on iOS 27;
+default, dark, AX5 and Reduce Motion. Worst first:
+
+- **P1** Paywall at AX5: the "Start Free Trial" footer covers the plan list, so only the
+  default plan can be picked; the terms are cut off; Restore/Terms/Privacy break mid-word.
+- **P2 (was "P1, P0 if confirmed")** Undo on the delete toast: `finding-verifier` read the
+  code (`ActivityView.swift:103-158`). Taps cannot fall through a live toast. But the purchase
+  is really deleted 6 s after the swipe, and the toast then fades for 0.35 s during which a
+  visible "Undo" does nothing and the tap reaches the row below. Fix: longer window (8–10 s,
+  like Mail), and commit only after the fade ends.
+- **P2** Insights 1W/1M/3M chips wrap at normal size and are unreadable at AX5.
+- **P2** Yen shows two decimals everywhere except the Home headline (`JP¥69,326.02`).
+- **P2** The Settings gear sits over the search Cancel button.
+- **P2** The monthly budget changed from JP¥185,295 to JP¥1,850,000 with no save; step unknown.
+- **Not checked:** VoiceOver in the running app (the simulator's accessibility inspect was
+  unavailable; labels were read from code, and `Money.spoken` gives "25.00 Australian dollars",
+  not words), emoji input, tab switching during a real sync, import with a real file, About,
+  Help, Cards & Appearance, Learned Categories.
 
 ### 3. No backup, no CloudKit
 
 Local-only SwiftData: losing the phone loses every transaction. The biggest
 structural gap and the clearest miss against HIG Agency.
 
-### 4. Dynamic Type at AX5 — never verified visually
+### 4. Dynamic Type at AX5 — now looked at
 
-`simctl` has no content-size option; it needs the Settings app driven inside the
-simulator. Issues were found by reading code. **Nobody has looked at the screens.**
+`xcrun simctl ui <udid> content_size accessibility-extra-extra-extra-large` works on this
+Xcode. The UI pass covered Home, Activity, Insights, add sheet, detail, paywall and the
+onboarding budget step at AX5. The paywall is the one that breaks (above).
 
 ### 5. Smaller, all traceable to Apple docs
 
@@ -168,14 +213,17 @@ That line decides whether the fix worked or whether it is Apple's timeout.
 
 ## Decisions still open
 
-1. **Abuse findings** — the `abuse-known-bugs` PR brings them onto `main` as
-   known-bug tests with CI green. Merge is Raj's call. The 7 DISPUTED tests
-   still need a keep-or-delete decision.
+1. **The 7 DISPUTED known-bug tests** — keep or delete each (names under "Still to do → 1").
+   The abuse findings themselves are merged and CI is green.
 2. **Sentry** — still linked. Either remove the package and
    `CrashReporting.swift`, or change the App Privacy label to Crash Data (not
    linked). Preflight fails on it today.
 3. **Privacy policy** — whether it names a person or a business entity. Needs a
    lawyer.
+4. **Old branches** — `forwarding-inbox`, `paywall-steps`, confetti, `LaunchOverlay`, and the
+   folder rename in PR #8. Build, drop, or leave; see "Where things are".
+5. **GitHub Pro** — the Student pack should give it; until it is active on the account there is
+   no branch protection, only the pre-push hook.
 
 ---
 
