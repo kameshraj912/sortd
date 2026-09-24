@@ -7,8 +7,9 @@ import Observation
 /// nothing is written to the store until `commit(in:)`.
 ///
 /// Each new stage restarts the window. When it ends, `onExpire` runs on the
-/// main actor: the view hides the toast first and only then commits, so a
-/// drawn "Undo" button always works.
+/// main actor. Nothing is committed here: the view fades its toast (kept in
+/// the tree, still taking taps) and calls `commit(in:)` once the fade ends,
+/// so a drawn "Undo" button always works.
 @MainActor @Observable
 final class PendingDeletes {
     /// How long Undo stays available after the last swipe. Mail and Photos
@@ -64,7 +65,11 @@ final class PendingDeletes {
         let gone = items
         items = []
         for t in gone { context.delete(t) }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            log.error("Pending delete save failed: \(error.localizedDescription)")
+        }
         WidgetBridge.refresh(from: context)
     }
 

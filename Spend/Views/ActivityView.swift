@@ -27,8 +27,11 @@ struct TransactionsScreen: View {
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
-    /// True while the toast slides away at the end of the window. The delete
-    /// is committed only once it has gone, so a visible Undo always works.
+    /// True while the toast fades out at the end of the window. It stays in
+    /// the view tree (faded with its own opacity and offset) and keeps taking
+    /// taps until the fade ends; only then is the delete committed and the
+    /// toast removed. A view being removed stops taking taps, which is why
+    /// the fade is not a transition.
     @State private var closingToast = false
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
@@ -103,13 +106,14 @@ struct TransactionsScreen: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: deleted)
         .overlay(alignment: .bottom) {
-            if showsToast {
+            if !pending.isEmpty {
                 UndoToast(text: pending.text) { undoDelete() }
                     .padding(.bottom, 12)
+                    .opacity(closingToast ? 0 : 1)
+                    .offset(y: closingToast ? 40 : 0)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.35), value: showsToast)
         // The list used to jump on every keystroke and every chip tap.
         .animation(.snappy, value: search)
         .animation(.snappy, value: categoryFilter)
@@ -132,34 +136,42 @@ struct TransactionsScreen: View {
 
     // MARK: Delete with undo
 
-    private var showsToast: Bool { !pending.isEmpty && !closingToast }
+    private static let toastSpring = Animation.spring(duration: 0.35)
 
     private func delete(_ t: Transaction) {
-        // A swipe while the toast is leaving keeps it up for the whole batch.
-        closingToast = false
-        // A new delete gives the whole batch a fresh window.
-        guard pending.stage(t, onExpire: { expireUndo() }) else { return }
+        var staged = false
+        withAnimation(Self.toastSpring) {
+            // A swipe while the toast is fading brings it back for the batch.
+            closingToast = false
+            // A new delete gives the whole batch a fresh window.
+            staged = pending.stage(t, onExpire: { expireUndo() })
+        }
+        guard staged else { return }
         deleted += 1
         AccessibilityNotification.Announcement("\(pending.text). Undo available.").post()
     }
 
-    /// The window is over: slide the toast away first, then delete. A view
-    /// on its way out stops taking taps, so an Undo that is still drawn
-    /// would otherwise land on the row underneath.
+    /// The window is over: fade the toast while it stays in the tree and
+    /// keeps taking taps, then delete. Only after the delete is the toast
+    /// removed (with no animation, as it is already invisible).
     private func expireUndo() {
-        withAnimation(.spring(duration: 0.35), completionCriteria: .removed) {
+        withAnimation(Self.toastSpring, completionCriteria: .removed) {
             closingToast = true
         } completion: {
-            // Undo or a new swipe got in first: leave the batch alone.
+            // Undo, a new swipe or an early commit got in first (each resets
+            // `closingToast`, which also ends this animation): leave it alone.
             guard closingToast else { return }
-            closingToast = false
             pending.commit(in: context)
+            closingToast = false
         }
     }
 
+    /// Cancels the pending commit, even mid-fade, and brings every row back.
     private func undoDelete() {
-        closingToast = false
-        pending.undo()
+        withAnimation(Self.toastSpring) {
+            closingToast = false
+            pending.undo()
+        }
     }
 
     /// Delete now, with no toast animation: used when the list goes away.
