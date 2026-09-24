@@ -29,10 +29,24 @@ enum AmountParser {
     /// written on its own ("THB 120").
     static func currency(in text: String) -> String? {
         let upper = text.uppercased()
-        if let m = markers.first(where: { upper.contains($0.0) }) { return m.1 }
+        if let m = markers.first(where: { standsAlone($0.0, in: upper) }) { return m.1 }
         return upper.split(whereSeparator: { !$0.isLetter })
             .first { $0.count == 3 && isoCodes.contains(String($0)) }
             .map(String.init)
+    }
+
+    /// True when `marker` appears with no letter glued to either side.
+    /// "MYR 8", "RM8" and "Rs. 500" name a currency; "MYRTLE", "CARMENS"
+    /// and "HOURS." do not. Digits, spaces and punctuation are fine.
+    private static func standsAlone(_ marker: String, in text: String) -> Bool {
+        var from = text.startIndex
+        while from < text.endIndex, let r = text.range(of: marker, range: from..<text.endIndex) {
+            let before = r.lowerBound > text.startIndex ? text[text.index(before: r.lowerBound)] : nil
+            let after = r.upperBound < text.endIndex ? text[r.upperBound] : nil
+            if before?.isLetter != true, after?.isLetter != true { return true }
+            from = text.index(after: r.lowerBound)
+        }
+        return false
     }
 
     /// True when the text starts with a minus: money coming back (a refund).
