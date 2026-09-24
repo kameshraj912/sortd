@@ -39,6 +39,35 @@ struct DebugScreenHost: View {
     }
 }
 
+/// Opens one paywall screen: SPEND_PAYWALL_STEP=features | trial | plans |
+/// single | onboarding | feature-<gmail|camera|insights|recurring|budgets>,
+/// or features-<gmail|camera|insights|bills> for one "What you get" page.
+/// Add SPEND_PRO=0 so a comped or demo Pro doesn't close it.
+struct PaywallDebugHost: View {
+    let value: String
+
+    var body: some View {
+        if value == "onboarding" {
+            // As it appears at the end of setup: full screen, "Not Now".
+            PaywallFlow(closeTitle: "Not Now", onBack: {}, onClose: {})
+        } else {
+            Color.page.ignoresSafeArea().sheet(isPresented: .constant(true)) { sheet }
+        }
+    }
+
+    @ViewBuilder private var sheet: some View {
+        if value == "single" {
+            PaywallView()
+        } else if value.hasPrefix("feature-") {
+            FeaturePaywallSheet(feature: ProStore.Feature(rawValue: String(value.dropFirst(8))) ?? .camera)
+        } else if value.hasPrefix("features-") {
+            PaywallFlow(startPage: PaywallPage(rawValue: String(value.dropFirst(9))), onClose: {})
+        } else {
+            PaywallFlow(start: PaywallStep(rawValue: value) ?? .features, onClose: {})
+        }
+    }
+}
+
 extension AppTab {
     /// SPEND_TAB=activity etc.
     static var debugStart: AppTab {

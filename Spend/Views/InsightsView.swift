@@ -201,7 +201,7 @@ struct CategoryDetailView: View {
         .background(Color.page)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $editingLimit) { if ProStore.shared.isPro { CategoryLimitSheet(category: category) } else { PaywallView(feature: .budgets) } }
+        .sheet(isPresented: $editingLimit) { if ProStore.shared.isPro { CategoryLimitSheet(category: category) } else { ProPaywall(entry: .feature(.budgets)) } }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.limit(for: category)
             if now != limit { limit = now }

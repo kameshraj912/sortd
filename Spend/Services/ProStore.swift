@@ -193,6 +193,11 @@ final class ProStore {
             guard case .verified(let t) = result else { throw StoreError.unverified }
             await t.finish()
             await refresh()
+            if remindsBeforeTrialEnds, t.offer?.paymentMode == .freeTrial, let end = t.expirationDate {
+                // Not awaited: the permission prompt mustn't hold up the sheet closing.
+                let price = "\(product.displayPrice) \(PaywallPlan.kind(for: product.id) == .monthly ? "a month" : "a year")"
+                Task { await Reminders.scheduleTrialEnding(endsAt: end, price: price) }
+            }
             return .purchased
         case .pending: return .pending
         case .userCancelled: return .cancelled
@@ -217,6 +222,29 @@ final class ProStore {
     enum StoreError: LocalizedError {
         case unverified
         var errorDescription: String? { "The App Store couldn't confirm this purchase. Please try again." }
+    }
+
+    /// The trial timeline promises a notification two days before the end.
+    /// Tests turn it off so no permission prompt appears.
+    var remindsBeforeTrialEnds = true
+
+    /// The plans as the paywall shows them, with the free trial only when
+    /// this Apple Account can still get it.
+    func paywallPlans() async -> [PaywallPlan] {
+        var plans: [PaywallPlan] = []
+        for p in products {
+            plans.append(PaywallPlan(id: p.id, kind: PaywallPlan.kind(for: p.id), displayPrice: p.displayPrice,
+                                     price: p.price, format: p.priceFormatStyle,
+                                     trial: await trialPeriod(for: p), product: p))
+        }
+        return plans
+    }
+
+    /// The free trial this person can still get on a plan, if any.
+    func trialPeriod(for product: Product) async -> TrialPeriod? {
+        guard let sub = product.subscription, let offer = sub.introductoryOffer,
+              offer.paymentMode == .freeTrial, await sub.isEligibleForIntroOffer else { return nil }
+        return TrialPeriod(offer.period)
     }
 
     /// Whether this person can still get the free trial on a plan.

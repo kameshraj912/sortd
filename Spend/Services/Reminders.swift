@@ -40,6 +40,32 @@ enum Reminders {
             try? await center.add(UNNotificationRequest(identifier: prefix + r.key, content: content, trigger: trigger))
         }
     }
+    // MARK: Free trial
+
+    /// Whether the paywall can promise a reminder: false only when the
+    /// person has turned notifications off for Sortd.
+    static func canPromiseReminder() async -> Bool {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus != .denied
+    }
+
+    /// "Your trial ends in 2 days", at 9 am two days before the end. Asks for
+    /// permission first (the trial timeline said Sortd would). Separate from
+    /// the bill reminders setting: it was promised at purchase.
+    static func scheduleTrialEnding(endsAt end: Date, price: String, now: Date = .now) async {
+        guard let fireAt = TrialReminder.fireDate(trialEnd: end, now: now),
+              await requestPermission() else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [TrialReminder.id])
+        let content = UNMutableNotificationContent()
+        content.title = "Your Sortd Pro trial ends in \(TrialTimeline.reminderDaysBefore) days"
+        content.body = "If you keep Pro, \(price) starts on \(end.formatted(.dateTime.weekday(.wide).day().month(.wide))). To stop, cancel in Settings › Apple Account › Subscriptions."
+        content.sound = .default
+        let cal = Calendar.current
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: fireAt), repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: TrialReminder.id, content: content, trigger: trigger))
+    }
+
     // MARK: Category limits
 
     private static let limitPrefix = "category-limit-"

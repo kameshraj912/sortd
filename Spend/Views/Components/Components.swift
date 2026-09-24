@@ -72,6 +72,9 @@ struct TransactionRow: View {
     var showTime = true
     /// Off on a category's own screen, where it would repeat on every row.
     var showCategory = true
+    /// Replaces the "category · card" line (the paywall's sample rows say
+    /// where they came from instead).
+    var subtitle: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -87,7 +90,7 @@ struct TransactionRow: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(big ? 3 : 1)
-                Text(showCategory ? "\(transaction.category.name) · \(transaction.paidWithLabel)" : transaction.paidWithLabel)
+                Text(subtitle ?? (showCategory ? "\(transaction.category.name) · \(transaction.paidWithLabel)" : transaction.paidWithLabel))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(big ? 3 : 1)

@@ -51,7 +51,7 @@ struct GmailSection: View {
             Text("Finds bank alerts and receipts (food delivery, rides, app stores, online shops) in your Gmail and reads them on this iPhone.")
         }
         .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) {
-            if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) }
+            if ProStore.shared.isPro { ConnectGmailSheet() } else { ProPaywall(entry: .feature(.gmail)) }
         }
         .confirmationDialog("Disconnect \(disconnecting?.email ?? "")?", isPresented: Binding(
             get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {

@@ -146,7 +146,7 @@ struct AddTransactionView: View {
                 }
             }
             .sheet(isPresented: $showingScanner) {
-                if ProStore.shared.isPro { ReceiptScanView(onRead: apply) } else { PaywallView(feature: .camera) }
+                if ProStore.shared.isPro { ReceiptScanView(onRead: apply) } else { ProPaywall(entry: .feature(.camera)) }
             }
             .sheet(isPresented: $showingCategories) {
                 CategoryPickerSheet(selected: category) { picked in

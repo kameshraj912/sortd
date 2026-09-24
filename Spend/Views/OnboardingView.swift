@@ -49,6 +49,24 @@ struct OnboardingView: View {
     private var region: String { Locale.current.region?.identifier ?? "AU" }
 
     var body: some View {
+        if showsPaywallFlow {
+            // The last step before "You're set" is the Pro paywall itself,
+            // with its own steps, so there's no extra sheet to open.
+            PaywallFlow(closeTitle: "Not Now", onBack: { go(-1) }, onClose: { go(1) })
+                .transition(.move(edge: forward ? .trailing : .leading).combined(with: .opacity))
+        } else {
+            setup
+        }
+    }
+
+    /// The multi-step paywall stands in for the Pro step (not in the beta,
+    /// and not for someone who already has Pro).
+    private var showsPaywallFlow: Bool {
+        step == .pro && PaywallPresentation.make(entry: .onboarding, variant: .current,
+                                                 betaFree: pro.isBetaFree, isPro: pro.isPro) == .steps
+    }
+
+    private var setup: some View {
         VStack(spacing: 0) {
             topBar
             ScrollView {
@@ -66,8 +84,8 @@ struct OnboardingView: View {
         }
         .background(Color.page)
         .sheet(item: $editing) { CardEditor(original: $0) }
-        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
-        .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { ProPaywall(entry: .feature(.gmail)) } }
+        .sheet(isPresented: $showingPaywall) { ProPaywall(entry: step == .reminders ? .feature(.recurring) : .onboarding) }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
         .task(id: step) {
             guard step == .pro, trialText == nil else { return }

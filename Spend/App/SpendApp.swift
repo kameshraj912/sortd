@@ -91,6 +91,8 @@ struct SpendApp: App {
             #if DEBUG
             if ProcessInfo.processInfo.environment["SPEND_GRADIENT_LAB"] == "1" {
                 GradientLab()
+            } else if let step = ProcessInfo.processInfo.environment["SPEND_PAYWALL_STEP"] {
+                PaywallDebugHost(value: step)
             } else if let screen = ProcessInfo.processInfo.environment["SPEND_SCREEN"] {
                 DebugScreenHost(name: screen)
             } else {

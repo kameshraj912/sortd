@@ -37,6 +37,6 @@ struct BillsRemindersSettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Bills & Reminders")
-        .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(isPresented: $showingPaywall) { ProPaywall(entry: .feature(.recurring)) }
     }
 }

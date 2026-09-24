@@ -16,6 +16,8 @@ struct ProStoreTests {
         s.resetToDefaultState()
         s.clearTransactions()
         s.disableDialogs = true
+        // No notification permission prompt from a test purchase.
+        ProStore.shared.remindsBeforeTrialEnds = false
         return s
     }
 
@@ -29,6 +31,22 @@ struct ProStoreTests {
         #expect(await ProStore.shared.trialText(for: yearly) == "14 days free")
         let lifetime = try #require(products.first { $0.id == ProStore.ID.lifetime })
         #expect(lifetime.type == .nonConsumable)
+    }
+
+    /// The paywall's plans come from the App Store: real prices, the trial
+    /// length from the introductory offer, and the yearly price per month.
+    @Test func paywallPlansFromTheStore() async throws {
+        let s = try Self.session(); _ = s
+        let store = ProStore.shared
+        await store.load()
+        let plans = await store.paywallPlans()
+        #expect(plans.map(\.kind) == [.yearly, .monthly, .lifetime])
+        let yearly = try #require(plans.first)
+        #expect(yearly.trial == TrialPeriod(value: 2, unit: .week))
+        #expect(yearly.trial?.text == "14 days")
+        #expect(yearly.perMonth != nil)
+        #expect(plans[1].trial == nil)
+        #expect(plans[2].trial == nil)
     }
 
     @Test func buyingYearlyUnlocksPro() async throws {

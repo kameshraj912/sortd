@@ -39,7 +39,11 @@ enum PaywallState: Equatable {
     }
 }
 
-/// Sortd Pro sheet. Shows real prices from the App Store, the free trial when
+/// Sortd Pro on one sheet: the single-page variant (`PaywallVariant.singlePage`),
+/// the TestFlight beta note and the "you have Pro" screen. Open it through
+/// `ProPaywall`, which picks this or the multi-step flow.
+///
+/// Shows real prices from the App Store, the free trial when
 /// the person is eligible, and Apple's required renewal terms.
 struct PaywallView: View {
     /// The feature that was tapped, shown first. Nil when opened from Settings.
@@ -292,8 +296,8 @@ struct PaywallView: View {
             HStack(spacing: 18) {
                 Button("Restore Purchases") { Task { await restore() } }
                 Button("Redeem Code") { message = nil; redeeming = true }
-                Button("Terms") { openURL(URL(string: "https://sortd.page/terms")!) }
-                Button("Privacy") { openURL(URL(string: "https://sortd.page/privacy")!) }
+                Button("Terms") { openURL(PaywallLinks.terms) }
+                Button("Privacy") { openURL(PaywallLinks.privacy) }
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(Color.ink)
@@ -411,7 +415,7 @@ struct ProLockedView: View {
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.page)
-        .sheet(isPresented: $showing) { PaywallView(feature: feature) }
+        .sheet(isPresented: $showing) { ProPaywall(entry: .feature(feature)) }
     }
 }
 

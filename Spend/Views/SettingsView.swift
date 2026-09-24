@@ -97,7 +97,7 @@ struct SettingsView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { Exports.clear() }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $showingPaywall) { ProPaywall(entry: .settings) }
         }
     }
 
