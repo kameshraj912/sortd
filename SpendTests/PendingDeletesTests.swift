@@ -83,6 +83,21 @@ struct PendingDeletesTests {
         #expect(pending.count == 2)
     }
 
+    @Test func secondStageFiresOneExpiryAfterBothWindows() async throws {
+        let a = try purchase("Woolworths")
+        let b = try purchase("Coles")
+        let pending = PendingDeletes(window: .milliseconds(200))
+        var fired = 0
+        pending.stage(a) { fired += 1 }
+        try await Task.sleep(for: .milliseconds(30))
+        pending.stage(b) { fired += 1 }
+
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(fired == 1)
+        #expect(pending.count == 2)
+    }
+
     @Test func commitAfterUndoIsNoOp() throws {
         let t = try purchase("Woolworths")
         let pending = PendingDeletes()
@@ -97,11 +112,11 @@ struct PendingDeletesTests {
 
     @Test func windowEndsWithOneCallback() async throws {
         let t = try purchase("Woolworths")
-        let pending = PendingDeletes(window: .milliseconds(50))
+        let pending = PendingDeletes(window: .milliseconds(200))
         var fired = 0
         pending.stage(t) { fired += 1 }
 
-        try await Task.sleep(for: .milliseconds(400))
+        try await Task.sleep(for: .milliseconds(600))
 
         #expect(fired == 1)
         #expect(pending.count == 1)           // still staged: the view commits after its animation
@@ -110,12 +125,12 @@ struct PendingDeletesTests {
 
     @Test func undoCancelsTheWindow() async throws {
         let t = try purchase("Woolworths")
-        let pending = PendingDeletes(window: .milliseconds(50))
+        let pending = PendingDeletes(window: .milliseconds(200))
         var fired = 0
         pending.stage(t) { fired += 1 }
         pending.undo()
 
-        try await Task.sleep(for: .milliseconds(300))
+        try await Task.sleep(for: .milliseconds(600))
 
         #expect(fired == 0)
         #expect(pending.deadline == nil)
