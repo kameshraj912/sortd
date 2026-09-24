@@ -28,18 +28,16 @@ struct AbuseAmountParserTests {
         #expect(AmountParser.isNegative("4.50-"), "trailing-minus (bank exports) read as a purchase")
     }
 
-    /// Three or more decimals are thrown away and the digits glued together,
-    /// so 12.345 becomes twelve thousand three hundred and forty five.
+    /// Three or more decimals are glued into the whole number, so 0.12345
+    /// becomes twelve thousand and KWD 12.345 becomes twelve thousand dinar.
     /// Real for 3-decimal currencies (KWD, BHD, OMR, JOD, TND) and for any
-    /// unit price a CSV or receipt carries.
+    /// sub-unit price a CSV or receipt carries. (A bare "12.345" reading as
+    /// 12,345 is the thousands rule on purpose; that case was dropped.)
     ///
-    /// DISPUTED, in part. `AmountParser.parse` (Spend/Services/Parsing.swift) glues digits together when 3+ follow the last separator.
-    /// The 0.12345 and KWD 12.345 lines are real bugs. The bare "12.345" line is not clear-cut: the same
-    /// rule reads "Rp 12.500" as 12,500 and "1,299" as 1,299, which passing tests assert. Needs a decision first.
+    /// Known bug: `AmountParser.parse` (Spend/Services/Parsing.swift) glues digits together when 3+ follow the last separator.
     @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-02", "DISPUTED: 0.12345 and KWD 12.345 are misread, but bare 12.345 as 12,345 follows the thousands rule on purpose"))
+          .bug(id: "abuse-02", "0.12345 and KWD 12.345 are read as thousands"))
     func extraDecimalsAreNotTurnedIntoThousands() {
-        #expect(AmountParser.parse("12.345")?.amount == Decimal(string: "12.345"))
         #expect((AmountParser.parse("0.12345")?.amount ?? 0) < 1, "a sub-dollar amount became thousands")
         #expect((AmountParser.parse("KWD 12.345")?.amount ?? 0) < 100)
     }
@@ -260,30 +258,6 @@ struct AbuseAudValueTests {
 
 struct AbuseFXTests {
 
-    /// A nonsense rate from the network must leave the budget alone, not
-    /// silently set it to zero.
-    ///
-    /// DISPUTED. `FXService.convertSetting` (Spend/Services/FXService.swift) returns 0 as its "can't convert" answer on purpose,
-    /// and MoneyFixesTests asserts that. There is no sensible positive answer for an infinite or NaN rate.
-    /// Callers check `rate > 0`, which stops NaN but not infinity: the fix belongs in `FXService.rebase` and
-    /// `CategoryBudgets.convert` (check `isFinite`), not here.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-10", "DISPUTED: convertSetting returns 0 on purpose for a bad rate; the real gap is callers accepting an infinite rate"))
-    func agarbageRateDoesNotWipeTheBudget() {
-        #expect(FXService.convertSetting(1000, rate: .infinity) > 0, "an infinite rate wiped the budget to 0")
-        #expect(FXService.convertSetting(1000, rate: .nan) > 0, "a NaN rate wiped the budget to 0")
-    }
-
-    /// A rate of zero would convert every purchase to nothing.
-    ///
-    /// DISPUTED. `FXService.convertSetting` (Spend/Services/FXService.swift) returns 0 for a zero rate by design, and
-    /// every caller (`FXService.rebase`, `CategoryBudgets.convert`, OnboardingView) checks the rate is above 0 before calling it.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-11", "DISPUTED: convertSetting returns 0 for a zero rate on purpose, and every caller checks rate > 0 first"))
-    func aZeroRateIsRefused() {
-        #expect(FXService.convertSetting(1000, rate: 0) > 0, "a zero rate wiped the budget to 0")
-    }
-
     /// Converting there and back must not lose money.
     @Test func convertingBothWaysKeepsTheValue() {
         let there = FXService.convertSetting(1000, rate: 0.9123)
@@ -400,23 +374,6 @@ struct AbuseDedupeTests {
         #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
     }
 
-    /// Two real payments at the same shop, minutes apart, for the same amount
-    /// — two coffees paid separately — are two purchases, not a re-send.
-    ///
-    /// DISPUTED. `Deduper.match` (Spend/Services/Deduper.swift) treats two taps from one source, same shop and amount,
-    /// within 10 minutes as one re-sent tap by design. This test wants 9 minutes to be two coffees.
-    /// That is a choice about the window, not a clear bug. It also assumes the home currency is AUD for the total.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-14", "DISPUTED: the Deduper treats a same-shop same-amount tap within 10 minutes as a re-send on purpose"))
-    func twoSeparatePaymentsAtOneShopAreTwoPurchases() throws {
-        let ctx = try store()
-        _ = try tap(ctx, "Seven Seeds", 4.50, minutes: 0)
-        _ = try tap(ctx, "Seven Seeds", 4.50, minutes: 9)
-        let all = try ctx.fetch(FetchDescriptor<Transaction>())
-        #expect(all.count == 2, "the second $4.50 coffee was swallowed as a duplicate")
-        #expect(all.audTotal == 9)
-    }
-
     /// The same amount in two different currencies is never the same purchase.
     @Test func sameAmountInAnotherCurrencyIsNotADuplicate() throws {
         let ctx = try store()
@@ -475,25 +432,6 @@ struct AbuseRefundIntentTests {
                                                in: ctx, book: CardBook(), now: start.addingTimeInterval(3 * 86400))
         let all = try ctx.fetch(FetchDescriptor<Transaction>())
         #expect(all.audTotal == 0, "a refund added \(all.audTotal) to the total instead of cancelling it")
-    }
-
-    /// The same refund arriving twice must not leave a second, phantom row.
-    ///
-    /// DISPUTED. The second refund arrives a day later and has no un-refunded purchase to cancel, so
-    /// `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift) saves it as a "Refund to your card" row marked refunded.
-    /// It adds nothing to the total. Whether that row should exist is a product choice.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-16", "DISPUTED: a second refund with no purchase left is kept as a zero-value refund row on purpose"))
-    func theSameRefundTwiceLeavesOneRow() async throws {
-        let ctx = store()
-        _ = try await LogPurchaseIntent.handle(merchant: "Uniqlo", amount: "A$59.90", card: "NAB Visa Debit",
-                                               in: ctx, book: CardBook(), now: start)
-        for i in 1...2 {
-            _ = try await LogPurchaseIntent.handle(merchant: "Uniqlo", amount: "-A$59.90", card: "NAB Visa Debit",
-                                                   in: ctx, book: CardBook(),
-                                                   now: start.addingTimeInterval(Double(i) * 86400))
-        }
-        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
     }
 
     /// A mangled amount from Shortcuts must not become a five-figure purchase.
