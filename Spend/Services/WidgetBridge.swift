@@ -12,6 +12,20 @@ import WidgetKit
 enum WidgetBridge {
 
     private static var pending: Task<Void, Never>?
+    /// Bulk imports (a Gmail sync) save every second or so. Each save would
+    /// rebuild the summary and reload the widget, which WidgetKit budgets.
+    /// While held, saves only mark the widget stale; `release` refreshes once.
+    private static var holds = 0
+    private static var stale = false
+
+    static func hold() { holds += 1 }
+
+    static func release() {
+        holds = max(0, holds - 1)
+        guard holds == 0, stale else { return }
+        stale = false
+        refresh(from: SpendStore.container.mainContext)
+    }
 
     /// Refreshes the widget after every save to the store: a tap logged by
     /// Shortcuts, a purchase added, edited or deleted, an import, a restore.
@@ -20,6 +34,7 @@ enum WidgetBridge {
         let context = SpendStore.container.mainContext
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { _ in
             MainActor.assumeIsolated {
+                if holds > 0 { stale = true; return }
                 pending?.cancel()
                 pending = Task {
                     try? await Task.sleep(for: .milliseconds(300))
@@ -36,6 +51,8 @@ enum WidgetBridge {
                         now: Date = .now,
                         calendar: Calendar = .current) {
         guard WidgetSummary.fileURL != nil else { return }
+        let span = Perf.begin("widget.refresh")
+        defer { span.end() }
         guard let all = try? context.fetch(FetchDescriptor<Transaction>()) else { return }
         let summary = build(from: all, now: now, calendar: calendar)
         guard summary.write() else { return }
