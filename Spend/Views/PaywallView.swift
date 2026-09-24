@@ -47,6 +47,7 @@ struct PaywallView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var store = ProStore.shared
     @State private var selected = ProStore.ID.yearly
     @State private var trials: [String: String] = [:]
@@ -69,6 +70,9 @@ struct PaywallView: View {
                     case .owned: alreadyPro
                     case .loading, .failed, .plans: plans
                     }
+                    // Straight after the plans, so the chosen plan and the
+                    // buy button stay together.
+                    if footerScrolls, state.showsPurchaseFooter { footer }
                     featureList
                     if state != .betaFree { freeNote }
                 }
@@ -76,7 +80,9 @@ struct PaywallView: View {
                 .padding(.bottom, 24)
             }
             .background(Color.page)
-            .safeAreaInset(edge: .bottom) { if state.showsPurchaseFooter { footer } }
+            .safeAreaInset(edge: .bottom) {
+                if !footerScrolls, state.showsPurchaseFooter { footer.padding(.horizontal, 20) }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -92,6 +98,11 @@ struct PaywallView: View {
             }
         }
     }
+
+    /// At accessibility text sizes the pinned footer (button, renewal terms,
+    /// four links) is taller than the sheet and hides the plans, so it
+    /// scrolls with the content instead. Normal sizes keep it pinned.
+    private var footerScrolls: Bool { typeSize.isAccessibilitySize }
 
     private var state: PaywallState {
         PaywallState.make(betaFree: store.isBetaFree, isPro: store.isPro, planCount: displayPlans.count,
@@ -188,24 +199,31 @@ struct PaywallView: View {
     private func planRow(_ p: PlanDisplay) -> some View {
         let on = selected == p.id
         return Button { selected = p.id } label: {
-            HStack(spacing: 12) {
-                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(on ? Color.ink : Color.secondary.opacity(0.5))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(title(p)).font(.body.weight(.semibold))
-                        if p.id == ProStore.ID.yearly {
-                            Text("Best value").font(.caption2.weight(.bold))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.brandPalette[3].opacity(0.18), in: .capsule)
-                                .foregroundStyle(Color.brandPalette[3])
-                        }
+            Group {
+                if footerScrolls {
+                    // Title, badge, note and price stack, so no word is
+                    // squeezed into pieces beside the price.
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) { planTick(on); planTitle(p) }
+                        if p.id == ProStore.ID.yearly { bestValueBadge }
+                        planNote(p)
+                        planPrice(p)
                     }
-                    Text(subtitle(p)).font(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(spacing: 12) {
+                        planTick(on)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                planTitle(p)
+                                if p.id == ProStore.ID.yearly { bestValueBadge }
+                            }
+                            planNote(p)
+                        }
+                        Spacer(minLength: 8)
+                        planPrice(p)
+                    }
                 }
-                Spacer(minLength: 8)
-                Text(p.price).font(.body.weight(.semibold)).monospacedDigit()
             }
             .padding(14)
             .background(Color.card, in: .rect(cornerRadius: 16, style: .continuous))
@@ -217,6 +235,31 @@ struct PaywallView: View {
         }
         .buttonStyle(.pressable)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func planTick(_ on: Bool) -> some View {
+        Image(systemName: on ? "checkmark.circle.fill" : "circle")
+            .font(.title3)
+            .foregroundStyle(on ? Color.ink : Color.secondary.opacity(0.5))
+    }
+
+    private func planTitle(_ p: PlanDisplay) -> some View {
+        Text(title(p)).font(.body.weight(.semibold))
+    }
+
+    private var bestValueBadge: some View {
+        Text("Best value").font(.caption2.weight(.bold))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Color.brandPalette[3].opacity(0.18), in: .capsule)
+            .foregroundStyle(Color.brandPalette[3])
+    }
+
+    private func planNote(_ p: PlanDisplay) -> some View {
+        Text(subtitle(p)).font(.footnote).foregroundStyle(.secondary)
+    }
+
+    private func planPrice(_ p: PlanDisplay) -> some View {
+        Text(p.price).font(.body.weight(.semibold)).monospacedDigit()
     }
 
     private func title(_ p: PlanDisplay) -> String {
@@ -295,21 +338,24 @@ struct PaywallView: View {
 
             Text(terms(plan, trial: trial))
                 .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Apple's 44pt minimum. These were the height of the text alone
             // (~16pt), and Restore Purchases is one App Review looks for.
-            // Four in a row when they fit, two rows at larger text sizes.
+            // Four in a row when they fit, two rows at larger text sizes,
+            // one per line at accessibility sizes so no word breaks in half.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 4) { accountButtons; legalButtons }
                 VStack(spacing: 0) {
                     HStack(spacing: 12) { accountButtons }
                     HStack(spacing: 12) { legalButtons }
                 }
+                VStack(spacing: 0) { accountButtons; legalButtons }
             }
             .buttonStyle(.pressable)
             .foregroundStyle(Color.ink)
         }
-        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
+        .padding(.top, 12).padding(.bottom, 8)
         .background(Color.page)
     }
 
@@ -328,6 +374,7 @@ struct PaywallView: View {
     private func legalLabel(_ title: String) -> some View {
         Text(title)
             .font(.caption.weight(.semibold))
+            .multilineTextAlignment(.center)
             .padding(.horizontal, 8)
             .frame(minHeight: 44)
             .contentShape(.rect)
