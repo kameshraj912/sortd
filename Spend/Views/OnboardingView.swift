@@ -76,6 +76,8 @@ struct OnboardingView: View {
 
     @State private var pro = ProStore.shared
     @State private var showingPaywall = false
+    @State private var redeeming = false
+    @State private var redeemError: String?
     @State private var showingImport = false
     /// "14 days free", read from the App Store. Nil when there's no trial.
     @State private var trialText: String?
@@ -1279,8 +1281,11 @@ struct OnboardingView: View {
     /// part ends.
     private var proPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header(pro.isPro ? "You have Sortd Pro" : "What Pro adds for you",
-                   pro.isPro
+            header(pro.isBetaFree ? "Pro is free during the beta"
+                   : pro.isPro ? "You have Sortd Pro" : "What Pro adds for you",
+                   pro.isBetaFree
+                   ? "Everything below is on while you test Sortd. No payment, nothing to cancel."
+                   : pro.isPro
                    ? "Everything below is unlocked. Thank you."
                    : "Picked from your answers. Logging, cards, budgets and export stay free.")
 
@@ -1318,7 +1323,21 @@ struct OnboardingView: View {
                 .setupCard()
                 .padding(.top, 12)
             }
+
+            // Apple's offer code sheet: the only allowed way to give Pro
+            // away with a code in the App Store build (Guideline 3.1.1).
+            if !pro.isPro {
+                Button("Have a code? Redeem it") { redeemError = nil; redeeming = true }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                    .frame(minHeight: 44)
+                    .padding(.top, 10)
+                if let redeemError {
+                    Text(redeemError).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
         }
+        .redeemOfferCode(isPresented: $redeeming) { redeemError = $0 }
     }
 
     private func timelineRow(_ symbol: String, _ title: String, _ detail: String) -> some View {
