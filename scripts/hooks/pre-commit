@@ -39,7 +39,7 @@ while IFS= read -r f; do
     *) continue ;;
   esac
   [ "$f" = "Spend/Services/ProStore.swift" ] && continue
-  if git show ":$f" | grep -qE 'SPEND_(PRO|DEMO|PAYWALL_DEMO|REEL_TAP|ONBOARD_STEP)'; then
+  if git show ":$f" | grep -qE 'SPEND_(PRO|DEMO|PAYWALL_DEMO|REEL_TAP|ONBOARD_STEP|BETA)'; then
     git show ":$f" | grep -q '#if DEBUG' || bad "$f uses a debug flag with no #if DEBUG."
   fi
 done <<< "$staged"
