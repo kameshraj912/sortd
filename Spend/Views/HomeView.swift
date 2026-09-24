@@ -59,6 +59,8 @@ struct HomeView: View {
                 }
             }
             .background(Color.page)
+            // A Gmail connect or sync that's still going, or that stopped.
+            .safeAreaInset(edge: .bottom) { GmailStatusBanner() }
             .navigationTitle("Home")
             // Home draws its own title; the bar only carries the gear.
             .navigationBarTitleDisplayMode(.inline)

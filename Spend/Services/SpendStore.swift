@@ -70,9 +70,13 @@ enum TransactionLogger {
     /// Adds a purchase, or folds it into an existing one from another source.
     /// `excluding`: purchases this same import already added or matched. Two
     /// identical lines in one statement are two purchases, never a re-send.
+    /// Bulk imports pass `learned` (read once) and `save: false`, then save
+    /// once at the end: one disk write and one screen refresh, not hundreds.
+    /// Unsaved purchases still count for matching (fetches include them).
     @discardableResult
-    static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = []) throws -> Outcome {
-        let learned = try learnedRules(in: context)
+    static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = [],
+                    learned known: [String: SpendCategory]? = nil, save: Bool = true) throws -> Outcome {
+        let learned = try known ?? learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
         // Only look at purchases near this date.
@@ -93,7 +97,7 @@ enum TransactionLogger {
         if let i = Deduper.match(candidate, in: pool) {
             let existing = nearby[i]
             merge(p, into: existing)
-            try context.save()
+            if save { try context.save() }
             return .merged(existing)
         }
 
@@ -110,7 +114,7 @@ enum TransactionLogger {
         )
         txn.platform = p.platform
         context.insert(txn)
-        try context.save()
+        if save { try context.save() }
         return .added(txn)
     }
 
