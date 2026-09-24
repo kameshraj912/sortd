@@ -1,0 +1,16 @@
+#!/bin/bash
+# Direct pushes to main are refused. Merge through a pull request so CI runs
+# first. (GitHub branch protection needs a paid plan on a private repo; this
+# hook is the local stand-in.)
+#
+# Emergency override: SORTD_ALLOW_MAIN_PUSH=1 git push ...
+set -uo pipefail
+[ "${SORTD_ALLOW_MAIN_PUSH:-}" = "1" ] && exit 0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master)
+      printf 'pre-push: refusing to push straight to %s. Open a PR: gh pr create\n' "${remote_ref#refs/heads/}" >&2
+      exit 1 ;;
+  esac
+done
+exit 0
