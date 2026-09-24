@@ -30,3 +30,9 @@ docs/demo/
 
 # Ad footage (huge, and regenerated from source)
 claude-project/ads/
+
+# Per-checkout build products (scripts/build.sh, scripts/test.sh)
+.build/
+
+# Claude sessions: one worktree per task (scripts/worktree-new.sh)
+.claude/worktrees/
