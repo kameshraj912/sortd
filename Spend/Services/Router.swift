@@ -28,6 +28,9 @@ final class Router {
     var showingSettings = false
     /// "Run Setup Again" was tapped: setup opens once Settings has closed.
     var pendingRerun = false
+    /// A search field is active. The floating Settings gear steps aside so
+    /// it doesn't sit on the field's Cancel button (UI pass finding 6).
+    var searchActive = false
 
     private init() {
         #if DEBUG

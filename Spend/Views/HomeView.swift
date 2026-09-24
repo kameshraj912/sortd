@@ -204,7 +204,9 @@ struct HomeView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Text(isCurrentMonth ? month.formatted(.dateTime.month(.wide)) : month.formatted(.dateTime.month(.wide).year()))
+                            Text(monthTitle)
+                                // "Sep 2025" may need two lines at AX5 on an SE.
+                                .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                             Image(systemName: "chevron.down").font(.footnote.weight(.bold)).foregroundStyle(.secondary)
                         }
                         .font(.title2.weight(.bold))
@@ -229,6 +231,9 @@ struct HomeView: View {
                     }
                 } }
             }
+            // The Settings gear floats top-right over every tab; keep the
+            // title row out from under it (UI pass finding 9).
+            .padding(.trailing, NavOption.current.gearOnEveryTab ? 60 : 0)
             .padding(.top, 8)
 
             Text(Money.format(monthItems.audTotal, Money.home, cents: false))
@@ -263,6 +268,13 @@ struct HomeView: View {
                 .accessibilityHint("Shows your categories")
             }
         }
+    }
+
+    /// "September", or "Sep" at accessibility sizes so it stays on one line
+    /// instead of breaking as "Sep-tember"; the year only for other months.
+    private var monthTitle: String {
+        let name: Date.FormatStyle.Symbol.Month = typeSize.isAccessibilitySize ? .abbreviated : .wide
+        return isCurrentMonth ? month.formatted(.dateTime.month(name)) : month.formatted(.dateTime.month(name).year())
     }
 
     /// One line about categories over their limit, this month only.
@@ -717,6 +729,7 @@ struct SpendChart: View {
 
     @State private var range: Range = .month
     @State private var selected: Date?
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Chart and empty-bars heights grow with Dynamic Type so the axis labels keep room.
     @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 190
     @ScaledMetric(relativeTo: .caption) private var placeholderHeight: CGFloat = 180
@@ -792,24 +805,23 @@ struct SpendChart: View {
         let point = selected.flatMap { d in current.first { cal.isDate($0.date, inSameDayAs: d) } }
 
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
-                Text(point.map { $0.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) } ?? range.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                HStack(spacing: 6) {
-                    ForEach(Range.allCases) { r in
-                        Button(r.rawValue) {
-                            withAnimation(.snappy) { range = r; selected = nil }
-                        }
-                        .chip(selected: r == range)
-                        .frame(minHeight: 44)
-                        .contentShape(.rect)
-                        .accessibilityLabel(r.title)
-                        .accessibilityAddTraits(r == range ? .isSelected : [])
-                    }
+            // Title and range chips side by side while they fit; at bigger
+            // text the chips drop under the title, then stack, and never
+            // squash "1W" into "1 / W" (UI pass finding 3).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center) {
+                    rangeTitle(point)
+                    Spacer(minLength: 12)
+                    rangeChips(AnyLayout(HStackLayout(spacing: 6)))
                 }
-                .buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 10) {
+                    rangeTitle(point)
+                    rangeChips(AnyLayout(HStackLayout(spacing: 6)))
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    rangeTitle(point)
+                    rangeChips(AnyLayout(VStackLayout(alignment: .leading, spacing: 6)))
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -837,6 +849,29 @@ struct SpendChart: View {
         }
         .padding(18)
         .surface()
+    }
+
+    private func rangeTitle(_ point: Point?) -> some View {
+        Text(point.map { $0.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) } ?? range.title)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.secondary)
+    }
+
+    private func rangeChips(_ layout: AnyLayout) -> some View {
+        layout {
+            ForEach(Range.allCases) { r in
+                Button(r.rawValue) {
+                    withAnimation(.snappy) { range = r; selected = nil }
+                }
+                .chip(selected: r == range)
+                .fixedSize()
+                .frame(minHeight: 44)
+                .contentShape(.rect)
+                .accessibilityLabel(r.title)
+                .accessibilityAddTraits(r == range ? .isSelected : [])
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var chart: some View {
@@ -867,10 +902,17 @@ struct SpendChart: View {
                 RuleMark(y: .value("Budget", budget))
                     .foregroundStyle(Color.down.opacity(0.7))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
-                    .annotation(position: .top, alignment: .leading, spacing: 2) {
-                        Text("Budget \(Money.format(Decimal(budget), Money.home, cents: false))")
+                    // Kept inside the plot so it can't sit on the y-axis
+                    // labels; at accessibility sizes the amount would not
+                    // fit, so the label is just "Budget" and the figure is
+                    // spoken with the chart (UI pass finding 4).
+                    .annotation(position: .top, alignment: .leading, spacing: 2,
+                                overflowResolution: .init(x: .fit(to: .plot), y: .disabled)) {
+                        Text(typeSize.isAccessibilitySize ? "Budget"
+                             : "Budget \(Money.format(Decimal(budget), Money.home, cents: false))")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Color.down)
+                            .lineLimit(1)
                     }
             }
             if let d = selected, let p = current.first(where: { cal.isDate($0.date, inSameDayAs: d) }) {
@@ -917,7 +959,8 @@ struct SpendChart: View {
         .frame(height: chartHeight)
         .sensoryFeedback(.selection, trigger: selected.map { cal.startOfDay(for: $0) })
         .accessibilityLabel("Running total, \(range.title.lowercased())")
-        .accessibilityValue("\(Money.spoken(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.spoken(Decimal(previous.last?.total ?? 0), Money.home)).")
+        .accessibilityValue("\(Money.spoken(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.spoken(Decimal(previous.last?.total ?? 0), Money.home))."
+                            + (showBudget ? " Budget \(Money.spoken(Decimal(budget), Money.home))." : ""))
     }
 
     private var legend: some View {
