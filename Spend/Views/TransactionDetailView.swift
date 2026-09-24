@@ -12,6 +12,11 @@ struct TransactionDetailView: View {
     /// so clearing "21.90" left "2" behind.
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
+    /// "Paid to" works the same way: the name goes through
+    /// `MerchantName.clean` when you leave the field, so a pasted newline or
+    /// a 200-character name never reaches `merchant` as typed.
+    @State private var merchantText = ""
+    @FocusState private var merchantFocused: Bool
 
     /// Amounts must be under this: the same 9 whole digits the field lets
     /// you type (`AmountEntry.detailWholeDigits`). Imports have no cap, so
@@ -46,8 +51,10 @@ struct TransactionDetailView: View {
             .listRowBackground(Color.clear)
 
             Section(bold: "Details") {
-                TextField("Paid to", text: $transaction.merchant)
+                TextField("Paid to", text: $merchantText)
                     .textInputAutocapitalization(.words)
+                    .focused($merchantFocused)
+                    .onSubmit(commitMerchant)
                 LabeledContent("Amount") {
                     TextField("0.00", text: $amountText)
                         .keyboardType(.decimalPad)
@@ -118,9 +125,16 @@ struct TransactionDetailView: View {
         .background(Color.page)
         .navigationTitle(transaction.merchant.isEmpty ? "Purchase" : transaction.merchant)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { amountText = Self.amountText(transaction.amount) }
+        .onAppear {
+            amountText = Self.amountText(transaction.amount)
+            merchantText = transaction.merchant
+        }
         .onChange(of: amountFocused) { _, focused in if !focused { commitAmount() } }
-        .onDisappear(perform: commitAmount)
+        .onChange(of: merchantFocused) { _, focused in if !focused { commitMerchant() } }
+        .onDisappear {
+            commitAmount()
+            commitMerchant()
+        }
         .onChange(of: transaction.amount) { _, _ in refreshAUD() }
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
@@ -222,6 +236,16 @@ struct TransactionDetailView: View {
             transaction.amount = amount
         }
         if !amountFocused { amountText = Self.amountText(transaction.amount) }
+    }
+
+    /// Saves the tidied name. A cleared field keeps the old name, the same
+    /// rule as Amount on this screen.
+    private func commitMerchant() {
+        let name = MerchantName.clean(merchantText)
+        if !name.isEmpty, name != transaction.merchant {
+            transaction.merchant = name
+        }
+        if !merchantFocused { merchantText = transaction.merchant }
     }
 
     private func refreshAUD() {
