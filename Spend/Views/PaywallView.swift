@@ -11,6 +11,34 @@ struct PlanDisplay: Identifiable {
     let product: Product?
 }
 
+/// What the paywall shows. Pure so tests can check every case.
+enum PaywallState: Equatable {
+    /// TestFlight beta: everything is free, no prices or buttons.
+    case betaFree
+    /// Already has Pro (bought, redeemed, or shared by family).
+    case owned
+    case loading
+    case failed(String)
+    case plans
+
+    static func make(betaFree: Bool, isPro: Bool, planCount: Int, isLoading: Bool, loadError: String?) -> PaywallState {
+        if betaFree { return .betaFree }
+        if isPro { return .owned }
+        if planCount > 0 { return .plans }
+        if let loadError, !isLoading { return .failed(loadError) }
+        return .loading
+    }
+
+    /// Buy, Restore and Redeem Code belong on the sheet only when there is
+    /// something to buy.
+    var showsPurchaseFooter: Bool {
+        switch self {
+        case .betaFree, .owned: false
+        case .loading, .failed, .plans: true
+        }
+    }
+}
+
 /// Sortd Pro sheet. Shows real prices from the App Store, the free trial when
 /// the person is eligible, and Apple's required renewal terms.
 struct PaywallView: View {
@@ -24,6 +52,7 @@ struct PaywallView: View {
     @State private var trials: [String: String] = [:]
     @State private var working = false
     @State private var message: String?
+    @State private var redeeming = false
 
     private var features: [ProStore.Feature] {
         guard let feature else { return ProStore.Feature.available }
@@ -35,15 +64,19 @@ struct PaywallView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
-                    if store.isPro { alreadyPro } else { plans }
+                    switch state {
+                    case .betaFree: betaNote
+                    case .owned: alreadyPro
+                    case .loading, .failed, .plans: plans
+                    }
                     featureList
-                    freeNote
+                    if state != .betaFree { freeNote }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
             .background(Color.page)
-            .safeAreaInset(edge: .bottom) { if !store.isPro { footer } }
+            .safeAreaInset(edge: .bottom) { if state.showsPurchaseFooter { footer } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -54,7 +87,15 @@ struct PaywallView: View {
                 for p in store.products { trials[p.id] = await store.trialText(for: p) }
             }
             .onChange(of: store.isPro) { _, pro in if pro { dismiss() } }
+            .redeemOfferCode(isPresented: $redeeming) { error in
+                message = error
+            }
         }
+    }
+
+    private var state: PaywallState {
+        PaywallState.make(betaFree: store.isBetaFree, isPro: store.isPro, planCount: displayPlans.count,
+                          isLoading: store.isLoading, loadError: store.loadError)
     }
 
     // MARK: Pieces
@@ -66,11 +107,11 @@ struct PaywallView: View {
                 .accessibilityHidden(true)
             Text("Sortd Pro").font(.system(.largeTitle, weight: .bold)).padding(.top, 2)
             BrandBar()
-            Text(feature.map { "\($0.title) is part of Sortd Pro." } ?? subtitle)
+            Text(state == .betaFree ? "Everything Sortd can do." : feature.map { "\($0.title) is part of Sortd Pro." } ?? subtitle)
                 .font(.body).foregroundStyle(.secondary)
             // The monthly figure comes second and smaller: what's billed is
             // the yearly price, so that leads.
-            if feature == nil, let perMonth = yearlyPlan?.perMonth {
+            if feature == nil, state != .betaFree, let perMonth = yearlyPlan?.perMonth {
                 Text("That works out to about \(perMonth) a month.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -209,6 +250,23 @@ struct PaywallView: View {
             .surface(radius: 16)
     }
 
+    /// The beta has no prices, trials or buttons: nothing to buy, nothing to
+    /// cancel.
+    private var betaNote: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Everything is free during the beta", systemImage: "gift.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.up)
+            Text("Every Pro feature below is on. No payment, no trial, nothing to cancel. Thanks for testing Sortd.")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surface(radius: 16)
+        .accessibilityElement(children: .combine)
+    }
+
     private var freeNote: some View {
         Text("Always free: Apple Pay logging, adding by hand, your monthly budget, statement import, widgets and backups.")
             .font(.footnote).foregroundStyle(.secondary)
@@ -240,16 +298,31 @@ struct PaywallView: View {
 
             // Apple's 44pt minimum. These were the height of the text alone
             // (~16pt), and Restore Purchases is one App Review looks for.
-            HStack(spacing: 12) {
-                Button { Task { await restore() } } label: { legalLabel("Restore Purchases") }
-                Button { openURL(URL(string: "https://sortd.page/terms")!) } label: { legalLabel("Terms") }
-                Button { openURL(URL(string: "https://sortd.page/privacy")!) } label: { legalLabel("Privacy") }
+            // Four in a row when they fit, two rows at larger text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) { accountButtons; legalButtons }
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) { accountButtons }
+                    HStack(spacing: 12) { legalButtons }
+                }
             }
             .buttonStyle(.pressable)
             .foregroundStyle(Color.ink)
         }
         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
         .background(Color.page)
+    }
+
+    /// Restore Purchases and Redeem Code (Apple's offer code sheet). Redeem
+    /// Code works in the live app too, so it is not a beta-only button.
+    @ViewBuilder private var accountButtons: some View {
+        Button { Task { await restore() } } label: { legalLabel("Restore Purchases") }
+        Button { message = nil; redeeming = true } label: { legalLabel("Redeem Code") }
+    }
+
+    @ViewBuilder private var legalButtons: some View {
+        Button { openURL(URL(string: "https://sortd.page/terms")!) } label: { legalLabel("Terms") }
+        Button { openURL(URL(string: "https://sortd.page/privacy")!) } label: { legalLabel("Privacy") }
     }
 
     private func legalLabel(_ title: String) -> some View {
@@ -300,6 +373,62 @@ struct PaywallView: View {
         } catch {
             message = "Couldn't restore right now. Please try again."
         }
+    }
+}
+
+extension View {
+    /// Apple's offer code sheet (App Store Connect codes, App Review 3.1.1).
+    /// Refreshes entitlements when it closes. `onError` gets a message to
+    /// show, or nil when it went fine or was cancelled.
+    func redeemOfferCode(isPresented: Binding<Bool>, onError: @escaping (String?) -> Void = { _ in }) -> some View {
+        modifier(RedeemOfferCode(isPresented: isPresented, onError: onError))
+    }
+}
+
+private struct RedeemOfferCode: ViewModifier {
+    @Binding var isPresented: Bool
+    let onError: (String?) -> Void
+
+    func body(content: Content) -> some View {
+        // The iOS 27 version hands back the redeemed transaction. Its name
+        // only exists in the Xcode 27 SDK, so CI's Xcode 26 needs the
+        // compiler guard as well as the #available check.
+        #if compiler(>=6.4)
+        if #available(iOS 27, *) {
+            content.offerCodeRedemption(options: [], isPresented: $isPresented) { result in
+                Task {
+                    switch result {
+                    case .success(let verification):
+                        await ProStore.shared.redeemed(verification)
+                        onError(nil)
+                    case .failure(let error):
+                        await ProStore.shared.redeemed(nil)
+                        onError(Self.message(for: error))
+                    }
+                }
+            }
+        } else {
+            legacy(content)
+        }
+        #else
+        legacy(content)
+        #endif
+    }
+
+    /// iOS 26: the sheet only says whether it closed cleanly. The redeemed
+    /// transaction arrives through `Transaction.updates`.
+    private func legacy(_ content: Content) -> some View {
+        content.offerCodeRedemption(isPresented: $isPresented) { result in
+            Task {
+                await ProStore.shared.redeemed(nil)
+                if case .failure(let error) = result { onError(Self.message(for: error)) } else { onError(nil) }
+            }
+        }
+    }
+
+    static func message(for error: Error) -> String? {
+        if case StoreKitError.userCancelled = error { return nil }
+        return "Couldn't redeem that code. Check it and try again."
     }
 }
 
