@@ -42,14 +42,19 @@ struct SpendApp: App {
     }
 
     init() {
+        let launch = Perf.begin("launch.init")
+        defer { launch.end() }
         CrashReporting.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+        let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
         Exports.clear()
-        let context = SpendStore.container.mainContext
-        let used = Set(((try? context.fetch(FetchDescriptor<Transaction>())) ?? []).map(\.cardRaw))
+        // Only the card column: this runs before the first frame.
+        var cardsOnly = FetchDescriptor<Transaction>()
+        cardsOnly.propertiesToFetch = [\.cardRaw]
+        let used = Perf.measure("launch.cardScan") { Set(((try? context.fetch(cardsOnly)) ?? []).map(\.cardRaw)) }
         CardBook.shared.adoptLegacy(usedIds: used)
         // Only the original install (purchases on the cards the app shipped
         // with) predates setup and home currency; its values are in AUD.
@@ -276,13 +281,17 @@ struct RootView: View {
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }
+            Perf.markFirstActive()
+            let pass = Perf.begin("launch.activeTasks")
+            defer { pass.end() }
+            // Not needed for anything on screen: don't make the rest wait.
+            Task { await GoogleAuth.retryPendingRevokes() }
             // A subscription can expire while the app sits in memory, and
             // expiry sends no update: check again before anything uses isPro.
-            await ProStore.shared.refresh()
+            await Perf.measure("launch.proRefresh") { await ProStore.shared.refresh() }
             // Bill reminders asked for during setup, before they had Pro.
             SetupProfile.applyPendingBillReminders()
-            await GoogleAuth.retryPendingRevokes()
-            try? TransactionLogger.refreshUncategorised(in: context)
+            Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
             await FXService.ensureConverted(in: context)
             #if DEBUG
             await GmailSync.syncAll(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")
