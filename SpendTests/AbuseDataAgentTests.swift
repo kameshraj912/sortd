@@ -401,33 +401,6 @@ struct AbuseDataAgentTests {
         #expect(count(ctx) == 2)
     }
 
-    /// Every line already known from taps: nothing new may be added.
-    ///
-    /// DISPUTED: a test-setup problem, not an app bug. The taps are logged in AUD, but statement lines with no
-    /// symbol take `Money.home`. On a simulator whose home is not AUD (en_SG gives SGD) the currencies differ and
-    /// nothing merges. With home set to AUD this test passes (checked 24 Sep 2026). The real issue, that a statement
-    /// is assumed to be in the home currency, is already documented by `aStatementWithNoCurrencySymbolLandsInTheHomeCurrency`.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-24", "DISPUTED: fails only because the test assumes the home currency is AUD"))
-    func aStatementOfPurchasesSortdAlreadyHasAddsNothing() throws {
-        let ctx = try store()
-        _ = try TransactionLogger.log(
-            IncomingPurchase(date: date("2026-09-01"), merchant: "WOOLWORTHS 1234",
-                             amount: Decimal(string: "58.30")!, currency: "AUD",
-                             card: .nab, source: .tap), in: ctx)
-        _ = try TransactionLogger.log(
-            IncomingPurchase(date: date("2026-09-02"), merchant: "SEVEN SEEDS",
-                             amount: Decimal(string: "5.50")!, currency: "AUD",
-                             card: .nab, source: .tap), in: ctx)
-
-        let rows = StatementImport.rows(fromCSV: statement).filter { $0.kind == .spend }
-        let out = StatementImport.save(rows, card: .nab, in: ctx)
-
-        #expect(out.added == 0)
-        #expect(out.merged == 2)
-        #expect(count(ctx) == 2)
-    }
-
     /// Three identical lines in one file are three purchases, and importing
     /// that file a second time must still leave three.
     @Test func threeIdenticalLinesStayThreeAcrossTwoImports() throws {
@@ -660,27 +633,6 @@ struct AbuseDataAgentTests {
         #expect(a.category == .health)
         #expect(b.category == .health)
         #expect(other.category == .groceries)
-    }
-
-    /// Two different shops whose names differ only by a trailing number are
-    /// collapsed into one rule key, so recategorising one moves the other.
-    ///
-    /// DISPUTED. `MerchantName.clean` (Spend/Services/Parsing.swift) drops trailing store numbers by design, so
-    /// "WOOLWORTHS 1234" and "WOOLWORTHS 0231" learn one category rule. "Sushi Hub 1" and "Sushi Hub 2" collapsing
-    /// is the cost of that choice, not a clear bug.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-29", "DISPUTED: MerchantName drops trailing store numbers on purpose so one shop's branches share a rule"))
-    func shopsThatDifferOnlyByANumberAreNotTreatedAsOne() throws {
-        let ctx = try store()
-        let a = add(ctx, "Sushi Hub 1", 14, "2026-09-01", category: .eatingOut)
-        let b = add(ctx, "Sushi Hub 2", 16, "2026-09-02", category: .eatingOut)
-
-        // Documenting the key collapse itself.
-        let keys = [MerchantName.key("Sushi Hub 1"), MerchantName.key("Sushi Hub 2")]
-        #expect(keys[0] != keys[1], "both names reduce to \"\(keys[0])\"")
-
-        try TransactionLogger.recategorise(a, to: .groceries, in: ctx)
-        #expect(b.category == .eatingOut)
     }
 
     // MARK: - Recurring

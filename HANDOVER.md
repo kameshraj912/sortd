@@ -11,7 +11,7 @@ something, it says so.
 |---|---|
 | Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
 | Branch | `main` @ `ed752cc` — **pushed**, CI green, nothing outstanding |
-| Tests | **445 passing**, 29 known bugs skipped, 474 in the run; measured with `scripts/test.sh` on 24 Sep (`--known-bugs` runs the 29, `--storekit` adds ProStoreTests) |
+| Tests | **445 passing**, 23 known bugs skipped, 468 in the run; measured with `scripts/test.sh` on 24 Sep (`--known-bugs` runs the 29, `--storekit` adds ProStoreTests) |
 | Pipeline | `docs/AgentPipeline.md` · agents in `.claude/agents/` · skills `sortd-*` · scripts in `scripts/` |
 
 Branches still holding work (`scripts/worktree-audit.sh` shows the live picture; all
@@ -138,20 +138,13 @@ alternative for AU/SG.
 scripts/test.sh --known-bugs
 ```
 
-CI does not run them, so it stays green. **29 tagged tests fail.** (This file
-used to say 21; the run on 24 Sep 2026 found 30, one of them only on CI, and one is now fixed.) Each
+CI does not run them, so it stays green. **23 tagged tests fail.** (The run on 24 Sep
+2026 found 30, one only on CI; one is fixed and Raj had the 7 disputed ones deleted.) Each
 test's doc comment says what is wrong and where. Fixing one means removing its tag.
 
 **Fixed:** `AmountParser.currency(in:)` matched markers as substrings
 (MYRTLE → ringgit, CARMENS → ringgit, HOURS. → rupees). Markers must now
 stand alone.
-
-**7 are marked DISPUTED** — check before "fixing": `extraDecimalsAreNotTurnedIntoThousands`
-(in part), `agarbageRateDoesNotWipeTheBudget`, `aZeroRateIsRefused`,
-`twoSeparatePaymentsAtOneShopAreTwoPurchases`, `theSameRefundTwiceLeavesOneRow`,
-`shopsThatDifferOnlyByANumberAreNotTreatedAsOne`, and
-`aStatementOfPurchasesSortdAlreadyHasAddsNothing` (a test-setup fault: it assumes
-the home currency is AUD and passes when it is).
 
 ### 2. UI adversarial pass — ran on 24 Sep, findings not fixed
 
@@ -213,8 +206,8 @@ That line decides whether the fix worked or whether it is Apple's timeout.
 
 ## Decisions still open
 
-1. **The 7 DISPUTED known-bug tests** — keep or delete each (names under "Still to do → 1").
-   The abuse findings themselves are merged and CI is green.
+1. **UI pass finding 13** (the budget jumped to JP¥1,850,000 with no save): `finding-verifier`
+   read every writer and found none that fires without a tap. Unreproduced; watch for it.
 2. **Sentry** — still linked. Either remove the package and
    `CrashReporting.swift`, or change the App Privacy label to Crash Data (not
    linked). Preflight fails on it today.
