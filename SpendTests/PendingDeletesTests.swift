@@ -25,6 +25,18 @@ struct PendingDeletesTests {
         return t
     }
 
+    /// Waits until `condition` holds, up to `limit`. Timing tests use this
+    /// instead of a fixed sleep: under heavy load (three worktrees building at
+    /// once) a 600 ms sleep can return before a 200 ms timer task has run.
+    private func waitUntil(_ limit: Duration = .seconds(10),
+                           _ condition: @MainActor () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let end = clock.now + limit
+        while !condition(), clock.now < end {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     @Test func stagingRemovesNothingFromStore() throws {
         let t = try purchase("Woolworths")
         let pending = PendingDeletes()
@@ -92,7 +104,8 @@ struct PendingDeletesTests {
         try await Task.sleep(for: .milliseconds(30))
         pending.stage(b) { fired += 1 }
 
-        try await Task.sleep(for: .milliseconds(600))
+        try await waitUntil { fired >= 1 }
+        try await Task.sleep(for: .milliseconds(300))   // room for a wrong second fire
 
         #expect(fired == 1)
         #expect(pending.count == 2)
@@ -116,7 +129,8 @@ struct PendingDeletesTests {
         var fired = 0
         pending.stage(t) { fired += 1 }
 
-        try await Task.sleep(for: .milliseconds(600))
+        try await waitUntil { fired >= 1 }
+        try await Task.sleep(for: .milliseconds(300))   // room for a wrong second fire
 
         #expect(fired == 1)
         #expect(pending.count == 1)           // still staged: the view commits after its animation
