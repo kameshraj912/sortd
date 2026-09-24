@@ -11,7 +11,7 @@ something, it says so.
 |---|---|
 | Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
 | Branch | `main` @ `ed752cc` — **pushed**, CI green, nothing outstanding |
-| Tests | **429 passing**, 29 known bugs skipped (`scripts/test.sh --known-bugs` runs them) |
+| Tests | **445 passing**, 29 known bugs skipped, 474 in the run; measured with `scripts/test.sh` on 24 Sep (`--known-bugs` runs the 29, `--storekit` adds ProStoreTests) |
 | Pipeline | `docs/AgentPipeline.md` · agents in `.claude/agents/` · skills `sortd-*` · scripts in `scripts/` |
 
 Branches still holding work (`scripts/worktree-audit.sh` shows the live picture; all
