@@ -54,16 +54,25 @@ struct AbuseAmountParserTests {
         #expect(AmountParser.parse("12/09/2026 A$4.50")?.amount == Decimal(string: "4.50"))
     }
 
-    /// A currency marker is matched as a bare substring anywhere in the text,
-    /// so ordinary letters name a currency.
-    ///
-    /// Known bug: `AmountParser.currency(in:)` (Spend/Services/Parsing.swift) matches markers as substrings, not whole words.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-04", "currency(in:) matches markers as substrings: MYRTLE is ringgit, CARMENS is ringgit, HOURS. is rupees"))
-    func aCurrencyIsNotGuessedFromLettersInsideAWord() {
+    /// A currency marker must stand alone: letters inside a word never name
+    /// a currency. Fixed: `AmountParser.currency(in:)` matched markers as
+    /// substrings, so MYRTLE and CARMENS were ringgit and HOURS. was rupees.
+    @Test func aCurrencyIsNotGuessedFromLettersInsideAWord() {
         #expect(AmountParser.currency(in: "CARMENS 12.00") == nil, "the RM in CARMENS read as Malaysian ringgit")
         #expect(AmountParser.currency(in: "HOURS. 12.00") == nil, "the RS. in HOURS. read as Indian rupees")
         #expect(AmountParser.currency(in: "MYRTLE CAFE 8.00") == nil)
+    }
+
+    /// The word-boundary fix must not lose markers that do stand alone.
+    @Test func aCurrencyMarkerOnItsOwnIsStillRead() {
+        #expect(AmountParser.currency(in: "RM8.00") == "MYR")
+        #expect(AmountParser.currency(in: "MYRTLE CAFE RM 8.00") == "MYR")
+        #expect(AmountParser.currency(in: "8.00 MYR") == "MYR")
+        #expect(AmountParser.currency(in: "Rs.500") == "INR")
+        #expect(AmountParser.currency(in: "HOURS. Rs. 500") == "INR")
+        #expect(AmountParser.currency(in: "US$5") == "USD")
+        #expect(AmountParser.currency(in: "(A$4.50)") == "AUD")
+        #expect(AmountParser.currency(in: "-S$12.30") == "SGD")
     }
 
     /// Thousands separators in every written form.
