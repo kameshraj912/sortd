@@ -45,13 +45,15 @@ struct SetupAura: View {
 /// The one icon style: plain, ink-coloured, fixed width so text lines up.
 struct RowIcon: View {
     let symbol: String
+    /// Grows with the text, so a big icon never touches the title (finding 15).
+    @ScaledMetric(relativeTo: .body) private var width: CGFloat = 28
     init(_ symbol: String) { self.symbol = symbol }
 
     var body: some View {
         Image(systemName: symbol)
             .font(.body.weight(.medium))
             .foregroundStyle(Color.ink)
-            .frame(width: 28)
+            .frame(width: width)
             .accessibilityHidden(true)
     }
 }

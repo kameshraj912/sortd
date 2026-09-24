@@ -13,20 +13,25 @@ struct TransactionDetailView: View {
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
 
-    /// Largest amount the detail screen accepts.
-    static let maxAmount: Decimal = 1_000_000
+    /// Amounts must be under this: the same 9 whole digits the field lets
+    /// you type (`AmountEntry.detailWholeDigits`). Imports have no cap, so
+    /// a bigger existing amount still shows; it just can't be typed back.
+    static let maxAmount: Decimal = 1_000_000_000
 
     /// The amount to save for what was typed, or nil to keep the old one
     /// (empty, unreadable, zero, or over the limit).
     static func committedAmount(from text: String) -> Decimal? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let parsed = AmountParser.parse(trimmed)?.amount,
-              parsed > 0, parsed <= maxAmount else { return nil }
+              parsed > 0, parsed < maxAmount else { return nil }
         return parsed
     }
 
+    /// Text for the field. No grouping commas: the field's own typing rule
+    /// (`AmountEntry`) would refuse "1,234.00" and wipe it.
     static func amountText(_ amount: Decimal) -> String {
-        amount == 0 ? "" : amount.formatted(.number.precision(.fractionLength(2)))
+        amount == 0 ? "" : amount.formatted(.number.precision(.fractionLength(2)).grouping(.never)
+            .locale(Locale(identifier: "en_US_POSIX")))
     }
 
     private static var currencies: [String] {
@@ -48,6 +53,14 @@ struct TransactionDetailView: View {
                         .keyboardType(.decimalPad)
                         .focused($amountFocused)
                         .onSubmit(commitAmount)
+                        // A key past the limit is refused on the spot, never
+                        // taken and reverted later. Only typing is checked:
+                        // the text set from the stored amount always shows.
+                        .onChange(of: amountText) { old, new in
+                            guard amountFocused else { return }
+                            let kept = AmountEntry.accepted(new, replacing: old)
+                            if kept != new { amountText = kept }
+                        }
                         .accessibilityLabel("Amount")
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
@@ -133,21 +146,39 @@ struct TransactionDetailView: View {
                 .font(.money)
                 .contentTransition(.numericText(value: transaction.amount.double))
             BrandBar(width: 14, height: 3)
-            HStack(spacing: 6) {
-                Text(transaction.paidWithLabel)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(.tertiarySystemFill), in: .capsule)
-                Text(transaction.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            // Chip and date on one line while they fit; otherwise stacked, so
+            // neither breaks mid-word ("8:24 A / M", "Every-day"): finding 11.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    paidChip
+                    when
+                }
+                VStack(spacing: 6) {
+                    paidChip
+                    when
+                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    private var paidChip: some View {
+        Text(transaction.paidWithLabel)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color(.tertiarySystemFill), in: .capsule)
+    }
+
+    private var when: some View {
+        Text(transaction.date.formatted(date: .abbreviated, time: .shortened))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
     }
 
     /// What happened to this purchase, oldest first, like Wise's transfer updates.
