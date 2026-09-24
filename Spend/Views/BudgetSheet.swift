@@ -8,6 +8,7 @@ struct BudgetSheet: View {
     @State private var text = ""
     @State private var saved = 0
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let presets: [Double] = [500, 800, 1000, 1500, 2000]
 
@@ -76,6 +77,39 @@ struct BudgetSheet: View {
     }
 
     var body: some View {
+        Group {
+            // At accessibility sizes the sheet is full height and scrolls,
+            // so nothing is cut to "Remove Bud..." (UI pass finding 5).
+            if typeSize.isAccessibilitySize {
+                ScrollView { content }
+            } else {
+                content
+            }
+        }
+        .padding(20)
+        .onAppear {
+            // Recover installs that saved a huge or broken budget.
+            let safe = Self.sanitized(budget)
+            if safe != budget { budget = safe }
+            if safe > 0 { text = Self.text(for: safe) }
+        }
+        .toolbar {
+            // The number pad has no Return key; without this there is
+            // no way to put it away and reach Save underneath.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focused = false }.fontWeight(.semibold)
+            }
+        }
+        .sensoryFeedback(.success, trigger: saved)
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.height(420), .large])
+        // Solid, so the cards behind don't bleed through the glass.
+        .presentationBackground(Color(.systemBackground))
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(32)
+    }
+
+    private var content: some View {
         VStack(spacing: 22) {
             HStack {
                 Spacer()
@@ -96,6 +130,7 @@ struct BudgetSheet: View {
                     Text(Money.symbol(Money.home))
                         .font(.title.weight(.bold))
                         .foregroundStyle(.secondary)
+                        .fixedSize()
                         .accessibilityHidden(true)
                     TextField("0", text: $text)
                         .font(.money)
@@ -107,15 +142,19 @@ struct BudgetSheet: View {
                             if limited != new { text = limited }
                         }
                         .accessibilityLabel("Monthly budget in \(Locale.current.localizedString(forCurrencyCode: Money.home) ?? Money.home)")
-                    Image(systemName: "pencil")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                    if !typeSize.isAccessibilitySize {
+                        Image(systemName: "pencil")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .onTapGesture { focused = true }
                 Text(range)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // Quick presets, like the gift-budget chips.
@@ -158,6 +197,8 @@ struct BudgetSheet: View {
                     } label: {
                         Text("Remove Budget")
                             .font(.headline)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
                             .frame(maxWidth: .infinity, minHeight: 52)
                             .foregroundStyle(.primary)
                             .overlay(Capsule().strokeBorder(Color.primary, lineWidth: 1.5))
@@ -166,26 +207,5 @@ struct BudgetSheet: View {
             }
             .buttonStyle(.pressable)
         }
-        .padding(20)
-        .onAppear {
-            // Recover installs that saved a huge or broken budget.
-            let safe = Self.sanitized(budget)
-            if safe != budget { budget = safe }
-            if safe > 0 { text = Self.text(for: safe) }
-        }
-        .toolbar {
-            // The number pad has no Return key; without this there is
-            // no way to put it away and reach Save underneath.
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focused = false }.fontWeight(.semibold)
-            }
-        }
-        .sensoryFeedback(.success, trigger: saved)
-        .presentationDetents([.height(420), .large])
-        // Solid, so the cards behind don't bleed through the glass.
-        .presentationBackground(Color(.systemBackground))
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(32)
     }
 }
