@@ -7,6 +7,10 @@ struct SpendApp: App {
     /// the other two are for people who want Spend one way always.
     @AppStorage("appearance") private var appearance = "system"
 
+    /// Shown once per process launch (see `LaunchOverlay`), never again after
+    /// it dismisses — so it never replays on a return from background.
+    @State private var showLaunchOverlay = true
+
     private var scheme: ColorScheme? {
         #if DEBUG
         switch ProcessInfo.processInfo.environment["SPEND_APPEARANCE"] {
@@ -109,6 +113,11 @@ struct SpendApp: App {
             // restart). The window override applies at once, sheets included.
             .onChange(of: appearance, initial: true) { applyAppearance() }
             .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { _ in applyAppearance() }
+            // Cold-start only: matches the static launch screen on its first
+            // frame, then grows the brand bar in and fades. App Lock's cover
+            // (its own UIWindow) and onboarding's full-screen cover both
+            // present above this, so neither is blocked by it.
+            .overlay { if showLaunchOverlay { LaunchOverlay(isPresented: $showLaunchOverlay) } }
         }
         .modelContainer(SpendStore.container)
 
