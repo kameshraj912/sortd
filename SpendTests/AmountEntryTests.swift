@@ -15,9 +15,11 @@ struct AmountEntryTests {
     }
 
     @Test func oneKeyPastTheLimitIsRefused() {
-        // 999,999 is the most whole digits; a seventh is dropped.
-        #expect(AmountEntry.accepted("123456", replacing: "12345") == "123456")
-        #expect(AmountEntry.accepted("1234567", replacing: "123456") == "123456")
+        // 999,999,999 is the most whole digits; a tenth is dropped.
+        #expect(AmountEntry.accepted("123456789", replacing: "12345678") == "123456789")
+        #expect(AmountEntry.accepted("1234567890", replacing: "123456789") == "123456789")
+        // The add sheet stops at six.
+        #expect(AmountEntry.accepted("1234567", replacing: "123456", wholeDigits: 6) == "123456")
         // Two decimals, never three.
         #expect(AmountEntry.accepted("31.40", replacing: "31.4") == "31.40")
         #expect(AmountEntry.accepted("31.405", replacing: "31.40") == "31.40")
@@ -35,8 +37,10 @@ struct AmountEntryTests {
         #expect(AmountEntry.accepted(ok, replacing: "whatever") == ok, "\(ok)")
     }
 
-    @Test func aBadOldValueFallsBackToEmpty() {
-        #expect(AmountEntry.accepted("abc", replacing: "xyz") == "")
+    @Test func aRefusedKeyNeverWipesTheField() {
+        #expect(AmountEntry.accepted("abc", replacing: "xyz") == "xyz")
+        // Deleting from an over-long value (an import past the cap) always works.
+        #expect(AmountEntry.accepted("12345678901", replacing: "123456789012") == "12345678901")
     }
 
     @Test func theAddSheetUsesTheSameRule() {
@@ -47,12 +51,13 @@ struct AmountEntryTests {
     @Test func theDetailFieldsTextIsAlwaysTypeable() {
         // The stored amount, put back into the field, must pass its own
         // rule, or the first keystroke would wipe it (grouping commas did).
-        for raw in ["0.5", "31.40", "1234.5", "999999.99"] {
+        for raw in ["0.5", "31.40", "1234.5", "999999.99", "1500000", "150000000"] {
             let amount = Decimal(string: raw)!
             let text = TransactionDetailView.amountText(amount)
             #expect(AmountEntry.isTypeable(text), "\(text)")
             #expect(TransactionDetailView.committedAmount(from: text) == amount, "\(text)")
         }
         #expect(TransactionDetailView.amountText(1234.5) == "1234.50")
+        #expect(TransactionDetailView.amountText(1_500_000) == "1500000.00")
     }
 }

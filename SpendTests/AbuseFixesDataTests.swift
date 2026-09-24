@@ -60,7 +60,9 @@ struct AbuseFixesDataTests {
         #expect(TransactionDetailView.committedAmount(from: "   ") == nil)
         #expect(TransactionDetailView.committedAmount(from: "abc") == nil)
         #expect(TransactionDetailView.committedAmount(from: "0") == nil)
-        #expect(TransactionDetailView.committedAmount(from: "1000000.01") == nil)
+        // The cap is 9 whole digits now (imports bring 1,000,000+ IDR purchases).
+        #expect(TransactionDetailView.committedAmount(from: "1000000000") == nil)
+        #expect(TransactionDetailView.committedAmount(from: "1500000") == 1_500_000)
         #expect(TransactionDetailView.committedAmount(from: "21.90") == Decimal(string: "21.90"))
         #expect(TransactionDetailView.committedAmount(from: "1,000,000") == 1_000_000)
     }
