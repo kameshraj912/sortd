@@ -70,9 +70,11 @@ struct PaywallView: View {
                     case .owned: alreadyPro
                     case .loading, .failed, .plans: plans
                     }
+                    // Straight after the plans, so the chosen plan and the
+                    // buy button stay together.
+                    if footerScrolls, state.showsPurchaseFooter { footer }
                     featureList
                     if state != .betaFree { freeNote }
-                    if footerScrolls, state.showsPurchaseFooter { footer }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -198,7 +200,7 @@ struct PaywallView: View {
         let on = selected == p.id
         return Button { selected = p.id } label: {
             Group {
-                if typeSize.isAccessibilitySize {
+                if footerScrolls {
                     // Title, badge, note and price stack, so no word is
                     // squeezed into pieces beside the price.
                     VStack(alignment: .leading, spacing: 8) {
