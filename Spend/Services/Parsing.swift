@@ -101,9 +101,22 @@ enum MerchantName {
     private static let prefixes = ["SQ *", "SQ*", "PAYPAL *", "PP*", "SP *", "SP*", "ZLR*", "LS ", "TST* ", "TST*",
                                    "SA_", "SMP_", "PADDLE.NET* ", "PADDLE.NET*", "TS/", "FP*", "DD *", "EB *", "EB*"]
 
+    /// Longest name kept. Bank descriptors run to about 20 characters and
+    /// email receipts to a few dozen; anything past this is pasted text.
+    static let maxLength = 80
+
     /// "SQ *CAFE BLOSSOM  MELBOURNE AU" → "Cafe Blossom"
+    ///
+    /// Typed or pasted input is tidied first: newlines, tabs and other
+    /// control characters become one space, runs of blanks collapse to one,
+    /// the ends are trimmed and the name is capped at `maxLength`.
     static func clean(_ raw: String) -> String {
-        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tidy = raw.components(separatedBy: CharacterSet.whitespacesAndNewlines.union(.controlCharacters))
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        // Cap before the word passes below so cleaning a cleaned name changes nothing.
+        let capped = String(tidy.prefix(maxLength)).trimmingCharacters(in: .whitespaces)
+        var s = capped
         for p in prefixes where s.uppercased().hasPrefix(p) {
             s = String(s.dropFirst(p.count))
             break
@@ -126,7 +139,7 @@ enum MerchantName {
         if s == s.uppercased(), s.contains(where: \.isLetter) {
             s = s.capitalized
         }
-        return s.isEmpty ? raw : s
+        return s.isEmpty ? capped : s
     }
 
     /// Stable key for learning and matching: lowercase letters/digits only.
