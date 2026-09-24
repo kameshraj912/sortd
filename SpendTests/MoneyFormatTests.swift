@@ -33,7 +33,7 @@ struct MoneyFormatTests {
     /// A newline typed or pasted into "Paid to" becomes a single space, not
     /// kept as a literal line break in the saved name.
     @Test func newlinesBecomeASingleSpace() {
-        #expect(MerchantName.clean("Woolworths\nMelbourne") == "Woolworths Melbourne")
+        #expect(MerchantName.clean("Woolworths\nMetro") == "Woolworths Metro")
         #expect(MerchantName.clean("Cafe\r\nBlossom") == "Cafe Blossom")
     }
 
@@ -47,7 +47,7 @@ struct MoneyFormatTests {
     /// A run of newlines collapses to exactly one space, so pasted
     /// multi-line text doesn't leave a run of blanks.
     @Test func runsOfNewlinesCollapseToOneSpace() {
-        #expect(MerchantName.clean("Woolworths\n\n\nMelbourne") == "Woolworths Melbourne")
+        #expect(MerchantName.clean("Woolworths\n\n\nMetro") == "Woolworths Metro")
     }
 
     /// A name over 80 characters is capped, not saved in full.
