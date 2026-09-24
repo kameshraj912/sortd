@@ -491,7 +491,8 @@ private struct ActivitySearch: ViewModifier {
                 .background(SearchStateReporter())
                 // The long prompt has no room at accessibility sizes and the
                 // field showed as an empty pill (UI pass finding 8).
-                .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
+                .searchable(text: $text,
+                            placement: typeSize.isAccessibilitySize ? .navigationBarDrawer(displayMode: .always) : .automatic,
                             prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
                 .searchFocused($focused)
                 .textInputAutocapitalization(.never)
@@ -519,7 +520,10 @@ private struct SearchStateReporter: View {
 
     var body: some View {
         Color.clear
-            .onChange(of: isSearching, initial: true) { _, active in
+            // onAppear as well as onChange: coming back from a pushed row
+            // with search still open must hide the gear again.
+            .onAppear { Router.shared.searchActive = isSearching }
+            .onChange(of: isSearching) { _, active in
                 withAnimation(.snappy) { Router.shared.searchActive = active }
             }
             .onDisappear { Router.shared.searchActive = false }
