@@ -126,14 +126,30 @@ struct AbuseMoneyFormatTests {
 
     /// Yen, won and rupiah have no minor units. Showing "¥1,200.00" is wrong
     /// and reads as a hundredth of the real amount to anyone who knows them.
-    ///
-    /// Known bug: `Money.format` (Spend/Views/Components/Components.swift) forces 2 decimals for every currency.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-06", "Money.format always shows 2 decimals, so JPY, KRW and IDR get .00"))
-    func zeroDecimalCurrenciesAreShownWithoutCents() {
+    /// The zero-decimal currency must win even where a caller passes
+    /// `cents: true` explicitly or leaves it at its default — every day and
+    /// category total, and the "≈ JP¥…" converted amount under a foreign
+    /// purchase, call `Money.format` without `cents: false` (see
+    /// `TransactionRow.trailingDetail`, `InsightsView`, `HomeView` month/day
+    /// totals in Spend/Views/Components/Components.swift and callers). The
+    /// spoken VoiceOver form (`Money.spoken`) must drop the decimal too.
+    @Test func zeroDecimalCurrenciesAreShownWithoutCents() {
         #expect(!Money.format(1200, "JPY").contains(".00"), Comment(rawValue: Money.format(1200, "JPY")))
         #expect(!Money.format(15000, "KRW").contains(".00"), Comment(rawValue: Money.format(15000, "KRW")))
         #expect(!Money.format(50000, "IDR").contains(".00"), Comment(rawValue: Money.format(50000, "IDR")))
+
+        // Day/category totals and the "≈ converted" amount never pass
+        // cents: false, so the currency itself must force zero decimals,
+        // even when the caller asks for cents explicitly.
+        let converted = Money.format(Decimal(string: "3878.84")!, "JPY", cents: true)
+        #expect(!converted.contains(".84"), "≈ converted form kept cents for JPY: \(converted)")
+        let dayTotal = Money.format(Decimal(string: "12408.59")!, "JPY")
+        #expect(!dayTotal.contains(".59"), "day total kept cents for JPY: \(dayTotal)")
+
+        // VoiceOver's spoken form must drop the decimal for zero-decimal
+        // currencies too, not just the on-screen label.
+        let spoken = Money.spoken(Decimal(string: "3433.30")!, "JPY")
+        #expect(!spoken.contains(".30"), "spoken JPY kept a decimal: \(spoken)")
     }
 
     /// Every supported currency must give the amount field a symbol to show.
