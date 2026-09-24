@@ -189,6 +189,9 @@ struct AddTransactionView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            // Dragging the form puts the number pad away, so the rest of the
+            // sheet can be reached at any text size.
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.page)
             .navigationTitle("New Purchase")
             .navigationBarTitleDisplayMode(.inline)
@@ -309,6 +312,9 @@ struct AddTransactionView: View {
                 Label(scanned ? "Scan Again" : "Scan Receipt", systemImage: "camera")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.ink)
+                    // At accessibility sizes the words wrap whole, centred.
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
                     .surface(radius: 20)
@@ -344,14 +350,9 @@ struct AddTransactionView: View {
         return r.amount
     }
 
-    /// What the amount field accepts: digits and one decimal point (or
-    /// comma), at most two decimals, and less than 1,000,000.
-    nonisolated static func isTypeable(_ text: String) -> Bool {
-        guard !text.isEmpty else { return true }
-        guard text.range(of: #"^\d*([.,]\d{0,2})?$"#, options: .regularExpression) != nil else { return false }
-        let whole = text.prefix { $0.isNumber }.drop { $0 == "0" }
-        return whole.count <= 6 && text.count <= 12
-    }
+    /// What the amount field accepts: the shared rule, with 6 whole digits
+    /// because this sheet saves under 1,000,000 (`parsedAmount`).
+    nonisolated static func isTypeable(_ text: String) -> Bool { AmountEntry.isTypeable(text, wholeDigits: 6) }
 
     private var isValid: Bool {
         // Only the amount is needed; a nameless purchase is saved under its category.

@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
     @State private var showingPaywall = false
     @State private var pro = ProStore.shared
+    /// The Pro row's app icon grows with the text (UI pass finding 16).
+    @ScaledMetric(relativeTo: .body) private var proIconSize: CGFloat = 30
 
     var body: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
@@ -22,7 +24,7 @@ struct SettingsView: View {
                 Section {
                     Button { showingPaywall = true } label: {
                         HStack(spacing: 12) {
-                            Image("BrandIcon").resizable().frame(width: 30, height: 30)
+                            Image("BrandIcon").resizable().frame(width: proIconSize, height: proIconSize)
                                 .clipShape(.rect(cornerRadius: 7, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Sortd Pro").foregroundStyle(Color.ink)
