@@ -10,7 +10,7 @@ something, it says so.
 |---|---|
 | Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
 | Branch | `main` @ `829b74a` — **pushed**, nothing outstanding |
-| Tests | **413 passing**, 28 known bugs skipped (`scripts/test.sh --known-bugs` runs them) |
+| Tests | **412 passing**, 29 known bugs skipped (`scripts/test.sh --known-bugs` runs them) |
 
 Branches still holding work:
 
@@ -109,8 +109,8 @@ onto `main` with branch `abuse-known-bugs`. Every test that fails is tagged `.kn
 scripts/test.sh --known-bugs
 ```
 
-CI does not run them, so it stays green. **28 tagged tests fail.** (This file
-used to say 21; the run on 24 Sep 2026 found 29, and one is now fixed.) Each
+CI does not run them, so it stays green. **29 tagged tests fail.** (This file
+used to say 21; the run on 24 Sep 2026 found 30, one of them only on CI, and one is now fixed.) Each
 test's doc comment says what is wrong and where. Fixing one means removing its tag.
 
 **Fixed:** `AmountParser.currency(in:)` matched markers as substrings
