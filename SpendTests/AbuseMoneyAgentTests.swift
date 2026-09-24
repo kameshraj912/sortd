@@ -143,6 +143,8 @@ struct AbuseMoneyFormatTests {
         // even when the caller asks for cents explicitly.
         let converted = Money.format(Decimal(string: "3878.84")!, "JPY", cents: true)
         #expect(!converted.contains(".84"), "≈ converted form kept cents for JPY: \(converted)")
+        // Rounded to the nearest yen, not cut: "JP¥3,879".
+        #expect(converted.hasSuffix("3,879"), "≈ converted JPY not rounded to whole yen: \(converted)")
         let dayTotal = Money.format(Decimal(string: "12408.59")!, "JPY")
         #expect(!dayTotal.contains(".59"), "day total kept cents for JPY: \(dayTotal)")
 

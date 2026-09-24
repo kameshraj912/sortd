@@ -12,6 +12,11 @@ struct TransactionDetailView: View {
     /// so clearing "21.90" left "2" behind.
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
+    /// What each field showed when the screen opened. A field is only
+    /// written back when its text changed, so a name or amount that a sync
+    /// updated while the screen was open is not overwritten on the way out.
+    @State private var loadedAmountText = ""
+    @State private var loadedMerchant = ""
     /// "Paid to" works the same way: the name goes through
     /// `MerchantName.clean` when you leave the field, so a pasted newline or
     /// a 200-character name never reaches `merchant` as typed.
@@ -33,10 +38,11 @@ struct TransactionDetailView: View {
     }
 
     /// Text for the field. No grouping commas: the field's own typing rule
-    /// (`AmountEntry`) would refuse "1,234.00" and wipe it.
-    static func amountText(_ amount: Decimal) -> String {
-        amount == 0 ? "" : amount.formatted(.number.precision(.fractionLength(2)).grouping(.never)
-            .locale(Locale(identifier: "en_US_POSIX")))
+    /// (`AmountEntry`) would refuse "1,234.00" and wipe it. No decimals for
+    /// a zero-decimal currency, so ¥1200 opens as "1200", not "1200.00".
+    static func amountText(_ amount: Decimal, currency: String = Money.home) -> String {
+        amount == 0 ? "" : amount.formatted(.number.precision(.fractionLength(Money.decimals(currency, cents: true)))
+            .grouping(.never).locale(Locale(identifier: "en_US_POSIX")))
     }
 
     private static var currencies: [String] {
@@ -126,8 +132,10 @@ struct TransactionDetailView: View {
         .navigationTitle(transaction.merchant.isEmpty ? "Purchase" : transaction.merchant)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            amountText = Self.amountText(transaction.amount)
+            amountText = Self.amountText(transaction.amount, currency: transaction.currencyCode)
+            loadedAmountText = amountText
             merchantText = transaction.merchant
+            loadedMerchant = merchantText
         }
         .onChange(of: amountFocused) { _, focused in if !focused { commitAmount() } }
         .onChange(of: merchantFocused) { _, focused in if !focused { commitMerchant() } }
@@ -231,21 +239,32 @@ struct TransactionDetailView: View {
     }
 
     /// Saves a valid amount; otherwise keeps the old one and puts its text back.
+    /// Unchanged text is left alone so it cannot undo a sync's newer amount.
     private func commitAmount() {
-        if let amount = Self.committedAmount(from: amountText), amount != transaction.amount {
+        if amountText != loadedAmountText, let amount = Self.committedAmount(from: amountText),
+           amount != transaction.amount {
             transaction.amount = amount
         }
-        if !amountFocused { amountText = Self.amountText(transaction.amount) }
+        if !amountFocused {
+            amountText = Self.amountText(transaction.amount, currency: transaction.currencyCode)
+            loadedAmountText = amountText
+        }
     }
 
     /// Saves the tidied name. A cleared field keeps the old name, the same
-    /// rule as Amount on this screen.
+    /// rule as Amount on this screen. Unchanged text is left alone so it
+    /// cannot undo a name a sync merged in while the screen was open.
     private func commitMerchant() {
-        let name = MerchantName.clean(merchantText)
-        if !name.isEmpty, name != transaction.merchant {
-            transaction.merchant = name
+        if merchantText != loadedMerchant {
+            let name = MerchantName.clean(merchantText)
+            if !name.isEmpty, name != transaction.merchant {
+                transaction.merchant = name
+            }
         }
-        if !merchantFocused { merchantText = transaction.merchant }
+        if !merchantFocused {
+            merchantText = transaction.merchant
+            loadedMerchant = merchantText
+        }
     }
 
     private func refreshAUD() {

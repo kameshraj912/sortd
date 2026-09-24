@@ -105,13 +105,24 @@ enum MerchantName {
     /// email receipts to a few dozen; anything past this is pasted text.
     static let maxLength = 80
 
+    /// Whitespace plus the real control characters (C0 and C1). Not
+    /// `.controlCharacters`: that also covers format characters — the joiner
+    /// inside "👨‍👩‍👧", the ZWNJ in a Persian name, a soft hyphen — which are
+    /// part of the name and must survive a re-clean at launch.
+    private static let separators: CharacterSet = {
+        var set = CharacterSet.whitespacesAndNewlines
+        set.insert(charactersIn: Unicode.Scalar(UInt8(0x00))...Unicode.Scalar(UInt8(0x1F)))
+        set.insert(charactersIn: Unicode.Scalar(UInt8(0x7F))...Unicode.Scalar(UInt8(0x9F)))
+        return set
+    }()
+
     /// "SQ *CAFE BLOSSOM  MELBOURNE AU" → "Cafe Blossom"
     ///
     /// Typed or pasted input is tidied first: newlines, tabs and other
     /// control characters become one space, runs of blanks collapse to one,
     /// the ends are trimmed and the name is capped at `maxLength`.
     static func clean(_ raw: String) -> String {
-        let tidy = raw.components(separatedBy: CharacterSet.whitespacesAndNewlines.union(.controlCharacters))
+        let tidy = raw.components(separatedBy: separators)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         // Cap before the word passes below so cleaning a cleaned name changes nothing.
