@@ -26,11 +26,16 @@ struct TransactionsScreen: View {
     @State private var deleted = 0
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
-    @State private var pendingDeletes: [Transaction] = []
+    @State private var pending = PendingDeletes()
+    /// True while the toast fades out at the end of the window. It stays in
+    /// the view tree (faded with its own opacity and offset) and keeps taking
+    /// taps until the fade ends; only then is the delete committed and the
+    /// toast removed. A view being removed stops taking taps, which is why
+    /// the fade is not a transition.
+    @State private var closingToast = false
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
     @Namespace private var zoom
-    @State private var undoTask: Task<Void, Never>?
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
     /// Asks "Change all N … purchases?" when other purchases share the shop.
@@ -101,13 +106,14 @@ struct TransactionsScreen: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: deleted)
         .overlay(alignment: .bottom) {
-            if !pendingDeletes.isEmpty {
-                UndoToast(text: undoText) { undoDelete() }
+            if !pending.isEmpty {
+                UndoToast(text: pending.text) { undoDelete() }
                     .padding(.bottom, 12)
+                    .opacity(closingToast ? 0 : 1)
+                    .offset(y: closingToast ? 40 : 0)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.35), value: pendingDeletes.isEmpty)
         // The list used to jump on every keystroke and every chip tap.
         .animation(.snappy, value: search)
         .animation(.snappy, value: categoryFilter)
@@ -122,7 +128,7 @@ struct TransactionsScreen: View {
         .refreshNote($refreshNote, bottomPadding: 16)
         .onDisappear { commitDelete() }
         // Leaving the app ends the Undo window: save the delete now, or the
-        // 6-second timer may never fire and the widgets keep the purchase.
+        // 8-second timer may never fire and the widgets keep the purchase.
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { commitDelete() }
         }
@@ -130,38 +136,48 @@ struct TransactionsScreen: View {
 
     // MARK: Delete with undo
 
+    private static let toastSpring = Animation.spring(duration: 0.35)
+
     private func delete(_ t: Transaction) {
-        guard !pendingDeletes.contains(where: { $0.persistentModelID == t.persistentModelID }) else { return }
-        pendingDeletes.append(t)
+        var staged = false
+        withAnimation(Self.toastSpring) {
+            // A swipe while the toast is fading brings it back for the batch.
+            closingToast = false
+            // A new delete gives the whole batch a fresh window.
+            staged = pending.stage(t, onExpire: { expireUndo() })
+        }
+        guard staged else { return }
         deleted += 1
-        // A new delete gives the whole batch a fresh 6 seconds.
-        undoTask?.cancel()
-        undoTask = Task {
-            try? await Task.sleep(for: .seconds(6))
-            guard !Task.isCancelled else { return }
-            commitDelete()
+        AccessibilityNotification.Announcement("\(pending.text). Undo available.").post()
+    }
+
+    /// The window is over: fade the toast while it stays in the tree and
+    /// keeps taking taps, then delete. Only after the delete is the toast
+    /// removed (with no animation, as it is already invisible).
+    private func expireUndo() {
+        withAnimation(Self.toastSpring, completionCriteria: .removed) {
+            closingToast = true
+        } completion: {
+            // Undo, a new swipe or an early commit got in first (each resets
+            // `closingToast`, which also ends this animation): leave it alone.
+            guard closingToast else { return }
+            pending.commit(in: context)
+            closingToast = false
         }
     }
 
+    /// Cancels the pending commit, even mid-fade, and brings every row back.
     private func undoDelete() {
-        undoTask?.cancel()
-        pendingDeletes = []
+        withAnimation(Self.toastSpring) {
+            closingToast = false
+            pending.undo()
+        }
     }
 
+    /// Delete now, with no toast animation: used when the list goes away.
     private func commitDelete() {
-        undoTask?.cancel()
-        guard !pendingDeletes.isEmpty else { return }
-        let gone = pendingDeletes
-        pendingDeletes = []
-        for t in gone { context.delete(t) }
-        try? context.save()
-        WidgetBridge.refresh(from: context)
-    }
-
-    /// "Deleted Woolworths" or "Deleted 2 purchases".
-    private var undoText: String {
-        if pendingDeletes.count == 1, let t = pendingDeletes.first { return "Deleted \(t.merchant)" }
-        return "Deleted \(pendingDeletes.count) purchases"
+        closingToast = false
+        pending.commit(in: context)
     }
 
     // MARK: Category
@@ -320,7 +336,7 @@ struct TransactionsScreen: View {
 
     private var filtered: [Transaction] {
         let q = SearchText.fold(search)
-        let hidden = Set(pendingDeletes.map(\.persistentModelID))
+        let hidden = Set(pending.items.map(\.persistentModelID))
         return transactions.filter { t in
             !hidden.contains(t.persistentModelID)
             && (fixedCard == nil || t.card == fixedCard)
