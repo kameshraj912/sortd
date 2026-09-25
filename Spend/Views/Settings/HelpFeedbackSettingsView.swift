@@ -31,6 +31,21 @@ struct HelpFeedbackSettingsView: View {
                     Label("Send Feedback", systemImage: "envelope")
                 }
                 Button {
+                    openURL(reportProblemURL) { accepted in
+                        if !accepted { showingAddress = true }
+                    }
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Report a Problem")
+                            Text("Crash reports are sent automatically when sharing is on.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "ladybug")
+                    }
+                }
+                Button {
                     // Setup opens once Settings has finished closing.
                     Router.shared.pendingRerun = true
                     Router.shared.showingSettings = false
@@ -48,7 +63,7 @@ struct HelpFeedbackSettingsView: View {
             } header: {
                 BoldHeader("Get Help")
             } footer: {
-                Text("Feedback opens Mail with your app version, iOS version and iPhone model. Nothing else is added. Running setup again keeps your purchases and cards. Tips are the short notes that point out what a screen can do.")
+                Text("Setup again keeps your purchases and cards.")
             }
 
             Section {
@@ -83,30 +98,25 @@ struct HelpFeedbackSettingsView: View {
         }
     }
 
-    /// A pre-filled mailto with just enough to debug a report: app version,
-    /// iOS version and device model. No purchases, no account — nothing
-    /// that identifies who's asking.
+    /// A blank mailto. No app version, no device info — just an empty
+    /// message the person writes themselves.
     private var feedbackURL: URL {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
-        let system = UIDevice.current.systemVersion
-        let model = Self.deviceIdentifier
-        let body = "\n\n—\nSortd \(version) (\(build))\niOS \(system)\n\(model)"
         var components = URLComponents(string: "mailto:\(Self.supportEmail)")!
-        components.queryItems = [
-            URLQueryItem(name: "subject", value: "Sortd Feedback"),
-            URLQueryItem(name: "body", value: body),
-        ]
+        components.queryItems = [URLQueryItem(name: "subject", value: "Sortd feedback")]
         return components.url ?? URL(string: "mailto:\(Self.supportEmail)")!
     }
 
-    /// The raw hardware identifier (e.g. "iPhone15,2"), not a friendly
-    /// name — useful in a bug report without asking anything of the user.
-    private static var deviceIdentifier: String {
-        var info = utsname()
-        uname(&info)
-        return withUnsafePointer(to: &info.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
-        }
+    /// A pre-filled mailto with just the app version, so a bug report can
+    /// be matched to a build. No iOS version, no device model, no purchases.
+    private var reportProblemURL: URL {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        let body = "\n\n—\nSortd \(version) (\(build))"
+        var components = URLComponents(string: "mailto:\(Self.supportEmail)")!
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "Sortd problem"),
+            URLQueryItem(name: "body", value: body),
+        ]
+        return components.url ?? URL(string: "mailto:\(Self.supportEmail)")!
     }
 }
