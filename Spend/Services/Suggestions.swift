@@ -57,11 +57,11 @@ enum Suggestions {
             .map { Suggestion(merchant: $0.latest.merchant, category: $0.latest.category) }
     }
 
-    /// A real visit: not sample data, not the setup test tap, not a refund
+    /// A real visit: not sample data, not a legacy test tap, not a refund
     /// or a transfer.
     static func counts(_ t: Transaction) -> Bool {
         !t.refunded && t.category != .transfers && !t.merchant.isEmpty
-            && t.note != DemoData.marker && t.merchant != TapTestButton.testMerchant
+            && t.note != DemoData.marker && t.merchant != LogPurchaseIntent.legacyTestMerchant
     }
 
     /// Same weekday 1, same kind of day (both weekdays, both weekend) 0.6,
