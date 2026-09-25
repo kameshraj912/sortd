@@ -21,7 +21,9 @@ struct PrivacyView: View {
                 row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
                 row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
                 row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only currency codes and dates are sent.")
-                row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no tracking across other apps or sites, and nothing is sold or shared.")
+                // Sits right above the "Share usage data" switch, so the
+                // heading must not promise "no tracking" (UI pass, 25 Sep).
+                row("chart.bar.xaxis", "No ads. Usage counts only, and you can turn them off.", "No advertising, no tracking across other apps or sites, and nothing is sold or shared.")
             }
             Section {
                 Toggle(isOn: Binding(

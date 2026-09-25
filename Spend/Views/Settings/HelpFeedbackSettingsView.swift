@@ -79,7 +79,7 @@ struct HelpFeedbackSettingsView: View {
         .alert("Tips Will Come Back", isPresented: $tipsNeedRelaunch) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Tips will come back after you reopen Sortd.")
+            Text("Reopen Sortd to see them.")
         }
     }
 

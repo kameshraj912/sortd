@@ -926,18 +926,17 @@ struct SpendChart: View {
                     .contentTransition(.numericText())
                 if point == nil, prevSameDay > 0 {
                     let diff = now - prevSameDay
-                    Label("\(Money.format(Decimal(abs(diff)), Money.home, cents: false)) \(diff >= 0 ? "more" : "less") than \(range.previousLabel.lowercased()) by now",
-                          systemImage: diff >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    // One comparison line, not two (UI pass, 25 Sep): the
+                    // month shows the share from `Outcome` ("12% less than
+                    // last month by now"), which says more than the amount;
+                    // the week and year keep the amount.
+                    let outcome = range == .month ? Outcome.line(
+                        thisMonth: now, lastMonthToSameDay: Outcome.lastMonthToSameDay(transactions, calendar: cal)) : nil
+                    let same = outcome?.hasPrefix("About the same") == true
+                    Label(outcome ?? "\(Money.format(Decimal(abs(diff)), Money.home, cents: false)) \(diff >= 0 ? "more" : "less") than \(range.previousLabel.lowercased()) by now",
+                          systemImage: same ? "equal" : diff >= 0 ? "arrow.up.right" : "arrow.down.right")
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(diff >= 0 ? Color.down : Color.up)
-                    // The outcome as a share, for the month: "12% less than
-                    // last month by now" says more than the amount alone.
-                    if range == .month, let outcome = Outcome.line(
-                        thisMonth: now, lastMonthToSameDay: Outcome.lastMonthToSameDay(transactions, calendar: cal)) {
-                        Text(outcome)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                        .foregroundStyle(same ? Color.secondary : diff >= 0 ? Color.down : Color.up)
                 }
             }
 
