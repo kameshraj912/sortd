@@ -66,3 +66,45 @@ struct SetupFlow: Equatable {
         return Double(reached + 1) / Double(shown.count)
     }
 }
+
+// MARK: - Tap-through defaults (overhaul sub-spec 6)
+
+extension SetupFlow {
+    /// What setup saves for a question nobody answered. Every step can be
+    /// passed with one tap on Continue; these are what that tap leaves behind.
+    struct Defaults: Equatable {
+        let currency: String
+        let budget: Double
+        /// Saved as the answer, but nothing is scheduled until the person
+        /// says yes to notifications on Home (after the first auto-logged
+        /// purchase), never during setup.
+        let checkIn: SetupProfile.CheckIn
+        let goals: Set<SetupProfile.Goal>
+        let wantsGmail: Bool
+    }
+
+    /// The phone's own currency when daily rates exist for it, no limit,
+    /// a Sunday recap, no goals, no Gmail.
+    static func defaults(locale: Locale) -> Defaults {
+        let code = locale.currency?.identifier ?? "USD"
+        return Defaults(currency: Money.supported.contains(code) ? code : "USD",
+                        budget: 0, checkIn: .sunday, goals: [], wantsGmail: false)
+    }
+
+    /// Nothing in setup is a required field: Continue always works, whatever
+    /// has been answered so far. Kept as a function so the view has one
+    /// place to ask, and a test can pin that the answer never changes.
+    static func continueEnabled(at step: Step, answers: SetupFlow) -> Bool { true }
+
+    /// The tap-through flow: "Continue" on every step, no permission alert
+    /// during setup, "Do this later" on the plan goes straight to Home.
+    /// Debug builds turn it on with SPEND_NEW_SETUP=1; the old flow stays the
+    /// default until the UI pass. The flag goes in a follow-up PR.
+    static var usesNewFlow: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["SPEND_NEW_SETUP"] == "1"
+        #else
+        false
+        #endif
+    }
+}
