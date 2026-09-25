@@ -92,7 +92,9 @@ final class SyncStatus {
         case .connecting, .searching: !quiet
         case .adding: true
         case .finished(let added): !quiet || added > 0
-        case .failed(let f): !quiet || f.kind == .expired || f.kind == .accessDenied
+        // A cancel is the person's own doing; it stays on the screen they
+        // cancelled from and never nags on Home.
+        case .failed(let f): f.kind != .cancelled && (!quiet || f.kind == .expired || f.kind == .accessDenied)
         }
     }
 
@@ -162,13 +164,14 @@ final class SyncStatus {
 
 /// Why a job stopped, in one short sentence, with what to do next.
 struct SyncFailure: Equatable, Sendable {
-    enum Kind: Equatable, Sendable { case offline, accessDenied, expired, slowDown, google }
+    enum Kind: Equatable, Sendable { case offline, accessDenied, expired, slowDown, google, cancelled }
     let kind: Kind
     let message: String
 
-    /// Access ended or was never given: signing in again is the fix.
-    var needsSignIn: Bool { kind == .expired || kind == .accessDenied }
-    var retryTitle: String { needsSignIn ? "Connect Again" : "Try Again" }
+    /// Access ended, was never given, or the sign-in was closed part way:
+    /// signing in again is the fix.
+    var needsSignIn: Bool { kind == .expired || kind == .accessDenied || kind == .cancelled }
+    var retryTitle: String { needsSignIn && kind != .cancelled ? "Connect Again" : "Try Again" }
 
     static func from(_ error: Error) -> SyncFailure {
         if let u = error as? URLError {
@@ -193,6 +196,8 @@ struct SyncFailure: Equatable, Sendable {
         }
         if let a = error as? GoogleAuth.AuthError {
             switch a {
+            case .cancelled:
+                return SyncFailure(kind: .cancelled, message: "Sign-in was cancelled. Try again.")
             case .missingGmailAccess:
                 return SyncFailure(kind: .accessDenied, message: "Sortd needs the Gmail box ticked to read receipts.")
             case .noRefreshToken:

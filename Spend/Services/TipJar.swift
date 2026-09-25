@@ -98,10 +98,12 @@ final class TipJar {
         String(productID.split(separator: ".").last ?? "unknown")
     }
 
-    /// Buys one tip and finishes it. Cancelling is not an error.
+    /// Buys one tip and finishes it. Cancelling is not an error. The App
+    /// Store sheet makes the scene inactive, so it runs under `SystemPrompt`
+    /// to keep the privacy cover off it.
     func tip(_ product: Product) async -> Outcome {
         do {
-            switch try await product.purchase() {
+            switch try await SystemPrompt.shared.showing({ try await product.purchase() }) {
             case .success(let result):
                 guard case .verified(let t) = result else { return .failed(TipError.unverified) }
                 await t.finish()
