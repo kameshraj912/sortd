@@ -60,7 +60,11 @@ struct AccountSettingsView: View {
         Section {
             SignInWithAppleButton(.signIn) { request in
                 request.requestedScopes = [.email]
+                // Apple's sheet makes the scene inactive: keep the privacy
+                // cover off it (ended in onCompletion, whatever the result).
+                SystemPrompt.shared.begin()
             } onCompletion: { result in
+                SystemPrompt.shared.end()
                 let resolved: Result<Account, Error> = result
                     .mapError(AppleIdentityProvider.error(from:))
                     .flatMap { auth in

@@ -40,6 +40,29 @@ struct GmailConnectTests {
         #expect(GmailSync.retryBySigningIn(offline, accounts: []))
     }
 
+    /// Closing Google's sheet used to send the Connect sheet back to idle
+    /// with no word, as if nothing had been tapped.
+    @Test func aCancelledSignInSaysSoAndOffersAnotherGo() {
+        let failure = SyncFailure.from(GoogleAuth.AuthError.cancelled)
+        #expect(failure.kind == .cancelled)
+        #expect(failure.message == "Sign-in was cancelled. Try again.")
+        #expect(failure.retryTitle == "Try Again")
+        // Try Again means another sign-in, even with an inbox already listed.
+        let listed = GmailSync.registering("a@b.com", in: [])
+        #expect(GmailSync.retryBySigningIn(failure, accounts: listed))
+    }
+
+    @Test func aCancelledSignInDoesNotNagOnHome() {
+        let s = SyncStatus()
+        let job = s.begin(quiet: false)
+        s.update(.failed(SyncFailure.from(GoogleAuth.AuthError.cancelled)), job: job)
+        #expect(s.title == "Sign-in was cancelled. Try again.")
+        #expect(!s.showsOnHome)
+        // Other sign-in failures still do.
+        s.update(.failed(SyncFailure.from(GoogleAuth.AuthError.missingGmailAccess)), job: job)
+        #expect(s.showsOnHome)
+    }
+
     @Test func aStoppedSyncIsNotAFailure() {
         var account = GmailSync.registering("a@b.com", in: [])[0]
         GmailSync.recordFailure(CancellationError(), on: &account)
