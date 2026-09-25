@@ -7,6 +7,7 @@
 #   scripts/sim.sh list     all Sortd-* simulators
 #   scripts/sim.sh screenshot <file.png>   save what is on screen (boots if needed)
 #   scripts/sim.sh appearance dark|light   switch the simulator's appearance
+#   scripts/sim.sh textsize ax5|default    Dynamic Type: largest accessibility size, or back
 #   scripts/sim.sh shutdown                shut this worktree's simulator down
 #   scripts/sim.sh install                 install the app built by build.sh
 #   scripts/sim.sh launch [KEY=VALUE ...]  launch it with env vars (e.g. SPEND_DEMO=1)
@@ -83,5 +84,15 @@ case "$cmd" in
     udid="$("$0" boot)" || exit 1
     xcrun simctl ui "$udid" appearance "$mode" && ok "$(sim_name) is now $mode"
     ;;
-  *) die "usage: sim.sh ensure|boot|delete|list|shutdown|install|launch [K=V..]|terminate|screenshot <file>|appearance dark|light" ;;
+  textsize)
+    size="${2:-}"
+    case "$size" in
+      ax5) size=accessibility-extra-extra-extra-large ;;
+      default) size=medium ;;
+      *) die "usage: sim.sh textsize ax5|default" ;;
+    esac
+    udid="$("$0" boot)" || exit 1
+    xcrun simctl ui "$udid" content_size "$size" && ok "$(sim_name) text size is now $size"
+    ;;
+  *) die "usage: sim.sh ensure|boot|delete|list|shutdown|install|launch [K=V..]|terminate|screenshot <file>|appearance dark|light|textsize ax5|default" ;;
 esac

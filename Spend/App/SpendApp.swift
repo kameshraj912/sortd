@@ -249,16 +249,9 @@ struct RootView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            // Settings in the same top-right spot on every tab (nav options
-            // that don't keep it on Home or in a You tab).
-            .overlay(alignment: .topTrailing) {
-                if nav.gearOnEveryTab, !router.searchActive {
-                    SettingsButton()
-                        .padding(.trailing, 16)
-                        .padding(.top, 2)
-                        .transition(.opacity)
-                }
-            }
+            // Settings sits top-right in each tab's own navigation bar
+            // (`SettingsToolbarButton`), not floated over the tabs: floated,
+            // it landed on Activity's search field and drifted as lists scrolled.
 
             // Keep the Router in step with taps on the tab bar, so a link to
             // the tab you left (a check-in, a widget) still switches back.
