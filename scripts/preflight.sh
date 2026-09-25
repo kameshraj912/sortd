@@ -30,16 +30,25 @@ else
   ok "SORTD_BETA absent."
 fi
 
-# 1b. Sentry crash reports are for TestFlight only. The App Store label says
-#     "Data Not Collected", and Sentry's privacy manifest declares crash data.
+# 1b. Sentry crash reports run in the live app (overhaul sub-spec 2b): scrubbed,
+#     under the analytics consent switch, user = the salted hash. The label must
+#     say Crash Data, Performance Data and Other Diagnostic Data, "linked to you"
+#     (App Functionality), matching PrivacyInfo.xcprivacy. The DSN comes from
+#     Secrets.xcconfig like the PostHog key: empty is a note for TestFlight and
+#     a FAIL for the App Store, where the label promises crash reports.
 if grep -q 'sentry-cocoa' "$PBX"; then
-  if [ "$MODE" = "--appstore" ]; then
-    bad "Sentry is still linked. Remove the sentry-cocoa package and CrashReporting.swift,"
-    say "      or change the App Privacy label to Crash Data (not linked) first — see CrashReporting.swift."
-  elif grep -q 'static let dsn = ""' Spend/Services/CrashReporting.swift 2>/dev/null; then
-    warn "Sentry DSN is empty — beta crash reports are off. Paste it in CrashReporting.swift."
+  warn "Crash reports on (Sentry). App Privacy label: Crash Data, Performance Data, Other Diagnostic Data — linked to you."
+  dsn=""
+  [ -f Secrets.xcconfig ] && dsn=$(grep -m1 '^SENTRY_DSN' Secrets.xcconfig | cut -d= -f2- | tr -d ' \t')
+  [ -z "$dsn" ] && dsn=$(grep -m1 '^SENTRY_DSN' Config.xcconfig 2>/dev/null | cut -d= -f2- | tr -d ' \t')
+  if [ -z "$dsn" ] || printf '%s' "$dsn" | grep -q 'replace_me'; then
+    if [ "$MODE" = "--appstore" ]; then
+      bad "SENTRY_DSN is empty. Copy Secrets.xcconfig.example to Secrets.xcconfig and paste the DSN."
+    else
+      warn "SENTRY_DSN is empty: this build sends no crash reports (see Secrets.xcconfig.example)."
+    fi
   else
-    ok "Sentry crash reports on for TestFlight."
+    ok "Sentry DSN set."
   fi
 fi
 
