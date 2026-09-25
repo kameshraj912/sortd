@@ -122,6 +122,6 @@ extension GmailSync {
     /// Try Again: sign in again when access ended, otherwise sync again.
     @MainActor
     static func retry(_ failure: SyncFailure, in context: ModelContext) {
-        if failure.needsSignIn || accounts.isEmpty { startConnect(in: context) } else { startSync(in: context) }
+        if retryBySigningIn(failure, accounts: accounts) { startConnect(in: context) } else { startSync(in: context) }
     }
 }
