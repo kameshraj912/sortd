@@ -18,12 +18,19 @@ enum ApplePayStatus: Equatable {
 
     /// Every taps' worth of `transactions` that counts as a real shop tap:
     /// `seenIn` has `.tap` (a tap merged with an email still counts), and it
-    /// is not sample data or the removed "Send a Test Tap" button's rows
-    /// (old installs may still have some; they stay excluded, not deleted).
+    /// is not the removed "Send a Test Tap" button's rows (old installs may
+    /// still have some; they stay excluded, not deleted).
+    ///
+    /// No `note != DemoData.marker` check: `DemoData.load` only ever inserts
+    /// with `source: .manual`, so a sample row never has `.tap` in `seenIn`
+    /// on its own. If one does, a real Wallet tap deduped onto it — the note
+    /// stays "Sample purchase" (`TransactionLogger.merge` doesn't touch it),
+    /// but the tap is genuine and must count (found in a router feel check:
+    /// a real refund tap merged onto a same-day, same-amount demo row read
+    /// as "not connected" because of this check).
     static func realTaps(in transactions: [Transaction]) -> [Transaction] {
         transactions.filter { t in
             t.seenIn.contains(.tap)
-                && t.note != DemoData.marker
                 && t.merchant != LogPurchaseIntent.legacyTestMerchant
                 && t.rawMerchant != LogPurchaseIntent.legacyTestMerchant
         }
