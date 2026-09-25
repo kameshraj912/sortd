@@ -19,6 +19,14 @@ Ask Raj for anything missing, **one question at a time**:
 
 Do not ask about things the code can answer. Look them up.
 
+## Overhauls
+
+If the idea touches several screens, a model, or how data flows, say so before anything
+else: it is an overhaul. Brief the architect to write an **overview** spec that cuts it into
+sub-specs in ship order (data and migration first, screens behind a flag second), per
+`docs/AgentPipeline.md` "Big changes and overhauls". Each sub-spec then goes through
+`sortd-design` and `sortd-build` on its own. Raj approves the overview before any sub-spec.
+
 ## Steps
 
 1. Scripts first. In the main folder run `git status` (read only) and

@@ -89,6 +89,28 @@ Cross-cutting skill: `sortd-status` prints where everything is: `worktree-audit.
 open PRs, CI state, the known-bug count from `test.sh --known-bugs`, and the open
 decisions list from `HANDOVER.md`.
 
+## Big changes and overhauls
+
+A change that touches several screens, a model, or how data flows is an **overhaul**.
+Overhauls do not go through `sortd-build` as one task. They go through `sortd-idea`
+first, and the architect's job there is to **cut it into sub-specs** that each fit one
+build task, in an order where every step leaves the app working:
+
+1. **One spec per sub-project**, `docs/specs/<date>-<overhaul>-<n>-<part>.md`, each with
+   its own behaviour list and gate. The first doc is the overview: what changes, what does
+   not, the order, and what a user sees after each step.
+2. **Data first, screens second.** A SwiftData model change needs a migration plan
+   (`VersionedSchema`, `SchemaMigrationPlan`) and a test that opens a store made by the
+   previous version. That sub-spec goes first and ships alone.
+3. **Feature flags for anything that replaces a screen.** The old screen stays until the
+   new one passes the UI pass; the flag is a `#if DEBUG` env switch until then.
+4. **Baseline before, UI pass after.** `ui-driver` screenshots the affected screens on
+   `main` before the first sub-project starts, so "did it get worse" has an answer.
+5. **Known-bug count may not rise.** `scripts/test.sh --known-bugs` before and after.
+6. **Old branches are sources, not merges.** Port by hand from a named commit.
+
+The router refuses to start a build task for an overhaul without an approved overview spec.
+
 ## Testing in depth
 
 - **Unit**: `scripts/test.sh` on an iOS 27 simulator. StoreKit tests are
