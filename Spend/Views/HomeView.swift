@@ -23,6 +23,9 @@ struct HomeView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var totalSize: CGFloat = 52
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
+    /// True while a pull-to-refresh runs: the numbers on screen stay, dimmed
+    /// as stale, and the new ones animate in when the sync lands.
+    @State private var refreshing = false
     @State private var confirmingClearDemo = false
     /// Which way the last month change went, so the totals slide that way.
     @State private var monthDirection: Motion.Direction = .forward
@@ -71,7 +74,11 @@ struct HomeView: View {
                         .padding(.bottom, 32)
                         .animation(.snappy, value: focused)
                     }
-                    .refreshable { refreshNote = await RefreshNote.run(in: context) }
+                    .refreshable {
+                        withAnimation(.snappy) { refreshing = true }
+                        refreshNote = await RefreshNote.run(in: context)
+                        withAnimation(.snappy) { refreshing = false }
+                    }
                 }
             }
             .background(Color.page)
@@ -280,6 +287,16 @@ struct HomeView: View {
                 .lineLimit(1)
                 .padding(.top, 6)
                 .accessibilityLabel("Spent \(Money.spoken(monthItems.audTotal, Money.home))")
+                .accessibilityValue(refreshing ? "Updating" : "")
+                .opacity(refreshing ? 0.5 : 1)
+                .animation(.snappy, value: monthItems.audTotal)
+            if let converting = convertingLine {
+                Label(converting, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(convertingSpoken)
+                    .transition(.opacity)
+            }
             Button { showingBudget = true } label: {
                 HStack(spacing: 4) {
                     Text(budgetLine(spent: spent))
@@ -290,6 +307,13 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Edit your monthly budget")
+            if let day = projectedOverDay {
+                Label(Pace.line(day: day), systemImage: "gauge.with.needle")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.down)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(Pace.line(day: day))
+            }
             if let line = overLimitLine {
                 Button { tab = .insights } label: {
                     HStack(spacing: 4) {
@@ -310,6 +334,24 @@ struct HomeView: View {
     private var monthTitle: String {
         let name: Date.FormatStyle.Symbol.Month = typeSize.isAccessibilitySize ? .abbreviated : .wide
         return isCurrentMonth ? month.formatted(.dateTime.month(name)) : month.formatted(.dateTime.month(name).year())
+    }
+
+    /// "+1 converting": purchases in another currency still waiting for a
+    /// rate, which the total leaves out until it lands.
+    private var convertingLine: String? {
+        let n = monthItems.pendingConversions
+        return n == 0 ? nil : "+\(n) converting"
+    }
+
+    private var convertingSpoken: String {
+        let n = monthItems.pendingConversions
+        return "\(n) \(n == 1 ? "purchase" : "purchases") still converting, not in the total yet"
+    }
+
+    /// The day this month's pace passes the budget, this month only.
+    private var projectedOverDay: Int? {
+        guard isCurrentMonth, budget > 0 else { return nil }
+        return Pace.projectedOverDay(spent: monthItems.audTotal.double, budget: budget, now: .now, calendar: cal)
     }
 
     /// One line about categories over their limit, this month only.
@@ -804,10 +846,15 @@ struct SpendChart: View {
     }
 
     /// Cumulative spend per day from `start`, for `days` days, plotted on
-    /// the current period's dates so the two lines line up.
-    private func series(from start: Date, days: Int) -> [Point] {
+    /// the current period's dates so the two lines line up. Purchases on or
+    /// after `until` are left out: last month's line runs for this month's
+    /// day count, so after a shorter month it would otherwise pick up the
+    /// first days of this one (April 1,000 then 200 on 1 May read as "17%
+    /// less" on 31 May). Past `until` the line stays flat.
+    private func series(from start: Date, days: Int, until: Date? = nil) -> [Point] {
         var byDay: [Int: Double] = [:]
         for t in transactions {
+            if let until, t.date >= until { continue }
             let offset = cal.dateComponents([.day], from: start, to: cal.startOfDay(for: t.date)).day ?? -1
             if offset >= 0 && offset < days, t.category != .transfers { byDay[offset, default: 0] += t.audValue.double }
         }
@@ -828,7 +875,7 @@ struct SpendChart: View {
     }
 
     private var current: [Point] { series(from: interval.start, days: daysSoFar) }
-    private var previous: [Point] { series(from: previousStart, days: totalDays) }
+    private var previous: [Point] { series(from: previousStart, days: totalDays, until: interval.start) }
 
     private var showBudget: Bool { range == .month && budget > 0 }
 
@@ -875,6 +922,14 @@ struct SpendChart: View {
                           systemImage: diff >= 0 ? "arrow.up.right" : "arrow.down.right")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(diff >= 0 ? Color.down : Color.up)
+                    // The outcome as a share, for the month: "12% less than
+                    // last month by now" says more than the amount alone.
+                    if range == .month, let outcome = Outcome.line(
+                        thisMonth: now, lastMonthToSameDay: Outcome.lastMonthToSameDay(transactions, calendar: cal)) {
+                        Text(outcome)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 

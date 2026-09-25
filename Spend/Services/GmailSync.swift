@@ -75,8 +75,9 @@ enum GmailSync {
             total.end("sign-in failed")
             throw error
         }
-        var list = accounts.filter { $0.email != email }
-        list.append(GmailAccount(email: email))
+        // Listed now, before the first sync: a sync that fails leaves the
+        // account in place with Retry, and never asks Google again.
+        let list = registering(email, in: accounts)
         accounts = list
         // That it happened, never which address (Google Limited Use).
         Analytics.shared.track(.gmailConnected, ["accounts": .int(list.count)])
@@ -84,6 +85,24 @@ enum GmailSync {
         let s = try await syncAccounts([email], in: context, force: true, rethrow: true, job: job)
         total.end("added \(s.added)")
         return s
+    }
+
+    /// The list with `email` added once (a fresh entry, never synced).
+    nonisolated static func registering(_ email: String, in list: [GmailAccount]) -> [GmailAccount] {
+        list.filter { $0.email != email } + [GmailAccount(email: email)]
+    }
+
+    /// A sync of `account` threw: keep the account, note why. A stop
+    /// (Disconnect, Delete All) leaves no note. `lastSync` stays as it
+    /// was, so a first sync that fails still reads "not synced yet".
+    nonisolated static func recordFailure(_ error: Error, on account: inout GmailAccount) {
+        account.lastResult = error is CancellationError ? nil : error.localizedDescription
+    }
+
+    /// Whether Try Again means another Google sign-in (access ended or was
+    /// never given, or no account is listed) rather than a plain sync.
+    @MainActor static func retryBySigningIn(_ failure: SyncFailure, accounts: [GmailAccount]) -> Bool {
+        failure.needsSignIn || accounts.isEmpty
     }
 
     /// A connect is running (from Google's sheet to the end of its first sync).
@@ -240,10 +259,9 @@ enum GmailSync {
                 }
                 list[i].lastResult = s.incomplete ? s.text + " · more next sync" : s.text
             } catch {
+                recordFailure(error, on: &list[i])
                 // Stopped by Disconnect or Delete All: not a failure to report.
-                let stopped = error is CancellationError
-                list[i].lastResult = stopped ? nil : error.localizedDescription
-                if !stopped { failure = error; total.failed += 1 }
+                if !(error is CancellationError) { failure = error; total.failed += 1 }
                 log.error("Gmail sync failed for \(list[i].email): \(error.localizedDescription)")
             }
         }
