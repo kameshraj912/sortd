@@ -6,12 +6,12 @@ OAuth docs. "Done" means built and tested in the simulator.
 ## Before any App Store build — do not skip
 
 - [ ] **Remove `SORTD_BETA`** from `SWIFT_ACTIVE_COMPILATION_CONDITIONS` in the app target's
-      Release config (`Spend.xcodeproj/project.pbxproj`). It gives Pro away free to anything
-      running against the App Store sandbox, which includes TestFlight **and App Review**.
-      Leave it in and reviewers never see the paywall work, and the IAPs go untested.
-      Run `scripts/preflight.sh --appstore` — it fails while the flag is still there.
-- [ ] Create the three products in App Store Connect and get them to "Ready to Submit".
-      Until then `ProStore.load()` returns nothing and the paywall is empty.
+      Release config (`Spend.xcodeproj/project.pbxproj`). Run `scripts/preflight.sh --appstore`
+      — it fails while the flag is still there.
+- [ ] Create the three tip consumables in App Store Connect and get them to "Ready to Submit":
+      `com.kameshraj.spend.tip.small`, `com.kameshraj.spend.tip.medium`,
+      `com.kameshraj.spend.tip.large`. Raj sets the prices. Each needs one review screenshot
+      of the tip sheet; attach all three to the version. Review note: tips unlock nothing.
 
 ## Money settings in App Store Connect (added 21 Sep 2026)
 
@@ -20,17 +20,6 @@ All three are settings, not code. Do them once the paid developer account clears
 - [ ] **App Store Small Business Program.** Apple takes 15% instead of 30% while proceeds stay
       under US$1M a year. Apply at developer.apple.com/app-store/small-business-program. It's a
       form; the lower rate starts after approval, not back-dated, so apply before launch.
-- [ ] **Billing Grace Period → 28 days, "All Renewals".** App Store Connect › the app ›
-      Subscriptions › Billing Grace Period. When a card fails, Apple keeps retrying and the person
-      keeps Pro. `ProStore.refresh()` keeps Pro during grace (fixed 21 Sep 2026; before that it
-      dropped anyone whose expiry date had passed, per Apple's currentEntitlements docs).
-      `ProStoreTests.gracePeriodKeepsPro` checks grace keeps Pro, but StoreKit Testing can't
-      reproduce the past-expiry case. Confirm once on TestFlight with a failing sandbox card.
-- [ ] **Retention Messaging** (WWDC26). App Store Connect › Subscriptions › Retention Messaging.
-      Apple shows your message, and optionally an offer, when someone taps Cancel in their
-      subscription settings. No server needed. Views: message only, message + image, message +
-      offer. Plan: one "message + offer" on monthly and yearly. Create a retention offer first
-      (e.g. yearly at 50% off for the first year). Keep the message in the brand voice, and honest.
 
 ## Beta crash reports — Sentry (added 21 Sep 2026)
 
@@ -60,15 +49,12 @@ Apple's site.
 
 - [x] **High · 2.3.1.** No longer applies: v1 ships with Gmail (22 Sep), so the listing and
       site can keep it. Only submit after Google verification, or Gmail won't work for reviewers.
-- [x] **High · 2.1.** (Done 21 Sep: review notes rewritten with a Pro section.) Review notes say sample data fills Insights and Subscriptions & bills, but
-      both are Pro. Once `SORTD_BETA` is gone the reviewer hits a lock. Add a Pro section: the
-      three products, what each unlocks, and that a sandbox purchase or restore unlocks them.
-- [ ] **High · 2.3.2.** Attach all three IAPs to version 1.0 and submit them with the build.
-      "Ready to Submit" alone isn't enough for a first subscription.
-- [ ] **Medium · 2.3.2.** Mark paid features as Pro in the listing: the promo line "See every
-      subscription before it charges you" and the Insights and Recurring screenshot captions.
-- [x] **Medium · 5.1.1(i).** (Done 21 Sep: Privacy Policy and Terms links on Settings › Privacy.) Pro users can't reach the privacy policy: its only link is in the
-      paywall footer, which Pro users never see. Add a "Privacy Policy" link on Settings › Privacy.
+- [x] **High · 2.1.** Superseded 25 Sep: no Pro, no paywall, nothing to unlock. Review notes now
+      say every feature is free (`docs/AppReviewNotes.md`).
+- [ ] **High · 2.3.2.** Attach all three tip consumables to the version and submit them with the
+      build. "Ready to Submit" alone isn't enough for a first in-app purchase.
+- [x] **Medium · 5.1.1(i).** (Done 21 Sep: Privacy Policy and Terms links on Settings › Privacy.)
+      No longer behind any paywall — nothing is locked, so the privacy policy is always reachable.
 - [ ] **Medium, unverified.** "Works on iPhone and Apple Watch": test a real Watch tap through the
       Wallet automation, or drop "Apple Watch" from the listing and site.
 - [ ] Answer the social media question in App Store Connect ("No"). The repo says it's required
