@@ -51,9 +51,9 @@ import Foundation
 //
 //       func screen(_ name: String)
 //
-//       /// identify(distinctId(salt:, provider:, subject:)); the salt is generated
-//       /// once and persisted at `defaults["analyticsSalt"]` (64 lowercase hex
-//       /// characters from random bytes) so the id is stable across launches.
+//       /// identify(distinctId(salt: accountSalt, provider:, subject:)); the salt
+//       /// is one fixed app-wide constant (`Analytics.accountSalt`), so the id is
+//       /// the same on every phone and after a reinstall (sub-spec 4).
 //       /// Never sends the email or the raw subject.
 //       func signedIn(provider: String, subject: String)
 //
@@ -234,12 +234,14 @@ struct AnalyticsTests {
         #expect(sink.identified[0] != sink.identified[1])
     }
 
-    @Test func signedInIdMatchesTheDistinctIdFunctionForItsStoredSalt() {
-        let (analytics, sink, defaults) = makeAnalytics(suite: #function)
+    /// The salt is fixed and app-wide, so the id is the same on every phone
+    /// and is exactly what `AccountStore` uses (sub-spec 4).
+    @Test func signedInIdIsTheAccountStoreHashWithTheFixedAccountSalt() {
+        let (analytics, sink, _) = makeAnalytics(suite: #function)
         analytics.signedIn(provider: "apple", subject: "001.abc")
-        let salt = try! #require(defaults.string(forKey: "analyticsSalt"))
-        let expected = Analytics.distinctId(salt: salt, provider: "apple", subject: "001.abc")
+        let expected = AccountStore.hash(salt: Analytics.accountSalt, provider: .apple, subject: "001.abc")
         #expect(sink.identified.first == expected)
+        #expect(Analytics.accountSalt.count >= 32)
     }
 
     @Test func signedOutCallsReset() {
