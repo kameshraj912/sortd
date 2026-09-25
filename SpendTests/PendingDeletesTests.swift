@@ -100,8 +100,10 @@ struct PendingDeletesTests {
         let b = try purchase("Coles")
         let pending = PendingDeletes(window: .milliseconds(200))
         var fired = 0
+        // Back to back on purpose: on a slow CI runner a 30 ms pause once
+        // stretched past the whole 200 ms window, so the first window expired
+        // before the second row was staged and the expiry fired twice.
         pending.stage(a) { fired += 1 }
-        try await Task.sleep(for: .milliseconds(30))
         pending.stage(b) { fired += 1 }
 
         try await waitUntil { fired >= 1 }
