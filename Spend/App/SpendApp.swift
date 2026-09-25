@@ -96,6 +96,14 @@ struct SpendApp: App {
         // finished setup before this existed never sees the card.
         Activation.settleExistingInstall(setupDone: UserDefaults.standard.bool(forKey: OnboardingView.doneKey))
         Activation.watchSaves()
+        // One-time fix: on some installs the removed "Send a Test Tap"
+        // button (spec 2026-09-25) was the only thing that ever set
+        // "reached" — clear it so the Apple Pay page stops claiming it's
+        // connected. Only worth the fetch when there is something to settle.
+        if LogPurchaseIntent.shortcutHasReachedApp {
+            let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
+            ApplePayStatus.settleTestTap(hasRealTap: ApplePayStatus.hasRealTap(in: taps))
+        }
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if env["SPEND_DEMO"] == "1" {

@@ -102,10 +102,11 @@ struct SettingsView: View {
     #endif
 
     private var sourcesSubtitle: String {
-        guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
-            return "No taps yet"
+        switch ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions) {
+        case .tapLogged(let date, _, _, _): "Last tap \(date.formatted(.relative(presentation: .named)))"
+        case .shortcutReached: "Connected · waiting for a shop tap"
+        case .notConnected: "Not set up yet"
         }
-        return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
     }
 
     private var cardsSubtitle: String {
