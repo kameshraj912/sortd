@@ -102,7 +102,14 @@ final class Transaction {
 extension Collection where Element == Transaction {
     /// Purchases still waiting on an exchange rate, for Home's "+1
     /// converting" note: they are left out of `audTotal` until the rate lands.
-    var pendingConversions: Int { count { $0.needsRate && !$0.refunded } }
+    /// A currency with no daily rate (`Money.supported`) never converts, so
+    /// it only counts for a week; then "converting" would be a lie.
+    var pendingConversions: Int { pendingConversions(now: .now) }
+
+    func pendingConversions(now: Date) -> Int {
+        let cutoff = now.addingTimeInterval(-7 * 86400)
+        return count { $0.needsRate && !$0.refunded && (Money.supported.contains($0.currencyCode) || $0.date > cutoff) }
+    }
 }
 
 /// A merchant → category mapping Raj taught the app by recategorising.
