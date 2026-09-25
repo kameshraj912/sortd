@@ -64,6 +64,12 @@ struct SetupDefaultsTests {
 
     // MARK: Continue always works
 
+    /// The tap-through flow is the default (since 25 Sep 2026). The test
+    /// scheme sets no `SPEND_OLD_SETUP`, so this pins the shipped answer.
+    @Test func theTapThroughFlowIsTheDefault() {
+        #expect(SetupFlow.usesNewFlow)
+    }
+
     @Test func continueIsAlwaysEnabledFromAnEmptyAnswerSet() {
         let empty = SetupFlow()
         for step in Step.allCases {

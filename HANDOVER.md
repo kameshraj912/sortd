@@ -29,9 +29,9 @@ Nine sub-specs planned in `docs/specs/2026-09-25-free-app-overhaul-overview.md` 
 
 **4 — Sign-in (Apple or Google)** (PR #39; spec drafted in PR #35; Worker implemented in PR #38). `Services/AccountStore.swift`, `GoogleAuth.swift`, `Settings/AccountSettingsView.swift`, `Spend.entitlements`. Behind the **`SORTD_SIGNIN`** compile flag — also confirmed off in both configs. Keyed by `ACCOUNT_WORKER_URL` (see §3). `AccountStore` and its providers always compile; only the account screen and its Settings row are gated. **Not verified:** real device, App Attest against a real key, real Apple/Google accounts, the Worker's production secrets.
 
-**5 — Motion** (PR #34). `Components/Feedback.swift`, one haptic map across 14 files, direction-aware transitions. The day-by-day Activity pager is behind the DEBUG-only **`SPEND_ACTIVITY_DAYS`** env var (`ActivityView.swift`); the list view stays the default until the pager gets its own UI pass.
+**5 — Motion** (PR #34). `Components/Feedback.swift`, one haptic map across 14 files, direction-aware transitions. The day-by-day Activity pager is the default since 25 Sep 2026 (`TransactionsScreen.dayPages`, `ActivityView.swift`); the old list view stays in for the DEBUG-only **`SPEND_ACTIVITY_LIST=1`** escape. The day header says "Yesterday · 2 of 14" and one swipe moves one day (`DayPager.settle`).
 
-**6 — Onboarding** (PR #37). `SetupFlow.swift`, tap-through setup with sensible defaults, the activation moment. Behind the DEBUG-only **`SPEND_NEW_SETUP`** env var (`SetupFlow.usesNewFlow`); the old flow is still the shipped default. Flag removal is a follow-up PR (§5).
+**6 — Onboarding** (PR #37). `SetupFlow.swift`, tap-through setup with sensible defaults, the activation moment. The default since 25 Sep 2026 (`SetupFlow.usesNewFlow` is true; the ActivationCard, `Activation.watchSaves` and the setup copy follow it). The old flow stays in for the DEBUG-only **`SPEND_OLD_SETUP=1`** escape. `Activation.settleExistingInstall` still marks an install that finished the old setup as already asked.
 
 **7 — Tips (TipKit)** (PR #41). `Components/Tips.swift`, six tips, one on screen at a time, pure eligibility rules. **`SPEND_TIPS_NOW`** is a DEBUG convenience only (skips the first-session wait and visit counts so a tip shows immediately for testing) — the tips themselves ship unconditionally, there is no feature flag gating them. Review found one must-fix (an off-screen Apple Pay tip blocking the month tip) and five should-fixes, both applied per the PR body.
 
@@ -80,7 +80,7 @@ The disputed-tests item from the last handover is closed: of the 30 abuse findin
 - **Live Activities** (Gmail sync progress, monthly budget) and **Share Extension** (share a receipt into Sortd) — each needs a new app target, so each gets its own spec first. Not started.
 - **UI pass after the overhaul** (`docs/UIPass-2026-09-25.md`, done 25 Sep): no P0, 3 P1 (bank names cut to letters at AX5 in setup; the "Moved N others · Undo" toast missing in 2 of 3 tries; setup choices hyphenated at AX5), 6 P2, 3 P3. Nothing that exists in both screenshot sets got worse. Fix the P1s first, through `sortd-build`.
 - **CloudKit live sync (option B)**, if Raj wants it — its own migration-first sub-spec, see §7.
-- **Flag removals** for `SORTD_ICLOUD`, `SORTD_SIGNIN`, `SPEND_NEW_SETUP` and `SPEND_ACTIVITY_DAYS` once each has had its own UI pass and Raj has approved making it the default.
+- **Flag removals.** Done 25 Sep 2026: the tap-through setup and the Activity day pager are the defaults (the DEBUG escapes `SPEND_OLD_SETUP=1` and `SPEND_ACTIVITY_LIST=1` keep the old paths for comparison), and `AppIcon-Glass.icon` is the active icon pending Raj's look on the phone. Still waiting: `SORTD_ICLOUD` and `SORTD_SIGNIN` need the paid enrolment (the free team cannot sign their entitlements); leave them off and do not touch the entitlements until then.
 
 ## 6. Traps — read before spending a day on these
 
