@@ -50,4 +50,17 @@ struct PendingConversionTests {
         #expect(!t.needsRate)
         #expect([t].pendingConversions == 0)
     }
+
+    @Test func aCurrencyWithNoDailyRateStopsCountingAfterAWeek() throws {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let old = try log(25, currency: "XXX", at: now.addingTimeInterval(-8 * 86400))
+        let fresh = try log(25, currency: "XXX", at: now.addingTimeInterval(-86400))
+        #expect(old.needsRate && fresh.needsRate)
+
+        #expect([old].pendingConversions(now: now) == 0)
+        #expect([fresh].pendingConversions(now: now) == 1)
+        // A supported currency keeps counting until its rate lands.
+        let supported = try log(25, currency: foreign, at: now.addingTimeInterval(-30 * 86400))
+        #expect([supported].pendingConversions(now: now) == 1)
+    }
 }
