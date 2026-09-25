@@ -45,11 +45,23 @@ enum Reminders {
     /// True while Apple's notification alert is up (see `SystemPrompt`).
     static var isAskingPermission: Bool { SystemPrompt.shared.active }
 
-    /// Asks once; returns whether reminders are allowed.
+    /// Asks once; returns whether reminders are allowed. Apple's alert lives
+    /// here and nowhere else: the aha card on Home calls it (through
+    /// `turnOnCheckIn`, the one ask after setup) and so do the switches in
+    /// Settings › Bills & reminders. The tap-through setup never does.
     static func requestPermission() async -> Bool {
         await SystemPrompt.shared.showing {
             (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         }
+    }
+
+    /// The aha card's "Yes": asks iOS, then schedules the check-in that was
+    /// saved during setup. Not allowed: any old check-in is cleared and
+    /// nothing is scheduled. Returns whether it was allowed.
+    static func turnOnCheckIn(_ choice: SetupProfile.CheckIn) async -> Bool {
+        let allowed = await requestPermission()
+        await CheckInReminder.schedule(allowed ? choice : .needed)
+        return allowed
     }
 
     /// The rebuild running now. App open and the Settings toggle can both

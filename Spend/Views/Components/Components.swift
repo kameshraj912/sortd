@@ -11,8 +11,11 @@ enum Money {
     }
 
     /// The phone's own currency, if we have daily rates for it.
-    nonisolated static var detectedHome: String {
-        let code = Locale.current.currency?.identifier ?? "USD"
+    nonisolated static var detectedHome: String { detectedHome(for: .current) }
+
+    /// The same for any locale (setup's defaults, and tests).
+    nonisolated static func detectedHome(for locale: Locale) -> String {
+        let code = locale.currency?.identifier ?? "USD"
         return supported.contains(code) ? code : "USD"
     }
 
