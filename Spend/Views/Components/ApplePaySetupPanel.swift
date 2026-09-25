@@ -5,34 +5,26 @@ import SwiftUI
 /// setup step (`OnboardingView.applePay`) and by Settings › Purchase
 /// Sources › Apple Pay Logging (`SetupGuideView`), so the two always agree
 /// (spec 2026-09-25, option A: every state comes from a real event).
+///
+/// One path only: the ready-made shortcut and its one picture guide. There
+/// is no by-hand walkthrough on this page any more (router feel check, 26
+/// Sep 2026, "short and clean") — it moved to the website, see
+/// `docs/site-copy-moved.md`.
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
-    /// Tapping "Rather do it by hand?" — nil hides the row. Settings omits
-    /// it: the by-hand guide is already further down that same page.
-    var onByHand: (() -> Void)? = nil
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
+    /// A long-press on the status card reveals what Apple Pay last sent, in
+    /// plain text — support staff point people to it. Kept out of the way
+    /// so the page itself stays short (router feel check, 26 Sep 2026).
+    @State private var showingRawTap = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             statusCard
             steps
             timeoutNote
-            if let onByHand {
-                Button(action: onByHand) {
-                    HStack(spacing: 12) {
-                        RowIcon("list.number")
-                        Text("Rather do it by hand?").font(.body).foregroundStyle(Color.ink)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 56)
-                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
@@ -60,8 +52,18 @@ struct ApplePaySetupPanel: View {
         .background(status.isConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: status)
         .feedback(.confirm, trigger: status)
+        .contentShape(.rect)
+        .onLongPressGesture {
+            guard UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) != nil else { return }
+            showingRawTap = true
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status.accessibilityLabel)
+        .alert("Last Tap Received", isPresented: $showingRawTap) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) ?? "")
+        }
     }
 
     // MARK: - The two steps
@@ -84,7 +86,7 @@ struct ApplePaySetupPanel: View {
 
             Divider()
 
-            miniStep(2, "Turn it on for your cards", "Swipe through the pictures — they show every screen in Shortcuts.")
+            miniStep(2, "Turn it on for your cards", "Swipe through the pictures. They show every screen in Shortcuts.")
             if #available(iOS 27.0, *) {
                 WalletSetupGuide(route: .quick)
             } else {

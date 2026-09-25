@@ -71,9 +71,6 @@ struct OnboardingView: View {
 
     @State private var showingImport = false
     @State private var forward = true
-    @State private var showingGuide = false
-    /// They've been sent to the ready-made shortcut at least once.
-    @State private var shortcutOpened = false
     @State private var customBudget = ""
     @State private var bankCountry: String = Locale.current.region?.identifier ?? "AU"
     @State private var editing: CardInfo?
@@ -142,9 +139,6 @@ struct OnboardingView: View {
         .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
-        .sheet(isPresented: $showingGuide) {
-            NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
-        }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
             Button("OK", role: .cancel) {}
@@ -1081,7 +1075,7 @@ struct OnboardingView: View {
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay by itself", SetupCopy.line(.applePay))
-            ApplePaySetupPanel(status: applePayStatus) { showingGuide = true }
+            ApplePaySetupPanel(status: applePayStatus)
                 .padding(.top, 10)
         }
     }
