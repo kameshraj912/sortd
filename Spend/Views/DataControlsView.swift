@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 
-/// Your data: what's stored, where, and the controls to take it out or
-/// wipe it. Required reading for the App Store privacy review, and simply
-/// fair to users.
+/// A few plain facts about privacy, then a link to the full policy on the
+/// website. The detail used to live here as bullet lists; it's now at
+/// sortd.page/privacy.
 struct PrivacyView: View {
     /// Observable: the switch redraws when the flag changes.
     private let analytics = Analytics.shared
@@ -13,19 +13,7 @@ struct PrivacyView: View {
         List {
             ListPageTitle(title: "Privacy")
             Section {
-                row("iphone", "Stored on this iPhone", "Purchases, cards and settings are stored only on this iPhone. There's no Sortd server or account.")
-                if Features.gmail {
-                    row("envelope", "Gmail, read on this iPhone", "Sortd only looks for receipts and bank alerts. Nothing is copied to a server or shared. Disconnect any time.")
-                    row("key", "Google sign-in kept safe", "Your Gmail sign-in is kept in the iPhone Keychain, Apple's secure storage.")
-                }
-                row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
-                row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
-                row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only currency codes and dates are sent.")
-                // Sits right above the "Share usage data" switch, so the
-                // heading must not promise "no tracking" (UI pass, 25 Sep).
-                row("chart.bar.xaxis", "No ads. Usage counts only, and you can turn them off.", "No advertising, no tracking across other apps or sites, and nothing is sold or shared.")
-            }
-            Section {
+                row("iphone", "Your purchases stay on this phone")
                 Toggle(isOn: Binding(
                     get: { analytics.isEnabled },
                     set: { on in
@@ -33,25 +21,18 @@ struct PrivacyView: View {
                         if !on { log.notice("analytics: switch off, \(Analytics.Event.analyticsOptedOut.rawValue) then nothing") }
                         analytics.isEnabled = on
                     })) {
-                    Label("Share usage data", systemImage: "chart.bar.xaxis")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Share usage data")
+                        Text("Usage counts, never amounts. Turn off anytime.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
                 .accessibilityHint("Counts what you use, never what you spend.")
-            } footer: {
-                Text("Counts what you use, never what you spend. You can turn it off any time.")
-            }
-            Section {
-                Text("Sortd isn't a bank, can't move money and doesn't give financial advice. Amounts come from Apple Pay, receipts and what you type, so check your bank statement for exact figures.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } header: {
-                BoldHeader("Good to Know")
+                row("ladybug", "Crash reports have no purchase data")
             }
             Section {
                 Link(destination: URL(string: "https://sortd.page/privacy")!) {
                     Label("Privacy Policy", systemImage: "hand.raised")
-                }
-                Link(destination: URL(string: "https://sortd.page/terms")!) {
-                    Label("Terms of Use", systemImage: "doc.text")
                 }
             }
             .tint(Color.ink)
@@ -61,17 +42,8 @@ struct PrivacyView: View {
         .brandedTitle("Privacy")
     }
 
-    private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol).frame(width: 24).foregroundStyle(Color.ink).padding(.top, 2)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.body.weight(.semibold))
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+    private func row(_ symbol: String, _ title: String) -> some View {
+        Label(title, systemImage: symbol)
     }
 }
 
