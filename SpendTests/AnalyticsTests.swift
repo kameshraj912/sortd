@@ -254,6 +254,78 @@ struct AnalyticsTests {
         #expect(sink.screens == ["Home"])
     }
 
+    // MARK: consent survives Delete All
+
+    @Test func disabledSurvivesADefaultsWipeWhenTheCallerRestoresIt() {
+        let suite = #function
+        let (analytics, sink, defaults) = makeAnalytics(suite: suite)
+        analytics.isEnabled = false
+        #expect(defaults.object(forKey: "analyticsConsentChangedAt") is Date)
+        // Delete All: the app's defaults go, then signedOut() resets the sink.
+        analytics.preserveConsent {
+            defaults.removePersistentDomain(forName: suite)
+            analytics.signedOut()
+        }
+        #expect(analytics.isEnabled == false)
+        #expect(defaults.object(forKey: "analyticsEnabled") as? Bool == false)
+        #expect(defaults.object(forKey: "analyticsConsentChangedAt") is Date)
+        #expect(sink.resets == 1)
+        analytics.track(.tabOpened, ["tab": .string("home")])
+        #expect(sink.captured.count == 1, "still off: only the original opt-out was ever sent")
+        let relaunch = Analytics(sink: SpySink(), defaults: defaults)
+        #expect(relaunch.isEnabled == false)
+    }
+
+    // MARK: trackOnce (activation)
+
+    /// `isDemo` is injected: a simulator that once ran with SPEND_DEMO=1 has
+    /// `demoActive` set in the shared app container, and the test host reads it.
+    private func makeNonDemoAnalytics(suite: String) -> (Analytics, SpySink) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let sink = SpySink()
+        return (Analytics(sink: sink, defaults: defaults, isDemo: { false }), sink)
+    }
+
+    @Test func trackOnceFiresOncePerInstall() {
+        let (analytics, sink) = makeNonDemoAnalytics(suite: #function)
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("email")])
+        #expect(sink.captured.count == 1)
+        #expect(sink.captured.first?.properties["source"] as? String == "tap")
+        #expect(sink.captured.first?.properties["hours_bucket"] as? String == "under_1h")
+    }
+
+    @Test func trackOnceDoesNotConsumeTheFlagWhileDisabled() {
+        let (analytics, sink) = makeNonDemoAnalytics(suite: #function)
+        analytics.isEnabled = false
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        #expect(sink.captured.count == 1, "only the opt-out")
+        analytics.isEnabled = true
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        #expect(sink.captured.last?.name == "activation_first_auto_purchase")
+    }
+
+    @Test func trackOnceSkipsSampleData() {
+        let suite = #function
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let sink = SpySink()
+        var demo = true
+        let analytics = Analytics(sink: sink, defaults: defaults, isDemo: { demo })
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        #expect(sink.captured.isEmpty)
+        demo = false
+        analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        #expect(sink.captured.count == 1, "the flag was not consumed by the demo run")
+    }
+
+    @Test func aTestTapNeverCountsAsActivation() {
+        #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: TapTestButton.testMerchant))
+        #expect(!LogPurchaseIntent.countsAsActivation(added: false, merchant: "Woolworths"))
+        #expect(LogPurchaseIntent.countsAsActivation(added: true, merchant: "Woolworths"))
+    }
+
     // MARK: event names
 
     @Test func everyEventRawValueIsSnakeCaseAscii() {

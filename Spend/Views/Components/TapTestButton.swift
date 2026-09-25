@@ -20,7 +20,7 @@ struct TapTestButton: View {
     /// purchase is obvious and cheap to undo.
     private static let testAmount = Decimal(string: "4.50")!
     /// Analytics skips a tap at this merchant: a test is not a real purchase.
-    static let testMerchant = "Sortd Test"
+    nonisolated static let testMerchant = "Sortd Test"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

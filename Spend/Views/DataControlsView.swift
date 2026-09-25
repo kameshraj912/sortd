@@ -131,11 +131,15 @@ enum DataReset {
         CardBook.shared.replaceAll([])
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-        if let domain = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: domain)
+        // The wipe deletes the analytics switch and reset() clears PostHog's
+        // own opt-out; both are put back, so "off" survives Delete All.
+        Analytics.shared.preserveConsent {
+            if let domain = Bundle.main.bundleIdentifier {
+                UserDefaults.standard.removePersistentDomain(forName: domain)
+            }
+            // Back to an anonymous analytics id; the salt went with the defaults.
+            Analytics.shared.signedOut()
         }
-        // Back to an anonymous analytics id; the salt went with the defaults.
-        Analytics.shared.signedOut()
         // Recreate the saved (empty) card list so old cards can't come back,
         // and set these explicitly so open screens notice and setup reopens.
         CardBook.shared.replaceAll([])

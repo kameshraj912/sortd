@@ -72,16 +72,24 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 
 ## Events (never amounts, merchants, emails, card digits, notes or any Gmail content)
 
-- `setup_step_viewed(step)`, `setup_finished(skipped, steps_seen)`
-- `activation(source: tap|email, hours_bucket)`
-- `tab_viewed(tab)`
-- `purchase_added(source)`
-- `gmail_connected`, `gmail_sync_failed(code)`
-- `backup_on`, `restore_done`
-- `tip_shown` / `tip_used(id)`
-- `tip_jar_opened`, `tip_given(tier)`
-- `signed_in(provider)`, `signed_out`
-- `analytics_off`: sent once, then nothing.
+The names below are the `Analytics.Event` raw values, pinned by `SpendTests/AnalyticsTests.swift` (updated 25 Sep 2026 to match the code; the earlier draft names are gone).
+
+- `setup_started(rerun)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`
+- `activation_first_auto_purchase(source: tap|email, hours_bucket)`: once per install, never on sample data or a test tap
+- `tab_opened(tab)`: the first tab at launch included
+- `purchase_added_manually(category_changed, has_note)`
+- `purchase_deleted(count)`, `purchase_undone(count)`
+- `apple_pay_tap_logged(merged)`
+- `gmail_connected(accounts)`, `gmail_sync_finished(ok, forced, error_code)`: no email or purchase counts (Google Limited Use)
+- `backup_completed`, `restore_completed(mode)`
+- `tip_left(size: small|medium|large)`: never the price
+- `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
+- Sign-in (sub-spec 4) calls `identify`/`reset` rather than sending an event.
+
+## What Raj does in PostHog
+
+- Turn on **"Discard client IP data"** in the project settings. PostHog otherwise adds a rough location from the IP on the server, and the app's manifest and label declare no Coarse Location.
+- Create the project on the EU host and put the `phc_` key in `Secrets.xcconfig` (see `Secrets.xcconfig.example`). Session replay stays off in the project too.
 
 ## Protection
 
