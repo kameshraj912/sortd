@@ -64,7 +64,10 @@ struct BackupDataSettingsView: View {
             } header: {
                 BoldHeader("iCloud")
             } footer: {
-                Text("Your purchases are encrypted on this iPhone before they go to your iCloud. The key stays in your iCloud Keychain, so only your devices can read them. On a new iPhone, restore first.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Encrypted on this iPhone before it goes to iCloud.")
+                    Link("Learn more", destination: URL(string: "https://sortd.page/help#icloud-backup")!)
+                }
             }
             #endif
 
@@ -105,7 +108,7 @@ struct BackupDataSettingsView: View {
             } header: {
                 BoldHeader("Backup File")
             } footer: {
-                Text("A backup file is a copy you keep yourself: in Files, on iCloud Drive, or sent to a new phone.")
+                Text("A copy you keep yourself: in Files, on iCloud Drive, or a new phone.")
             }
 
             Section {
