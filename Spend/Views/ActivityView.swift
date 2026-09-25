@@ -367,14 +367,18 @@ struct TransactionsScreen: View {
     /// for VoiceOver and Switch Control. Each chevron gets a 44x44pt tap
     /// target, grown around the glyph rather than by scaling it up.
     private func pagerHeader(_ day: (date: Date, items: [Transaction]), position: DayPager.Position) -> some View {
-        let newer = Button("Newer Day", systemImage: "chevron.left") { stepDay(-1) }
-            .disabled(position.index == 0)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-        let older = Button("Older Day", systemImage: "chevron.right") { stepDay(1) }
-            .disabled(position.index + 1 >= position.count)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+        // The 44pt frame sits inside the label, so the whole square takes
+        // the tap; outside it, only the glyph would.
+        let newer = Button { stepDay(-1) } label: {
+            Label("Newer Day", systemImage: "chevron.left")
+                .frame(width: 44, height: 44).contentShape(.rect)
+        }
+        .disabled(position.index == 0)
+        let older = Button { stepDay(1) } label: {
+            Label("Older Day", systemImage: "chevron.right")
+                .frame(width: 44, height: 44).contentShape(.rect)
+        }
+        .disabled(position.index + 1 >= position.count)
         // At the largest sizes the chevrons get their own row, so the day
         // keeps the full width.
         return Group {
@@ -384,7 +388,11 @@ struct TransactionsScreen: View {
                     HStack { newer; Spacer(); older }
                 }
             } else {
-                HStack(spacing: 4) { newer; dayHeader(day, position: position); older }
+                // The squares hang out past the header's inset, so the
+                // glyphs sit where the small chevrons did and the day keeps
+                // one line.
+                HStack(spacing: 0) { newer; dayHeader(day, position: position); older }
+                    .padding(.horizontal, -14)
             }
         }
         .labelStyle(.iconOnly)
@@ -489,6 +497,8 @@ struct TransactionsScreen: View {
         let title = dayTitle(day.date)
         return layout {
             Text(position.map { "\(title) · \($0.text)" } ?? title)
+                .lineLimit(big ? nil : 1)
+                .minimumScaleFactor(big ? 1 : 0.85)
                 .accessibilityLabel(position.map { "\(title), \($0.spoken)" } ?? title)
             if !big { Spacer() }
             Text(Money.format(day.items.audTotal, Money.home))
