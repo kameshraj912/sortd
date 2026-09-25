@@ -27,9 +27,9 @@ struct TransactionsScreen: View {
     @State private var undone = 0
     /// The day on screen in the day pager (`dayPages`).
     @State private var dayPage: Date?
-    /// Swipes between days. The haptic plays on these, not when the pager
-    /// picks a day itself (first show, a filter, a delete).
-    @State private var daySwipes = 0
+    /// Chevron taps that changed the day. The haptic plays on these, not
+    /// when the pager picks a day itself (first show, a filter, a delete).
+    @State private var dayChanges = 0
     /// Which way the last day change went, for the slide.
     @State private var dayDirection: Motion.Direction = .forward
     @Environment(\.crossFades) private var crossFades
@@ -98,8 +98,9 @@ struct TransactionsScreen: View {
         }
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
+                // No `.sharedBackgroundVisibility(.hidden)`: keeps its glass
+                // circle, like the gear (`SettingsToolbarButton`) beside it.
                 ToolbarItem(placement: .topBarLeading) { filterMenu }
-                    .sharedBackgroundVisibility(.hidden)
             }
             if fixedCard == nil { SettingsToolbarButton() }
             if NavLayout.current == .header || NavLayout.current == .toolbar {
@@ -288,18 +289,24 @@ struct TransactionsScreen: View {
         .background(Color.page)
     }
 
-    /// One day at a time, newest first: swipe sideways or tap the chevrons
-    /// in the day's header to move a day. It is one List, the direct content
-    /// of the navigation stack, so the bar tracks it: scrolling up folds the
-    /// large title into the bar and hides the search field, and a pull down
-    /// at the top brings them back. (Each day in a paging TabView had its own
-    /// list, and the bar tracked none of them.)
+    /// One day at a time, newest first: tap the chevrons in the day's header
+    /// to move a day. Rows keep the sideways swipe for their own actions
+    /// (leading = Category, trailing = Delete, the iOS convention), so
+    /// paging the day never fights a swipe on a row. It is one List, the
+    /// direct content of the navigation stack, so the bar tracks it:
+    /// scrolling up folds the large title into the bar and hides the search
+    /// field, and a pull down at the top brings them back. (Each day in a
+    /// paging TabView had its own list, and the bar tracked none of them.)
     private var dayPager: some View {
         let all = days
         let index = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
         return ScrollViewReader { proxy in
             List {
-                chipsRow
+                // Its own section, margins zeroed: an inset-grouped List
+                // otherwise clips the row to the section's card, cutting the
+                // chips off short of the real screen edge.
+                Section { chipsRow }
+                    .listSectionMargins(.horizontal, 0)
                 if all.isEmpty {
                     Section { noMatches.listRowBackground(Color.clear) }
                 } else {
@@ -315,16 +322,6 @@ struct TransactionsScreen: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            // Sideways swipes move a day; up and down still scroll. Only a
-            // clearly sideways drag counts.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 30)
-                    .onEnded { drag in
-                        let dx = drag.translation.width, dy = drag.translation.height
-                        guard abs(dx) > 80, abs(dx) > abs(dy) * 2 else { return }
-                        stepDay(dx < 0 ? 1 : -1)
-                    }
-            )
             .task(id: dayPage) {
                 #if DEBUG
                 guard Self.startScrolled, let last = all.indices.contains(index) ? all[index].items.last : nil else { return }
@@ -334,7 +331,7 @@ struct TransactionsScreen: View {
             }
         }
         // Paging to another day is a choice, like the card carousel.
-        .feedback(.select, trigger: daySwipes)
+        .feedback(.select, trigger: dayChanges)
         // The day on screen can go: cleared by a search or a chip, or
         // its last purchase swiped away. Stay next to where you were.
         .onChange(of: all.map(\.date), initial: true) { old, new in
@@ -362,16 +359,22 @@ struct TransactionsScreen: View {
               let next = DayPager.day(delta, from: current, in: dates) else { return }
         dayDirection = delta > 0 ? .forward : .backward
         withAnimation(crossFades ? .easeInOut(duration: 0.2) : .snappy) { dayPage = next }
-        daySwipes += 1
+        dayChanges += 1
     }
 
-    /// The day's header with a chevron either side: the tap alternative to
-    /// swiping, and the way in for VoiceOver and Switch Control.
+    /// The day's header with a chevron either side: the only way to move a
+    /// day (rows keep sideways swipe for their own actions), and the way in
+    /// for VoiceOver and Switch Control. Each chevron gets a 44x44pt tap
+    /// target, grown around the glyph rather than by scaling it up.
     private func pagerHeader(_ day: (date: Date, items: [Transaction]), position: DayPager.Position) -> some View {
         let newer = Button("Newer Day", systemImage: "chevron.left") { stepDay(-1) }
             .disabled(position.index == 0)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         let older = Button("Older Day", systemImage: "chevron.right") { stepDay(1) }
             .disabled(position.index + 1 >= position.count)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         // At the largest sizes the chevrons get their own row, so the day
         // keeps the full width.
         return Group {
@@ -391,10 +394,12 @@ struct TransactionsScreen: View {
     }
 
     /// The chips as a list row, a section gap under the title and search
-    /// field. The first chip lines up with the search field; the rest scroll
-    /// out to the screen edge.
+    /// field. Its section has its margins zeroed (`dayPager`), so the chips
+    /// need their own inset (matching the search field's, 20pt) to still
+    /// line up on the leading edge; the rest scroll out to the real screen
+    /// edge instead of stopping at the card's margin.
     private var chipsRow: some View {
-        chips(inset: 0)
+        chips(inset: 20)
             .scrollClipDisabled()
             .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 8, trailing: 0))
             .listRowBackground(Color.clear)
