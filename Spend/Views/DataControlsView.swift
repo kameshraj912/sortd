@@ -126,8 +126,13 @@ enum DataReset {
         // would otherwise lose.
         GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
+        #if SORTD_SIGNIN
         // The account lives in its own Keychain service: sign out by name.
-        AccountStore.shared.signOut()
+        // Signed in, the PostHog person goes too: its delete is queued here,
+        // kept across the wipe below, and sent at the end.
+        let account = AccountStore.shared
+        account.signOutForDeleteAll()
+        #endif
         // Any backup or spreadsheet copies made for sharing.
         Exports.clear()
         CardBook.shared.replaceAll([])
@@ -135,13 +140,20 @@ enum DataReset {
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         // The wipe deletes the analytics switch and reset() clears PostHog's
         // own opt-out; both are put back, so "off" survives Delete All.
-        Analytics.shared.preserveConsent {
-            if let domain = Bundle.main.bundleIdentifier {
-                UserDefaults.standard.removePersistentDomain(forName: domain)
+        let wipeDefaults = {
+            Analytics.shared.preserveConsent {
+                if let domain = Bundle.main.bundleIdentifier {
+                    UserDefaults.standard.removePersistentDomain(forName: domain)
+                }
+                // Back to an anonymous analytics id.
+                Analytics.shared.signedOut()
             }
-            // Back to an anonymous analytics id; the salt went with the defaults.
-            Analytics.shared.signedOut()
         }
+        #if SORTD_SIGNIN
+        account.preservePendingDeletes(across: wipeDefaults)
+        #else
+        wipeDefaults()
+        #endif
         // Recreate the saved (empty) card list so old cards can't come back,
         // and set these explicitly so open screens notice and setup reopens.
         CardBook.shared.replaceAll([])
@@ -151,6 +163,9 @@ enum DataReset {
         WidgetBridge.refresh(from: context)
         #if SORTD_ICLOUD
         if cloudWasOn { Task { await cloud.deleteCloudCopyAfterReset() } }
+        #endif
+        #if SORTD_SIGNIN
+        Task { await account.retryPendingDeletes() }
         #endif
     }
 }
