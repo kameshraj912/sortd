@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Debug builds, including the phone on the free team: only what a personal
+	     team can sign. iCloud, Sign in with Apple and App Attest live in
+	     Spend.entitlements (Release) and are compiled out until paid enrolment
+	     (SORTD_ICLOUD, SORTD_SIGNIN). Once the paid account exists and both flags
+	     are on, point Debug back at Spend.entitlements. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.kameshraj.spend</string>
+	</array>
+</dict>
+</plist>
