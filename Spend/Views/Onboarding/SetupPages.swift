@@ -215,6 +215,9 @@ struct CheckInPage: View {
     let counter: String
     @Binding var checkIn: SetupProfile.CheckIn
     @Binding var billReminders: Bool
+    /// The bill-reminder toggle needs a permission the new flow doesn't ask
+    /// for during setup, so that flow leaves it out.
+    var showBills = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -227,20 +230,24 @@ struct CheckInPage: View {
                     }
                 }
             }
-            Toggle(isOn: $billReminders) {
-                HStack(spacing: 12) {
-                    RowIcon("bell")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Remind me the day before a bill").font(.body)
-                        Text("9 am, the day before it's charged")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
+            if showBills { billsToggle }
+        }
+    }
+
+    private var billsToggle: some View {
+        Toggle(isOn: $billReminders) {
+            HStack(spacing: 12) {
+                RowIcon("bell")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Remind me the day before a bill").font(.body)
+                    Text("9 am, the day before it's charged")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            .tint(Color.brand)
-            .setupCard()
-            .padding(.top, 16)
         }
+        .tint(Color.brand)
+        .setupCard()
+        .padding(.top, 16)
     }
 }
 

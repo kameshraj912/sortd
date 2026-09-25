@@ -24,6 +24,7 @@ import os
 final class Analytics {
     enum Event: String, CaseIterable {
         case setupStarted = "setup_started"
+        case setupStepViewed = "setup_step_viewed"
         case setupStepCompleted = "setup_step_completed"
         case setupFinished = "setup_finished"
         case activationFirstAutoPurchase = "activation_first_auto_purchase"
