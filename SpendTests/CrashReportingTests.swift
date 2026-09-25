@@ -33,6 +33,9 @@ struct CrashReportingTests {
     /// Builds the event described in the sub-spec 2b test plan: an exception
     /// value and a message that both carry merchant text and an amount, a user
     /// with an IP address and email, a request, breadcrumbs, extra and tags.
+    /// Also what the crash converter adds for an uncaught NSException: its
+    /// userInfo under `context["user info"]`, and earlier runtime messages
+    /// under `mechanism.data["crash_info_messages"]`.
     private func makeEvent() -> Sentry.Event {
         let event = Sentry.Event(level: .error)
 
@@ -41,7 +44,18 @@ struct CrashReportingTests {
         frame.function = "parseReceipt(_:)"
         let stacktrace = Sentry.SentryStacktrace(frames: [frame], registers: [:])
         exception.stacktrace = stacktrace
+        let mechanism = Sentry.Mechanism(type: "nsexception")
+        mechanism.handled = false
+        mechanism.data = ["crash_info_messages": ["Fatal error: Coles 12.50 refund failed"]]
+        exception.mechanism = mechanism
         event.exceptions = [exception]
+
+        event.context = [
+            "user info": ["NSLocalizedDescription": "Receipt from Coles for 12.50 to a@b.c"],
+            "device": ["model": "iPhone17,1"],
+            "os": ["name": "iOS", "version": "26.0"],
+            "app": ["app_version": "1.0"],
+        ]
 
         event.message = Sentry.SentryMessage(formatted: "Coles 12.50 failed")
 
@@ -67,6 +81,27 @@ struct CrashReportingTests {
         #expect(exception?.type == "DecodingError")
         #expect(exception?.stacktrace?.frames.count == 1)
         #expect(exception?.stacktrace?.frames.first?.function == "parseReceipt(_:)")
+    }
+
+    /// The converter puts an uncaught NSException's userInfo under
+    /// `context["user info"]`; it goes. Device, OS and app stay, since Sentry
+    /// groups on them and they carry nothing typed in the app.
+    @Test func scrubDropsTheNSExceptionUserInfoButKeepsDeviceOsAndApp() {
+        let scrubbed = CrashReporting.scrub(makeEvent(), userId: "deadbeef")
+        #expect(scrubbed.context?["user info"] == nil)
+        #expect(scrubbed.context?["device"]?["model"] as? String == "iPhone17,1")
+        #expect(scrubbed.context?["os"]?["name"] as? String == "iOS")
+        #expect(scrubbed.context?["app"]?["app_version"] as? String == "1.0")
+    }
+
+    /// `mechanism.data` carries earlier Swift runtime messages
+    /// ("crash_info_messages"); it goes. The mechanism type and handled flag stay.
+    @Test func scrubDropsTheMechanismDataButKeepsItsType() {
+        let scrubbed = CrashReporting.scrub(makeEvent(), userId: "deadbeef")
+        let mechanism = scrubbed.exceptions?.first?.mechanism
+        #expect(mechanism?.data == nil)
+        #expect(mechanism?.type == "nsexception")
+        #expect(mechanism?.handled == false)
     }
 
     @Test func scrubDropsTheMessage() {
@@ -106,6 +141,36 @@ struct CrashReportingTests {
         #expect(!flattened.contains("12.50"))
         #expect(!flattened.contains("1.2.3.4"))
         #expect(!flattened.contains("@"))
+        #expect(!flattened.contains("refund"))
+        #expect(!flattened.contains("Receipt from"))
+        #expect(!flattened.contains("user info"))
+        #expect(!flattened.contains("crash_info_messages"))
+    }
+
+    // MARK: - identityHash survives a relaunch
+
+    /// Crash events are sent on the next launch, so the hash must come back
+    /// from disk with a fresh `Analytics` on the same defaults, and go on
+    /// `signedOut`.
+    @MainActor @Test func identityHashPersistsAcrossInstancesAndClearsOnSignOut() {
+        let suite = "CrashReportingTests.identityHash"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = Analytics(sink: SpySink(), defaults: defaults)
+        #expect(first.identityHash == nil)
+        first.signedIn(provider: "apple", subject: "001.abc")
+        let hash = first.identityHash
+        #expect(hash?.count == 64)
+
+        let second = Analytics(sink: SpySink(), defaults: defaults)
+        #expect(second.identityHash == hash)
+
+        second.signedOut()
+        #expect(second.identityHash == nil)
+        let third = Analytics(sink: SpySink(), defaults: defaults)
+        #expect(third.identityHash == nil)
     }
 
     // MARK: - scrubBreadcrumb(_:)

@@ -75,6 +75,9 @@ final class Analytics {
     /// When the switch was last flipped: the consent record, kept on the phone.
     static let consentChangedAtKey = "analyticsConsentChangedAt"
     static let saltKey = "analyticsSalt"
+    /// The identified hash, kept so a crash sent on the next launch still
+    /// carries it. Cleared on `signedOut`.
+    static let identityHashKey = "analyticsIdentityHash"
     /// Prefix for `trackOnce`: "<prefix>.<event>" is set once per install.
     static let activatedKey = "analyticsActivated"
     /// When this install first ran, for the activation hours bucket.
@@ -129,7 +132,8 @@ final class Analytics {
 
     /// The identified id (the salted hash) while signed in, else nil. Read
     /// by `CrashReporting` from Sentry's own thread, so it sits behind a
-    /// lock rather than on the main actor.
+    /// lock rather than on the main actor. Persisted at `identityHashKey`:
+    /// Sentry sends a crash on the next launch, after this object is new.
     nonisolated var identityHash: String? { identityBox.withLock { $0 } }
     private nonisolated let identityBox = OSAllocatedUnfairLock<String?>(initialState: nil)
 
@@ -138,6 +142,9 @@ final class Analytics {
         self.defaults = defaults
         self.isDemo = isDemo
         self.enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        if let kept = defaults.string(forKey: Self.identityHashKey), kept.count == 64 {
+            identityBox.withLock { $0 = kept }
+        }
         // First launch only; never overwritten (preserveConsent keeps it
         // across Delete All).
         if defaults.object(forKey: Self.installedAtKey) == nil {
@@ -243,12 +250,14 @@ final class Analytics {
         }
         let id = Self.distinctId(salt: salt, provider: provider, subject: subject)
         identityBox.withLock { $0 = id }
+        defaults.set(id, forKey: Self.identityHashKey)
         sink.identify(id)
     }
 
     /// Sign-out and Delete All: back to an anonymous id.
     func signedOut() {
         identityBox.withLock { $0 = nil }
+        defaults.removeObject(forKey: Self.identityHashKey)
         sink.reset()
     }
 
