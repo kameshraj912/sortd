@@ -234,7 +234,8 @@ struct AddTransactionView: View {
                 card = Card.mine.contains(lastCard) ? lastCard : (Card.mine.first ?? .other)
                 amountFocused = true
             }
-            .sensoryFeedback(.success, trigger: saved)
+            .feedback(.confirm, trigger: saved)
+            .feedback(.fail, trigger: saveError) { _, new in new != nil }
             .alert("Couldn't Save Purchase", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
@@ -276,7 +277,7 @@ struct AddTransactionView: View {
                 amountText = Self.isTypeable(old) ? old : ""
                 refusedKeys += 1
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: refusedKeys)
+            .feedback(.blocked, trigger: refusedKeys)
             .frame(maxWidth: .infinity)
             .contentShape(.rect)
             .onTapGesture { amountFocused = true }

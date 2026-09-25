@@ -31,11 +31,6 @@ struct OnboardingView: View {
     @AppStorage(SetupProfile.billsKey) private var billIntent = false
     @AppStorage(SetupProfile.rerunKey) private var rerun = false
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// iOS 26.4 added a precise signal for "cross-fade instead of slide";
-    /// before that, Reduce Motion is the only thing to go on.
-    @Environment(\.self) private var environment
-
     /// They answered the check-in question this time (not skipped, not "Not now").
     @State private var checkInChosen = false
     /// Asking iOS for notification permission; one tap is enough.
@@ -65,18 +60,9 @@ struct OnboardingView: View {
     #else
     @State private var step: Step = .welcome
     #endif
-    /// Either setting means: no sliding.
-    ///
-    /// `accessibilityPrefersCrossFadeTransitions` runs on iOS 26.4+, but the
-    /// name only ships in the Xcode 27 SDK (Swift 6.4). An `#available` check
-    /// alone is not enough: Xcode 26.x cannot compile the name at all, which
-    /// broke CI. The compiler guard keeps both toolchains building.
-    private var crossFade: Bool {
-        #if compiler(>=6.4)
-        if #available(iOS 26.4, *), environment.accessibilityPrefersCrossFadeTransitions { return true }
-        #endif
-        return reduceMotion
-    }
+    /// Reduce Motion or Prefer Cross-Fade Transitions: no sliding. One
+    /// implementation for the whole app, in `Feedback.swift`.
+    @Environment(\.crossFades) private var crossFade
 
     @State private var showingImport = false
     @State private var forward = true
@@ -154,7 +140,7 @@ struct OnboardingView: View {
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
-        .sensoryFeedback(.selection, trigger: step)
+        .feedback(.select, trigger: step)
         .onChange(of: step) {
             stepChangedAt = .now
             scroll.scrollTo(edge: .top)
@@ -649,7 +635,7 @@ struct OnboardingView: View {
                 }
             }
             .padding(.top, 8)
-            .sensoryFeedback(.selection, trigger: abroadRaw)
+            .feedback(.select, trigger: abroadRaw)
 
             if let ratePreview {
                 HStack(spacing: 12) {
@@ -1073,7 +1059,7 @@ struct OnboardingView: View {
         .background(tapConnected || shortcutReached ? Color.up.opacity(0.12) : Color.card,
                     in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: tapConnected)
-        .sensoryFeedback(.success, trigger: tapConnected)
+        .feedback(.confirm, trigger: tapConnected)
         .accessibilityElement(children: .combine)
     }
 
