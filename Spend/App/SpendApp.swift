@@ -52,8 +52,6 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
-        // The aha: the first purchase a tap or a receipt logged by itself.
-        Activation.watchSaves()
         #if SORTD_ICLOUD
         CloudBackup.watchSaves()
         #endif
@@ -80,6 +78,11 @@ struct SpendApp: App {
                 UserDefaults.standard.set("AUD", forKey: FXService.convertedKey)
             }
         }
+        // The aha: the first purchase a tap or a receipt logged by itself.
+        // After the legacy check, which can mark setup done. An install that
+        // finished setup before this existed never sees the card.
+        Activation.settleExistingInstall(setupDone: UserDefaults.standard.bool(forKey: OnboardingView.doneKey))
+        Activation.watchSaves()
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if env["SPEND_DEMO"] == "1" {

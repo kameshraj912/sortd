@@ -52,27 +52,60 @@ enum Activation {
         defaults.set(true, forKey: askedKey)
     }
 
+    // MARK: - Existing installs
+
+    /// Set the first time a build that has Activation runs.
+    static let knownKey = "activationKnown"
+
+    /// Once, at the first launch of a build with Activation: an install that
+    /// had already finished setup was asked about notifications by the old
+    /// check-in step and may hold tap rows for weeks. It never gets the
+    /// card or a second ask. A fresh install (setup not done yet) is left
+    /// open, and later launches change nothing.
+    static func settleExistingInstall(setupDone: Bool, defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: knownKey) else { return }
+        defaults.set(true, forKey: knownKey)
+        guard setupDone else { return }
+        defaults.set(true, forKey: seenKey)
+        defaults.set(true, forKey: askedKey)
+    }
+
     // MARK: - Hook
 
-    /// After every save to the store, until the aha has happened: look for
-    /// the first purchase a tap or an email reported. Call once at launch.
+    /// When this process started. A row made before it (a restore keeps the
+    /// original `createdAt`, Backup.swift) was not logged now.
+    static let launchedAt = Date.now
+
+    /// After every save to the store, until the aha has happened: look at
+    /// the rows that save inserted. Call once at launch. Off with the flag,
+    /// like the card it feeds.
     @MainActor
     static func watchSaves() {
+        guard SetupFlow.usesNewFlow, !UserDefaults.standard.bool(forKey: seenKey) else { return }
         let context = SpendStore.container.mainContext
-        guard !UserDefaults.standard.bool(forKey: seenKey) else { return }
-        NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { _ in
-            MainActor.assumeIsolated { check(in: context) }
+        NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { note in
+            MainActor.assumeIsolated { check(inserted: inserted(in: note, context: context), since: launchedAt) }
         }
     }
 
-    /// One fetch of the rows an automatic source has seen, then `recordIfFirst`
-    /// on each. A no-op once the flag is set.
+    /// The `Transaction` rows a `didSave` inserted (edits and deletes carry
+    /// none, so they cost nothing here).
     @MainActor
-    static func check(in context: ModelContext, defaults: UserDefaults = .standard) {
-        guard !defaults.bool(forKey: seenKey) else { return }
-        let tap = TxnSource.tap.rawValue, email = TxnSource.email.rawValue
-        let candidates = (try? context.fetch(FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.seenInRaw.contains(tap) || $0.seenInRaw.contains(email) }))) ?? []
-        for t in candidates where recordIfFirst(t, defaults: defaults) != nil { return }
+    static func inserted(in note: Notification, context: ModelContext) -> [Transaction] {
+        let key = ModelContext.NotificationKey.insertedIdentifiers
+        let ids = (note.userInfo?[key] ?? note.userInfo?[key.rawValue]) as? [PersistentIdentifier] ?? []
+        return ids.compactMap { context.model(for: $0) as? Transaction }
+    }
+
+    /// `recordIfFirst` on each inserted row made in this launch, in order.
+    /// A restored or imported row (older `createdAt`) never counts; a
+    /// no-op once the flag is set.
+    @discardableResult
+    static func check(inserted: [Transaction], since launch: Date, defaults: UserDefaults = .standard) -> Source? {
+        guard !defaults.bool(forKey: seenKey) else { return nil }
+        for t in inserted where t.createdAt >= launch {
+            if let source = recordIfFirst(t, defaults: defaults) { return source }
+        }
+        return nil
     }
 }
