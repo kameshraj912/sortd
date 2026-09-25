@@ -78,7 +78,7 @@ The disputed-tests item from the last handover is closed: of the 30 abuse findin
 
 - **Sub-spec 9 screenshots** — new App Store screenshot set, once the icon renders are approved.
 - **Live Activities** (Gmail sync progress, monthly budget) and **Share Extension** (share a receipt into Sortd) — each needs a new app target, so each gets its own spec first. Not started.
-- **UI pass after the overhaul**: see `docs/UIPass-2026-09-25.md` — this file does **not exist yet** (confirmed); it is the planned follow-up to `docs/UIPass-2026-09-24.md`, and the router is expected to fill in the counts once it runs.
+- **UI pass after the overhaul** (`docs/UIPass-2026-09-25.md`, done 25 Sep): no P0, 3 P1 (bank names cut to letters at AX5 in setup; the "Moved N others · Undo" toast missing in 2 of 3 tries; setup choices hyphenated at AX5), 6 P2, 3 P3. Nothing that exists in both screenshot sets got worse. Fix the P1s first, through `sortd-build`.
 - **CloudKit live sync (option B)**, if Raj wants it — its own migration-first sub-spec, see §7.
 - **Flag removals** for `SORTD_ICLOUD`, `SORTD_SIGNIN`, `SPEND_NEW_SETUP` and `SPEND_ACTIVITY_DAYS` once each has had its own UI pass and Raj has approved making it the default.
 
