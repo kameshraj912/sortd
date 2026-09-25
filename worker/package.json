@@ -1,0 +1,21 @@
+{
+  "name": "sortd-account",
+  "private": true,
+  "type": "module",
+  "description": "Sortd account Worker: revokes Sign in with Apple tokens and deletes PostHog persons. Stores nothing.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260925.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2",
+    "wrangler": "4.140.0"
+  }
+}
