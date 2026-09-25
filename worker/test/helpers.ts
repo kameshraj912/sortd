@@ -213,6 +213,8 @@ export interface AttestOptions {
   wrongKeyId?: boolean;
   /** Put a different credentialId in authData than the key id. */
   wrongCredentialId?: boolean;
+  /** Header key id and credentialId agree with each other, but not with the certified key. */
+  keyNotCertified?: boolean;
   /** Sign the nonce over a different challenge than the one sent. */
   nonceChallenge?: string;
   leafNotAfter?: Date;
@@ -234,7 +236,8 @@ export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
   aaguid.set(enc.encode(o.aaguid ?? "appattest"));
   const counter = new Uint8Array(4);
   new DataView(counter.buffer).setUint32(0, o.counter ?? 0);
-  const credId = o.wrongCredentialId ? await sha256("some other key") : keyIdBytes;
+  const otherKeyId = await sha256("not the key");
+  const credId = o.keyNotCertified ? otherKeyId : o.wrongCredentialId ? await sha256("some other key") : keyIdBytes;
   const credLen = Uint8Array.of(credId.length >> 8, credId.length & 0xff);
   const coseKeyPlaceholder = cbor({ "1": "EC2" });
   const authData = concat(
@@ -266,7 +269,7 @@ export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
     attStmt: { x5c: [leafDer, ca.intermediateDer], receipt: new Uint8Array(8) },
     authData,
   });
-  const keyId = o.wrongKeyId ? b64(await sha256("not the key")) : b64(keyIdBytes);
+  const keyId = o.wrongKeyId || o.keyNotCertified ? b64(otherKeyId) : b64(keyIdBytes);
   return { keyId, attestation: b64(object) };
 }
 

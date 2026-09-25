@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handle } from "../src/index";
+import { handle } from "../src/handler";
 import { DISTINCT_ID, POSTHOG_API_KEY, attestedRequest, fakeFetch, fakeLimiter, json, makeDeps, makeEnv } from "./helpers";
 
 const BULK = "https://eu.posthog.test/api/environments/12345/persons/bulk_delete/";
