@@ -92,6 +92,12 @@ final class TipJar {
         }
     }
 
+    /// The last part of a tip's product id ("com.kameshraj.spend.tip.small"
+    /// gives "small"). For analytics; the price never goes anywhere.
+    nonisolated static func size(of productID: String) -> String {
+        String(productID.split(separator: ".").last ?? "unknown")
+    }
+
     /// Buys one tip and finishes it. Cancelling is not an error.
     func tip(_ product: Product) async -> Outcome {
         do {
@@ -99,6 +105,8 @@ final class TipJar {
             case .success(let result):
                 guard case .verified(let t) = result else { return .failed(TipError.unverified) }
                 await t.finish()
+                // Which tip, never the price: "small", "medium" or "large".
+                Analytics.shared.track(.tipLeft, ["size": .string(Self.size(of: product.id))])
                 return .thanked
             case .pending:
                 return .failed(TipError.pending)
