@@ -14,7 +14,7 @@ struct BackupDataSettingsView: View {
     @State private var lastSaved = UserDefaults.standard.object(forKey: BackupDataSettingsView.lastBackupKey) as? Date
     @State private var failure: String?
 
-    // iCloud
+    #if SORTD_ICLOUD
     @State private var cloud = CloudBackup.shared
     @State private var confirmingSwitchOff = false
     @State private var confirmingRestore = false
@@ -22,11 +22,14 @@ struct BackupDataSettingsView: View {
     @State private var cloudContents: Backup.Contents?
     @State private var replaceCount = 0
     @State private var restored: String?
+    @State private var noBackup = false
     @State private var cloudFailure: String?
+    #endif
 
     var body: some View {
         List {
             ListPageTitle(title: "Backup & Data")
+            #if SORTD_ICLOUD
             Section {
                 Toggle(isOn: cloudSwitch) {
                     Label {
@@ -63,6 +66,7 @@ struct BackupDataSettingsView: View {
             } footer: {
                 Text("Your purchases are encrypted on this iPhone before they go to your iCloud. The key stays in your iCloud Keychain, so only your devices can read them. On a new iPhone, restore first.")
             }
+            #endif
 
             Section {
                 Button(action: prepareBackup) {
@@ -148,6 +152,7 @@ struct BackupDataSettingsView: View {
         // Alerts, not confirmation dialogs, for everything below: a dialog
         // anchored to the row renders in a narrow popover that wrapped
         // three sentences into ragged lines (HANDOVER).
+        #if SORTD_ICLOUD
         .alert("Delete the iCloud copy too?", isPresented: $confirmingSwitchOff) {
             Button("Delete iCloud Copy", role: .destructive) { deleteCloudCopy() }
             Button("Keep It", role: .cancel) {}
@@ -172,11 +177,17 @@ struct BackupDataSettingsView: View {
         } message: {
             Text(restored ?? "")
         }
+        .alert("No Backup in iCloud Yet", isPresented: $noBackup) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Turn on Back up to iCloud on the iPhone that has your purchases, then restore here.")
+        }
         .alert("Couldn't Restore", isPresented: Binding(get: { cloudFailure != nil }, set: { if !$0 { cloudFailure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(cloudFailure ?? "")
         }
+        #endif
         .alert("Delete all data?", isPresented: $confirmingDelete) {
             Button("Delete Everything", role: .destructive) {
                 DataReset.deleteEverything(in: context)
@@ -198,94 +209,14 @@ struct BackupDataSettingsView: View {
         return "Last saved \(last.formatted(.relative(presentation: .named)))"
     }
 
-    /// "Last backup: 2 min ago". `spoken` uses full words for VoiceOver.
-    static func lastCloudText(_ last: Date?, now: Date = .now, spoken: Bool = false) -> String {
-        guard let last else { return "No backup yet" }
-        if now.timeIntervalSince(last) < 60 { return "Last backup: just now" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = spoken ? .full : .abbreviated
-        return "Last backup: \(formatter.localizedString(for: last, relativeTo: now))"
-    }
-
     private var deleteMessage: String {
         var text = GmailSync.accounts.isEmpty
             ? "Every purchase, card and budget on this iPhone goes."
             : "Every purchase, card and budget on this iPhone goes, and Gmail is disconnected."
+        #if SORTD_ICLOUD
         if cloud.isEnabled { text += " The iCloud backup is deleted too." }
+        #endif
         return text + " There's no undo."
-    }
-
-    // MARK: - iCloud
-
-    /// On: the first backup runs at once (unless there's nothing to back up).
-    /// Off: backups stop, and the user chooses whether the copy stays.
-    private var cloudSwitch: Binding<Bool> {
-        Binding(get: { cloud.isEnabled }, set: { on in
-            cloud.isEnabled = on
-            if on {
-                Task { await cloud.backUpIfDue(from: context) }
-            } else if cloud.lastBackup != nil {
-                confirmingSwitchOff = true
-            }
-        })
-    }
-
-    private func backUpToCloud() {
-        Task {
-            // The status line under the switch says what went wrong.
-            try? await cloud.backUpNow(from: context)
-        }
-    }
-
-    private func deleteCloudCopy() {
-        Task {
-            do { try await cloud.deleteCloudCopy() } catch { cloudFailure = error.localizedDescription }
-        }
-    }
-
-    /// Replace needs to say what it will do, so it looks at the backup first.
-    private func prepareReplace() {
-        Task {
-            do {
-                guard let contents = try await cloud.contents() else {
-                    restored = "No backup in iCloud yet."
-                    return
-                }
-                cloudContents = contents
-                replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
-                confirmingReplace = true
-            } catch {
-                cloudFailure = error.localizedDescription
-            }
-        }
-    }
-
-    private var replaceTitle: String {
-        guard let cloudContents else { return "Replace this iPhone's data with the iCloud backup?" }
-        return Backup.replaceWarning(backup: cloudContents, purchasesHere: replaceCount).title
-    }
-
-    private var replaceMessage: String {
-        guard let cloudContents else { return "Everything on this iPhone will be replaced. This can't be undone." }
-        return Backup.replaceWarning(backup: cloudContents, purchasesHere: replaceCount).message
-    }
-
-    private func restore(_ mode: Backup.Mode) {
-        Task {
-            do {
-                if mode == .merge, try await cloud.contents() == nil {
-                    restored = "No backup in iCloud yet."
-                    return
-                }
-                let added = try await cloud.restore(into: context, mode: mode)
-                Task { await FXService.backfill(in: context) }
-                restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
-                    : "\(added) purchase\(added == 1 ? "" : "s") added."
-                AccessibilityNotification.Announcement(restored ?? "").post()
-            } catch {
-                cloudFailure = error.localizedDescription
-            }
-        }
     }
 
     // MARK: - Backup file
@@ -312,6 +243,91 @@ struct BackupDataSettingsView: View {
         }
     }
 }
+
+#if SORTD_ICLOUD
+extension BackupDataSettingsView {
+    /// "Last backup: 2 min ago". `spoken` uses full words for VoiceOver.
+    static func lastCloudText(_ last: Date?, now: Date = .now, spoken: Bool = false) -> String {
+        guard let last else { return "No backup yet" }
+        if now.timeIntervalSince(last) < 60 { return "Last backup: just now" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = spoken ? .full : .abbreviated
+        return "Last backup: \(formatter.localizedString(for: last, relativeTo: now))"
+    }
+
+    // MARK: - iCloud
+
+    /// On: the first backup runs at once (unless there's nothing to back up,
+    /// or iCloud already holds one to restore first). Off: backups stop, and
+    /// the user chooses whether the copy stays.
+    fileprivate var cloudSwitch: Binding<Bool> {
+        Binding(get: { cloud.isEnabled }, set: { on in
+            cloud.isEnabled = on
+            if on {
+                Task { await cloud.backUpIfDue(from: context) }
+            } else if cloud.lastBackup != nil || cloud.status == .paused(.restoreFirst) {
+                confirmingSwitchOff = true
+            }
+        })
+    }
+
+    fileprivate func backUpToCloud() {
+        Task {
+            // The status line under the switch says what went wrong.
+            try? await cloud.backUpNow(from: context)
+        }
+    }
+
+    fileprivate func deleteCloudCopy() {
+        Task {
+            do { try await cloud.deleteCloudCopy() } catch { cloudFailure = error.localizedDescription }
+        }
+    }
+
+    /// Replace needs to say what it will do, so it looks at the backup first.
+    fileprivate func prepareReplace() {
+        Task {
+            do {
+                guard let contents = try await cloud.contents() else {
+                    noBackup = true
+                    return
+                }
+                cloudContents = contents
+                replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
+                confirmingReplace = true
+            } catch {
+                cloudFailure = error.localizedDescription
+            }
+        }
+    }
+
+    fileprivate var replaceTitle: String {
+        CloudBackup.replaceWarning(contents: cloudContents, purchasesHere: replaceCount).title
+    }
+
+    fileprivate var replaceMessage: String {
+        CloudBackup.replaceWarning(contents: cloudContents, purchasesHere: replaceCount).message
+    }
+
+    fileprivate func restore(_ mode: Backup.Mode) {
+        Task {
+            do {
+                // One download: nil means there was nothing to restore.
+                guard let added = try await cloud.restoreIfPresent(into: context, mode: mode) else {
+                    noBackup = true
+                    return
+                }
+                Task { await FXService.backfill(in: context) }
+                restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
+                    : "\(added) purchase\(added == 1 ? "" : "s") added."
+                AccessibilityNotification.Announcement(restored ?? "").post()
+            } catch {
+                cloudFailure = error.localizedDescription
+            }
+        }
+    }
+}
+#endif
 
 private struct SharedFile: Identifiable {
     let url: URL
