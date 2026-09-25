@@ -37,10 +37,15 @@ A.
 
 First step: the `.icon` file and a check on a real home screen in every appearance.
 
+**Status (25 Sep 2026):** `Spend/AppIcon-Glass.icon` is the active icon
+(`ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-Glass"` in both Spend target configs, branch
+`flags-on`). Pending Raj's look on the phone in every appearance and CI on Xcode 26.6.
+`AppIcon.appiconset` stays until then; `Brand/README.md` says how to revert.
+
 ## Files
 
-- New `AppIcon.icon` (Icon Composer). Selecting it may change `ASSETCATALOG_COMPILER_APPICON_NAME` in `Spend.xcodeproj/project.pbxproj`, which folder sync does not cover (**not verified**).
-- `Spend/Assets.xcassets/AppIcon.appiconset/`: keep until the `.icon` is proven on iOS 26 and on CI's pinned Xcode 26.6.
+- `Spend/AppIcon-Glass.icon` (Icon Composer), selected by `ASSETCATALOG_COMPILER_APPICON_NAME` in `Spend.xcodeproj/project.pbxproj` (two lines, Spend target only; folder sync does not cover this setting).
+- `Spend/Assets.xcassets/AppIcon.appiconset/`: keep until the `.icon` is proven on the phone and on CI's pinned Xcode 26.6.
 - `Brand/`, `Brand/README.md`.
 - `SortdWidget/SortdWidget.swift`: accented rendering.
 - Screenshots: `docs/AppStoreListing.md` (router or growth).
@@ -48,7 +53,7 @@ First step: the `.icon` file and a check on a real home screen in every appearan
 ## Test plan
 
 - Test: `UIImage(named: "BrandIcon")` and `UIImage(named: "LaunchWordmark")` are not nil (asset rename guard).
-- Build check: `scripts/build.sh` passes on local Xcode 27, and CI passes on pinned Xcode 26.6 with the `.icon` file. **Not verified** that 26.6 builds `.icon`; Icon Composer shipped with Xcode 26.
+- Build check: `scripts/build.sh` passes on local Xcode 27 (checked 25 Sep 2026 with the `.icon` active), and CI passes on pinned Xcode 26.6 with the `.icon` file. **Not verified** that 26.6 builds `.icon`; Icon Composer shipped with Xcode 26.
 - `ui-driver`:
   - home screen icon in light, dark, tinted and clear;
   - widget in accented mode;

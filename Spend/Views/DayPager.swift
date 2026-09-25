@@ -18,6 +18,31 @@ enum DayPager {
         return days.indices.contains(i + delta) ? days[i + delta] : nil
     }
 
+    /// Where a swipe lands: the day it asked for when that is the day on
+    /// screen or the one next to it, else the adjacent day in that
+    /// direction. A fast swipe while the built window moves can hand the
+    /// pager a day two pages away (UI pass P2); one swipe is one day.
+    static func settle(_ new: Date, from current: Date?, in days: [Date], calendar: Calendar = .current) -> Date {
+        guard let current,
+              let i = dayIndex(for: current, in: days, calendar: calendar),
+              let j = dayIndex(for: new, in: days, calendar: calendar),
+              abs(j - i) > 1 else { return new }
+        return days[i + (j > i ? 1 : -1)]
+    }
+
+    /// "2 of 14": this page's place in the list, newest first.
+    struct Position: Equatable {
+        let index: Int
+        let count: Int
+        var text: String { "\(index + 1) of \(count)" }
+        /// For VoiceOver, where "2 of 14" alone could be a count of purchases.
+        var spoken: String { "day \(index + 1) of \(count)" }
+    }
+
+    static func position(_ index: Int, of count: Int) -> Position {
+        Position(index: index, count: count)
+    }
+
     /// The pages to build: `reach` either side of `index`, clamped to the list.
     static func window(around index: Int, count: Int, reach: Int = reach) -> Range<Int> {
         guard count > 0 else { return 0..<0 }

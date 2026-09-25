@@ -2,9 +2,10 @@ import Testing
 import Foundation
 @testable import Spend
 
-/// Spec 5's day pager (behind `SPEND_ACTIVITY_DAYS`): the day index from a
-/// date, paging back across a month edge, the built window, and where the
-/// pager lands when the day on screen goes.
+/// Spec 5's day pager (the default; `SPEND_ACTIVITY_LIST=1` shows the old
+/// list in DEBUG): the day index from a date, paging back across a month
+/// edge, the built window, where the pager lands when the day on screen
+/// goes, and that one swipe is one day.
 @Suite("DayPager")
 struct DayPagerTests {
     let cal = Calendar(identifier: .gregorian)
@@ -59,5 +60,38 @@ struct DayPagerTests {
     @Test func aDayStillShownStays() {
         let days = [d(2026, 9, 25), d(2026, 9, 22)]
         #expect(DayPager.neighbour(of: d(2026, 9, 22), in: days, still: days) == d(2026, 9, 22))
+    }
+
+    // MARK: One swipe is one day (UI pass P2: a fast swipe once skipped a day)
+
+    @Test func aSwipeToTheNextDayLandsThere() {
+        let days = [d(2026, 9, 25), d(2026, 9, 24), d(2026, 9, 22), d(2026, 9, 20)]
+        #expect(DayPager.settle(d(2026, 9, 24), from: d(2026, 9, 25), in: days, calendar: cal) == d(2026, 9, 24))
+        #expect(DayPager.settle(d(2026, 9, 25), from: d(2026, 9, 24), in: days, calendar: cal) == d(2026, 9, 25))
+        // Staying put is fine too.
+        #expect(DayPager.settle(d(2026, 9, 24), from: d(2026, 9, 24), in: days, calendar: cal) == d(2026, 9, 24))
+    }
+
+    @Test func aSwipeTwoDaysAwaySettlesOnTheAdjacentDay() {
+        let days = [d(2026, 9, 25), d(2026, 9, 24), d(2026, 9, 22), d(2026, 9, 20)]
+        // Older: skipped 24 Sep, lands on it.
+        #expect(DayPager.settle(d(2026, 9, 22), from: d(2026, 9, 25), in: days, calendar: cal) == d(2026, 9, 24))
+        #expect(DayPager.settle(d(2026, 9, 20), from: d(2026, 9, 25), in: days, calendar: cal) == d(2026, 9, 24))
+        // Newer: the same the other way.
+        #expect(DayPager.settle(d(2026, 9, 25), from: d(2026, 9, 20), in: days, calendar: cal) == d(2026, 9, 22))
+    }
+
+    @Test func aSwipeWithNoDayOnScreenOrAnUnknownDayIsTakenAsIs() {
+        let days = [d(2026, 9, 25), d(2026, 9, 22)]
+        #expect(DayPager.settle(d(2026, 9, 22), from: nil, in: days, calendar: cal) == d(2026, 9, 22))
+        // The day on screen just went (a filter): nothing to be adjacent to.
+        #expect(DayPager.settle(d(2026, 9, 22), from: d(2026, 9, 24), in: days, calendar: cal) == d(2026, 9, 22))
+    }
+
+    @Test func positionReadsAsOneOfCount() {
+        let p = DayPager.position(1, of: 14)
+        #expect(p.text == "2 of 14")
+        #expect(p.spoken == "day 2 of 14")
+        #expect(DayPager.position(0, of: 1).text == "1 of 1")
     }
 }

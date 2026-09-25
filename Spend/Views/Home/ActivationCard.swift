@@ -28,8 +28,8 @@ struct ActivationCard: View {
     }
 
     var body: some View {
-        // Behind the same flag as the tap-through setup until the UI pass:
-        // a build without it must not show this to anyone.
+        // Follows the tap-through setup: the old flow (DEBUG escape) asked
+        // about notifications itself, so it never shows this.
         if SetupFlow.usesNewFlow, seen, !asked {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {

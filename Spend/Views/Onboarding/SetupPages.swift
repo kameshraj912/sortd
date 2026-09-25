@@ -138,8 +138,8 @@ struct SetupHeader: View {
 
 /// The line under each screen's title. The tap-through flow (sub-spec 6)
 /// says one warm, plain line per screen (the heyclicky reference: talk,
-/// don't announce); the old lines stay until the flag goes. Titles are
-/// the same in both.
+/// don't announce); the old lines stay for the DEBUG old-flow escape.
+/// Titles are the same in both.
 enum SetupCopy {
     static func line(_ step: SetupFlow.Step) -> String? {
         SetupFlow.usesNewFlow ? new[step] : old[step]
