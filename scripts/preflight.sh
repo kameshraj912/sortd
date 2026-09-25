@@ -30,16 +30,30 @@ else
   ok "SORTD_BETA absent."
 fi
 
-# 1b. Sentry crash reports are for TestFlight only. The App Store label says
-#     "Data Not Collected", and Sentry's privacy manifest declares crash data.
+# 1b. Sentry crash reports run in the live app (overhaul sub-spec 2b): scrubbed,
+#     under the analytics consent switch, user = the salted hash. The label must
+#     say Crash Data, Performance Data and Other Diagnostic Data, "linked to you"
+#     (App Functionality), matching PrivacyInfo.xcprivacy. The DSN comes from
+#     Secrets.xcconfig like the PostHog key: empty is a note for TestFlight and
+#     a FAIL for the App Store, where the label promises crash reports.
 if grep -q 'sentry-cocoa' "$PBX"; then
-  if [ "$MODE" = "--appstore" ]; then
-    bad "Sentry is still linked. Remove the sentry-cocoa package and CrashReporting.swift,"
-    say "      or change the App Privacy label to Crash Data (not linked) first — see CrashReporting.swift."
-  elif grep -q 'static let dsn = ""' Spend/Services/CrashReporting.swift 2>/dev/null; then
-    warn "Sentry DSN is empty — beta crash reports are off. Paste it in CrashReporting.swift."
+  warn "Crash reports on (Sentry). App Privacy label: Crash Data, Performance Data, Other Diagnostic Data — linked to you."
+  dsn=""
+  [ -f Secrets.xcconfig ] && dsn=$(grep -m1 '^SENTRY_DSN' Secrets.xcconfig | cut -d= -f2- | tr -d ' \t')
+  [ -z "$dsn" ] && dsn=$(grep -m1 '^SENTRY_DSN' Config.xcconfig 2>/dev/null | cut -d= -f2- | tr -d ' \t')
+  # Read it as Xcode does: "//" starts a comment, so a DSN pasted without the
+  # $() reads back as "https:"; then the $() drops out. Set means what is left
+  # still has the scheme, the key and the ingest host.
+  [ -n "$dsn" ] && dsn=$(printf '%s' "$dsn" | sed 's#//.*$##; s/\$()//g')
+  if [ -z "$dsn" ] || printf '%s' "$dsn" | grep -q 'replace_me' \
+     || ! { printf '%s' "$dsn" | grep -q '://' && printf '%s' "$dsn" | grep -q '@' && printf '%s' "$dsn" | grep -q 'ingest'; }; then
+    if [ "$MODE" = "--appstore" ]; then
+      bad "SENTRY_DSN is empty or not a DSN (needs https:/\$()/<key>@<org>.ingest.sentry.io/<id>). See Secrets.xcconfig.example."
+    else
+      warn "SENTRY_DSN is empty or not a DSN: this build sends no crash reports (see Secrets.xcconfig.example)."
+    fi
   else
-    ok "Sentry crash reports on for TestFlight."
+    ok "Sentry DSN set."
   fi
 fi
 
