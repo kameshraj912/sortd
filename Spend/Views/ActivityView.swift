@@ -25,6 +25,8 @@ struct TransactionsScreen: View {
     @State private var recategorising: Transaction?
     @State private var deleted = 0
     @State private var undone = 0
+    /// The day on screen in the day pager (`dayPages`).
+    @State private var dayPage: Date?
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
@@ -42,6 +44,15 @@ struct TransactionsScreen: View {
     /// Asks "Change all N … purchases?" when other purchases share the shop.
     @State private var confirmingChange: CategoryChange?
 
+    /// Debug: SPEND_ACTIVITY_DAYS=1 shows one day per page, swiping between
+    /// days (the TeuxDeux reference in spec 5). The list stays the default
+    /// until the pager has had its own UI pass.
+    #if DEBUG
+    static let dayPages = ProcessInfo.processInfo.environment["SPEND_ACTIVITY_DAYS"] == "1"
+    #else
+    static let dayPages = false
+    #endif
+
     var body: some View {
         Group {
             if transactions.isEmpty {
@@ -52,6 +63,8 @@ struct TransactionsScreen: View {
                                message: "Your purchases will show up here.")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else if Self.dayPages {
+                dayPager
             } else {
                 // The list always shows (title, search box, chips), with a
                 // "nothing matches" message inside it, so a search can be cleared.
@@ -201,97 +214,153 @@ struct TransactionsScreen: View {
     private var list: some View {
         List {
             ListPageTitle(title: fixedCard?.name ?? "Activity")
-            // Category chips, like the reference's outlined pills.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    chip("All", selected: categoryFilter == nil) { categoryFilter = nil }
-                    ForEach(usedCategories) { c in
-                        chip(c.name, dot: c.color, selected: categoryFilter == c) {
-                            categoryFilter = categoryFilter == c ? nil : c
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            chips
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
             if filtered.isEmpty {
                 Section {
-                    // The system's own no-results view, so it reads and
-                    // behaves the way it does everywhere else on iOS.
-                    Group {
-                        if search.isEmpty {
-                            ContentUnavailableView {
-                                Label("No purchases match", systemImage: "line.3.horizontal.decrease.circle")
-                            } description: {
-                                Text("Nothing here with these filters on.")
-                            } actions: {
-                                Button("Clear Filters") { cardFilter = nil; categoryFilter = nil }
-                            }
-                        } else {
-                            ContentUnavailableView.search(text: search)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .listRowBackground(Color.clear)
+                    noMatches
+                        .listRowBackground(Color.clear)
                 }
             }
             ForEach(days, id: \.date) { day in
                 Section {
-                    ForEach(day.items) { t in
-                        ZStack {
-                            // Hidden link so the row has no chevron.
-                            NavigationLink {
-                                TransactionDetailView(transaction: t)
-                                    .navigationTransition(.zoom(sourceID: t.persistentModelID, in: zoom))
-                            } label: { EmptyView() }
-                                .opacity(0)
-                            TransactionRow(transaction: t)
-                        }
-                        // The detail grows out of the row you tapped instead
-                        // of sliding in from the side.
-                        .matchedTransitionSource(id: t.persistentModelID, in: zoom)
-                        .listRowBackground(Color.card)
-                        .alignmentGuide(.listRowSeparatorLeading) { _ in 48 }
-                        .swipeActions(edge: .leading) {
-                            Button("Category", systemImage: "tag") { recategorising = t }
-                                .tint(t.category.color)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
-                                .tint(.red)
-                        }
-                        .contextMenu {
-                            Button("Change Category", systemImage: "tag") { recategorising = t }
-                            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
-                        } preview: {
-                            TransactionPreview(transaction: t)
-                        }
-                    }
+                    ForEach(day.items) { t in row(t) }
                 } header: {
-                    // At the largest text sizes the day gets its own line, so
-                    // "September" isn't broken in the middle.
-                    let big = typeSize.isAccessibilitySize
-                    let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-                                     : AnyLayout(HStackLayout())
-                    layout {
-                        Text(dayTitle(day.date))
-                        if !big { Spacer() }
-                        Text(Money.format(day.items.audTotal, Money.home))
-                            .monospacedDigit()
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .textCase(nil)
+                    dayHeader(day)
                 }
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.page)
+    }
+
+    /// One day per page, swiping sideways between days (newest first).
+    /// Each page is its own list, so pull-to-refresh, swipe actions and
+    /// the zoom into a purchase work as they do in `list`; search and the
+    /// chips filter the days the same way.
+    private var dayPager: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageTitle(title: fixedCard?.name ?? "Activity")
+                .padding(.horizontal, 20)
+            chips
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+            if days.isEmpty {
+                noMatches
+                    .frame(maxHeight: .infinity)
+            } else {
+                TabView(selection: $dayPage) {
+                    ForEach(days, id: \.date) { day in
+                        List {
+                            Section {
+                                ForEach(day.items) { t in row(t) }
+                            } header: {
+                                dayHeader(day)
+                            }
+                        }
+                        .listStyle(.insetGrouped)
+                        .scrollContentBackground(.hidden)
+                        .tag(Optional(day.date))
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                // Paging to another day is a choice, like the card carousel.
+                .feedback(.select, trigger: dayPage)
+                // A search or chip can drop the day on screen: fall back to
+                // the newest day that still matches.
+                .onChange(of: days.map(\.date), initial: true) { _, dates in
+                    if dayPage.map({ !dates.contains($0) }) ?? true { dayPage = dates.first }
+                }
+            }
+        }
+        .background(Color.page)
+    }
+
+    /// Category chips, like the reference's outlined pills.
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", selected: categoryFilter == nil) { categoryFilter = nil }
+                ForEach(usedCategories) { c in
+                    chip(c.name, dot: c.color, selected: categoryFilter == c) {
+                        categoryFilter = categoryFilter == c ? nil : c
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    /// The system's own no-results view, so it reads and behaves the way
+    /// it does everywhere else on iOS.
+    private var noMatches: some View {
+        Group {
+            if search.isEmpty {
+                ContentUnavailableView {
+                    Label("No purchases match", systemImage: "line.3.horizontal.decrease.circle")
+                } description: {
+                    Text("Nothing here with these filters on.")
+                } actions: {
+                    Button("Clear Filters") { cardFilter = nil; categoryFilter = nil }
+                }
+            } else {
+                ContentUnavailableView.search(text: search)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    private func row(_ t: Transaction) -> some View {
+        ZStack {
+            // Hidden link so the row has no chevron.
+            NavigationLink {
+                TransactionDetailView(transaction: t)
+                    .navigationTransition(.zoom(sourceID: t.persistentModelID, in: zoom))
+            } label: { EmptyView() }
+                .opacity(0)
+            TransactionRow(transaction: t)
+        }
+        // The detail grows out of the row you tapped instead
+        // of sliding in from the side.
+        .matchedTransitionSource(id: t.persistentModelID, in: zoom)
+        .listRowBackground(Color.card)
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 48 }
+        .swipeActions(edge: .leading) {
+            Button("Category", systemImage: "tag") { recategorising = t }
+                .tint(t.category.color)
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+                .tint(.red)
+        }
+        .contextMenu {
+            Button("Change Category", systemImage: "tag") { recategorising = t }
+            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+        } preview: {
+            TransactionPreview(transaction: t)
+        }
+    }
+
+    private func dayHeader(_ day: (date: Date, items: [Transaction])) -> some View {
+        // At the largest text sizes the day gets its own line, so
+        // "September" isn't broken in the middle.
+        let big = typeSize.isAccessibilitySize
+        let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                         : AnyLayout(HStackLayout())
+        return layout {
+            Text(dayTitle(day.date))
+            if !big { Spacer() }
+            Text(Money.format(day.items.audTotal, Money.home))
+                .monospacedDigit()
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .textCase(nil)
     }
 
     private var usedCategories: [SpendCategory] {
