@@ -530,25 +530,104 @@ struct CloudBackupTests {
 
     // MARK: Review: automatic backups
 
+    /// The waits are replaced, not slept: the fake records each duration and
+    /// moves the clock by it, so the test is exact and never times out. With
+    /// `holds` on, each wait parks until `release()`, so the test can look at
+    /// the state during the wait without racing the task that is waiting.
+    @MainActor
+    private final class FakeClock {
+        var now: Date
+        var waits: [Duration] = []
+        var holds = false
+        private var parked: CheckedContinuation<Void, Never>?
+        private var releases = 0
+
+        init(_ start: Date) { now = start }
+
+        func install(on cloud: CloudBackup) {
+            cloud.sleep = { [self] d in
+                waits.append(d)
+                if holds {
+                    if releases > 0 {
+                        releases -= 1
+                    } else {
+                        await withCheckedContinuation { parked = $0 }
+                    }
+                }
+                now = now.addingTimeInterval(Double(d.components.seconds)
+                                             + Double(d.components.attoseconds) / 1e18)
+            }
+        }
+
+        /// Lets the current (or the next) wait finish.
+        func release() {
+            if let parked {
+                self.parked = nil
+                parked.resume()
+            } else {
+                releases += 1
+            }
+        }
+    }
+
     @Test func aRateLimitedBackupRetriesAfterTheWait() async throws {
         let keys = FakeBackupKeyStore()
         let cloudStore = FakeCloudBackupStore()
         let ctx = try store()
         try log(ctx, "Woolworths", 58.30, minutes: 0)
-        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        let time = FakeClock(fixedClock())
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: { time.now })
+        time.install(on: cloud)
+        // The retry parks in its wait, so the paused state can be checked.
+        time.holds = true
         cloud.isEnabled = true
 
-        cloudStore.saveError = CloudBackupError.rateLimited(retryAfter: 1)
-        await #expect(throws: CloudBackupError.rateLimited(retryAfter: 1)) {
+        cloudStore.saveError = CloudBackupError.rateLimited(retryAfter: 30)
+        await #expect(throws: CloudBackupError.rateLimited(retryAfter: 30)) {
             try await cloud.backUpNow(from: ctx)
         }
         #expect(cloudStore.saved == nil)
+        #expect(cloud.status == .paused(.rateLimited(retryAfter: 30)))
         cloudStore.saveError = nil
 
-        try await Task.sleep(for: .milliseconds(1500))
+        let retry = try #require(cloud.retry)
+        time.release()
+        await retry.value
+        #expect(time.waits == [.seconds(30)])
         #expect(cloudStore.saved != nil)
         #expect(cloud.status == .idle)
-        #expect(cloud.lastBackup == fixedClock())
+        #expect(cloud.lastBackup == time.now)
+    }
+
+    @Test func aBackupSkippedByTheCapIsCaughtUpWhenTheCapEnds() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let time = FakeClock(fixedClock())
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: { time.now })
+        time.install(on: cloud)
+        cloud.isEnabled = true
+
+        await cloud.backUpIfDue(from: ctx)
+        let first = try #require(cloudStore.saved)
+
+        // A save five minutes later: debounced, then skipped by the cap.
+        time.now = time.now.addingTimeInterval(5 * 60)
+        try log(ctx, "Coles", 12.00, minutes: 60)
+        cloud.scheduleBackup(from: ctx)
+        let pending = try #require(cloud.pending)
+        await pending.value
+        if let catchUp = cloud.catchUp { await catchUp.value }
+
+        #expect(time.waits.first == CloudBackup.debounce)
+        // The catch-up waited for the rest of the ten minutes, then backed up.
+        let rest = try #require(time.waits.last)
+        #expect(rest == .seconds(CloudBackup.minimumGap - 5 * 60 - 5))
+        let second = try #require(cloudStore.saved)
+        #expect(second.blob != first.blob)
+        #expect(second.modified == time.now)
+        #expect(cloud.catchUp == nil)
     }
 
     @Test func theSwitchOffMeansNoAutomaticBackup() async throws {
@@ -561,7 +640,8 @@ struct CloudBackupTests {
 
         await cloud.backUpIfDue(from: ctx)
         cloud.scheduleBackup(from: ctx)
-        try await Task.sleep(for: .milliseconds(100))
+        // Off means no debounce is even scheduled.
+        #expect(cloud.pending == nil)
 
         #expect(cloudStore.saved == nil)
         #expect(keys.saveCount == 0)
