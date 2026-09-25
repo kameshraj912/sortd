@@ -82,14 +82,16 @@ struct SetupDefaultsTests {
 
     // MARK: Path length and no Pro step
 
-    @Test func everyPathIsElevenStepsOrFewerAndHasNoProStep() {
+    @Test func everyPathIsElevenQuestionsOrFewerAndHasNoProStep() {
         let goals = SetupProfile.Goal.allCases
         for mask in 0..<(1 << goals.count) {
             let picked = Set(goals.enumerated().filter { mask & (1 << $0.offset) != 0 }.map(\.element))
             for payment in [nil] + SetupProfile.Payment.allCases.map(Optional.some) {
                 for cards in [false, true] {
                     let flow = SetupFlow(goals: picked, payment: payment, hasCards: cards)
-                    #expect(flow.path.count <= 11, "\(flow.path.count) steps for \(picked) \(String(describing: payment)) cards:\(cards)")
+                    // "11" in the spec excludes welcome and the building pause.
+                    let counted = flow.path.filter { $0 != .welcome && $0 != .building }.count
+                    #expect(counted <= 11, "\(counted) steps for \(picked) \(String(describing: payment)) cards:\(cards)")
                     // There is no `.pro` case on `Step` at all (sub-spec 1); this
                     // just documents that every path stays within the known cases.
                     #expect(Set(flow.path).isSubset(of: Set(Step.allCases)))
