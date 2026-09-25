@@ -99,6 +99,12 @@ final class Transaction {
     var needsReview: Bool { amount == 0 }
 }
 
+extension Collection where Element == Transaction {
+    /// Purchases still waiting on an exchange rate, for Home's "+1
+    /// converting" note: they are left out of `audTotal` until the rate lands.
+    var pendingConversions: Int { count { $0.needsRate && !$0.refunded } }
+}
+
 /// A merchant → category mapping Raj taught the app by recategorising.
 @Model
 final class MerchantRule {
