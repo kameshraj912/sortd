@@ -45,6 +45,7 @@ matters.
   labels, values and whether a control is enabled. Never guess coordinates.
 - `tap` the centre of the element's frame. `swipe` to scroll (start more than 4pt from
   the edge, or you trigger a system gesture).
+- `scripts/sim.sh install`, `scripts/sim.sh launch KEY=VALUE ...` (env such as `SPEND_DEMO=1`), `scripts/sim.sh terminate` and `scripts/sim.sh shutdown` cover install, launch and shutdown; raw `simctl` is not needed for them.
 - `screenshot` for layout, colour and clipping.
 - Save each screenshot as `<wt>/.build/ui/<screen>-<size>-<mode>.png`, e.g.
   `home-se-ax5.png`, `activity-promax-dark.png`. Sizes: `se`, `pro`, `promax`. Modes:
