@@ -46,6 +46,9 @@ struct TransactionsScreen: View {
     @State private var stagedChange: CategoryChange?
     /// Asks "Change all N … purchases?" when other purchases share the shop.
     @State private var confirmingChange: CategoryChange?
+    /// A category change that also moved other purchases at the shop, kept
+    /// for the same window as a delete so Undo can put every one back.
+    @State private var recategorised: RecategoriseChange?
 
     /// Debug: SPEND_ACTIVITY_DAYS=1 shows one day per page, swiping between
     /// days (the TeuxDeux reference in spec 5). The list stays the default
@@ -111,11 +114,11 @@ struct TransactionsScreen: View {
                             titleVisibility: .visible,
                             presenting: confirmingChange) { change in
             Button("All \(change.total)") {
-                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context)
+                recategorise(change.transaction, to: change.category)
             }
             Button("Just This One") {
-                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
-                                                    applyToOthers: false)
+                _ = try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
+                                                        applyToOthers: false)
             }
             Button("Cancel", role: .cancel) {}
         } message: { change in
@@ -124,13 +127,23 @@ struct TransactionsScreen: View {
         .feedback(.delete, trigger: deleted)
         .feedback(.undo, trigger: undone)
         .overlay(alignment: .bottom) {
-            if !pending.isEmpty {
-                UndoToast(text: pending.text) { undoDelete() }
-                    .padding(.bottom, 12)
-                    .opacity(closingToast ? 0 : 1)
-                    .offset(y: closingToast ? 40 : 0)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            VStack(spacing: 8) {
+                if let change = recategorised, let text = change.toastText {
+                    UndoToast(text: text, symbol: "tag") { undoRecategorise(change) }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: change) {
+                            try? await Task.sleep(for: pending.window)
+                            withAnimation(Self.toastSpring) { recategorised = nil }
+                        }
+                }
+                if !pending.isEmpty {
+                    UndoToast(text: pending.text) { undoDelete() }
+                        .opacity(closingToast ? 0 : 1)
+                        .offset(y: closingToast ? 40 : 0)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .padding(.bottom, 12)
         }
         // The list used to jump on every keystroke and every chip tap.
         .animation(.snappy, value: search)
@@ -206,10 +219,26 @@ struct TransactionsScreen: View {
     private func pick(_ category: SpendCategory, for t: Transaction) {
         let others = (try? TransactionLogger.samePlace(as: t, in: context)) ?? []
         if others.allSatisfy({ $0.category == category }) {
-            try? TransactionLogger.recategorise(t, to: category, in: context)
+            recategorise(t, to: category)
         } else {
             stagedChange = CategoryChange(transaction: t, category: category, total: others.count + 1)
         }
+    }
+
+    /// Moves the shop and, when others moved too, offers Undo for a while.
+    private func recategorise(_ t: Transaction, to category: SpendCategory) {
+        let change = try? TransactionLogger.recategorise(t, to: category, in: context)
+        withAnimation(Self.toastSpring) { recategorised = change?.toastText == nil ? nil : change }
+        if let text = change?.toastText {
+            AccessibilityNotification.Announcement("\(text). Undo available.").post()
+        }
+    }
+
+    private func undoRecategorise(_ change: RecategoriseChange) {
+        try? TransactionLogger.undo(change, in: context)
+        withAnimation(Self.toastSpring) { recategorised = nil }
+        undone += 1
+        AccessibilityNotification.Announcement("Moved back").post()
     }
 
     // MARK: List
