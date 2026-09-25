@@ -2,29 +2,46 @@ import Foundation
 import Observation
 import UserNotifications
 
-/// True while an iOS permission alert is on screen. The alert makes the scene
-/// go `.inactive`, which would otherwise show the privacy cover behind it.
-/// RootView reads `SystemPrompt.shared.active` to skip the cover then.
+/// True while a system sheet the app asked for is on screen: a permission
+/// alert, Google's or Apple's sign-in sheet, the App Store purchase sheet.
+/// Each makes the scene go `.inactive`, which would otherwise show the
+/// privacy cover on top of it (and a cover over Google's sign-in ends it as
+/// cancelled). RootView reads `SystemPrompt.shared.active` to skip the cover.
 @MainActor
 @Observable
 final class SystemPrompt {
     static let shared = SystemPrompt()
     private(set) var active = false
     private var depth = 0
+    /// How long `active` stays set after the sheet closes, while the scene
+    /// returns to `.active`, so the cover doesn't flash as the sheet goes.
+    private let linger: Duration
 
-    /// Runs `work` (which shows a system alert) with `active` set. It stays
-    /// set a moment after, while the scene returns to `.active`, so the cover
-    /// doesn't flash as the alert closes.
-    func showing<T>(_ work: () async -> T) async -> T {
+    init(linger: Duration = .milliseconds(600)) {
+        self.linger = linger
+    }
+
+    /// A system sheet is about to open. Pair every call with `end()`.
+    func begin() {
         depth += 1
         active = true
-        let result = await work()
+    }
+
+    /// The sheet closed (any way: done, cancelled, failed).
+    func end() {
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Task.sleep(for: linger)
             depth -= 1
             if depth == 0 { active = false }
         }
-        return result
+    }
+
+    /// Runs `work` (which shows a system sheet) with `active` set, and ends
+    /// it on every way out, including a throw.
+    func showing<T>(_ work: () async throws -> T) async rethrows -> T {
+        begin()
+        defer { end() }
+        return try await work()
     }
 }
 
