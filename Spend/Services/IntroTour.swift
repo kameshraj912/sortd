@@ -27,7 +27,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: "Tap + to add anything Apple Pay missed"
         case .insights: "See where your money goes in Insights"
-        case .move: "Switch tabs here. Swipe to change the day."
+        case .move: "Switch tabs here. Tap the arrows to change the day."
         }
     }
 
@@ -37,7 +37,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: "The plus button, bottom right, adds a purchase."
         case .insights: "The Insights tab, in the tab bar."
-        case .move: "The tab bar. On Activity, swipe left or right to change the day."
+        case .move: "The tab bar. On Activity, tap the arrows to change the day."
         }
     }
 
