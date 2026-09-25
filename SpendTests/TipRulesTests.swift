@@ -24,15 +24,21 @@ struct TipRulesTests {
     // MARK: applePay — setup done, Shortcut never reached the app.
 
     @Test func applePayShowsWhenSetupDoneAndShortcutNeverReached() {
-        #expect(TipRules.applePay(setupDone: true, shortcutReached: false, setupShowing: false) == true)
+        #expect(TipRules.applePay(setupDone: true, shortcutReached: false, rowShowing: true, setupShowing: false) == true)
     }
 
     @Test func applePayHidesWhenSetupNotDone() {
-        #expect(TipRules.applePay(setupDone: false, shortcutReached: false, setupShowing: false) == false)
+        #expect(TipRules.applePay(setupDone: false, shortcutReached: false, rowShowing: true, setupShowing: false) == false)
     }
 
     @Test func applePayHidesOnceShortcutReachedTheApp() {
-        #expect(TipRules.applePay(setupDone: true, shortcutReached: true, setupShowing: false) == false)
+        #expect(TipRules.applePay(setupDone: true, shortcutReached: true, rowShowing: true, setupShowing: false) == false)
+    }
+
+    /// A cash user has no Apple Pay row (the Finish Setup card offers the
+    /// widget instead); a hidden card or sample data has no row either.
+    @Test func applePayHidesWhenItsRowIsNotOnScreen() {
+        #expect(TipRules.applePay(setupDone: true, shortcutReached: false, rowShowing: false, setupShowing: false) == false)
     }
 
     // MARK: swipe — 3rd Activity visit, 5+ purchases, boundary at 2 vs 3 visits.
@@ -102,7 +108,7 @@ struct TipRulesTests {
     }
 
     @Test func setupShowingForcesApplePayFalse() {
-        #expect(TipRules.applePay(setupDone: true, shortcutReached: false, setupShowing: true) == false)
+        #expect(TipRules.applePay(setupDone: true, shortcutReached: false, rowShowing: true, setupShowing: true) == false)
     }
 
     @Test func setupShowingForcesSwipeFalse() {
