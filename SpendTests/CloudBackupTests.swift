@@ -55,6 +55,7 @@ final class FakeCloudBackupStore: CloudBackupStore {
     var deleteCount = 0
     var saveError: Error?
     var fetchError: Error?
+    var deleteError: Error?
 
     func save(_ blob: Data, modified: Date) async throws {
         if let e = saveError { throw e }
@@ -67,6 +68,7 @@ final class FakeCloudBackupStore: CloudBackupStore {
     }
 
     func delete() async throws {
+        if let e = deleteError { throw e }
         deleteCount += 1
         saved = nil
     }
@@ -376,5 +378,252 @@ struct CloudBackupTests {
         _ = try await backer.restore(into: dest, mode: .merge)
 
         #expect(keys.deleteCount == 0)
+    }
+
+    // MARK: Review: a new phone must not write over the backup it should restore
+
+    @Test func firstBackupWithACloudRecordPresentRefusesAndTouchesNothing() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let old = (blob: Data("an older phone's backup".utf8), modified: Date(timeIntervalSince1970: 1_790_000_000))
+        cloudStore.saved = old
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+
+        await #expect(throws: CloudBackupError.restoreFirst) {
+            try await cloud.backUpNow(from: ctx)
+        }
+        #expect(cloud.status == .paused(.restoreFirst))
+        #expect(keys.key == nil)
+        #expect(keys.saveCount == 0)
+        let after = try #require(cloudStore.saved)
+        #expect(after.blob == old.blob)
+        #expect(after.modified == old.modified)
+        #expect(cloud.lastBackup == nil)
+    }
+
+    @Test func switchingOnWithACloudRecordPresentDoesNotBackUpAutomatically() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let old = (blob: Data("full backup".utf8), modified: Date(timeIntervalSince1970: 1_790_000_000))
+        cloudStore.saved = old
+        let ctx = try store()
+        try log(ctx, "Coles", 12.00, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+
+        cloud.isEnabled = true
+        await cloud.backUpIfDue(from: ctx)
+
+        #expect(cloudStore.saved?.blob == old.blob)
+        #expect(cloud.status == .paused(.restoreFirst))
+        #expect(keys.saveCount == 0)
+    }
+
+    @Test func firstBackupWithAnEmptyCloudCreatesTheKeyAndSaves() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+
+        try await cloud.backUpNow(from: ctx)
+
+        #expect(keys.saveCount == 1)
+        #expect(cloudStore.saved != nil)
+        #expect(cloud.status == .idle)
+    }
+
+    @Test func aMissingKeyWithACloudRecordPresentIsNeverReplaced() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let source = try store()
+        try log(source, "Woolworths", 58.30, minutes: 0)
+        let defaults = scratch()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: defaults, clock: fixedClock)
+        try await cloud.backUpNow(from: source)
+        let saved = try #require(cloudStore.saved)
+
+        // The key vanished (an iCloud Keychain reset) but this phone had backed up before.
+        keys.key = nil
+        let later = CloudBackup(store: cloudStore, keys: keys, defaults: defaults, clock: fixedClock)
+        await #expect(throws: CloudBackupError.noKey) {
+            try await later.backUpNow(from: source)
+        }
+        #expect(keys.saveCount == 1)
+        #expect(cloudStore.saved?.blob == saved.blob)
+    }
+
+    @Test func afterASuccessfulRestoreBackupProceeds() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let source = try store()
+        try log(source, "Woolworths", 58.30, minutes: 0)
+        let backer = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        try await backer.backUpNow(from: source)
+
+        let dest = try store()
+        let newPhone = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        #expect(try await newPhone.restore(into: dest, mode: .merge) == 1)
+        try log(dest, "Coles", 12.00, minutes: 60)
+
+        try await newPhone.backUpNow(from: dest)
+
+        let key = try #require(try keys.load())
+        let plain = try CloudBackup.decrypt(try #require(cloudStore.saved).blob, with: key)
+        #expect(Backup.contents(of: plain)?.purchases == 2)
+        #expect(newPhone.status == .idle)
+    }
+
+    // MARK: Review: Delete All Data
+
+    @Test func deleteAfterResetTurnsTheSwitchOffAndRemovesTheCloudCopy() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        cloud.isEnabled = true
+        try await cloud.backUpNow(from: ctx)
+
+        await cloud.deleteCloudCopyAfterReset()
+
+        #expect(cloud.isEnabled == false)
+        #expect(cloudStore.deleteCount == 1)
+        #expect(cloudStore.saved == nil)
+        #expect(cloud.isDeletePending == false)
+        #expect(cloud.lastBackup == nil)
+    }
+
+    @Test func aFailedDeleteAfterResetIsRememberedAndRetriedLater() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let defaults = scratch()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: defaults, clock: fixedClock)
+        cloud.isEnabled = true
+        try await cloud.backUpNow(from: ctx)
+
+        cloudStore.deleteError = CloudBackupError.notSignedIn
+        await cloud.deleteCloudCopyAfterReset()
+        #expect(cloud.isDeletePending == true)
+        #expect(cloudStore.saved != nil)
+        #expect(cloud.isEnabled == false)
+
+        // Next launch, iCloud is back.
+        cloudStore.deleteError = nil
+        let nextLaunch = CloudBackup(store: cloudStore, keys: keys, defaults: defaults, clock: fixedClock)
+        #expect(nextLaunch.isDeletePending == true)
+        await nextLaunch.retryPendingDelete()
+        #expect(cloudStore.saved == nil)
+        #expect(nextLaunch.isDeletePending == false)
+    }
+
+    @Test func retryPendingDeleteDoesNothingWhenNothingIsPending() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.deleteCount == 0)
+    }
+
+    // MARK: Review: automatic backups
+
+    @Test func aRateLimitedBackupRetriesAfterTheWait() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        cloud.isEnabled = true
+
+        cloudStore.saveError = CloudBackupError.rateLimited(retryAfter: 1)
+        await #expect(throws: CloudBackupError.rateLimited(retryAfter: 1)) {
+            try await cloud.backUpNow(from: ctx)
+        }
+        #expect(cloudStore.saved == nil)
+        cloudStore.saveError = nil
+
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(cloudStore.saved != nil)
+        #expect(cloud.status == .idle)
+        #expect(cloud.lastBackup == fixedClock())
+    }
+
+    @Test func theSwitchOffMeansNoAutomaticBackup() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        #expect(cloud.isEnabled == false)
+
+        await cloud.backUpIfDue(from: ctx)
+        cloud.scheduleBackup(from: ctx)
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(cloudStore.saved == nil)
+        #expect(keys.saveCount == 0)
+    }
+
+    @Test func anEmptyStoreIsNotBackedUpAutomatically() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        cloud.isEnabled = true
+
+        await cloud.backUpIfDue(from: ctx)
+
+        #expect(cloudStore.saved == nil)
+        #expect(keys.saveCount == 0)
+        #expect(cloud.status == .idle)
+    }
+
+    @Test func anAutomaticBackupWithinTheGapIsSkipped() async throws {
+        let keys = FakeBackupKeyStore()
+        let cloudStore = FakeCloudBackupStore()
+        let ctx = try store()
+        try log(ctx, "Woolworths", 58.30, minutes: 0)
+        var now = fixedClock()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: { now })
+        cloud.isEnabled = true
+
+        await cloud.backUpIfDue(from: ctx)
+        let first = try #require(cloudStore.saved)
+        now = now.addingTimeInterval(5 * 60)
+        await cloud.backUpIfDue(from: ctx)
+        #expect(cloudStore.saved?.blob == first.blob)
+
+        now = now.addingTimeInterval(6 * 60)
+        await cloud.backUpIfDue(from: ctx)
+        #expect(cloudStore.saved?.blob != first.blob)
+    }
+
+    // MARK: Review: restore UI
+
+    @Test func theReplaceWarningComesFromBackup() throws {
+        let contents = Backup.Contents(purchases: 3, cards: 1, createdAt: fixedClock())
+        let expected = Backup.replaceWarning(backup: contents, purchasesHere: 7)
+        let got = CloudBackup.replaceWarning(contents: contents, purchasesHere: 7)
+        #expect(got.title == expected.title)
+        #expect(got.message == expected.message)
+
+        let unknown = CloudBackup.replaceWarning(contents: nil, purchasesHere: 7)
+        #expect(unknown.title.contains("Replace"))
+        #expect(unknown.message.contains("can't be undone"))
+    }
+
+    @Test func mergeRestoreWithNoCloudCopySaysSoWithoutAddingRows() async throws {
+        let keys = FakeBackupKeyStore()
+        keys.key = SymmetricKey(size: .bits256)
+        let cloudStore = FakeCloudBackupStore()
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        let dest = try store()
+
+        let added = try await cloud.restoreIfPresent(into: dest, mode: .merge)
+        #expect(added == nil)
+        #expect(try dest.fetch(FetchDescriptor<Transaction>()).count == 0)
     }
 }

@@ -39,7 +39,9 @@ final class KeychainBackupKeyStore: BackupKeyStore {
         let status = SecItemCopyMatching(q as CFDictionary, &out)
         switch status {
         case errSecSuccess:
-            guard let data = out as? Data, data.count == 32 else { return nil }
+            // Anything but a 256-bit key can't open the backup: say so, rather
+            // than looking like "no key yet" (which could lead to a new one).
+            guard let data = out as? Data, data.count == 32 else { throw CloudBackupError.corrupt }
             return SymmetricKey(data: data)
         case errSecItemNotFound:
             return nil
