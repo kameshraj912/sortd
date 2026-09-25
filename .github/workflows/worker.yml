@@ -11,6 +11,9 @@ on:
     branches: [ "main" ]
     paths: [ "worker/**", ".github/workflows/worker.yml" ]
 
+permissions:
+  contents: read
+
 concurrency:
   group: worker-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
