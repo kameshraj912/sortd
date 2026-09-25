@@ -168,6 +168,10 @@ private struct SpendBar: View {
                 }
                 Spacer(minLength: 0)
             }
+            // Accented (tinted Home Screen) rendering drops every colour and
+            // keeps only two groups: accent and primary. The slices go in the
+            // accent group so they still read against the track.
+            .widgetAccentable()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Sortd.track)
             .clipShape(Capsule())
@@ -419,7 +423,14 @@ struct QuickAddView: View {
                     }
                     .foregroundStyle(Sortd.onInk)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Sortd.ink, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background {
+                        // In accented rendering a filled button and its label
+                        // would both turn primary and the label would vanish.
+                        // The fill takes the accent; the label stays primary.
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Sortd.ink)
+                            .widgetAccentable()
+                    }
                 }
                 .accessibilityLabel("Add a purchase")
                 HStack(spacing: 6) {
@@ -449,6 +460,7 @@ struct QuickAddView: View {
                     .minimumScaleFactor(0.8)
             }
             .foregroundStyle(Sortd.ink)
+            .widgetAccentable()
             .frame(maxWidth: .infinity, minHeight: 30)
             .background(Sortd.track, in: Capsule())
         }
@@ -462,9 +474,13 @@ struct QuickAddView: View {
                 Text(title).font(.caption2.weight(.medium)).lineLimit(1)
             }
             .foregroundStyle(filled ? Sortd.onInk : Sortd.ink)
+            .widgetAccentable(!filled)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(filled ? Sortd.ink : Sortd.track,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(filled ? Sortd.ink : Sortd.track)
+                    .widgetAccentable(filled)
+            }
         }
     }
 }

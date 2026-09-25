@@ -1,0 +1,62 @@
+{
+  "fill" : {
+    "solid" : "extended-srgb:0.06667,0.06667,0.07451,1.00000"
+  },
+  "groups" : [
+    {
+      "name" : "2-bars",
+      "hidden" : false,
+      "layers" : [
+        {
+          "name" : "bars",
+          "image-name" : "bars.svg",
+          "glass" : true,
+          "hidden" : false,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [ 0, 0 ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    },
+    {
+      "name" : "1-receipt",
+      "hidden" : false,
+      "layers" : [
+        {
+          "name" : "receipt",
+          "image-name" : "receipt.svg",
+          "glass" : true,
+          "hidden" : false,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [ 0, 0 ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [ "iOS" ]
+  }
+}
