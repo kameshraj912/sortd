@@ -77,8 +77,8 @@ enum Activation {
     static let launchedAt = Date.now
 
     /// After every save to the store, until the aha has happened: look at
-    /// the rows that save inserted. Call once at launch. Off with the flag,
-    /// like the card it feeds.
+    /// the rows that save inserted. Call once at launch. Off under the
+    /// old-setup escape, like the card it feeds.
     @MainActor
     static func watchSaves() {
         guard SetupFlow.usesNewFlow, !UserDefaults.standard.bool(forKey: seenKey) else { return }
