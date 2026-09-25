@@ -718,10 +718,15 @@ struct OnboardingView: View {
             Text("Do you spend in other currencies?")
                 .font(.headline)
                 .padding(.top, 24)
-            HStack(spacing: 8) {
+            // Three across while the words fit; one under another at
+            // accessibility sizes, so "Often" never breaks into "Of-ten"
+            // (UI pass, 25 Sep).
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
                 ForEach(SetupProfile.Abroad.allCases) { a in
                     Button { withAnimation(.snappy) { abroadRaw = a.rawValue } } label: {
                         Text(a.title)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                             .chip(selected: abroad == a)
                     }
@@ -841,10 +846,14 @@ struct OnboardingView: View {
                             Text(CardInfo.flag(for: info.country)).font(.system(size: 10)).padding(2)
                         }
                         .accessibilityHidden(true)
+                    // Whole words at every size: a one-line limit showed
+                    // "Everyda…" at the largest text (UI pass, 25 Sep).
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(info.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(info.name).font(.subheadline.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(countryName(info.country) + " · " + info.currency)
                             .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
                     Button {
@@ -895,14 +904,27 @@ struct OnboardingView: View {
     }
 
     /// Banks in the chosen country, two per row. Each tap adds one card.
-    private func bankGrid(_ country: String) -> some View {
+    /// At accessibility sizes the grid becomes one full-width row per bank:
+    /// a half-width cell cut "DBS" down to "D…" (UI pass, 25 Sep).
+    @ViewBuilder private func bankGrid(_ country: String) -> some View {
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: 10) { bankButtons(country) }
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) { bankButtons(country) }
+        }
+    }
+
+    @ViewBuilder private func bankButtons(_ country: String) -> some View {
         let banks = BankPreset.all.filter { $0.country == country }
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+        Group {
             ForEach(banks) { bank in
                 let count = book.active.filter { $0.bank == bank.name }.count
                 Button { addCard(from: bank) } label: {
                     HStack(spacing: 8) {
-                        Text(bank.name).font(.body).foregroundStyle(Color.ink).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(bank.name).font(.body).foregroundStyle(Color.ink)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
                         Spacer(minLength: 2)
                         if count > 0 {
                             if count > 1 { Text("\(count)").font(.footnote.weight(.bold)).monospacedDigit() }
@@ -935,6 +957,8 @@ struct OnboardingView: View {
                 Label("Other bank", systemImage: "plus")
                     .font(.body)
                     .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, minHeight: 56)
                     .overlay {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1541,9 +1565,10 @@ struct CardDetailForm: View {
         return (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                Text(required ? (title == "Apple Pay number" ? "Required — tells same-bank cards apart" : "Required") : "Recommended")
+                Text(hint(title, required: required))
                     .font(.caption)
-                    .foregroundStyle(required && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(warns(title, required: required) && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
             }
             if !stacked { Spacer() }
             TextField("Last 4", text: text)
@@ -1560,6 +1585,21 @@ struct CardDetailForm: View {
         .padding(.horizontal, 14)
         .padding(.vertical, stacked ? 8 : 0)
         .frame(minHeight: 52)
+    }
+
+    /// The line under a digits field. The new flow lets Continue skip this
+    /// step, so the card number is a plain hint there, not "Required" in
+    /// orange (UI pass, 25 Sep). The old flow keeps its wording until the
+    /// flag goes. The Apple Pay number is the same in both.
+    private func hint(_ title: String, required: Bool) -> String {
+        if title == "Apple Pay number" { return required ? "Required — tells same-bank cards apart" : "Recommended" }
+        if SetupFlow.usesNewFlow { return "Optional: last 4 digits help match taps" }
+        return required ? "Required" : "Recommended"
+    }
+
+    /// Orange while the digits are missing: only where the line says "Required".
+    private func warns(_ title: String, required: Bool) -> Bool {
+        required && (title == "Apple Pay number" || !SetupFlow.usesNewFlow)
     }
 
     private func save() {
