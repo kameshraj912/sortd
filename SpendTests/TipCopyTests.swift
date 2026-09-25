@@ -2,13 +2,14 @@ import Testing
 import Foundation
 @testable import Spend
 
-/// The six tip lines, kept plain and short: no "Pro", one sentence, no
+/// The five tip lines, kept plain and short: no "Pro", one sentence, no
 /// trailing period on the title, unique snake_case ids for Analytics to key
 /// on later. Contract lives in docs/specs/2026-09-25-free-app-overhaul-7-tips.md.
+/// The sixth (add) is gone: docs/specs/2026-09-25-app-intro.md teaches + instead.
 struct TipCopyTests {
 
-    @Test func hasExactlySixTips() {
-        #expect(TipCopy.all.count == 6)
+    @Test func hasExactlyFiveTips() {
+        #expect(TipCopy.all.count == 5)
     }
 
     @Test func idsAreUniqueSnakeCase() {
