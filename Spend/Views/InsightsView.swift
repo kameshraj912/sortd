@@ -32,6 +32,10 @@ struct InsightsView: View {
                         .padding(.bottom, 32)
                     }
                     .background(Color.page)
+                    // See the matching comment on Home: without this the top
+                    // scroll edge fade only covers the status bar, not the
+                    // gear's row, so scrolled content is sharp under the glass gear.
+                    .scrollEdgeEffectStyle(.soft, for: .top)
                 }
             }
             .navigationTitle("Insights")
