@@ -148,3 +148,24 @@ Added here:
 1. Sentry: remove it, or change the App Privacy label.
 2. Privacy policy: names a person or a business entity. Needs a lawyer.
 3. PR #8 (rename the `Spend/` folder to `Sortd/`): superseded except the rename itself.
+
+## Lessons from the first overhaul
+
+The free-app overhaul (PRs #30–#41, 25 Sep 2026) was the first big change to go through
+this pipeline end to end. What to carry forward:
+
+- **Gate by known-bug names, not counts.** A count alone can go up and down by
+  coincidence while hiding a real regression; comparing the actual test names against
+  the baseline list catches a swap that a count would miss.
+- **Rebase before the gate, and stop on conflict.** Running `scripts/check.sh` on a
+  branch that is behind `main` proves nothing about what will actually merge; a
+  conflict found at gate time, not at merge time, is cheap to fix.
+- **One agent per worktree, always.** Test files land in the shared `SpendTests/`;
+  two agents in the same worktree corrupt each other's work.
+- **Review is not optional.** `code-reviewer` found a P0 in three of the nine
+  sub-specs. Skipping review to save time would have shipped those.
+- **Builders must be allowed to stop and say so.** Test-writers sometimes pin a
+  wrong premise into the test list; a builder who silently makes the code fit a
+  wrong test is worse than one who stops and flags it.
+- **Docs-only PRs skip CI.** A PR that touches only `docs/` needs no build or test
+  run; gating it the same way as a code PR wastes the minutes that code PRs need.
