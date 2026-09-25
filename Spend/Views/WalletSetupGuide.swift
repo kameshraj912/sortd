@@ -118,18 +118,14 @@ struct WalletSetupGuide: View {
             ShortcutsMock(step: p.id, route: route)
                 .frame(height: mockHeight)
                 .accessibilityHidden(true)
-            HStack(alignment: .top, spacing: 10) {
-                Text("\(p.id + 1)")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Color.onBrand)
-                    .frame(width: 28, height: 28)
-                    .background(Color.ink, in: .circle)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.title).font(.headline)
-                    Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
+            // No numbered badge here: the page dots below already show
+            // position, and a second "1" inside a caller's own numbered
+            // step read as a second step 1 (router feel check, 26 Sep 2026).
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.title).font(.headline)
+                Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Step \(p.id + 1) of \(pages.count). \(p.title). \(p.detail)")
         }
