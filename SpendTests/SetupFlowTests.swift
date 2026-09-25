@@ -4,6 +4,37 @@ import Foundation
 
 /// Different kinds of people walked through setup. Each checks the screens
 /// they see, in order, and what their plan lists.
+///
+/// Free-app contract (overhaul sub-spec 1, `docs/specs/2026-09-25-free-app-overhaul-1-free.md`):
+/// there is no Pro step, ever, and no `isPro` flag on `SetupFlow`.
+///
+///     struct SetupFlow: Equatable {
+///         enum Step: Int, CaseIterable, Sendable {
+///             case welcome, goals, payment, currency, feeling, budget, checkIn, building, plan
+///             case cards, cardDetails, applePay, email
+///         }
+///         var goals: Set<SetupProfile.Goal> = []
+///         var payment: SetupProfile.Payment?
+///         var hasCards = false
+///         var gmailFeature = false
+///         // no `isPro`
+///         var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
+///         func isShown(_ s: Step) -> Bool {
+///             switch s {
+///             case .budget: goals.contains(.spendLess)
+///             case .cardDetails: hasCards
+///             case .applePay: payment != .cash
+///             case .email: gmailFeature && wantsGmail   // no isPro
+///             default: true
+///             }
+///         }
+///     }
+///
+/// These tests are written against that signature. Until swift-builder drops
+/// `isPro`/`.pro` from `SetupFlow`, this whole file fails to compile
+/// (`SetupFlow` has no `isPro`/`hasTipped`... has extra `isPro` member and
+/// `Step` still has `.pro`; the initializer calls below don't match). That is
+/// expected: see the test-writer report for the exact compiler errors.
 struct SetupFlowTests {
     typealias Step = SetupFlow.Step
 
@@ -30,9 +61,9 @@ struct SetupFlowTests {
 
     @Test func cashUserWhoWantsToSpendLess() {
         let flow = SetupFlow(goals: [.spendLess], payment: .cash)
+        // No Pro step, no Apple Pay chores for someone who mostly pays cash.
         #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .budget, .checkIn,
-                              .building, .plan, .cards, .pro])
-        // No Apple Pay chores for someone who mostly pays cash.
+                              .building, .plan, .cards])
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "widget"])
         #expect(flow.counter(.budget) == "Question 5 of 6")
     }
@@ -40,28 +71,25 @@ struct SetupFlowTests {
     @Test func notSureYetApplePayUser() {
         let flow = SetupFlow(goals: [], payment: nil)
         #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .checkIn,
-                              .building, .plan, .cards, .applePay, .pro])
+                              .building, .plan, .cards, .applePay])
         #expect(!flow.path.contains(.budget))
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay"])
         #expect(flow.counter(.checkIn) == "Question 5 of 5")
     }
 
-    @Test func onlineShopperWithPro() {
-        let flow = SetupFlow(goals: [.receipts], payment: .online, hasCards: true, gmailFeature: true, isPro: true)
+    /// A person whose goals want receipts, with Gmail switched on in this
+    /// build, sees the email step -- with no Pro condition anywhere.
+    @Test func receiptsGoalWithGmailFeatureShowsTheEmailStep() {
+        let flow = SetupFlow(goals: [.receipts], payment: .online, hasCards: true, gmailFeature: true)
         #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .checkIn, .building, .plan,
-                              .cards, .cardDetails, .applePay, .pro, .email])
+                              .cards, .cardDetails, .applePay, .email])
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay", "gmail"])
     }
 
-    @Test func onlineShopperWithoutProNeverSeesTheGmailStep() {
-        let flow = SetupFlow(goals: [.receipts], payment: .online, gmailFeature: true, isPro: false)
-        #expect(!flow.path.contains(.email))
-        // The plan still says Gmail exists, marked Pro.
-        #expect(tasks(flow).first { $0.id == "gmail" }?.pro == true)
-    }
-
-    @Test func buildWithoutGmailNeverMentionsIt() {
-        let flow = SetupFlow(goals: [.receipts], payment: .online, gmailFeature: false, isPro: true)
+    /// Gmail switched off in this build: never the email step, never the
+    /// gmail chore, no matter what the goals say.
+    @Test func gmailFeatureOffNeverShowsTheEmailStep() {
+        let flow = SetupFlow(goals: [.receipts], payment: .online, gmailFeature: false)
         #expect(!flow.path.contains(.email))
         #expect(!tasks(flow).contains { $0.id == "gmail" })
     }
@@ -74,10 +102,12 @@ struct SetupFlowTests {
         #expect(flow.neighbour(of: .welcome, -1) == nil)
     }
 
+    /// A cash payer with none of the optional steps ends at `.cards`: there
+    /// is no `.pro` step to land on any more.
     @Test func lastStepHasNoNext() {
         let flow = SetupFlow(payment: .cash)
-        #expect(flow.path.last == .pro)
-        #expect(flow.neighbour(of: .pro, 1) == nil)
+        #expect(flow.path.last == .cards)
+        #expect(flow.neighbour(of: .cards, 1) == nil)
     }
 
     @Test func questionsOnlyHaveCounters() {
@@ -97,10 +127,8 @@ struct SetupFlowTests {
             for payment in [nil] + SetupProfile.Payment.allCases.map(Optional.some) {
                 for cards in [false, true] {
                     for gmail in [false, true] {
-                        for pro in [false, true] {
-                            people.append(SetupFlow(goals: picked, payment: payment, hasCards: cards,
-                                                    gmailFeature: gmail, isPro: pro))
-                        }
+                        people.append(SetupFlow(goals: picked, payment: payment, hasCards: cards,
+                                                gmailFeature: gmail))
                     }
                 }
             }
@@ -109,13 +137,11 @@ struct SetupFlowTests {
     }()
 
     @Test func everyCombinationHasASaneRoute() {
-        #expect(Self.everyone.count == 32 * 6 * 8)
+        #expect(Self.everyone.count == 32 * 6 * 4)
         for flow in Self.everyone {
             let path = flow.path
-            // Starts at welcome, then questions, the pause, the plan; ends on Pro or Gmail.
             #expect(path.first == .welcome)
-            #expect(path.contains(.building) && path.contains(.plan) && path.contains(.pro))
-            #expect(path.last == .pro || path.last == .email)
+            #expect(path.contains(.building) && path.contains(.plan))
             // In order, no repeats.
             #expect(path.map(\.rawValue) == path.map(\.rawValue).sorted())
             #expect(Set(path).count == path.count)
@@ -123,7 +149,11 @@ struct SetupFlowTests {
             #expect(path.contains(.budget) == flow.goals.contains(.spendLess))
             #expect(path.contains(.applePay) == (flow.payment != .cash))
             #expect(path.contains(.cardDetails) == flow.hasCards)
-            #expect(path.contains(.email) == (flow.gmailFeature && flow.isPro && flow.wantsGmail))
+            #expect(path.contains(.email) == (flow.gmailFeature && flow.wantsGmail))
+            // The path ends on the last step (in declaration order) this
+            // person is shown -- no fixed "last screen" any more.
+            let lastShown = Step.allCases.last { flow.isShown($0) }
+            #expect(path.last == lastShown)
             // Going back from any step lands on the step before it, skipping the pause.
             for (i, step) in path.enumerated().dropFirst() {
                 let before = path[i - 1] == .building ? path[i - 2] : path[i - 1]
