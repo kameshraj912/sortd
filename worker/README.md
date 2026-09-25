@@ -212,7 +212,8 @@ CI: `.github/workflows/worker.yml` runs install, type-check and tests on Linux f
 
 ## Not verified
 
-- **Real App Attest objects.** The tests use a fake CA. The Apple root in `src/attest.ts` parses, and its self-signature verifies in a test. But no real device attestation has been checked yet: that needs a device or TestFlight.
+- **Real App Attest objects.** The tests use a fake CA. The Apple root in `src/attest.ts` is pinned by SHA-256. It parses, and its self-signature verifies in a test. But no real device attestation has been checked yet: that needs a device or TestFlight. Whether Apple's leaf is signed with SHA-256 or SHA-384 is also not verified. Both are tested.
+- **PostHog's unknown-id 400.** Only `{"type":"validation_error","attr":"distinct_ids", …}` with our id in a list counts as "already gone". The real field names are not verified.
 - **Workers runtime.** Tests run on Node. `wrangler dev` (workerd) was smoke-tested for routing, 405, 403, 413, 429, the challenge route and the dev bypass. The App Attest crypto was not exercised in workerd.
 - **CPU time** per attestation on the free plan's 10 ms limit.
 - **Apple without `redirect_uri`** for native codes.
