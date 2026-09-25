@@ -14,9 +14,10 @@ import os
 /// still goes with what is left.
 ///
 /// Identity: before sign-in PostHog's own anonymous id is the per-install id.
-/// `signedIn` identifies as sha256(salt + provider + subject), where the salt
-/// is random and kept only on this phone, so the id never carries the email
-/// or the raw subject. `signedOut` resets.
+/// `signedIn` identifies as sha256(accountSalt + provider + subject), where
+/// `accountSalt` is one fixed string compiled into the app, so the same
+/// person is the same PostHog person on every phone and after a reinstall,
+/// and the id never carries the email or the raw subject. `signedOut` resets.
 ///
 /// Consent: on by default (Settings › Privacy has the switch). Turning it
 /// off sends `analytics_opted_out` once, then nothing.
@@ -39,6 +40,9 @@ final class Analytics {
         case backupCompleted = "backup_completed"
         case restoreCompleted = "restore_completed"
         case analyticsOptedOut = "analytics_opted_out"
+        /// Sign-in (sub-spec 4): `provider` is apple or google, never the email.
+        case signedIn = "signed_in"
+        case signedOut = "signed_out"
     }
 
     /// Where events go. `PostHogSink` in the app, `NoopSink` with no key,
@@ -75,10 +79,14 @@ final class Analytics {
     static let enabledKey = "analyticsEnabled"
     /// When the switch was last flipped: the consent record, kept on the phone.
     static let consentChangedAtKey = "analyticsConsentChangedAt"
-    static let saltKey = "analyticsSalt"
     /// The identified hash, kept so a crash sent on the next launch still
     /// carries it. Cleared on `signedOut`.
     static let identityHashKey = "analyticsIdentityHash"
+    /// The salt in the signed-in id. Fixed and app-wide on purpose: a
+    /// per-phone salt would make one person two PostHog persons on two
+    /// phones. Not a secret; it only stops a plain lookup of a known Apple
+    /// or Google subject. `AccountStore.hash` uses the same string.
+    nonisolated static let accountSalt = "ecb29d9facc0de3bd8ec45788386868cd4f679dbc3c20e92e2ea7b58b40b3fb6"
     /// Prefix for `trackOnce`: "<prefix>.<event>" is set once per install.
     static let activatedKey = "analyticsActivated"
     /// When this install first ran, for the activation hours bucket.
@@ -239,20 +247,19 @@ final class Analytics {
         track(event, all)
     }
 
-    /// Identifies as a salted hash. The salt is made once and kept on the
-    /// phone, so the id is stable across launches and useless off it.
+    /// Identifies as sha256(accountSalt + provider + subject): the same id
+    /// on every phone and after a reinstall.
     func signedIn(provider: String, subject: String) {
-        let salt: String
-        if let kept = defaults.string(forKey: Self.saltKey), kept.count == 64 {
-            salt = kept
-        } else {
-            salt = (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max)) }.joined()
-            defaults.set(salt, forKey: Self.saltKey)
-        }
-        let id = Self.distinctId(salt: salt, provider: provider, subject: subject)
-        identityBox.withLock { $0 = id }
-        defaults.set(id, forKey: Self.identityHashKey)
-        sink.identify(id)
+        signedIn(hash: Self.distinctId(salt: Self.accountSalt, provider: provider, subject: subject))
+    }
+
+    /// The same, with the hash already made (`AccountStore` makes it with
+    /// `accountSalt`, so the two never disagree). Kept on the phone so a
+    /// crash report sent on the next launch still carries it.
+    func signedIn(hash: String) {
+        identityBox.withLock { $0 = hash }
+        defaults.set(hash, forKey: Self.identityHashKey)
+        sink.identify(hash)
     }
 
     /// Sign-out and Delete All: back to an anonymous id.
