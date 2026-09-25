@@ -50,7 +50,9 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
+        #if SORTD_ICLOUD
         CloudBackup.watchSaves()
+        #endif
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
         Exports.clear()
@@ -259,8 +261,10 @@ struct RootView: View {
         })
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
+            #if SORTD_ICLOUD
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
+            #endif
         }
         // A tap on a widget opens the app at what the widget was showing.
         .onOpenURL { url in
@@ -292,6 +296,10 @@ struct RootView: View {
             defer { pass.end() }
             // Not needed for anything on screen: don't make the rest wait.
             Task { await GoogleAuth.retryPendingRevokes() }
+            #if SORTD_ICLOUD
+            // A Delete All Data that couldn't reach iCloud last time.
+            Task { await CloudBackup.shared.retryPendingDelete() }
+            #endif
             // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()
             Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
