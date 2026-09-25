@@ -41,6 +41,7 @@ struct HomeView: View {
     private var animatedMonth: Binding<Date> {
         Binding(get: { month }, set: { new in
             monthDirection = Motion.direction(from: month, to: new, calendar: cal)
+            if new != month { TipState.monthChanged() }
             Task { @MainActor in withAnimation(.snappy) { month = new } }
         })
     }
@@ -57,6 +58,9 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
+                            // The one Home tip that is not a popover: the +
+                            // lives in the tab bar, which has nothing to anchor to.
+                            SortdTipView(tip: AddTip())
                             if !demo {
                                 // The aha: the first purchase logged by itself,
                                 // then the one notification ask.
@@ -128,6 +132,9 @@ struct HomeView: View {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
         }
+        // Tips: each visit counts, and the rules read the purchase figures.
+        .onAppear { TipState.visitedHome() }
+        .onChange(of: transactions.count, initial: true) { TipState.update(from: transactions) }
     }
 
     /// Shown while the sample data is in: one tap removes it and reopens setup.
@@ -238,6 +245,7 @@ struct HomeView: View {
                         .foregroundStyle(Color.ink)
                     }
                     .accessibilityLabel("Month, \(month.formatted(.dateTime.month(.wide).year()))")
+                    .sortdTip(MonthTip(), arrowEdge: .top)
                     BrandBar(width: 14, height: 3)
                 }
                 Spacer()
@@ -955,6 +963,7 @@ struct SpendChart: View {
         layout {
             ForEach(Range.allCases) { r in
                 Button(r.rawValue) {
+                    TipState.chipsUsed()
                     withAnimation(.snappy) { range = r; selected = nil }
                 }
                 .chip(selected: r == range)
@@ -966,6 +975,8 @@ struct SpendChart: View {
             }
         }
         .buttonStyle(.plain)
+        // The Insights tip points at the chips (the chart is Insights-only).
+        .sortdTip(InsightsTip(), arrowEdge: .top)
     }
 
     private var chart: some View {

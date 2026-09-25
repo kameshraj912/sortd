@@ -427,6 +427,9 @@ struct SetupChecklistList: View {
                 if let open, !task.done {
                     Button { open(task.kind) } label: { row(task) }
                         .buttonStyle(.plain)
+                        // Home only (the plan screen has no `open`): the tip
+                        // to set up Apple Pay logging points at its row.
+                        .sortdTip(task.kind == .applePay ? ApplePayTip() : nil, arrowEdge: .top)
                 } else {
                     row(task)
                 }
