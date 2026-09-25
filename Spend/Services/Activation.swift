@@ -18,6 +18,9 @@ enum Activation {
     /// Set once the person has answered the single notification ask on
     /// Home (yes or no). Declined means never asked again.
     static let askedKey = "notificationAskShown"
+    /// The aha card's haptic and tick have played: once per install, not
+    /// once per launch while the ask is still up.
+    static let celebratedKey = "activationCelebrated"
 
     /// Which automatic source this purchase came from, or nil when it does
     /// not count as the aha.
