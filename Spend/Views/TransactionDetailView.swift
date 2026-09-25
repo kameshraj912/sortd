@@ -22,6 +22,10 @@ struct TransactionDetailView: View {
     /// a 200-character name never reaches `merchant` as typed.
     @State private var merchantText = ""
     @FocusState private var merchantFocused: Bool
+    /// A category change that also moved other purchases at the shop, kept
+    /// for a few seconds so Undo can put every one of them back.
+    @State private var recategorised: RecategoriseChange?
+    @State private var undone = 0
 
     /// Amounts must be under this: the same 9 whole digits the field lets
     /// you type (`AmountEntry.detailWholeDigits`). Imports have no cap, so
@@ -147,7 +151,21 @@ struct TransactionDetailView: View {
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
-                try? TransactionLogger.recategorise(transaction, to: category, in: context)
+                let change = try? TransactionLogger.recategorise(transaction, to: category, in: context)
+                withAnimation(.snappy) { recategorised = change?.toastText == nil ? nil : change }
+            }
+        }
+        .feedback(.undo, trigger: undone)
+        .overlay(alignment: .bottom) {
+            if let change = recategorised, let text = change.toastText {
+                UndoToast(text: text, symbol: "tag") { undoRecategorise(change) }
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: change) {
+                        // The same window as a delete (`PendingDeletes`).
+                        try? await Task.sleep(for: .seconds(8))
+                        withAnimation(.snappy) { recategorised = nil }
+                    }
             }
         }
         .confirmationDialog("Delete this purchase?", isPresented: $confirmingDelete, titleVisibility: .visible) {
@@ -265,6 +283,14 @@ struct TransactionDetailView: View {
             merchantText = transaction.merchant
             loadedMerchant = merchantText
         }
+    }
+
+    /// Every purchase the change moved goes back, and so does the rule.
+    private func undoRecategorise(_ change: RecategoriseChange) {
+        try? TransactionLogger.undo(change, in: context)
+        withAnimation(.snappy) { recategorised = nil }
+        undone += 1
+        AccessibilityNotification.Announcement("Moved back").post()
     }
 
     private func refreshAUD() {
