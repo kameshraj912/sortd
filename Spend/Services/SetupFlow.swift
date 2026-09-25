@@ -97,13 +97,13 @@ extension SetupFlow {
 
     /// The tap-through flow: "Continue" on every step, no permission alert
     /// during setup, "Do this later" on the plan goes straight to Home.
-    /// Debug builds turn it on with SPEND_NEW_SETUP=1; the old flow stays the
-    /// default until the UI pass. The flag goes in a follow-up PR.
+    /// The default since 25 Sep 2026. Debug builds show the old flow with
+    /// SPEND_OLD_SETUP=1 (to compare, or to run the old-flow tests).
     static var usesNewFlow: Bool {
         #if DEBUG
-        ProcessInfo.processInfo.environment["SPEND_NEW_SETUP"] == "1"
+        ProcessInfo.processInfo.environment["SPEND_OLD_SETUP"] != "1"
         #else
-        false
+        true
         #endif
     }
 }
