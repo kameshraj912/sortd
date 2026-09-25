@@ -16,9 +16,13 @@ import Sentry
 enum CrashReporting {
     /// From sentry.io › Project Settings › Client Keys (DSN). Never in source:
     /// `SENTRY_DSN` in Secrets.xcconfig (gitignored) → Config.xcconfig →
-    /// Spend-Info.plist → here. Empty = off.
-    static let dsn: String = (Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String ?? "")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Spend-Info.plist → here. Empty = off. The example file's placeholder
+    /// ("replace_me") counts as empty, so a copied example never starts Sentry.
+    static let dsn: String = {
+        let raw = (Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.contains("replace_me") ? "" : raw
+    }()
 
     static var isDebug: Bool {
         #if DEBUG
@@ -45,12 +49,17 @@ enum CrashReporting {
 
     /// The consent switch moved. Off closes the SDK so nothing more leaves
     /// the phone; on starts it again. Called from `Analytics.isEnabled`.
+    ///
+    /// `close()` waits up to `shutdownTimeInterval` for the transport, so it
+    /// runs off the main thread and the switch never freezes. Events already
+    /// captured under consent (and queued) may still flush during that close;
+    /// nothing captured after it leaves.
     static func consentChanged(to on: Bool, analytics: Analytics) {
         if on {
             start(analytics: analytics)
         } else if SentrySDK.isEnabled {
-            SentrySDK.close()
             log.notice("crash reports off: consent withdrawn")
+            Task.detached(priority: .utility) { SentrySDK.close() }
         }
     }
 
@@ -75,6 +84,8 @@ enum CrashReporting {
             // Sessions (start, end, crashed) give the crash-free rate; they
             // carry no user text.
             options.enableAutoSessionTracking = true
+            // How long close() waits for the transport (default 2 s).
+            options.shutdownTimeInterval = 0.5
             options.beforeBreadcrumb = { @Sendable crumb in CrashReporting.scrubBreadcrumb(crumb) }
             options.beforeSend = { @Sendable event in
                 CrashReporting.scrub(event, userId: analytics.identityHash)
@@ -83,15 +94,27 @@ enum CrashReporting {
         log.info("crash reports on: Sentry, scrubbed")
     }
 
-    /// What may leave the phone: the exception type and its frames, the
-    /// device and OS, and the user id (the hash). Exception values and the
-    /// message go, since an error string can carry a merchant name or Gmail
-    /// text. Request, breadcrumbs, extra and tags go whole.
+    /// Context keys Sentry needs to group and show a crash: the device
+    /// model, the OS and the app version. Nothing typed in the app lands
+    /// there. Everything else in `context` goes; in particular the crash
+    /// converter puts an uncaught NSException's userInfo under "user info".
+    nonisolated static let keptContext: Set<String> = ["device", "os", "app"]
+
+    /// What may leave the phone: the exception type, its frames and its
+    /// mechanism type, the device, OS and app context, and the user id (the
+    /// hash). Exception values, the message and the mechanism data (the crash
+    /// converter's "crash_info_messages": earlier Swift runtime messages)
+    /// go, since an error string can carry a merchant name or Gmail text.
+    /// Request, breadcrumbs, extra and tags go whole.
     nonisolated static func scrub(_ event: Event, userId: String?) -> Event {
         for exception in event.exceptions ?? [] {
             exception.value = nil
+            exception.mechanism?.data = nil
         }
         event.message = nil
+        if let context = event.context {
+            event.context = context.filter { keptContext.contains($0.key) }
+        }
         if let userId {
             event.user = User(userId: userId)
         } else {
