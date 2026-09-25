@@ -7,6 +7,9 @@
 	<string>$(POSTHOG_API_KEY)</string>
 	<key>POSTHOG_HOST</key>
 	<string>$(POSTHOG_HOST)</string>
+	<!-- Sentry crash reports; same route. Empty DSN = crash reports off. -->
+	<key>SENTRY_DSN</key>
+	<string>$(SENTRY_DSN)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
