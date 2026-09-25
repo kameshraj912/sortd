@@ -47,13 +47,13 @@ struct TransactionsScreen: View {
     /// Asks "Change all N … purchases?" when other purchases share the shop.
     @State private var confirmingChange: CategoryChange?
 
-    /// Debug: SPEND_ACTIVITY_DAYS=1 shows one day per page, swiping between
-    /// days (the TeuxDeux reference in spec 5). The list stays the default
-    /// until the pager has had its own UI pass.
+    /// One day per page, swiping between days (the TeuxDeux reference in
+    /// spec 5): the default since 25 Sep 2026. Debug builds show the old
+    /// single list with SPEND_ACTIVITY_LIST=1.
     #if DEBUG
-    static let dayPages = ProcessInfo.processInfo.environment["SPEND_ACTIVITY_DAYS"] == "1"
+    static let dayPages = ProcessInfo.processInfo.environment["SPEND_ACTIVITY_LIST"] != "1"
     #else
-    static let dayPages = false
+    static let dayPages = true
     #endif
 
     var body: some View {
@@ -295,13 +295,18 @@ struct TransactionsScreen: View {
                 noMatches
                     .frame(maxHeight: .infinity)
             } else {
+                let all = days
                 TabView(selection: swipedDayPage) {
                     ForEach(pagedDays, id: \.date) { day in
                         List {
                             Section {
                                 ForEach(day.items) { t in row(t) }
                             } header: {
-                                dayHeader(day)
+                                // The page dots are hidden, so the header
+                                // says where this day sits ("2 of 14"):
+                                // nothing else hints there are more days.
+                                dayHeader(day, position: DayPager.dayIndex(for: day.date, in: all.map(\.date))
+                                    .map { DayPager.position($0, of: all.count) })
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -322,9 +327,11 @@ struct TransactionsScreen: View {
                 // The page dots are hidden, so VoiceOver hears which day
                 // this is and what it cost.
                 .onChange(of: dayPage) { old, new in
-                    guard old != nil, let new, let day = days.first(where: { $0.date == new }) else { return }
+                    guard old != nil, let new, let i = DayPager.dayIndex(for: new, in: all.map(\.date)) else { return }
+                    let day = all[i]
                     AccessibilityNotification.Announcement(
-                        "\(dayTitle(day.date)), \(Money.spoken(day.items.audTotal, Money.home))").post()
+                        "\(dayTitle(day.date)), \(DayPager.position(i, of: all.count).spoken), "
+                        + Money.spoken(day.items.audTotal, Money.home)).post()
                 }
             }
         }
@@ -333,10 +340,13 @@ struct TransactionsScreen: View {
 
     /// The pager's selection. A swipe writes through here and counts as one;
     /// the pager's own choices write `dayPage` directly and stay silent.
+    /// A fast swipe can hand over a day two pages away (the window of built
+    /// pages moves under it): it settles on the adjacent day instead.
     private var swipedDayPage: Binding<Date?> {
         Binding(get: { dayPage }, set: { new in
-            if let new, dayPage != nil, new != dayPage { daySwipes += 1 }
-            dayPage = new
+            let settled = new.map { DayPager.settle($0, from: dayPage, in: days.map(\.date)) }
+            if let settled, dayPage != nil, settled != dayPage { daySwipes += 1 }
+            dayPage = settled
         })
     }
 
@@ -415,17 +425,22 @@ struct TransactionsScreen: View {
         }
     }
 
-    private func dayHeader(_ day: (date: Date, items: [Transaction])) -> some View {
+    /// `position` (the pager only) adds "· 2 of 14" after the day.
+    private func dayHeader(_ day: (date: Date, items: [Transaction]),
+                           position: DayPager.Position? = nil) -> some View {
         // At the largest text sizes the day gets its own line, so
         // "September" isn't broken in the middle.
         let big = typeSize.isAccessibilitySize
         let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
                          : AnyLayout(HStackLayout())
+        let title = dayTitle(day.date)
         return layout {
-            Text(dayTitle(day.date))
+            Text(position.map { "\(title) · \($0.text)" } ?? title)
+                .accessibilityLabel(position.map { "\(title), \($0.spoken)" } ?? title)
             if !big { Spacer() }
             Text(Money.format(day.items.audTotal, Money.home))
                 .monospacedDigit()
+                .accessibilityLabel(Money.spoken(day.items.audTotal, Money.home))
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
