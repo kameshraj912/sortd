@@ -192,6 +192,12 @@ struct OnboardingView: View {
     private var checkInLine: (symbol: String, text: String) {
         let choice = effectiveCheckIn
         if choice != .needed, notificationsOff {
+            // New flow: nothing has asked yet, so "off" would be wrong. The
+            // aha card on Home asks, once.
+            if newFlow {
+                return ("bell", choice == .sunday ? "We'll ask about a Sunday recap later"
+                                                  : "We'll ask about check-ins later")
+            }
             return ("bell.slash", "Check-ins off (notifications are off)")
         }
         return (choice.symbol, choice == .needed ? "No regular check-ins" : choice.summary)
@@ -383,10 +389,12 @@ struct OnboardingView: View {
                 case .checkIn where asksNotifications:
                     primaryButton(primaryTitle, action: primaryAction)
                     tertiaryButton("Not now") {
-                        // No notifications: no check-in, no bill reminders.
+                        // No notifications: no check-in, no bill reminders,
+                        // and the aha card never asks again (research 03 §9).
                         checkInRaw = SetupProfile.CheckIn.needed.rawValue
                         billIntent = false
                         checkInChosen = true
+                        Activation.markNotificationAsked()
                         go(1)
                     }
                 default:
@@ -421,6 +429,9 @@ struct OnboardingView: View {
 
     private func primaryAction() {
         guard !finished else { return }
+        // New flow: Continue past a question nobody answered is a skip, so
+        // setup_finished(skipped) means the same thing in both flows.
+        if newFlow, untouched(step) { usedSkip = true }
         if step == .checkIn {
             checkInRaw = checkIn.rawValue   // keep the pre-picked default too
             checkInChosen = true
@@ -433,6 +444,8 @@ struct OnboardingView: View {
                     let allowed = await Reminders.requestPermission()
                     let actual = await Self.notificationsAllowed()
                     notificationsOff = !(allowed || actual)
+                    // Asked here: the aha card must never ask a second time.
+                    Activation.markNotificationAsked()
                     requesting = false
                     if step == from { go(1) }
                 }
@@ -440,6 +453,18 @@ struct OnboardingView: View {
             }
         }
         go(1)
+    }
+
+    /// A question left as it was: no goal, no payment, no feeling, no limit.
+    /// Currency and check-in always hold a default, so they never count.
+    private func untouched(_ s: Step) -> Bool {
+        switch s {
+        case .goals: goals.isEmpty
+        case .payment: payment == nil
+        case .feeling: feelingRaw.isEmpty
+        case .budget: budget == 0
+        default: false
+        }
     }
 
     private func go(_ delta: Int) {
@@ -450,7 +475,7 @@ struct OnboardingView: View {
             if delta > 0 { finish() }
             return
         }
-        if delta > 0 { stepDone(step) }
+        if delta > 0 { stepDone(step, skipped: newFlow && untouched(step)) }
         withAnimation(.snappy) { step = next }
     }
 
@@ -662,7 +687,9 @@ struct OnboardingView: View {
     private var currency: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.currency), title: "Your main currency",
-                        subtitle: SetupCopy.line(.currency))
+                        // "We picked the one your iPhone uses" only while
+                        // that is still true.
+                        subtitle: home == Money.detectedHome ? SetupCopy.line(.currency) : SetupCopy.currencyPicked)
             VStack(spacing: 10) {
                 ForEach(currencyChoices, id: \.self) { code in
                     OptionCard(symbol: Self.currencySymbol(code), title: "\(code) · \(name(of: code))",

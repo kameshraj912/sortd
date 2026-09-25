@@ -86,9 +86,8 @@ extension SetupFlow {
     /// The phone's own currency when daily rates exist for it, no limit,
     /// a Sunday recap, no goals, no Gmail.
     static func defaults(locale: Locale) -> Defaults {
-        let code = locale.currency?.identifier ?? "USD"
-        return Defaults(currency: Money.supported.contains(code) ? code : "USD",
-                        budget: 0, checkIn: .sunday, goals: [], wantsGmail: false)
+        Defaults(currency: Money.detectedHome(for: locale),
+                 budget: 0, checkIn: .sunday, goals: [], wantsGmail: false)
     }
 
     /// Nothing in setup is a required field: Continue always works, whatever
