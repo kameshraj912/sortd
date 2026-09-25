@@ -21,19 +21,26 @@ All three are settings, not code. Do them once the paid developer account clears
       under US$1M a year. Apply at developer.apple.com/app-store/small-business-program. It's a
       form; the lower rate starts after approval, not back-dated, so apply before launch.
 
-## Beta crash reports — Sentry (added 21 Sep 2026)
+## Crash reports — Sentry (added 21 Sep 2026, live app from 25 Sep 2026)
 
-Built into TestFlight builds only (`Spend/Services/CrashReporting.swift`, `#if SORTD_BETA`).
-Sends the stack trace, device model and OS. No purchases, merchants, emails, screenshots,
-breadcrumbs or IP.
+On in every Release build that has a DSN, under the same consent switch as analytics
+(Settings › Privacy). `Spend/Services/CrashReporting.swift` scrubs every event before it
+leaves: exception type, stack, device model and OS stay; exception text, message, request,
+breadcrumbs, extra, tags and IP go. The user is the salted analytics hash only, so Crash,
+Performance and Other Diagnostic Data are "linked to you" on the label (App Functionality).
+Turning the switch off closes the SDK; on starts it again. Off in Debug always.
 
-- [ ] Make a free Sentry account and an iOS project; paste its DSN into `CrashReporting.dsn`.
-- [ ] Before the first beta build with the DSN: one line on sortd.page/privacy (beta section)
-      and the beta page — "TestFlight builds send crash reports (no personal data) to Sentry."
-- [ ] Crash once on purpose in a TestFlight build and check the report shows no personal data.
-- [ ] **App Store build:** remove the package, or go live with it (label → Diagnostics › Crash
-      Data, not linked; update the "no analytics" wording). `preflight.sh --appstore` fails
-      while Sentry is linked.
+- [ ] Make a free Sentry account and an iOS project. Put its DSN in `Secrets.xcconfig`
+      (`SENTRY_DSN`, see `Secrets.xcconfig.example`). Never in source; `preflight.sh --appstore`
+      fails while it is empty, TestFlight only notes it.
+- [ ] App Privacy label: add Crash Data, Performance Data, Other Diagnostic Data — linked to you,
+      App Functionality — beside the analytics types. `PrivacyInfo.xcprivacy` already says so.
+- [ ] sortd.page/privacy and the in-app Privacy page: one line, in the same release —
+      "Crash reports (no purchases, merchants or emails) go to Sentry under the analytics switch."
+- [ ] Crash once on purpose in a TestFlight build. In Sentry: stack and device model present;
+      no IP, no merchant text; the user id is the hash (or none before sign-in).
+- [ ] Not verified: whether our manifest's "linked" wins over sentry-cocoa's "not linked" in
+      Xcode's privacy report on the archive. Check the report; the label is what you type anyway.
 
 ## Account security (added 21 Sep 2026)
 
@@ -79,9 +86,8 @@ Checked in code, not on a device. Not legal advice; items marked "lawyer" need o
 - [x] "Finish setup" widget check uses `WidgetCenter.currentConfigurations()`, on the device.
 - [x] Only network calls in the app: Google OAuth/Gmail, frankfurter.dev, and StoreKit (Apple).
 - [x] sortd.page/privacy, terms and support updated for all of the above (not deployed).
-- [ ] Sentry is linked in the app target even though the DSN is empty. Its privacy manifest may
-      put "Crash Data" into Xcode's privacy report and clash with "Data Not Collected". Check the
-      generated report on the archive; remove the package for the App Store build (already planned).
+- [ ] Sentry is linked and on (see Crash reports above). Check Xcode's privacy report on the
+      archive shows Crash, Performance and Other Diagnostic Data as linked, matching the label.
 - [ ] The in-app Privacy page (`PrivacyView` in `Views/DataControlsView.swift`) doesn't mention
       setup answers, notifications or Apple Intelligence yet. Settings › Privacy & Security now has
       a short section for them; fold it into PrivacyView when that file is free.
