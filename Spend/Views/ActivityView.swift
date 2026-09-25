@@ -30,6 +30,9 @@ struct TransactionsScreen: View {
     /// Swipes between days. The haptic plays on these, not when the pager
     /// picks a day itself (first show, a filter, a delete).
     @State private var daySwipes = 0
+    /// Which way the last day change went, for the slide.
+    @State private var dayDirection: Motion.Direction = .forward
+    @Environment(\.crossFades) private var crossFades
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
@@ -285,109 +288,123 @@ struct TransactionsScreen: View {
         .background(Color.page)
     }
 
-    /// One day per page, swiping sideways between days (newest first).
-    /// Each page is its own list, so pull-to-refresh, swipe actions and
-    /// the zoom into a purchase work as they do in `list`; search and the
-    /// chips filter the days the same way.
+    /// One day at a time, newest first: swipe sideways or tap the chevrons
+    /// in the day's header to move a day. It is one List, the direct content
+    /// of the navigation stack, so the bar tracks it: scrolling up folds the
+    /// large title into the bar and hides the search field, and a pull down
+    /// at the top brings them back. (Each day in a paging TabView had its own
+    /// list, and the bar tracked none of them.)
     private var dayPager: some View {
-        // The pager is the screen's root scroll view and the chips are the
-        // first row of every page, so the navigation bar has a list to
-        // track: with the chips in a VStack above it, the search field never
-        // showed (the bar was watching the chips' horizontal scroll view).
-        Group {
-            if days.isEmpty {
-                List {
-                    chipsRow
+        let all = days
+        let index = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
+        return ScrollViewReader { proxy in
+            List {
+                chipsRow
+                if all.isEmpty {
                     Section { noMatches.listRowBackground(Color.clear) }
-                }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .contentMargins(.top, 12, for: .scrollContent)
-            } else {
-                let all = days
-                TabView(selection: swipedDayPage) {
-                    ForEach(pagedDays, id: \.date) { day in
-                        ScrollViewReader { proxy in
-                            List {
-                                chipsRow
-                                Section {
-                                    ForEach(day.items) { t in row(t) }
-                                } header: {
-                                    // The page dots are hidden, so the header
-                                    // says where this day sits ("2 of 14"):
-                                    // nothing else hints there are more days.
-                                    dayHeader(day, position: DayPager.dayIndex(for: day.date, in: all.map(\.date))
-                                        .map { DayPager.position($0, of: all.count) })
-                                }
-                            }
-                            .listStyle(.insetGrouped)
-                            .scrollContentBackground(.hidden)
-                            .contentMargins(.top, 12, for: .scrollContent)
-                            .task {
-                                guard Self.startScrolled, let last = day.items.last else { return }
-                                try? await Task.sleep(for: .seconds(1))
-                                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                            }
+                } else {
+                    let day = all[index]
+                    Section {
+                        ForEach(day.items) { t in
+                            row(t).transition(Motion.transition(dayDirection, crossFades: crossFades))
                         }
-                        .tag(Optional(day.date))
+                    } header: {
+                        pagerHeader(day, position: DayPager.position(index, of: all.count))
                     }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // Paging to another day is a choice, like the card carousel.
-                .feedback(.select, trigger: daySwipes)
-                // The day on screen can go: cleared by a search or a chip, or
-                // its last purchase swiped away. Stay next to where you were.
-                .onChange(of: days.map(\.date), initial: true) { old, new in
-                    if dayPage.map({ !new.contains($0) }) ?? true {
-                        dayPage = DayPager.neighbour(of: dayPage, in: old, still: new)
-                    }
-                }
-                // The page dots are hidden, so VoiceOver hears which day
-                // this is and what it cost.
-                .onChange(of: dayPage) { old, new in
-                    guard old != nil, let new, let i = DayPager.dayIndex(for: new, in: all.map(\.date)) else { return }
-                    let day = all[i]
-                    AccessibilityNotification.Announcement(
-                        "\(dayTitle(day.date)), \(DayPager.position(i, of: all.count).spoken), "
-                        + Money.spoken(day.items.audTotal, Money.home)).post()
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            // Sideways swipes move a day; up and down still scroll. Only a
+            // clearly sideways drag counts.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onEnded { drag in
+                        let dx = drag.translation.width, dy = drag.translation.height
+                        guard abs(dx) > 80, abs(dx) > abs(dy) * 2 else { return }
+                        stepDay(dx < 0 ? 1 : -1)
+                    }
+            )
+            .task(id: dayPage) {
+                #if DEBUG
+                guard Self.startScrolled, let last = all.indices.contains(index) ? all[index].items.last : nil else { return }
+                try? await Task.sleep(for: .seconds(1))
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                #endif
+            }
+        }
+        // Paging to another day is a choice, like the card carousel.
+        .feedback(.select, trigger: daySwipes)
+        // The day on screen can go: cleared by a search or a chip, or
+        // its last purchase swiped away. Stay next to where you were.
+        .onChange(of: all.map(\.date), initial: true) { old, new in
+            if dayPage.map({ !new.contains($0) }) ?? true {
+                dayPage = DayPager.neighbour(of: dayPage, in: old, still: new)
+            }
+        }
+        // There are no page dots, so VoiceOver hears which day this is and
+        // what it cost.
+        .onChange(of: dayPage) { old, new in
+            guard old != nil, let new, let i = DayPager.dayIndex(for: new, in: all.map(\.date)) else { return }
+            let day = all[i]
+            AccessibilityNotification.Announcement(
+                "\(dayTitle(day.date)), \(DayPager.position(i, of: all.count).spoken), "
+                + Money.spoken(day.items.audTotal, Money.home)).post()
         }
         .background(Color.page)
     }
 
+    /// Moves one day: +1 is the next older day, -1 the next newer. Nothing
+    /// past either end.
+    private func stepDay(_ delta: Int) {
+        let dates = days.map(\.date)
+        guard let current = dayPage ?? dates.first,
+              let next = DayPager.day(delta, from: current, in: dates) else { return }
+        dayDirection = delta > 0 ? .forward : .backward
+        withAnimation(crossFades ? .easeInOut(duration: 0.2) : .snappy) { dayPage = next }
+        daySwipes += 1
+    }
+
+    /// The day's header with a chevron either side: the tap alternative to
+    /// swiping, and the way in for VoiceOver and Switch Control.
+    private func pagerHeader(_ day: (date: Date, items: [Transaction]), position: DayPager.Position) -> some View {
+        let newer = Button("Newer Day", systemImage: "chevron.left") { stepDay(-1) }
+            .disabled(position.index == 0)
+        let older = Button("Older Day", systemImage: "chevron.right") { stepDay(1) }
+            .disabled(position.index + 1 >= position.count)
+        // At the largest sizes the chevrons get their own row, so the day
+        // keeps the full width.
+        return Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    dayHeader(day, position: position)
+                    HStack { newer; Spacer(); older }
+                }
+            } else {
+                HStack(spacing: 4) { newer; dayHeader(day, position: position); older }
+            }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .font(.footnote.weight(.semibold))
+        .textCase(nil)
+    }
+
     /// The chips as a list row, a section gap under the title and search
-    /// field (the list's own top margin is the rest of it).
+    /// field. The first chip lines up with the search field; the rest scroll
+    /// out to the screen edge.
     private var chipsRow: some View {
-        chips
-            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
+        chips(inset: 0)
+            .scrollClipDisabled()
+            .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 8, trailing: 0))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
     }
 
-    /// The pager's selection. A swipe writes through here and counts as one;
-    /// the pager's own choices write `dayPage` directly and stay silent.
-    /// A fast swipe can hand over a day two pages away (the window of built
-    /// pages moves under it): it settles on the adjacent day instead.
-    private var swipedDayPage: Binding<Date?> {
-        Binding(get: { dayPage }, set: { new in
-            let settled = new.map { DayPager.settle($0, from: dayPage, in: days.map(\.date)) }
-            if let settled, dayPage != nil, settled != dayPage { daySwipes += 1 }
-            dayPage = settled
-        })
-    }
-
-    /// Only the days near the one on screen are built (`DayPager.reach`
-    /// either side); the window follows the page, so paging never runs out
-    /// and all of history is never a list each.
-    private var pagedDays: [(date: Date, items: [Transaction])] {
-        let all = days
-        let i = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
-        return Array(all[DayPager.window(around: i, count: all.count)])
-    }
-
     /// Category chips, like the reference's outlined pills.
-    private var chips: some View {
+    private var chips: some View { chips(inset: 20) }
+
+    private func chips(inset: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip("All", selected: categoryFilter == nil) { categoryFilter = nil }
@@ -397,7 +414,7 @@ struct TransactionsScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, inset)
         }
     }
 
