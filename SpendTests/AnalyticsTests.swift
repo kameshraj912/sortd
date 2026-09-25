@@ -36,9 +36,12 @@ import Foundation
 //
 //       enum AnalyticsValue { case string(String), int(Int), double(Double), bool(Bool) }
 //
-//       init(sink: Sink, defaults: UserDefaults)
+//       init(sink: Sink, defaults: UserDefaults, regionCode: String? = Locale.current.region?.identifier)
 //
-//       /// Persisted at `defaults["analyticsEnabled"]`. Default true. Setting it to
+//       /// Persisted at `defaults["analyticsEnabled"]`. With nothing stored, the
+//       /// default comes from `defaultConsent(regionCode:)`: off in the EU/EEA, UK
+//       /// and Switzerland, on elsewhere (AnalyticsConsentTests). These tests pin
+//       /// region "AU", so the default is on. Setting it to
 //       /// false posts `.analyticsOptedOut` exactly once (the transition), then every
 //       /// later `track`/`screen` call is a no-op until it is set back to true.
 //       /// Setting it to false again while already false does nothing.
@@ -94,10 +97,10 @@ struct AnalyticsTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let sink = SpySink()
-        return (Analytics(sink: sink, defaults: defaults), sink, defaults)
+        return (Analytics(sink: sink, defaults: defaults, regionCode: "AU"), sink, defaults)
     }
 
-    // MARK: enabled by default / opt-out / opt-in
+    // MARK: enabled by default (outside Europe) / opt-out / opt-in
 
     @Test func enabledByDefault() {
         let (analytics, _, _) = makeAnalytics(suite: #function)
@@ -136,10 +139,10 @@ struct AnalyticsTests {
         let suite = #function
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-        let first = Analytics(sink: SpySink(), defaults: defaults)
+        let first = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         first.isEnabled = false
 
-        let second = Analytics(sink: SpySink(), defaults: defaults)
+        let second = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         #expect(second.isEnabled == false)
     }
 
@@ -274,7 +277,7 @@ struct AnalyticsTests {
         #expect(sink.resets == 1)
         analytics.track(.tabOpened, ["tab": .string("home")])
         #expect(sink.captured.count == 1, "still off: only the original opt-out was ever sent")
-        let relaunch = Analytics(sink: SpySink(), defaults: defaults)
+        let relaunch = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         #expect(relaunch.isEnabled == false)
     }
 
@@ -286,7 +289,7 @@ struct AnalyticsTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let sink = SpySink()
-        return (Analytics(sink: sink, defaults: defaults, isDemo: { false }), sink)
+        return (Analytics(sink: sink, defaults: defaults, isDemo: { false }, regionCode: "AU"), sink)
     }
 
     @Test func trackOnceFiresOncePerInstall() {
@@ -314,7 +317,7 @@ struct AnalyticsTests {
         defaults.removePersistentDomain(forName: suite)
         let sink = SpySink()
         var demo = true
-        let analytics = Analytics(sink: sink, defaults: defaults, isDemo: { demo })
+        let analytics = Analytics(sink: sink, defaults: defaults, isDemo: { demo }, regionCode: "AU")
         analytics.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
         #expect(sink.captured.isEmpty)
         demo = false
