@@ -55,6 +55,8 @@ final class PendingDeletes {
     /// Bring every staged row back.
     func undo() {
         cancelTimer()
+        guard !items.isEmpty else { return }
+        Analytics.shared.track(.purchaseUndone, ["count": .int(items.count)])
         items = []
     }
 
@@ -64,6 +66,7 @@ final class PendingDeletes {
         guard !items.isEmpty else { return }
         let gone = items
         items = []
+        Analytics.shared.track(.purchaseDeleted, ["count": .int(gone.count)])
         for t in gone { context.delete(t) }
         do {
             try context.save()
