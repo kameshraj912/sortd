@@ -49,7 +49,7 @@ struct CurrencySettingsView: View {
                     Text(fxResult).font(.footnote).foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Purchases in other currencies are converted to \(home) at that day's European Central Bank rate.")
+                Text("Converted to \(home) at that day's European Central Bank rate.")
             }
         }
         .scrollContentBackground(.hidden)
