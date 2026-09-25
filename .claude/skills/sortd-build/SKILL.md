@@ -49,6 +49,7 @@ Ask Raj, **one question at a time**, only for what is missing:
    `git -C <path> diff main...<task>`. Read only." Any **must fix** goes back to
    swift-builder, then steps 6 and 7 again. After two rounds still failing, stop and
    show Raj.
+7b. **Feel check** for any change that touches a screen: the router drives the changed screens on the worktree simulator (tap, scroll, pull, AX5, dark) per `docs/AgentPipeline.md` "The feel check". Stills from the builder are not enough.
 8. Router checks the commits: `git -C <path> status` is clean and
    `git -C <path> show --stat HEAD` lists only this task's files.
 9. Push and PR:

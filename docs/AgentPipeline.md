@@ -111,6 +111,29 @@ build task, in an order where every step leaves the app working:
 
 The router refuses to start a build task for an overhaul without an approved overview spec.
 
+## The feel check (a gate, not a step)
+
+Raj, 25 Sep 2026: how the app feels in the hand is what matters most. Code review reads code and
+unit tests read logic; neither sees spacing, alignment, jank or a gesture that fights you. So every
+change that touches a screen passes a **feel check** before it merges:
+
+1. **Hands on, not stills.** Drive the screen on this worktree's simulator with the iOS Simulator
+   control tool: tap every control, scroll to the end and back, pull to refresh, pull down to
+   reveal search, swipe between days, open and dismiss every sheet. Default size, AX5, dark.
+2. **Look for feel, not only bugs.** Spacing against the 16 pt system margin and standard section
+   gaps; things touching or crowding (title to chips, icon to text); alignment; text too long for
+   the screen; a control smaller than 44 pt; motion that jumps, lags or goes the wrong way; a
+   sheet that flashes; anything that makes you stop and think.
+3. **Compare with the last shots** of the same screen, and with the system apps and the
+   references in `docs/ux-research/07-app-references.md` (WhatsApp for search, Flighty for polish).
+4. **The router owns it.** If an agent cannot drive the simulator, the router does the feel check
+   itself before merging. A change that has only stills does not merge.
+5. **Raj's phone is the final word.** Haptics and real-speed animation only exist on a device:
+   after each merge batch, `scripts/device.sh` puts the build on Raj's iPhone, and his notes come
+   back through `sortd-support` as findings.
+
+The checklist for step 2 lives in `docs/testing/ios-polish-checklist.md`.
+
 ## Testing in depth
 
 - **Unit**: `scripts/test.sh` on an iOS 27 simulator. StoreKit tests are
