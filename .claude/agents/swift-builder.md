@@ -28,7 +28,7 @@ If any of these is missing, say what is missing and stop. Do not guess the scope
    - The branch must be the task branch, not `main`. If there are changes you did not
      make, another session is here: stop and report.
 2. Baseline, before you touch anything:
-   - `<wt>/scripts/build.sh` (errors and the `** BUILD` line; log in `<wt>/.build/build.log`).
+   - `<wt>/scripts/build.sh (then `scripts/sim.sh launch KEY=VALUE ...` to run it on this worktree's simulator, `scripts/sim.sh screenshot <file>`, `scripts/sim.sh shutdown`)` (errors and the `** BUILD` line; log in `<wt>/.build/build.log`).
    - `<wt>/scripts/test.sh` (log in `<wt>/.build/test.log`). Note the pass count and any
      failures that exist before your change, so you do not blame yourself for them or
      hide them.
