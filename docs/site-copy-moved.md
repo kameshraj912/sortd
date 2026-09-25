@@ -89,3 +89,31 @@ under ~90 characters without moving anything to the site:
   Files, on iCloud Drive, or a new phone."
 - Tip sheet line: cut from three sentences to one — "Sortd is free. A tip
   unlocks nothing, it just says thanks."
+
+## From the Apple Pay page (25 Sep 2026)
+
+Handoff notes for whoever next edits `site/`. Each entry: what moved, why, and the
+exact change still needed on the site (not made here — this worktree only touches
+`Spend/` and `SpendTests/`, per its brief).
+## Apple Pay Logging: the by-hand walkthrough (26 Sep 2026)
+**Why:** router feel check on `applepay-page` — Raj wants Settings › Purchase
+Sources › Apple Pay Logging short and clean. It carried two full picture guides
+(the ready-made shortcut, and a by-hand walkthrough for anyone who'd rather build
+it themselves); now it shows only the first. The by-hand steps stay useful, so
+they move to the support site instead of being deleted.
+**Removed from the app:** `WalletSetupGuide(route: .byHand)` (iOS 27) and the
+`SetupGuideView` iOS 26 plain-text fallback (`Step`, `legacySteps`) — both are
+gone from `Spend/Views/SetupGuideView.swift`. `WalletSetupGuide.swift` itself is
+untouched: `.byHand`/`.byHandPages` still compile, just unused in-app for now.
+**Where it already lives:** `site/support.html` already has a "By hand" `<h3>`
+under `<h2 id="apple-pay">` with the same seven steps (added earlier, ahead of
+the app's own copy — see the section starting `<h3>By hand</h3>`). It only needs
+one change:
+```html
+<h3 id="apple-pay-manual">By hand</h3>
+```
+(currently `<h3>By hand</h3>`, no id). That makes `https://sortd.page/support#apple-pay-manual`
+a direct link to it, matching the anchor named in the router's note. Content is
+otherwise already correct and doesn't need rewriting — check it against
+`Spend/Views/WalletSetupGuide.swift`'s `byHandPages` if the in-app steps ever
+change, since the two can drift.
