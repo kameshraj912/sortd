@@ -115,12 +115,16 @@ final class CloudBackup {
     @ObservationIgnored private let keys: BackupKeyStore
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let clock: () -> Date
-    /// The debounce after a save.
-    @ObservationIgnored private var pending: Task<Void, Never>?
+    /// Every wait goes through here so tests can stand in for the clock:
+    /// the debounce after a save, the catch-up at the end of the ten-minute
+    /// cap, and the wait iCloud asks for after a rate limit.
+    @ObservationIgnored var sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    /// The debounce after a save. Readable so a test can await it.
+    @ObservationIgnored private(set) var pending: Task<Void, Never>?
     /// A backup skipped by the ten-minute cap, to run when the cap ends.
-    @ObservationIgnored private var catchUp: Task<Void, Never>?
+    @ObservationIgnored private(set) var catchUp: Task<Void, Never>?
     /// The wait iCloud asked for after a rate limit, then one more try.
-    @ObservationIgnored private var retry: Task<Void, Never>?
+    @ObservationIgnored private(set) var retry: Task<Void, Never>?
     @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     /// The last automatic try, pass or fail, so a failing store isn't hit on
     /// every save.
@@ -171,8 +175,9 @@ final class CloudBackup {
         dirty = true
         pending?.cancel()
         pending = Task { [weak self] in
-            try? await Task.sleep(for: Self.debounce)
-            guard !Task.isCancelled, let self else { return }
+            guard let self else { return }
+            try? await self.sleep(Self.debounce)
+            guard !Task.isCancelled else { return }
             await self.backUpIfDue(from: context)
         }
     }
@@ -180,9 +185,10 @@ final class CloudBackup {
     private func scheduleCatchUp(in seconds: TimeInterval, from context: ModelContext) {
         guard catchUp == nil else { return }
         catchUp = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(max(seconds, 1)))
-            guard !Task.isCancelled, let self else { return }
-            self.catchUp = nil
+            guard let self else { return }
+            defer { self.catchUp = nil }
+            try? await self.sleep(.seconds(max(seconds, 1)))
+            guard !Task.isCancelled else { return }
             // Nothing changed since the last backup: nothing to catch up.
             guard self.dirty else { return }
             await self.backUpIfDue(from: context)
@@ -363,8 +369,9 @@ final class CloudBackup {
         // iCloud said when to come back: wait that long, then try once more.
         if case .rateLimited(let seconds) = known, let context {
             retry = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(max(seconds, 1)))
-                guard !Task.isCancelled, let self, self.status == .paused(known) else { return }
+                guard let self else { return }
+                try? await self.sleep(.seconds(max(seconds, 1)))
+                guard !Task.isCancelled, self.status == .paused(known) else { return }
                 self.status = .idle
                 self.lastAttempt = nil
                 try? await self.backUp(from: context, automatic: true)
