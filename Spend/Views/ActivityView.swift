@@ -75,7 +75,7 @@ struct TransactionsScreen: View {
             }
         }
         .background(Color.page)
-        .brandedTitle(fixedCard?.name ?? "Activity")
+        .modifier(ActivityTitle(title: fixedCard?.name ?? "Activity", day: pagerBarTitle))
         // A card's own list always has search; the main list has it when
         // there's no Search tab (nav option A). Hand-rolling this field lost
         // the Cancel button and scroll-to-reveal, and left the app with two
@@ -94,6 +94,7 @@ struct TransactionsScreen: View {
                 ToolbarItem(placement: .topBarLeading) { filterMenu }
                     .sharedBackgroundVisibility(.hidden)
             }
+            if fixedCard == nil { SettingsToolbarButton() }
             if NavLayout.current == .header || NavLayout.current == .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Purchase", systemImage: "plus") { showingAdd = true }
@@ -302,11 +303,10 @@ struct TransactionsScreen: View {
                             Section {
                                 ForEach(day.items) { t in row(t) }
                             } header: {
-                                // The page dots are hidden, so the header
-                                // says where this day sits ("2 of 14"):
-                                // nothing else hints there are more days.
-                                dayHeader(day, position: DayPager.dayIndex(for: day.date, in: all.map(\.date))
-                                    .map { DayPager.position($0, of: all.count) })
+                                // The day and its place ("2 of 14") are the
+                                // navigation title, which stays put as the
+                                // list scrolls; the header keeps the total.
+                                dayTotal(day)
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -425,9 +425,31 @@ struct TransactionsScreen: View {
         }
     }
 
-    /// `position` (the pager only) adds "· 2 of 14" after the day.
-    private func dayHeader(_ day: (date: Date, items: [Transaction]),
-                           position: DayPager.Position? = nil) -> some View {
+    /// The pager's day and its place in the list, for the navigation bar:
+    /// "Yesterday" with "2 of 14" under it. The page dots are hidden, so
+    /// nothing else hints there are more days. Nil outside the pager, or
+    /// when nothing matches.
+    private var pagerBarTitle: (title: String, subtitle: String)? {
+        guard Self.dayPages, fixedCard == nil, !transactions.isEmpty,
+              let dayPage, let i = DayPager.dayIndex(for: dayPage, in: days.map(\.date)) else { return nil }
+        return (dayTitle(dayPage), DayPager.position(i, of: days.count).text)
+    }
+
+    /// The pager's section header: the day's total, right-aligned like the
+    /// total in `dayHeader`.
+    private func dayTotal(_ day: (date: Date, items: [Transaction])) -> some View {
+        HStack {
+            Spacer()
+            Text(Money.format(day.items.audTotal, Money.home))
+                .monospacedDigit()
+                .accessibilityLabel("Total " + Money.spoken(day.items.audTotal, Money.home))
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .textCase(nil)
+    }
+
+    private func dayHeader(_ day: (date: Date, items: [Transaction])) -> some View {
         // At the largest text sizes the day gets its own line, so
         // "September" isn't broken in the middle.
         let big = typeSize.isAccessibilitySize
@@ -435,8 +457,7 @@ struct TransactionsScreen: View {
                          : AnyLayout(HStackLayout())
         let title = dayTitle(day.date)
         return layout {
-            Text(position.map { "\(title) · \($0.text)" } ?? title)
-                .accessibilityLabel(position.map { "\(title), \($0.spoken)" } ?? title)
+            Text(title)
             if !big { Spacer() }
             Text(Money.format(day.items.audTotal, Money.home))
                 .monospacedDigit()
@@ -660,18 +681,22 @@ private struct ActivitySearch: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content
-                .background(SearchStateReporter())
+                // Minimized to a glass button in the bar until it's tapped or
+                // the list is pulled down: the purchases come first, and a
+                // parked field left no room for the gear beside it.
                 // The long prompt has no room at accessibility sizes and the
                 // field showed as an empty pill (UI pass finding 8).
-                .searchable(text: $text,
-                            placement: typeSize.isAccessibilitySize ? .navigationBarDrawer(displayMode: .always) : .automatic,
+                .searchable(text: $text, placement: .automatic,
                             prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
+                .searchToolbarBehavior(.minimize)
                 .searchFocused($focused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .task {
                     #if DEBUG
                     // Screenshots: SPEND_SEARCH=1 opens with the field active.
+                    // (A minimized field does not open from here on the iOS 27
+                    // simulator, focused or presented: it still needs a tap.)
                     if ProcessInfo.processInfo.environment["SPEND_SEARCH"] == "1" {
                         try? await Task.sleep(for: .milliseconds(600))
                         focused = true
@@ -684,20 +709,24 @@ private struct ActivitySearch: ViewModifier {
     }
 }
 
-/// Sits under the searchable list and tells the Router when the search
-/// field is active, so the floating Settings gear gets out of the way of
-/// the field's Cancel button.
-private struct SearchStateReporter: View {
-    @Environment(\.isSearching) private var isSearching
+/// The navigation title. In the day pager the bar shows the day on screen
+/// and its place ("Yesterday" / "2 of 14"), so the heading stays still as
+/// the list scrolls; the page's own "Activity" title is in the content.
+/// Everywhere else the bar keeps the title for Back and VoiceOver only.
+private struct ActivityTitle: ViewModifier {
+    let title: String
+    let day: (title: String, subtitle: String)?
 
-    var body: some View {
-        Color.clear
-            // onAppear as well as onChange: coming back from a pushed row
-            // with search still open must hide the gear again.
-            .onAppear { Router.shared.searchActive = isSearching }
-            .onChange(of: isSearching) { _, active in
-                withAnimation(.snappy) { Router.shared.searchActive = active }
-            }
-            .onDisappear { Router.shared.searchActive = false }
+    func body(content: Content) -> some View {
+        if let day {
+            content
+                .navigationTitle(day.title)
+                .navigationSubtitle(day.subtitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .listSectionSpacing(.compact)
+        } else {
+            content.brandedTitle(title)
+        }
     }
 }
