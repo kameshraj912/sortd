@@ -32,14 +32,16 @@ while IFS= read -r f; do
 done <<< "$staged"
 
 # 4. Debug escapes stay inside #if DEBUG. Any Swift file that names one must
-#    also contain "#if DEBUG".
+#    also contain "#if DEBUG". No `grep -q` here: under pipefail it exits at
+#    the first match, `git show` gets SIGPIPE on a big file, and the pipeline
+#    reports "not found" for a file that does contain the line.
 while IFS= read -r f; do
   case "$f" in
     Spend/*.swift|SortdWidget/*.swift) ;;
     *) continue ;;
   esac
-  if git show ":$f" | grep -qE 'SPEND_[A-Z_]+'; then
-    git show ":$f" | grep -q '#if DEBUG' || bad "$f uses a debug flag with no #if DEBUG."
+  if git show ":$f" | grep -E 'SPEND_[A-Z_]+' >/dev/null; then
+    git show ":$f" | grep '#if DEBUG' >/dev/null || bad "$f uses a debug flag with no #if DEBUG."
   fi
 done <<< "$staged"
 
