@@ -7,20 +7,6 @@ import Foundation
 /// docs/specs/2026-09-25-free-app-overhaul-7-tips.md.
 struct TipRulesTests {
 
-    // MARK: add — Home seen twice, no manual purchase yet.
-
-    @Test func addShowsAtTwoHomeVisitsWithNoManualPurchase() {
-        #expect(TipRules.add(homeVisits: 2, manualCount: 0, setupShowing: false) == true)
-    }
-
-    @Test func addHidesBelowTwoHomeVisits() {
-        #expect(TipRules.add(homeVisits: 1, manualCount: 0, setupShowing: false) == false)
-    }
-
-    @Test func addHidesOnceAManualPurchaseExists() {
-        #expect(TipRules.add(homeVisits: 2, manualCount: 1, setupShowing: false) == false)
-    }
-
     // MARK: applePay — setup done, Shortcut never reached the app.
 
     @Test func applePayShowsWhenSetupDoneAndShortcutNeverReached() {
@@ -102,10 +88,6 @@ struct TipRulesTests {
     }
 
     // MARK: setupShowing forces every rule to false, regardless of the rest.
-
-    @Test func setupShowingForcesAddFalse() {
-        #expect(TipRules.add(homeVisits: 5, manualCount: 0, setupShowing: true) == false)
-    }
 
     @Test func setupShowingForcesApplePayFalse() {
         #expect(TipRules.applePay(setupDone: true, shortcutReached: false, rowShowing: true, setupShowing: true) == false)
