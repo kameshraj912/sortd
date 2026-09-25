@@ -21,17 +21,32 @@ enum Money {
                                         "INR", "IDR", "KRW", "PHP", "THB", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF",
                                         "ILS", "MXN", "BRL", "ZAR", "TRY", "RON", "ISK", "BGN"]
 
+    /// Currencies with no minor unit in daily use: ISO 4217 exponent 0, plus
+    /// IDR and HUF (sen and fillér exist on paper, never on a price tag).
+    /// Shown and spoken without decimals whatever `cents:` asks for, so
+    /// "¥1,200.00" can't appear in a total or a converted amount.
+    nonisolated static let zeroDecimal: Set<String> = [
+        "BIF", "CLP", "DJF", "GNF", "HUF", "IDR", "ISK", "JPY", "KMF", "KRW",
+        "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF",
+    ]
+
+    /// Decimal places to show: two, or none for a zero-decimal currency.
+    nonisolated static func decimals(_ code: String, cents: Bool) -> Int {
+        cents && !zeroDecimal.contains(code.uppercased()) ? 2 : 0
+    }
+
     static func format(_ value: Decimal, _ code: String, cents: Bool = true) -> String {
         // The home currency gets its plain local symbol ("$", "£"); others are
         // always spelled out ("S$", "US$") so two dollars can't be confused.
         let dollars = ["AUD", "SGD", "USD", "NZD", "CAD", "HKD"]
         let foreign = ["AUD": "A$", "SGD": "S$", "USD": "US$", "MYR": "RM", "NZD": "NZ$", "CAD": "C$", "HKD": "HK$"]
         let symbol: String? = code == home ? (dollars.contains(code) ? "$" : (code == "MYR" ? "RM" : nil)) : foreign[code]
+        let digits = decimals(code, cents: cents)
         guard let symbol else {
-            return value.formatted(.currency(code: code).precision(.fractionLength(cents ? 2 : 0)))
+            return value.formatted(.currency(code: code).precision(.fractionLength(digits)))
         }
         let sign = value < 0 ? "-" : ""
-        let n = (value < 0 ? -value : value).formatted(.number.precision(.fractionLength(cents ? 2 : 0)))
+        let n = (value < 0 ? -value : value).formatted(.number.precision(.fractionLength(digits)))
         return "\(sign)\(symbol)\(n)"
     }
 
@@ -44,7 +59,7 @@ enum Money {
     static func spoken(_ value: Decimal, _ code: String, cents: Bool = true) -> String {
         value.formatted(.currency(code: code)
             .presentation(.fullName)
-            .precision(.fractionLength(cents ? 2 : 0)))
+            .precision(.fractionLength(decimals(code, cents: cents))))
     }
 
     /// Just the symbol, for amount entry fields ("$", "S$", "£").
