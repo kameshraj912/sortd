@@ -67,7 +67,7 @@ struct BillsRemindersSettingsView: View {
             } header: {
                 BoldHeader("Budget")
             } footer: {
-                Text("One notification a month if you're on track to pass your budget, like \u{201C}On track to pass your budget by the 22nd\u{201D}. Only if notifications are already allowed.")
+                Text("One alert a month if you're on track to pass your budget.")
             }
         }
         .scrollContentBackground(.hidden)
