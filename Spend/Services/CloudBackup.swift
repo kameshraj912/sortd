@@ -57,6 +57,8 @@ enum CloudBackupError: Error, Equatable, LocalizedError {
 @MainActor
 @Observable
 final class CloudBackup {
+    static let shared = CloudBackup(store: CloudKitBackupStore(), keys: KeychainBackupKeyStore())
+
 
     nonisolated static let enabledKey = "cloudBackupEnabled"
     nonisolated static let lastKey = "cloudBackupLast"
