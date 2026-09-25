@@ -1,0 +1,37 @@
+# Tests the account Worker (worker/) on every push and pull request to main that touches it.
+# Linux runner: 1x minutes, unlike swift.yml's macOS runner (10x).
+
+name: Worker
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "worker/**", ".github/workflows/worker.yml" ]
+  pull_request:
+    branches: [ "main" ]
+    paths: [ "worker/**", ".github/workflows/worker.yml" ]
+
+concurrency:
+  group: worker-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: worker/package-lock.json
+    - name: Install
+      run: npm ci
+    - name: Type-check
+      run: npm run typecheck
+    - name: Test
+      run: npm test
