@@ -134,6 +134,46 @@ struct SetupHeader: View {
     }
 }
 
+// MARK: - Copy
+
+/// The line under each screen's title. The tap-through flow (sub-spec 6)
+/// says one warm, plain line per screen (the heyclicky reference: talk,
+/// don't announce); the old lines stay until the flag goes. Titles are
+/// the same in both.
+enum SetupCopy {
+    static func line(_ step: SetupFlow.Step) -> String? {
+        SetupFlow.usesNewFlow ? new[step] : old[step]
+    }
+
+    private static let old: [SetupFlow.Step: String] = [
+        .welcome: "Your spending, logged by itself.",
+        .goals: "Pick any.",
+        .feeling: "No wrong answer.",
+        .budget: "Change it any time.",
+        .checkIn: "One short notification. Change it any time.",
+        .plan: "Built from your answers. Change any of it in Settings.",
+        .cards: "Tap each bank you pay with. Two cards at one bank? Tap twice.",
+        .cardDetails: "So receipts land on the right card. Only the last 4.",
+        .applePay: "Three steps, about a minute.",
+        .email: "From receipts and bank alerts in your Gmail.",
+    ]
+
+    private static let new: [SetupFlow.Step: String] = [
+        .welcome: "Hi. Let's get your spending to log itself.",
+        .goals: "Tap any that fit. Not sure? Just continue.",
+        .payment: "So the right things get set up first.",
+        .currency: "We picked the one your iPhone uses.",
+        .feeling: "No wrong answer. It just sets the tone.",
+        .budget: "Leave it empty if you're not sure yet.",
+        .checkIn: "One short note. We'll ask about notifications later, not now.",
+        .plan: "All set from your answers. The rest can wait.",
+        .cards: "Tap each bank you pay with. Fine to skip for now.",
+        .cardDetails: "So receipts find the right card. Fine to skip today.",
+        .applePay: "About a minute, once. Or do it later from Home.",
+        .email: "Read on your iPhone. Nothing leaves it.",
+    ]
+}
+
 // MARK: - Questions
 
 struct GoalsPage: View {
@@ -143,7 +183,7 @@ struct GoalsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter, title: "What should Sortd help with?",
-                        subtitle: "Pick any.")
+                        subtitle: SetupCopy.line(.goals))
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Goal.allCases) { goal in
                     OptionCard(symbol: goal.symbol, title: goal.title, selected: goals.contains(goal), multi: true) {
@@ -165,7 +205,7 @@ struct PaymentPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SetupHeader(counter: counter, title: "How do you usually pay?")
+            SetupHeader(counter: counter, title: "How do you usually pay?", subtitle: SetupCopy.line(.payment))
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Payment.allCases) { p in
                     OptionCard(symbol: p.symbol, title: p.title, selected: payment == p) {
@@ -188,7 +228,7 @@ struct FeelingPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter, title: "How does your spending feel lately?",
-                        subtitle: "No wrong answer.")
+                        subtitle: SetupCopy.line(.feeling))
             VStack(spacing: 10) {
                 ForEach(SetupProfile.Feeling.allCases) { f in
                     OptionCard(symbol: f.symbol, title: f.title, selected: feeling == f) {
@@ -222,7 +262,7 @@ struct CheckInPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter, title: "When should we check in?",
-                        subtitle: "One short notification. Change it any time.")
+                        subtitle: SetupCopy.line(.checkIn))
             VStack(spacing: 10) {
                 ForEach(SetupProfile.CheckIn.allCases) { c in
                     OptionCard(symbol: c.symbol, title: c.title, detail: c.detail, selected: checkIn == c) {

@@ -590,7 +590,7 @@ struct OnboardingView: View {
         return lines
     }
 
-    private var planSummary: String { "Built from your answers. Change any of it in Settings." }
+    private var planSummary: String { SetupCopy.line(.plan) ?? "" }
 
     private var planSettings: [(String, String)] {
         var chips = [(Self.currencySymbol(home), "Totals in \(home)"
@@ -635,7 +635,7 @@ struct OnboardingView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Sortd")
-                Text("Your spending, logged by itself.")
+                Text(SetupCopy.line(.welcome) ?? "")
                     .font(.body).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 18) {
@@ -662,7 +662,7 @@ struct OnboardingView: View {
     private var currency: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.currency), title: "Your main currency",
-                        subtitle: nil)
+                        subtitle: SetupCopy.line(.currency))
             VStack(spacing: 10) {
                 ForEach(currencyChoices, id: \.self) { code in
                     OptionCard(symbol: Self.currencySymbol(code), title: "\(code) · \(name(of: code))",
@@ -785,7 +785,7 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Tap each bank you pay with. Two cards at one bank? Tap twice.")
+            header("Your cards", SetupCopy.line(.cards))
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
             // Below the grid, so adding a card never moves the buttons.
@@ -965,7 +965,7 @@ struct OnboardingView: View {
 
     private var cardDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Last 4 digits", "So receipts land on the right card. Only the last 4.")
+            header("Last 4 digits", SetupCopy.line(.cardDetails))
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
                     CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
@@ -1023,7 +1023,7 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay by itself", "Three steps, about a minute.")
+            header("Log Apple Pay by itself", SetupCopy.line(.applePay))
             tapStatus
 
             // Step 1: the ready-made shortcut. It arrives with the amount,
@@ -1185,7 +1185,7 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Catch online receipts", "From receipts and bank alerts in your Gmail.")
+            header("Catch online receipts", SetupCopy.line(.email))
             FlowLayout(spacing: 8) {
                 ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
                          ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
@@ -1259,7 +1259,7 @@ struct OnboardingView: View {
     private var budgetPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.budget), title: "Want a monthly limit?",
-                        subtitle: "Change it any time.")
+                        subtitle: SetupCopy.line(.budget))
 
             // One big amount, typed or picked.
             VStack(spacing: 8) {
