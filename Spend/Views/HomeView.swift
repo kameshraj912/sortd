@@ -383,7 +383,7 @@ struct HomeView: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $focused, anchor: .leading)
             .scrollClipDisabled()
-            .sensoryFeedback(.selection, trigger: focused)
+            .feedback(.select, trigger: focused)
 
             // Page dots, like Wallet.
             HStack(spacing: 6) {
@@ -956,7 +956,7 @@ struct SpendChart: View {
             }
         }
         .frame(height: chartHeight)
-        .sensoryFeedback(.selection, trigger: selected.map { cal.startOfDay(for: $0) })
+        .feedback(.select, trigger: selected.map { cal.startOfDay(for: $0) })
         .accessibilityLabel("Running total, \(range.title.lowercased())")
         .accessibilityValue("\(Money.spoken(Decimal(current.last?.total ?? 0), Money.home)) so far. \(range.previousLabel) total \(Money.spoken(Decimal(previous.last?.total ?? 0), Money.home))."
                             + (showBudget ? " Budget \(Money.spoken(Decimal(budget), Money.home))." : ""))

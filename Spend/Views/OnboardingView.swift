@@ -154,7 +154,7 @@ struct OnboardingView: View {
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
-        .sensoryFeedback(.selection, trigger: step)
+        .feedback(.select, trigger: step)
         .onChange(of: step) {
             stepChangedAt = .now
             scroll.scrollTo(edge: .top)
@@ -649,7 +649,7 @@ struct OnboardingView: View {
                 }
             }
             .padding(.top, 8)
-            .sensoryFeedback(.selection, trigger: abroadRaw)
+            .feedback(.select, trigger: abroadRaw)
 
             if let ratePreview {
                 HStack(spacing: 12) {
@@ -1073,7 +1073,7 @@ struct OnboardingView: View {
         .background(tapConnected || shortcutReached ? Color.up.opacity(0.12) : Color.card,
                     in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: tapConnected)
-        .sensoryFeedback(.success, trigger: tapConnected)
+        .feedback(.confirm, trigger: tapConnected)
         .accessibilityElement(children: .combine)
     }
 
