@@ -23,6 +23,7 @@ struct SearchView: View {
             .scrollContentBackground(.hidden)
             .background(Color.page)
             .navigationTitle("Search")
+            .toolbar { SettingsToolbarButton() }
             .modifier(OwnSearchField(enabled: external == nil, query: $own))
             .navigationDestination(for: Transaction.self) { TransactionDetailView(transaction: $0) }
         }
