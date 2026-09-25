@@ -28,6 +28,9 @@ final class Router {
     var showingSettings = false
     /// "Run Setup Again" was tapped: setup opens once Settings has closed.
     var pendingRerun = false
+    /// Help › "Show the Intro Again" was tapped: the intro starts once
+    /// Settings has closed.
+    var pendingIntroReplay = false
 
     private init() {
         #if DEBUG
