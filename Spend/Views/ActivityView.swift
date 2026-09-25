@@ -27,6 +27,9 @@ struct TransactionsScreen: View {
     @State private var undone = 0
     /// The day on screen in the day pager (`dayPages`).
     @State private var dayPage: Date?
+    /// Swipes between days. The haptic plays on these, not when the pager
+    /// picks a day itself (first show, a filter, a delete).
+    @State private var daySwipes = 0
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
@@ -253,8 +256,8 @@ struct TransactionsScreen: View {
                 noMatches
                     .frame(maxHeight: .infinity)
             } else {
-                TabView(selection: $dayPage) {
-                    ForEach(days, id: \.date) { day in
+                TabView(selection: swipedDayPage) {
+                    ForEach(pagedDays, id: \.date) { day in
                         List {
                             Section {
                                 ForEach(day.items) { t in row(t) }
@@ -269,15 +272,42 @@ struct TransactionsScreen: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 // Paging to another day is a choice, like the card carousel.
-                .feedback(.select, trigger: dayPage)
-                // A search or chip can drop the day on screen: fall back to
-                // the newest day that still matches.
-                .onChange(of: days.map(\.date), initial: true) { _, dates in
-                    if dayPage.map({ !dates.contains($0) }) ?? true { dayPage = dates.first }
+                .feedback(.select, trigger: daySwipes)
+                // The day on screen can go: cleared by a search or a chip, or
+                // its last purchase swiped away. Stay next to where you were.
+                .onChange(of: days.map(\.date), initial: true) { old, new in
+                    if dayPage.map({ !new.contains($0) }) ?? true {
+                        dayPage = DayPager.neighbour(of: dayPage, in: old, still: new)
+                    }
+                }
+                // The page dots are hidden, so VoiceOver hears which day
+                // this is and what it cost.
+                .onChange(of: dayPage) { old, new in
+                    guard old != nil, let new, let day = days.first(where: { $0.date == new }) else { return }
+                    AccessibilityNotification.Announcement(
+                        "\(dayTitle(day.date)), \(Money.spoken(day.items.audTotal, Money.home))").post()
                 }
             }
         }
         .background(Color.page)
+    }
+
+    /// The pager's selection. A swipe writes through here and counts as one;
+    /// the pager's own choices write `dayPage` directly and stay silent.
+    private var swipedDayPage: Binding<Date?> {
+        Binding(get: { dayPage }, set: { new in
+            if let new, dayPage != nil, new != dayPage { daySwipes += 1 }
+            dayPage = new
+        })
+    }
+
+    /// Only the days near the one on screen are built (`DayPager.reach`
+    /// either side); the window follows the page, so paging never runs out
+    /// and all of history is never a list each.
+    private var pagedDays: [(date: Date, items: [Transaction])] {
+        let all = days
+        let i = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
+        return Array(all[DayPager.window(around: i, count: all.count)])
     }
 
     /// Category chips, like the reference's outlined pills.

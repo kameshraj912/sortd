@@ -30,14 +30,15 @@ struct HomeView: View {
     /// A card or a Recent row grows into its detail from where it was tapped.
     @Namespace private var zoom
 
-    /// Writing the month through here is what makes the numericText
-    /// transition on the total — and the rest of the page — actually run.
-    /// The direction is set first, outside the animation, so the outgoing
-    /// totals already know which way to leave.
+    /// The month picker writes through here. The direction lands in its own
+    /// transaction and the month in the next: changed together, the outgoing
+    /// totals would keep the previous direction and leave the wrong way when
+    /// going back a month. The animation is what runs the numericText
+    /// transition on the total and the slide on the totals block.
     private var animatedMonth: Binding<Date> {
         Binding(get: { month }, set: { new in
             monthDirection = Motion.direction(from: month, to: new, calendar: cal)
-            withAnimation(.snappy) { month = new }
+            Task { @MainActor in withAnimation(.snappy) { month = new } }
         })
     }
 
