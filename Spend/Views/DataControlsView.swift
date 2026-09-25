@@ -85,12 +85,14 @@ enum DataReset {
         // into the empty store afterwards.
         GmailSync.cancelRunningSyncs()
         #if SORTD_ICLOUD
-        // The iCloud copy goes too, or it would bring everything back. The
-        // switch goes off first so the saves below don't schedule a backup;
-        // the delete itself runs after the defaults wipe below, so its
-        // "still pending" note survives if iCloud can't be reached.
+        // The iCloud copy goes too, or it would bring everything back. That
+        // includes a copy kept when backup was turned off ("Keep It"), so the
+        // switch alone doesn't decide. The switch goes off first so the saves
+        // below don't schedule a backup; the delete itself runs after the
+        // defaults wipe below, so its "still pending" note survives if iCloud
+        // can't be reached.
         let cloud = CloudBackup.shared
-        let cloudWasOn = cloud.isEnabled
+        let deletesCloudCopy = cloud.deletesCloudCopyOnReset
         cloud.isEnabled = false
         #endif
         try? context.delete(model: Transaction.self)
@@ -144,7 +146,7 @@ enum DataReset {
         // Widgets were showing the old totals until the next app refresh.
         WidgetBridge.refresh(from: context)
         #if SORTD_ICLOUD
-        if cloudWasOn { Task { await cloud.deleteCloudCopyAfterReset() } }
+        if deletesCloudCopy { Task { await cloud.deleteCloudCopyAfterReset() } }
         #endif
         #if SORTD_SIGNIN
         Task { await account.retryPendingDeletes() }
