@@ -50,6 +50,7 @@ Full design: `docs/AgentPipeline.md`.
 - `npx wrangler deploy` uploads the files on disk, **including other sessions' uncommitted
   edits**. Deploy only when `git status site/` is clean and matches the pushed branch.
 - One session deploys at a time.
+- The account Worker deploys from `worker/` (`cd worker && npx wrangler deploy`), separately from the site. See `worker/README.md`.
 
 **6. Finish.**
 - `scripts/worktree-done.sh <task>` removes the worktree, its simulator and its build folder,
