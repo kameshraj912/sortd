@@ -154,6 +154,10 @@ enum DataReset {
         #else
         wipeDefaults()
         #endif
+        // The tips start over too. Their counters went with the defaults;
+        // TipKit's own store is reset at the next launch, before it opens
+        // (a reset while it is open can fail).
+        TipState.resetAtNextLaunch()
         // Recreate the saved (empty) card list so old cards can't come back,
         // and set these explicitly so open screens notice and setup reopens.
         CardBook.shared.replaceAll([])
