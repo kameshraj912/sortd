@@ -2,8 +2,8 @@ import Foundation
 import UserNotifications
 
 /// What someone told Sortd about themselves during setup. Kept on this
-/// iPhone only. It decides which setup steps show, what Pro leads with, and
-/// when the check-in notification comes.
+/// iPhone only. It decides which setup steps show and when the check-in
+/// notification comes.
 enum SetupProfile {
     static let goalsKey = "setup.goals"
     static let paymentKey = "setup.payment"
@@ -13,11 +13,11 @@ enum SetupProfile {
     static let billsKey = "setup.billReminders"
     static let rerunKey = "setup.rerun"
 
-    /// Someone asked for bill reminders during setup without Pro. Once Pro
-    /// is active, turn them on (once).
+    /// Someone asked for bill reminders during setup and the request is
+    /// still pending (an older build waited for Pro). Turn them on, once.
     @MainActor
     static func applyPendingBillReminders(defaults: UserDefaults = .standard) {
-        guard defaults.bool(forKey: billsKey), ProStore.shared.isPro else { return }
+        guard defaults.bool(forKey: billsKey) else { return }
         defaults.set(true, forKey: Reminders.enabledKey)
         defaults.set(false, forKey: billsKey)
     }
@@ -159,18 +159,6 @@ enum SetupProfile {
 
     static func raw(_ goals: Set<Goal>) -> String {
         Goal.allCases.filter(goals.contains).map(\.rawValue).joined(separator: ",")
-    }
-
-    /// Pro features in the order that matters to this person.
-    static func proOrder(goals: Set<Goal>, payment: Payment?) -> [ProStore.Feature] {
-        var order: [ProStore.Feature] = []
-        func add(_ f: ProStore.Feature) { if !order.contains(f) { order.append(f) } }
-        if payment == .online || goals.contains(.receipts) { add(.gmail); add(.camera) }
-        if goals.contains(.bills) { add(.recurring) }
-        if goals.contains(.spendLess) { add(.budgets) }
-        if goals.contains(.seeWhere) { add(.insights) }
-        ProStore.Feature.allCases.forEach(add)
-        return order.filter { ProStore.Feature.available.contains($0) }
     }
 }
 
