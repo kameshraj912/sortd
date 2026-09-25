@@ -54,9 +54,7 @@ struct GmailSection: View {
         }
         // Accounts and "Synced …" lines change as a connect or sync moves on.
         .onChange(of: status.phase) { accounts = GmailSync.accounts }
-        .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) {
-            if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) }
-        }
+        .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) { ConnectGmailSheet() }
         .confirmationDialog("Disconnect \(disconnecting?.email ?? "")?", isPresented: Binding(
             get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
             Button("Disconnect") { disconnect(deleting: false) }

@@ -74,13 +74,7 @@ struct OnboardingView: View {
         return reduceMotion
     }
 
-    @State private var pro = ProStore.shared
-    @State private var showingPaywall = false
-    @State private var redeeming = false
-    @State private var redeemError: String?
     @State private var showingImport = false
-    /// "14 days free", read from the App Store. Nil when there's no trial.
-    @State private var trialText: String?
     @State private var forward = true
     @State private var showingGuide = false
     /// They've been sent to the ready-made shortcut at least once.
@@ -144,16 +138,8 @@ struct OnboardingView: View {
         }
         .sheet(item: $editing) { CardEditor(original: $0) }
         .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
-        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { if ProStore.shared.isPro { ConnectGmailSheet() } else { PaywallView(feature: .gmail) } }
-        .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
-        .task(id: step) {
-            guard step == .pro, trialText == nil else { return }
-            await pro.load()
-            if let yearly = pro.product(ProStore.ID.yearly) {
-                trialText = await pro.trialText(for: yearly)
-            }
-        }
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
@@ -204,7 +190,7 @@ struct OnboardingView: View {
     private var abroad: SetupProfile.Abroad? { SetupProfile.Abroad(rawValue: abroadRaw) }
     private var flow: SetupFlow {
         SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty,
-                  gmailFeature: Features.gmail, isPro: pro.isPro)
+                  gmailFeature: Features.gmail)
     }
     private var wantsGmail: Bool { flow.wantsGmail }
     /// The check-in step asks for notifications only if something will use them.
@@ -339,16 +325,6 @@ struct OnboardingView: View {
         GlassEffectContainer(spacing: 10) {
             VStack(spacing: 10) {
                 switch step {
-                case .pro where !pro.isPro:
-                    // Buy, the price, then skip, together at the bottom.
-                    primaryButton(trialLine) { showingPaywall = true }
-                    Text(priceLine)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 8)
-                    tertiaryButton(primaryTitle, action: primaryAction)
                 case .welcome:
                     primaryButton(primaryTitle, action: primaryAction)
                     secondaryButton("Bring In Past Spending") { showingImport = true }
@@ -403,7 +379,6 @@ struct OnboardingView: View {
         case .applePay where !tapConnected && !shortcutReached:
             return last ? "Do This Later and Start" : "I'll Do This Later"
         case .email where gmail.isEmpty: return "I'll Do This Later"
-        case .pro where !pro.isPro: return "Maybe Later"
         default: return last ? "Start Using Sortd" : "Continue"
         }
     }
@@ -486,9 +461,7 @@ struct OnboardingView: View {
                 UserDefaults.standard.set(SetupProfile.CheckIn.needed.rawValue, forKey: SetupProfile.checkInKey)
             }
         }
-        // Bill reminders are Pro: on now if they have it, otherwise the
-        // intent waits and comes on when Pro starts (applyPendingBillReminders).
-        if billIntent, pro.isPro {
+        if billIntent {
             reminders = true
             billIntent = false
         }
@@ -513,13 +486,12 @@ struct OnboardingView: View {
         case .currency: currency
         case .feeling: FeelingPage(counter: counter(.feeling), feeling: feelingBinding)
         case .budget: budgetPage
-        case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent, isPro: pro.isPro)
+        case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent)
         case .building: BuildingPage(lines: buildingLines) { if step == .building { go(1) } }
         case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
         case .cardDetails: cardDetails
         case .applePay: applePay
-        case .pro: proPage
         case .email: emailPage
         }
     }
@@ -548,7 +520,7 @@ struct OnboardingView: View {
                       + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", others converted daily" : ""))]
         if effectiveBudget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(effectiveBudget), home, cents: false) + " monthly limit")) }
         chips.append((checkInLine.symbol, checkInLine.text))
-        if billIntent { chips.append(("bell.badge", pro.isPro ? "Bill heads-ups" : "Bill heads-ups with Pro")) }
+        if billIntent { chips.append(("bell.badge", "Bill heads-ups")) }
         return chips
     }
 
@@ -1275,114 +1247,6 @@ struct OnboardingView: View {
         }
         .onAppear { if budget > 0, customBudget.isEmpty { customBudget = BudgetSheet.text(for: budget, currency: home) } }
     }
-
-    /// Sortd Pro, offered once during setup.
-    ///
-    /// Without this someone can finish setup having never heard of the trial
-    /// or of Pro, then hit a locked feature later and feel tricked. Said
-    /// plainly here instead: what Pro adds, what the trial costs afterwards,
-    /// and that everything on this screen is skippable.
-    ///
-    /// The price line is not decoration. The ACCC has free trials and
-    /// subscriptions as an enforcement priority through 2027: a headline
-    /// saying "free" has to say, just as clearly, what happens when the free
-    /// part ends.
-    private var proPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header(pro.isBetaFree ? "Pro is free during the beta"
-                   : pro.isPro ? "You have Sortd Pro" : "What Pro adds for you",
-                   pro.isBetaFree
-                   ? "Everything below is on while you test Sortd. No payment, nothing to cancel."
-                   : pro.isPro
-                   ? "Everything below is unlocked. Thank you."
-                   : "Picked from your answers. Logging, cards, budgets and export stay free.")
-
-            VStack(spacing: 0) {
-                ForEach(Array(SetupProfile.proOrder(goals: goals, payment: payment).enumerated()), id: \.element) { index, feature in
-                    if index > 0 { Divider().padding(.leading, 46) }
-                    HStack(alignment: .top, spacing: 12) {
-                        RowIcon(feature.symbol)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(feature.title).font(.headline)
-                            Text(feature.detail)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 12)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
-
-            // How the trial works, said plainly: what happens today, and
-            // what happens when it ends.
-            if !pro.isPro, let trialText {
-                VStack(alignment: .leading, spacing: 14) {
-                    timelineRow("gift", "Today", "Everything in Pro unlocked. \(trialText.capitalized).")
-                    timelineRow("calendar.badge.clock", "When the trial ends",
-                                pro.product(ProStore.ID.yearly).map { "Your plan starts at \($0.displayPrice) a year." } ?? "Your plan starts.")
-                    timelineRow("xmark.circle", "Any time before", "Cancel in the App Store and you pay nothing.")
-                }
-                .setupCard()
-                .padding(.top, 12)
-            }
-
-            // Apple's offer code sheet: the only allowed way to give Pro
-            // away with a code in the App Store build (Guideline 3.1.1).
-            if !pro.isPro {
-                Button("Have a code? Redeem it") { redeemError = nil; redeeming = true }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.ink)
-                    .frame(minHeight: 44)
-                    .padding(.top, 10)
-                if let redeemError {
-                    Text(redeemError).font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-        }
-        .redeemOfferCode(isPresented: $redeeming) { redeemError = $0 }
-    }
-
-    private func timelineRow(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            RowIcon(symbol)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// "Try Sortd Pro free" reads like a typo — free is left dangling. Say
-    /// the actual offer when the App Store has told us what it is, and a
-    /// plain invitation when it hasn't.
-    private var proHeadline: String {
-        guard let trial = trialText else { return "Try Sortd Pro" }
-        return "Sortd Pro, \(trial.lowercased())"
-    }
-
-    /// Reads the real offer from the App Store when it's there, and stays
-    /// vague rather than promising a trial that might not exist.
-    private var trialLine: String {
-        trialText.map { "Start \($0.lowercased())" } ?? "See Plans"
-    }
-
-    private var priceLine: String {
-        guard let yearly = pro.product(ProStore.ID.yearly) else {
-            return "Cancel any time in the App Store."
-        }
-        guard let trial = trialText else {
-            return "\(yearly.displayPrice) a year. Cancel any time in the App Store."
-        }
-        return "\(trial.capitalized), then \(yearly.displayPrice) a year. Cancel any time in the App Store."
-    }
-
 }
 
 /// Lays chips out left to right, wrapping onto new lines.

@@ -215,7 +215,6 @@ struct CheckInPage: View {
     let counter: String
     @Binding var checkIn: SetupProfile.CheckIn
     @Binding var billReminders: Bool
-    let isPro: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -233,7 +232,7 @@ struct CheckInPage: View {
                     RowIcon("bell")
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Remind me the day before a bill").font(.body)
-                        Text(isPro ? "9 am, the day before it's charged" : "Pro · included in the free trial")
+                        Text("9 am, the day before it's charged")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
@@ -387,14 +386,6 @@ struct SetupChecklistList: View {
                 Text(task.detail).font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            if task.pro, !task.done {
-                Text("Pro")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.onBrand)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.brand, in: .capsule)
-            }
             if open != nil, !task.done {
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
             }

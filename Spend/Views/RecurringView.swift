@@ -256,7 +256,7 @@ struct UpcomingSection: View {
         if !soon.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 NavigationLink {
-                    ProGate(feature: .recurring) { RecurringView() }
+                    RecurringView()
                 } label: {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Coming Up").font(.title3.weight(.bold)).foregroundStyle(Color.ink)
