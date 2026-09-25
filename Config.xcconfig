@@ -8,7 +8,9 @@
 // Never put the real key here: copy Secrets.xcconfig.example to
 // Secrets.xcconfig (gitignored) and fill it in. It is included below when it
 // exists and its values win over these defaults.
+// In an xcconfig "//" starts a comment, so the host is written with an
+// empty $() in the middle; it reads back as https://eu.i.posthog.com.
 POSTHOG_API_KEY =
-POSTHOG_HOST = https://eu.i.posthog.com
+POSTHOG_HOST = https:/$()/eu.i.posthog.com
 
 #include? "Secrets.xcconfig"
