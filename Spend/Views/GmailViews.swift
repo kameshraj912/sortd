@@ -73,8 +73,16 @@ struct GmailSection: View {
         disconnecting = nil
     }
 
+    /// The row's own line. While a connect or sync runs it is the live
+    /// step ("Looking for receipts…"), so the row is useful the moment
+    /// Google says yes; a first sync that stopped says so and the Retry
+    /// card below takes it from there.
     private func status(_ a: GmailAccount) -> String {
-        guard let last = a.lastSync else { return a.lastResult ?? "Not synced yet" }
+        if status.isBusy, status.phase != .signingIn { return status.title }
+        guard let last = a.lastSync else {
+            if case .failed(let f) = status.phase { return f.message }
+            return a.lastResult ?? "Not synced yet"
+        }
         return "Synced \(last.formatted(.relative(presentation: .named))) · \(a.lastResult ?? "")"
     }
 }
