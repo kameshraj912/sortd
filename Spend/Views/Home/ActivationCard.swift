@@ -28,7 +28,9 @@ struct ActivationCard: View {
     }
 
     var body: some View {
-        if seen, !asked {
+        // Behind the same flag as the tap-through setup until the UI pass:
+        // a build without it must not show this to anyone.
+        if SetupFlow.usesNewFlow, seen, !asked {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
@@ -86,9 +88,10 @@ struct ActivationCard: View {
         asking = true
         Task {
             let choice = choice
-            _ = await Reminders.turnOnCheckIn(choice)
-            // Keep the saved answer in step with what was just asked about.
-            checkInRaw = choice.rawValue
+            let allowed = await Reminders.turnOnCheckIn(choice)
+            // Keep the saved answer in step with what will actually come:
+            // denied means none, as Settings and the old setup say.
+            checkInRaw = (allowed ? choice : .needed).rawValue
             asking = false
             withAnimation(.snappy) { Activation.markNotificationAsked() }
         }

@@ -122,6 +122,63 @@ struct ActivationTests {
 
         #expect(!Activation.shouldAskForNotifications(defaults: d))
     }
+
+    // MARK: The save hook only looks at rows made in this launch
+
+    /// A restore (iCloud or file) keeps each row's original `createdAt`
+    /// (Backup.swift), so a restored tap row is older than this launch and
+    /// must not count as the aha.
+    @Test func aRestoredTapRowDoesNotActivate() throws {
+        let d = defaults()
+        let launch = Date.now
+        let restored = try log("Starbucks", source: .tap)
+        restored.createdAt = launch.addingTimeInterval(-3600)
+        #expect(Activation.check(inserted: [restored], since: launch, defaults: d) == nil)
+        #expect(!Activation.shouldAskForNotifications(defaults: d))
+    }
+
+    @Test func anInsertedTapRowCreatedNowActivates() throws {
+        let d = defaults()
+        let launch = Date.now.addingTimeInterval(-60)
+        let tap = try log("Starbucks", source: .tap)
+        #expect(Activation.check(inserted: [tap], since: launch, defaults: d) == .tap)
+    }
+
+    /// An edit or a delete saves the store with nothing inserted: nothing
+    /// to look at, nothing recorded.
+    @Test func anUpdateOnlySaveDoesNothing() throws {
+        let d = defaults()
+        _ = try log("Starbucks", source: .tap)
+        #expect(Activation.check(inserted: [], since: .distantPast, defaults: d) == nil)
+        #expect(!d.bool(forKey: Activation.seenKey))
+    }
+
+    // MARK: Existing installs
+
+    /// An install that finished setup before Activation existed has already
+    /// been asked about notifications (the old check-in step) and may hold
+    /// tap rows for weeks: it never gets the card or a second ask.
+    @Test func anInstallWithSetupFinishedBeforeActivationExistedNeverGetsTheCard() throws {
+        let d = defaults()
+        d.set(true, forKey: OnboardingView.doneKey)
+        Activation.settleExistingInstall(setupDone: d.bool(forKey: OnboardingView.doneKey), defaults: d)
+
+        let tap = try log("Starbucks", source: .tap)
+        #expect(Activation.recordIfFirst(tap, defaults: d) == nil)
+        #expect(!Activation.shouldAskForNotifications(defaults: d))
+    }
+
+    /// A fresh install: settling at first launch (setup not done) and again
+    /// at the next launch (setup done by then) leaves the aha open.
+    @Test func aFreshInstallStillGetsTheCardAfterSetup() throws {
+        let d = defaults()
+        Activation.settleExistingInstall(setupDone: false, defaults: d)
+        Activation.settleExistingInstall(setupDone: true, defaults: d)
+
+        let tap = try log("Starbucks", source: .tap)
+        #expect(Activation.recordIfFirst(tap, defaults: d) == .tap)
+        #expect(Activation.shouldAskForNotifications(defaults: d))
+    }
 }
 
 // Device-only and UI-level cases (a real Apple Pay tap, a Gmail import, "0
