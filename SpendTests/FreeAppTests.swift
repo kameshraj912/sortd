@@ -41,15 +41,9 @@ struct FreeAppTests {
         // The test host's home currency depends on the simulator's region
         // (e.g. SGD on en_SG); logging in a hardcoded "AUD" would leave
         // audValue at 0 on a non-AUD host and fail for FX reasons, not the
-        // Pro condition this test is about. Pin the home currency and log
-        // the purchase in it.
-        let wasHome = standardDefaults.string(forKey: Money.homeKey)
-        standardDefaults.set("AUD", forKey: Money.homeKey)
-        defer {
-            if let wasHome { standardDefaults.set(wasHome, forKey: Money.homeKey) }
-            else { standardDefaults.removeObject(forKey: Money.homeKey) }
-        }
-
+        // Pro condition this test is about. Logging in Money.home, whatever
+        // it is on this host, sidesteps that -- and leaves UserDefaults.standard
+        // alone, which other suites read at the same time.
         let context = try store()
         let now = Date(timeIntervalSince1970: 1_790_000_000)
         let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 500, currency: Money.home,
