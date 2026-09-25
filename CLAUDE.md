@@ -91,7 +91,7 @@ consumable tips that unlock nothing. StoreKit 2 stays in the app only for that.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
 - No bank passwords, no screen scraping. Secrets (the Google refresh token) go in the Keychain, never in git.
-- Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`) stay inside `#if DEBUG`.
+- Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`, `SPEND_OLD_SETUP` for the old setup flow, `SPEND_ACTIVITY_LIST` for the old Activity list) stay inside `#if DEBUG`.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 
 ## Known gaps
