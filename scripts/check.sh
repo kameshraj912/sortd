@@ -25,7 +25,8 @@ if [ $allow_dirty -eq 0 ] && [ -n "$(git -C "$ROOT" status --porcelain)" ]; then
 fi
 
 "$ROOT/scripts/build.sh" || exit 1
-if ! "$ROOT/scripts/test.sh" "${extra[@]}"; then
+# ${extra[@]+...}: an empty array is "unbound" under set -u on macOS bash 3.2.
+if ! "$ROOT/scripts/test.sh" ${extra[@]+"${extra[@]}"}; then
   say ""
   say "failing tests:"
   grep -E '✘ Test [A-Za-z0-9_]+\(\) (failed|recorded an issue)' "$ROOT/.build/test.log" \

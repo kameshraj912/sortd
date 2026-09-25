@@ -43,6 +43,28 @@ if grep -q 'sentry-cocoa' "$PBX"; then
   fi
 fi
 
+# 1d. Usage analytics (PostHog) are on in every build that has a key. The App
+#     Privacy label must say Product Interaction, User ID and Device ID, all
+#     "linked to you" (Analytics, App Functionality), matching PrivacyInfo.xcprivacy.
+#     The key comes from Secrets.xcconfig (gitignored; never in a fresh
+#     worktree). No key means no events: a note for TestFlight, a FAIL for
+#     the App Store, where the label promises analytics that would not run.
+if grep -q 'posthog-ios' "$PBX"; then
+  warn "Analytics on (PostHog). App Privacy label: Product Interaction, User ID, Device ID — linked to you."
+  key=""
+  [ -f Secrets.xcconfig ] && key=$(grep -m1 '^POSTHOG_API_KEY' Secrets.xcconfig | cut -d= -f2- | tr -d ' \t')
+  [ -z "$key" ] && key=$(grep -m1 '^POSTHOG_API_KEY' Config.xcconfig 2>/dev/null | cut -d= -f2- | tr -d ' \t')
+  if [ -z "$key" ] || [ "$key" = "phc_replace_me" ]; then
+    if [ "$MODE" = "--appstore" ]; then
+      bad "POSTHOG_API_KEY is empty. Copy Secrets.xcconfig.example to Secrets.xcconfig and paste the phc_ key."
+    else
+      warn "POSTHOG_API_KEY is empty: this build sends no analytics (see Secrets.xcconfig.example)."
+    fi
+  else
+    ok "PostHog key set."
+  fi
+fi
+
 # 1c. Gmail ships in v1, which only works for the public once Google has verified the scope.
 if grep -q 'SORTD_GMAIL' "$PBX" && [ "$MODE" = "--appstore" ]; then
   warn "Gmail is on. Submit only after Google has verified gmail.readonly"

@@ -54,6 +54,12 @@ struct LogPurchaseIntent: AppIntent {
         UserDefaults.standard.object(forKey: lastTapAtKey) != nil
     }
 
+    /// A tap counts as the first auto-logged purchase only when it was
+    /// added (not merged) and is not the app's own "Send a Test Tap".
+    nonisolated static func countsAsActivation(added: Bool, merchant: String) -> Bool {
+        added && merchant != TapTestButton.testMerchant
+    }
+
     /// The whole tap-handling logic, callable from tests.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
@@ -116,6 +122,11 @@ struct LogPurchaseIntent: AppIntent {
 
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
+        // The first purchase the app logged on its own (once per install).
+        // A "Send a Test Tap" purchase is not one.
+        if case .added = outcome, Self.countsAsActivation(added: true, merchant: name) {
+            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        }
         if refund, !t.refunded {
             t.refunded = true
             try? context.save()

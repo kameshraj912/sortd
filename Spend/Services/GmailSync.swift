@@ -78,6 +78,8 @@ enum GmailSync {
         var list = accounts.filter { $0.email != email }
         list.append(GmailAccount(email: email))
         accounts = list
+        // That it happened, never which address (Google Limited Use).
+        Analytics.shared.track(.gmailConnected, ["accounts": .int(list.count)])
         // Only the new account: the others were synced recently enough.
         let s = try await syncAccounts([email], in: context, force: true, rethrow: true, job: job)
         total.end("added \(s.added)")
@@ -256,6 +258,15 @@ enum GmailSync {
         accounts = accounts.map { a in
             guard touched.contains(a.email) else { return a }
             return list.first { $0.email == a.email } ?? a
+        }
+        // Whether it worked, and nothing about the inbox: no email counts, no
+        // purchase counts (Google Limited Use). Before the throw, so a connect
+        // whose first sync fails is counted too.
+        if ran {
+            var props: [String: Analytics.AnalyticsValue] = ["ok": .bool(failure == nil), "forced": .bool(force)]
+            if let failure { props["error_code"] = .string(String(describing: SyncFailure.from(failure).kind)) }
+            Analytics.shared.track(.gmailSyncFinished, props)
+            if total.added > 0 { Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("email")]) }
         }
         if let failure {
             report(.failed(SyncFailure.from(failure)))
