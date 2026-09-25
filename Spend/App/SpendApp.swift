@@ -333,6 +333,7 @@ struct RootView: View {
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())
             await Reminders.checkCategoryLimits(all)
+            await Reminders.checkBudgetPace(all, budget: UserDefaults.standard.double(forKey: FXService.budgetKey))
             // Leave the widget fresh numbers. Does nothing without an App Group.
             WidgetBridge.refresh(from: context)
         }
