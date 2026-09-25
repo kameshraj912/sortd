@@ -8,7 +8,7 @@
 //
 // Idempotent: today bulk_delete answers 202 and drops ids it does not know. A PostHog draft
 // PR (#104461) would instead answer 400 naming the unknown ids when delete_events is set;
-// a 400 whose body names our id is treated as done too.
+// a 400 of that exact shape (see isUnknownIdError) is treated as done too.
 // A 404 is NOT treated as done: bulk_delete has no per-person 404, so a 404 means the
 // project id or path is wrong, and hiding that would silently skip every deletion.
 
@@ -42,14 +42,21 @@ export async function deletePerson(distinctId: string, cfg: PostHogConfig, fetch
   if (res.status === 401 || res.status === 403) throw new WorkerError("posthog_auth");
   if (res.status === 404) throw new WorkerError("misconfigured");
   if (res.status === 429 || res.status >= 500) throw new WorkerError("posthog_unavailable");
-  if (res.status === 400) {
-    let text = "";
-    try {
-      text = await res.text();
-    } catch {
-      // ignore
-    }
-    if (text.includes(distinctId)) return; // "unknown distinct id": already gone
-  }
+  if (res.status === 400 && isUnknownIdError(await res.json().catch(() => null), distinctId)) return;
   throw new WorkerError("posthog_rejected");
+}
+
+/**
+ * True only for PostHog's validation-error shape that lists our id as unknown:
+ *   {"type":"validation_error", "attr":"distinct_ids", ..., <an array of ids containing ours>}
+ * PostHog's standard error body is {type, code, detail, attr}. The id-list field name in the
+ * draft PR (#104461) is NOT VERIFIED, so any top-level string array that contains our id
+ * exactly is accepted, but only inside a validation_error about distinct_ids. A 400 that
+ * merely echoes the id anywhere else (text, detail, another shape) is posthog_rejected.
+ */
+function isUnknownIdError(body: unknown, distinctId: string): boolean {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return false;
+  const b = body as Record<string, unknown>;
+  if (b.type !== "validation_error" || b.attr !== "distinct_ids") return false;
+  return Object.values(b).some((v) => Array.isArray(v) && v.every((x) => typeof x === "string") && v.includes(distinctId));
 }

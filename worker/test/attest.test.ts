@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   APPLE_APP_ATTEST_ROOT_PEM,
+  APPLE_APP_ATTEST_ROOT_SHA256,
   parseCertificate,
   pemToDer,
   verifyAttestation,
   verifySignedBy,
   type AttestInput,
 } from "../src/attest";
-import { CLIENT_ID, NOW, TEAM_ID, makeAttestation, makeCA, testCA, type AttestOptions } from "./helpers";
+import { CLIENT_ID, NOW, TEAM_ID, hex, makeAttestation, makeCA, sha256, testCA, type AttestOptions } from "./helpers";
 
 const CHALLENGE = "test-challenge-string";
 
@@ -23,6 +24,7 @@ async function run(opts: Partial<AttestOptions> = {}, input: Partial<AttestInput
       allowDevelop: false,
       nowMs: NOW,
       roots: [(await testCA()).rootDer],
+      rootSha256: [(await testCA()).rootSha256],
       ...input,
     });
     return "ok";
@@ -48,6 +50,58 @@ describe("App Attest attestation of a fresh key", () => {
 
   it("rejects when no root is configured", async () => {
     expect(await run({}, { roots: [] })).toBe("attest_invalid");
+  });
+
+  it("rejects a leaf that names the intermediate but was signed by a stranger key", async () => {
+    expect(await run({ leafSignedByStranger: true })).toBe("attest_invalid");
+  });
+
+  it("rejects a leaf whose issuer name is not the intermediate's subject, even if the intermediate signed it", async () => {
+    expect(await run({ leafIssuerCN: "Someone Else CA" })).toBe("attest_invalid");
+  });
+
+  it("rejects an intermediate that names the root as issuer but signed itself", async () => {
+    const ca = await makeCA({ intermediateSelfSigned: true });
+    expect(await run({ ca }, { roots: [ca.rootDer], rootSha256: [ca.rootSha256] })).toBe("attest_invalid");
+  });
+
+  it("rejects an intermediate without basicConstraints cA=true", async () => {
+    const ca = await makeCA({ intermediateNotCA: true });
+    expect(await run({ ca }, { roots: [ca.rootDer], rootSha256: [ca.rootSha256] })).toBe("attest_invalid");
+  });
+
+  it("rejects an expired intermediate, and an expired root", async () => {
+    const past = new Date(NOW - 1000);
+    const i = await makeCA({ intermediateNotAfter: past });
+    expect(await run({ ca: i }, { roots: [i.rootDer], rootSha256: [i.rootSha256] })).toBe("attest_invalid");
+    const r = await makeCA({ rootNotAfter: past });
+    expect(await run({ ca: r }, { roots: [r.rootDer], rootSha256: [r.rootSha256] })).toBe("attest_invalid");
+  });
+
+  it("pins the root by SHA-256: a self-made root named 'Apple App Attestation Root CA' is not trusted", async () => {
+    const impostor = await makeCA({ label: "Apple App Attestation" });
+    // The chain is internally valid against the impostor root...
+    expect(await run({ ca: impostor }, { roots: [impostor.rootDer], rootSha256: [impostor.rootSha256] })).toBe("ok");
+    // ...but with the production pin it fails, even when the impostor DER is offered as a root.
+    expect(await run({ ca: impostor }, { roots: [impostor.rootDer], rootSha256: [APPLE_APP_ATTEST_ROOT_SHA256] })).toBe("attest_invalid");
+  });
+
+  it("signature paths: P-384 intermediate signing the leaf with SHA-256 (believed Apple's, not verified) and with SHA-384", async () => {
+    expect(await run({ leafHash: "SHA-256" })).toBe("ok");
+    expect(await run({ leafHash: "SHA-384" })).toBe("ok");
+  });
+
+  it("rejects a leaf key that is not P-256", async () => {
+    expect(await run({ leafCurve: "P-384" })).toBe("attest_invalid");
+  });
+
+  it("rejects x5c with other than exactly [leaf, intermediate]", async () => {
+    expect(await run({ x5c: (l, i, r) => [l, i, r] })).toBe("attest_invalid");
+    expect(await run({ x5c: (l) => [l] })).toBe("attest_invalid");
+  });
+
+  it("rejects authData without the AT (attested credential data) flag", async () => {
+    expect(await run({ flags: 0x01 })).toBe("attest_invalid");
   });
 
   it("rejects a nonce made for another challenge", async () => {
@@ -83,8 +137,10 @@ describe("App Attest attestation of a fresh key", () => {
     expect(await run({}, { keyId: "" })).toBe("attest_invalid");
   });
 
-  it("the embedded Apple App Attestation Root CA parses and its self-signature verifies", async () => {
-    const root = parseCertificate(pemToDer(APPLE_APP_ATTEST_ROOT_PEM));
+  it("the embedded Apple App Attestation Root CA parses, self-verifies, and matches the pinned SHA-256", async () => {
+    const der = pemToDer(APPLE_APP_ATTEST_ROOT_PEM);
+    expect(hex(await sha256(der))).toBe(APPLE_APP_ATTEST_ROOT_SHA256);
+    const root = parseCertificate(der);
     expect(root.subjectCommonName).toBe("Apple App Attestation Root CA");
     expect(await verifySignedBy(root, root)).toBe(true);
   });

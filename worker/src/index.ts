@@ -2,7 +2,7 @@
 // workerd only allows handlers as exports of the main module, so this file exports
 // nothing but the default handler. The logic lives in handler.ts.
 
-import { APPLE_APP_ATTEST_ROOT_PEM } from "./attest";
+import { APPLE_APP_ATTEST_ROOT_PEM, APPLE_APP_ATTEST_ROOT_SHA256 } from "./attest";
 import { pemToDer } from "./bytes";
 import { handle } from "./handler";
 import type { Env } from "./types";
@@ -12,6 +12,6 @@ let roots: Uint8Array[] | undefined;
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     roots ??= [pemToDer(APPLE_APP_ATTEST_ROOT_PEM)];
-    return handle(request, env, { fetch: (input, init) => fetch(input, init), now: () => Date.now(), attestRoots: roots });
+    return handle(request, env, { fetch: (input, init) => fetch(input, init), now: () => Date.now(), attestRoots: roots, attestRootSha256: [APPLE_APP_ATTEST_ROOT_SHA256] });
   },
 } satisfies ExportedHandler<Env>;
