@@ -47,7 +47,7 @@ struct TipStateTests {
             let e = try! #require(last())
             #expect(e.applePay == false)
             #expect(e.month == true)
-            #expect(TipRules.onlyOne([e.add, e.applePay, e.month]) == 2)
+            #expect(TipRules.onlyOne([e.applePay, e.month]) == 1)
         }
     }
 

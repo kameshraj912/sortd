@@ -60,6 +60,13 @@ struct HelpFeedbackSettingsView: View {
                 } label: {
                     Label("Show Tips Again", systemImage: "lightbulb")
                 }
+                Button {
+                    // The intro opens once Settings has finished closing.
+                    Router.shared.pendingIntroReplay = true
+                    Router.shared.showingSettings = false
+                } label: {
+                    Label("Show the Intro Again", systemImage: "sparkles")
+                }
             } header: {
                 BoldHeader("Get Help")
             } footer: {

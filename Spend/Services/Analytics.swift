@@ -39,6 +39,10 @@ final class Analytics {
         case tipLeft = "tip_left"
         case tipShown = "tip_shown"
         case tipUsed = "tip_used"
+        /// The app intro (docs/specs/2026-09-25-app-intro.md): once per
+        /// showing, and once per showing when it ends.
+        case introShown = "intro_shown"
+        case introFinished = "intro_finished"
         case backupCompleted = "backup_completed"
         case restoreCompleted = "restore_completed"
         case analyticsOptedOut = "analytics_opted_out"
