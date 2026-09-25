@@ -66,7 +66,9 @@ Full design: `docs/AgentPipeline.md`.
 - CI (`.github/workflows/swift.yml`) builds and tests on a pinned Xcode. Code must compile on
   that Xcode too: an SDK-only symbol needs `#if compiler(>=...)`, not just `#available`.
 - Sample data in the simulator: launch with env `SPEND_DEMO=1` (DEBUG only), or tap "Explore with sample data" on the first screen.
-- On the phone: Xcode → Signing & Capabilities → pick Raj's team. Free team = re-install every 7 days.
+- On the phone: `scripts/device.sh` (Developer Mode on, phone unlocked). Free team = re-install every 7 days.
+  Debug signs with `Spend-Development.entitlements` (app groups only); the paid capabilities stay in
+  `Spend.entitlements` for Release.
 
 ## Tip jar
 Everything is free forever: Gmail, the receipt camera, Insights, Subscriptions & bills,
