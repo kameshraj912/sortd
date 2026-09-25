@@ -2,8 +2,8 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-/// Settings › Backup & Data: save or import a backup, export a CSV, or
-/// delete everything Sortd has stored.
+/// Settings › Backup & Data: back up to iCloud, save or import a backup
+/// file, export a CSV, or delete everything Sortd has stored.
 struct BackupDataSettingsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
@@ -14,9 +14,56 @@ struct BackupDataSettingsView: View {
     @State private var lastSaved = UserDefaults.standard.object(forKey: BackupDataSettingsView.lastBackupKey) as? Date
     @State private var failure: String?
 
+    // iCloud
+    @State private var cloud = CloudBackup.shared
+    @State private var confirmingSwitchOff = false
+    @State private var confirmingRestore = false
+    @State private var confirmingReplace = false
+    @State private var cloudContents: Backup.Contents?
+    @State private var replaceCount = 0
+    @State private var restored: String?
+    @State private var cloudFailure: String?
+
     var body: some View {
         List {
             ListPageTitle(title: "Backup & Data")
+            Section {
+                Toggle(isOn: cloudSwitch) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Back up to iCloud")
+                            // Redrawn each minute so "2 min ago" stays true.
+                            TimelineView(.everyMinute) { tl in
+                                Text(cloud.status.message ?? Self.lastCloudText(cloud.lastBackup, now: tl.date))
+                                    .accessibilityLabel(cloud.status.message
+                                                        ?? Self.lastCloudText(cloud.lastBackup, now: tl.date, spoken: true))
+                            }
+                            .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        if cloud.status.isBusy {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "icloud")
+                        }
+                    }
+                }
+                if cloud.isEnabled {
+                    Button(action: backUpToCloud) {
+                        Label("Back Up Now", systemImage: "arrow.clockwise.icloud")
+                    }
+                    .disabled(cloud.status.isBusy)
+                }
+                Button { confirmingRestore = true } label: {
+                    Label("Restore from iCloud", systemImage: "arrow.counterclockwise.icloud")
+                }
+                .disabled(cloud.status.isBusy)
+            } header: {
+                BoldHeader("iCloud")
+            } footer: {
+                Text("Your purchases are encrypted on this iPhone before they go to your iCloud. The key stays in your iCloud Keychain, so only your devices can read them. On a new iPhone, restore first.")
+            }
+
             Section {
                 Button(action: prepareBackup) {
                     Label {
@@ -52,9 +99,9 @@ struct BackupDataSettingsView: View {
                     }
                 }
             } header: {
-                BoldHeader("Backup")
+                BoldHeader("Backup File")
             } footer: {
-                Text("Everything stays on this iPhone. Save a backup to move to a new phone, or in case you lose this one.")
+                Text("A backup file is a copy you keep yourself: in Files, on iCloud Drive, or sent to a new phone.")
             }
 
             Section {
@@ -98,9 +145,38 @@ struct BackupDataSettingsView: View {
         } message: {
             Text(failure ?? "")
         }
-        // An alert, not a confirmation dialog: this is the one irreversible
-        // action in the app, and a dialog anchored to the row renders in a
-        // narrow popover that wrapped three sentences into ragged lines.
+        // Alerts, not confirmation dialogs, for everything below: a dialog
+        // anchored to the row renders in a narrow popover that wrapped
+        // three sentences into ragged lines (HANDOVER).
+        .alert("Delete the iCloud copy too?", isPresented: $confirmingSwitchOff) {
+            Button("Delete iCloud Copy", role: .destructive) { deleteCloudCopy() }
+            Button("Keep It", role: .cancel) {}
+        } message: {
+            Text("Backups have stopped either way. Keep the copy if you might want it on a new iPhone.")
+        }
+        .alert("Restore from iCloud?", isPresented: $confirmingRestore) {
+            Button("Add What's Missing") { restore(.merge) }
+            Button("Replace Everything", role: .destructive) { prepareReplace() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Add What's Missing keeps what's on this iPhone and adds what the backup has. Replace Everything clears this iPhone first.")
+        }
+        .alert(replaceTitle, isPresented: $confirmingReplace) {
+            Button("Replace Everything", role: .destructive) { restore(.replace) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(replaceMessage)
+        }
+        .alert("Restored", isPresented: Binding(get: { restored != nil }, set: { if !$0 { restored = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(restored ?? "")
+        }
+        .alert("Couldn't Restore", isPresented: Binding(get: { cloudFailure != nil }, set: { if !$0 { cloudFailure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cloudFailure ?? "")
+        }
         .alert("Delete all data?", isPresented: $confirmingDelete) {
             Button("Delete Everything", role: .destructive) {
                 DataReset.deleteEverything(in: context)
@@ -110,9 +186,7 @@ struct BackupDataSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(GmailSync.accounts.isEmpty
-                 ? "Every purchase, card and budget on this iPhone goes. There's no undo."
-                 : "Every purchase, card and budget on this iPhone goes, and Gmail is disconnected. There's no undo.")
+            Text(deleteMessage)
         }
     }
 
@@ -123,6 +197,98 @@ struct BackupDataSettingsView: View {
         if now.timeIntervalSince(last) < 60 { return "Last saved just now" }
         return "Last saved \(last.formatted(.relative(presentation: .named)))"
     }
+
+    /// "Last backup: 2 min ago". `spoken` uses full words for VoiceOver.
+    static func lastCloudText(_ last: Date?, now: Date = .now, spoken: Bool = false) -> String {
+        guard let last else { return "No backup yet" }
+        if now.timeIntervalSince(last) < 60 { return "Last backup: just now" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = spoken ? .full : .abbreviated
+        return "Last backup: \(formatter.localizedString(for: last, relativeTo: now))"
+    }
+
+    private var deleteMessage: String {
+        var text = GmailSync.accounts.isEmpty
+            ? "Every purchase, card and budget on this iPhone goes."
+            : "Every purchase, card and budget on this iPhone goes, and Gmail is disconnected."
+        if cloud.isEnabled { text += " The iCloud backup is deleted too." }
+        return text + " There's no undo."
+    }
+
+    // MARK: - iCloud
+
+    /// On: the first backup runs at once (unless there's nothing to back up).
+    /// Off: backups stop, and the user chooses whether the copy stays.
+    private var cloudSwitch: Binding<Bool> {
+        Binding(get: { cloud.isEnabled }, set: { on in
+            cloud.isEnabled = on
+            if on {
+                Task { await cloud.backUpIfDue(from: context) }
+            } else if cloud.lastBackup != nil {
+                confirmingSwitchOff = true
+            }
+        })
+    }
+
+    private func backUpToCloud() {
+        Task {
+            // The status line under the switch says what went wrong.
+            try? await cloud.backUpNow(from: context)
+        }
+    }
+
+    private func deleteCloudCopy() {
+        Task {
+            do { try await cloud.deleteCloudCopy() } catch { cloudFailure = error.localizedDescription }
+        }
+    }
+
+    /// Replace needs to say what it will do, so it looks at the backup first.
+    private func prepareReplace() {
+        Task {
+            do {
+                guard let contents = try await cloud.contents() else {
+                    restored = "No backup in iCloud yet."
+                    return
+                }
+                cloudContents = contents
+                replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
+                confirmingReplace = true
+            } catch {
+                cloudFailure = error.localizedDescription
+            }
+        }
+    }
+
+    private var replaceTitle: String {
+        guard let cloudContents else { return "Replace this iPhone's data with the iCloud backup?" }
+        return Backup.replaceWarning(backup: cloudContents, purchasesHere: replaceCount).title
+    }
+
+    private var replaceMessage: String {
+        guard let cloudContents else { return "Everything on this iPhone will be replaced. This can't be undone." }
+        return Backup.replaceWarning(backup: cloudContents, purchasesHere: replaceCount).message
+    }
+
+    private func restore(_ mode: Backup.Mode) {
+        Task {
+            do {
+                if mode == .merge, try await cloud.contents() == nil {
+                    restored = "No backup in iCloud yet."
+                    return
+                }
+                let added = try await cloud.restore(into: context, mode: mode)
+                Task { await FXService.backfill(in: context) }
+                restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
+                    : "\(added) purchase\(added == 1 ? "" : "s") added."
+                AccessibilityNotification.Announcement(restored ?? "").post()
+            } catch {
+                cloudFailure = error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Backup file
 
     /// Reads the purchases (main thread), writes the file off it, then opens
     /// the share sheet. The spinner shows the whole time.

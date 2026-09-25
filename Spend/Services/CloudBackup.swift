@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import SwiftData
+import UIKit
 
 /// Where the encrypted backup blob lives. The real one is a CloudKit record in
 /// the user's private database (`CloudKitBackupStore`); tests use a fake.
@@ -98,6 +99,7 @@ final class CloudBackup {
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private var retry: Task<Void, Never>?
+    @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     /// The last automatic try, pass or fail, so a failing store isn't hit on
     /// every save.
     @ObservationIgnored private var lastAttempt: Date?
@@ -144,6 +146,36 @@ final class CloudBackup {
             guard !Task.isCancelled else { return }
             await backUpIfDue(from: context)
         }
+    }
+
+    /// Backs up after every save to the store (a logged tap, an import, an
+    /// edit), the same hook `WidgetBridge` uses, so CloudKit never sits
+    /// inside `TransactionLogger`. Call once at launch.
+    static func watchSaves() {
+        NotificationCenter.default.addObserver(forName: ModelContext.didSave,
+                                               object: SpendStore.container.mainContext, queue: .main) { _ in
+            MainActor.assumeIsolated { shared.scheduleBackup(from: SpendStore.container.mainContext) }
+        }
+    }
+
+    /// On the way to the background: back up now if due, with the few extra
+    /// seconds iOS grants so the upload isn't cut off mid-way.
+    func backUpOnBackground(from context: ModelContext) {
+        guard isEnabled, backgroundTask == .invalid else { return }
+        pending?.cancel()
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "cloud-backup") {
+            MainActor.assumeIsolated { self.endBackgroundTask() }
+        }
+        Task {
+            await backUpIfDue(from: context)
+            endBackgroundTask()
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 
     private func backUp(from context: ModelContext, automatic: Bool) async throws {

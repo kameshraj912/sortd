@@ -89,6 +89,13 @@ enum DataReset {
         // A Gmail sync still downloading would otherwise save its purchases
         // into the empty store afterwards.
         GmailSync.cancelRunningSyncs()
+        // The iCloud copy goes too, or it would bring everything back. The
+        // switch goes off first so the saves below don't schedule a backup.
+        let cloud = CloudBackup.shared
+        if cloud.isEnabled {
+            cloud.isEnabled = false
+            Task { try? await cloud.deleteCloudCopy() }
+        }
         try? context.delete(model: Transaction.self)
         try? context.delete(model: MerchantRule.self)
         try? context.delete(model: ImportedRecord.self)
