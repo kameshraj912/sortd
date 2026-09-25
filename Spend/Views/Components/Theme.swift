@@ -147,6 +147,11 @@ struct ChipStyle: ViewModifier {
             .foregroundStyle(selected ? Color.onBrand : Color.ink)
             .background(selected ? Color.brand : Color.clear, in: .capsule)
             .overlay(Capsule().strokeBorder(selected ? Color.clear : Color.hairline, lineWidth: 1))
+            // The capsule itself stays its usual size; the tap target grows
+            // to the 44pt minimum around it (HIG-Layout), same trick as a
+            // small nav-bar icon button.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 
