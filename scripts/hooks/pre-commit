@@ -19,7 +19,7 @@ done <<< "$staged"
 # 2. Secrets: patterns inside the staged diff (added lines only).
 added="$(git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+')"
 if printf '%s' "$added" | grep -nE \
-  'AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[A-Za-z0-9]{36}|AIza[0-9A-Za-z_-]{35}|GOCSPX-[A-Za-z0-9_-]{20,}|"refresh_token"\s*:\s*"[^"]{20,}' \
+  'AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[A-Za-z0-9]{36}|AIza[0-9A-Za-z_-]{35}|GOCSPX-[A-Za-z0-9_-]{20,}|"refresh_token"\s*:\s*"[^"]{20,}|[0-9a-f]{32}@o[0-9]+\.ingest(\.[a-z]{2})?\.sentry\.io' \
   >/dev/null; then
   bad "a staged line looks like an API key or private key. Remove it; use the Keychain."
 fi
