@@ -61,6 +61,7 @@ struct SpendApp: App {
         } catch {
             log.error("tips: configure failed: \(error.localizedDescription)")
         }
+        TipVisibility.shared.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
@@ -266,6 +267,8 @@ struct RootView: View {
                 // Which tabs get used, the first one at launch included. The +
                 // slot never becomes `tab`.
                 Analytics.shared.track(.tabOpened, ["tab": .string(new.title.lowercased())])
+                // A tip visit: a tab opened, not a return from a pushed row.
+                if !setupPresented { TipState.visited(new) }
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .feedback(.select, trigger: tab)
@@ -293,6 +296,8 @@ struct RootView: View {
         })
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
+            // Coming back to the app on a tab is a visit to it.
+            if phase == .active, !setupPresented { TipState.visited(tab) }
             #if SORTD_ICLOUD
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
@@ -320,8 +325,10 @@ struct RootView: View {
                 setupFinished = true
             }
         }
-        // No tips while setup is up; the screens behind it re-check when it closes.
+        // No tips while setup is up; the screens behind it re-check when it
+        // closes, and the tab it closed onto counts as visited then.
         .onChange(of: setupPresented, initial: true) { _, showing in TipState.setupShowing = showing }
+        .onChange(of: setupPresented) { _, showing in if !showing { TipState.visited(tab) } }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }

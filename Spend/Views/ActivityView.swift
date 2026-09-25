@@ -83,9 +83,8 @@ struct TransactionsScreen: View {
         .modifier(ActivitySearch(enabled: fixedCard != nil || NavOption.current.searchInActivity,
                                  text: $search))
         .scrollDismissesKeyboard(.immediately)
-        // Tips: the main list's visits count, the rules read the purchase
-        // figures, and typing a search is the search tip's "done".
-        .onAppear { if fixedCard == nil { TipState.visitedActivity() } }
+        // Tips: the rules read the purchase figures (visits are counted by
+        // RootView, on the tab), and typing a search is the search tip's "done".
         .onChange(of: transactions.count, initial: true) { if fixedCard == nil { TipState.update(from: transactions) } }
         .onChange(of: search) { _, text in
             if !text.trimmingCharacters(in: .whitespaces).isEmpty { TipState.searchUsed() }

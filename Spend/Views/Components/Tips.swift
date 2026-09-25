@@ -1,15 +1,19 @@
 import SwiftUI
 import TipKit
+import Observation
 
 /// In-app tips (overhaul sub-spec 7). Six TipKit tips that appear one at a
 /// time, at the moment a feature matters: never as a tour, never during
 /// setup, never in the first-launch session.
 ///
-/// Three parts, each on its own:
+/// Four parts, each on its own:
 /// - `TipCopy`: the six lines (tested for tone and length).
 /// - `TipRules`: the eligibility maths as pure functions (tested).
 /// - `TipState`: the counters behind the rules, in UserDefaults, and the one
-///   `refresh()` that turns them into each tip's `eligible` parameter.
+///   `refresh()` that turns them into an `Eligibility` (tested with a
+///   throwaway defaults suite and a spy in place of TipKit).
+/// - `TipVisibility`: which tips TipKit is showing right now, for the
+///   inline cards to come and go with.
 ///
 /// TipKit itself does the rest: shows a tip once its rule is true, keeps it
 /// up until it is closed or invalidated, and allows one new tip a day
@@ -56,9 +60,11 @@ enum TipRules {
         !setupShowing && homeVisits >= 2 && manualCount == 0
     }
 
-    /// Setup done, the Shortcut has never reached the app.
-    static func applePay(setupDone: Bool, shortcutReached: Bool, setupShowing: Bool) -> Bool {
-        !setupShowing && setupDone && !shortcutReached
+    /// Setup done, the Shortcut has never reached the app, and the Apple Pay
+    /// row is on screen (a card user, the Finish Setup card not hidden, no
+    /// sample data). A cash user gets the widget row instead.
+    static func applePay(setupDone: Bool, shortcutReached: Bool, rowShowing: Bool, setupShowing: Bool) -> Bool {
+        !setupShowing && setupDone && !shortcutReached && rowShowing
     }
 
     /// Third Activity visit with five or more purchases, and no swipe yet.
@@ -86,11 +92,20 @@ enum TipRules {
         candidates.firstIndex(of: true)
     }
 
-    /// "Show tips again" and Delete All Data. A static var so a test can
-    /// spy on it without touching TipKit's store.
-    static var resetDatastore: () -> Void = {
-        do { try Tips.resetDatastore() } catch { log.error("tips: reset failed: \(error.localizedDescription)") }
+    /// TipKit's reset, as a Bool: it can fail while the store is open.
+    /// A static var so a test can stand in for TipKit.
+    static var tryResetDatastore: () -> Bool = {
+        do {
+            try Tips.resetDatastore()
+            return true
+        } catch {
+            log.error("tips: reset failed: \(error.localizedDescription)")
+            return false
+        }
     }
+
+    /// The same reset with no answer, for callers that cannot act on one.
+    static var resetDatastore: () -> Void = { _ = TipRules.tryResetDatastore() }
 
     /// Calendar days from the earliest purchase to today, both included.
     /// No purchases: 0.
@@ -110,7 +125,7 @@ enum TipRules {
 
 // MARK: - The tips
 
-/// Each tip has one rule: its `eligible` parameter, set by `TipState.refresh()`.
+/// Each tip has one rule: its `eligible` parameter, set by `TipState`.
 /// That keeps the maths in `TipRules` (one place, tested) and leaves TipKit
 /// the showing, closing and once-a-day pacing.
 
@@ -172,8 +187,8 @@ nonisolated struct MonthTip: Tip {
 
 /// The counters and flags behind the rules, in UserDefaults, and the
 /// purchase figures the screens hand over from their `@Query`. Every change
-/// ends in `refresh()`, which writes each tip's `eligible` parameter so
-/// that at most one tip per screen is true.
+/// ends in `refresh()`, which works out an `Eligibility` and hands it to
+/// `apply` (TipKit in the app, a spy in tests).
 enum TipState {
     static let homeVisitsKey = "tips.homeVisits"
     static let activityVisitsKey = "tips.activityVisits"
@@ -185,22 +200,69 @@ enum TipState {
     static let firstLaunchAtKey = "tips.firstLaunchAt"
     /// Set on the second launch, or ten minutes into the first.
     static let firstSessionEndedKey = "tips.firstLaunchSessionEnded"
-    /// Ids of tips TipKit has put on screen, for `tip_used` to be honest.
+    /// Ids of tips TipKit has put on screen: `tip_shown` once each.
     static let shownKey = "tips.shown"
-    /// "Show tips again" also resets before the next `Tips.configure`.
+    /// Ids whose action was done after they were shown: `tip_used` once each.
+    static let usedKey = "tips.used"
+    /// A reset TipKit could not do while open, for the next launch.
     static let pendingResetKey = "tips.pendingReset"
     static let firstSessionLength: TimeInterval = 10 * 60
+
+    /// Where the counters live. Tests point this at a throwaway suite.
+    static var defaults: UserDefaults = .standard
+    /// Where an eligibility goes. TipKit in the app; a spy in tests.
+    static var apply: @MainActor (Eligibility) -> Void = { applyToTipKit($0) }
 
     /// True while setup is on screen. `RootView` keeps it up to date.
     static var setupShowing = false {
         didSet { if setupShowing != oldValue { refresh() } }
     }
 
-    // Figures from the store, cached by the screens that hold a @Query.
-    private(set) static var manualCount = 0
-    private(set) static var purchases = 0
-    private(set) static var daysOfData = 0
-    private(set) static var monthsOfData = 0
+    /// The figures from the store, as the screens last reported them.
+    private(set) static var figures = Figures.empty
+
+    /// What the rules need from the purchases. Sample data never counts.
+    struct Figures: Equatable, Sendable {
+        var manualCount: Int
+        var purchases: Int
+        var daysOfData: Int
+        var monthsOfData: Int
+
+        static let empty = Figures(manualCount: 0, purchases: 0, daysOfData: 0, monthsOfData: 0)
+
+        struct Row: Sendable {
+            let date: Date
+            let manual: Bool
+            let sample: Bool
+        }
+
+        init(manualCount: Int, purchases: Int, daysOfData: Int, monthsOfData: Int) {
+            self.manualCount = manualCount
+            self.purchases = purchases
+            self.daysOfData = daysOfData
+            self.monthsOfData = monthsOfData
+        }
+
+        init(rows: [Row], now: Date, calendar: Calendar) {
+            let real = rows.filter { !$0.sample }
+            manualCount = real.filter(\.manual).count
+            purchases = real.count
+            let dates = real.map(\.date)
+            daysOfData = TipRules.daysOfData(from: dates.min(), to: now, calendar: calendar)
+            monthsOfData = TipRules.calendarMonths(of: dates, calendar: calendar)
+        }
+    }
+
+    /// Each rule's answer. Which one a screen shows is decided when it is
+    /// applied (a tip already closed gives way to the next).
+    struct Eligibility: Equatable, Sendable {
+        var add = false
+        var applePay = false
+        var month = false
+        var swipe = false
+        var search = false
+        var insights = false
+    }
 
     // MARK: Launch
 
@@ -208,58 +270,70 @@ enum TipState {
     /// tips starts the first session, unless setup was already done (an
     /// install from before tips existed is past its first session).
     static func launched(setupDone: Bool, now: Date = .now) {
-        let d = UserDefaults.standard
-        if d.object(forKey: firstLaunchAtKey) == nil {
-            d.set(now, forKey: firstLaunchAtKey)
-            if setupDone { d.set(true, forKey: firstSessionEndedKey) }
+        if defaults.object(forKey: firstLaunchAtKey) == nil {
+            defaults.set(now, forKey: firstLaunchAtKey)
+            if setupDone { defaults.set(true, forKey: firstSessionEndedKey) }
         } else {
-            d.set(true, forKey: firstSessionEndedKey)
+            defaults.set(true, forKey: firstSessionEndedKey)
         }
     }
 
-    /// Before `Tips.configure`: a reset asked for while the store was open.
+    /// Delete All Data: TipKit's store is reset at the next launch, before
+    /// it opens (a reset while it is open can fail).
+    static func resetAtNextLaunch() {
+        defaults.set(true, forKey: pendingResetKey)
+    }
+
+    /// Before `Tips.configure`. The flag stays if the reset fails again.
     static func applyPendingReset() {
-        guard UserDefaults.standard.bool(forKey: pendingResetKey) else { return }
-        UserDefaults.standard.removeObject(forKey: pendingResetKey)
-        TipRules.resetDatastore()
+        guard defaults.bool(forKey: pendingResetKey) else { return }
+        if TipRules.tryResetDatastore() { defaults.removeObject(forKey: pendingResetKey) }
     }
 
     #if DEBUG
     /// SPEND_TIPS_NOW=1: skip the first session and the visit counts, so a
     /// tip shows on the first screen. The real one-per-screen rules still apply.
     static func forceNow() {
-        let d = UserDefaults.standard
-        d.set(true, forKey: firstSessionEndedKey)
-        d.set(2, forKey: homeVisitsKey)
-        d.set(3, forKey: activityVisitsKey)
-        TipRules.resetDatastore()
+        defaults.set(true, forKey: firstSessionEndedKey)
+        defaults.set(2, forKey: homeVisitsKey)
+        defaults.set(3, forKey: activityVisitsKey)
+        _ = TipRules.tryResetDatastore()
     }
     #endif
 
     static var firstSessionEnded: Bool {
-        let d = UserDefaults.standard
-        if d.bool(forKey: firstSessionEndedKey) { return true }
-        guard let at = d.object(forKey: firstLaunchAtKey) as? Date,
+        if defaults.bool(forKey: firstSessionEndedKey) { return true }
+        guard let at = defaults.object(forKey: firstLaunchAtKey) as? Date,
               Date.now.timeIntervalSince(at) >= firstSessionLength else { return false }
-        d.set(true, forKey: firstSessionEndedKey)
+        defaults.set(true, forKey: firstSessionEndedKey)
         return true
     }
 
     // MARK: Inputs
 
-    /// The figures the rules need, from every purchase. Sample data never
-    /// counts as a purchase added by hand.
+    /// The figures the rules need, from every purchase.
     static func update(from transactions: [Transaction]) {
-        manualCount = transactions.filter { $0.source == .manual && $0.note != DemoData.marker }.count
-        purchases = transactions.count
-        let dates = transactions.map(\.date)
-        daysOfData = TipRules.daysOfData(from: dates.min(), to: .now, calendar: .current)
-        monthsOfData = TipRules.calendarMonths(of: dates, calendar: .current)
+        let rows = transactions.map {
+            Figures.Row(date: $0.date, manual: $0.source == .manual, sample: $0.note == DemoData.marker)
+        }
+        update(figures: Figures(rows: rows, now: .now, calendar: .current))
+    }
+
+    static func update(figures new: Figures) {
+        figures = new
         refresh()
     }
 
-    static func visitedHome() { bump(homeVisitsKey) }
-    static func visitedActivity() { bump(activityVisitsKey) }
+    /// A tab opened from another tab, or the app coming back on it. Not a
+    /// return from a pushed detail, and nothing while setup is up.
+    static func visited(_ tab: AppTab) {
+        guard !setupShowing else { return }
+        switch tab {
+        case .home: bump(homeVisitsKey)
+        case .activity: bump(activityVisitsKey)
+        default: break
+        }
+    }
 
     // The thing the tip was about has been done: the tip is over.
     static func searchUsed() { done(searchUsedKey, SearchTip()) }
@@ -267,79 +341,97 @@ enum TipState {
     static func chipsUsed() { done(chipsUsedKey, InsightsTip()) }
     static func monthChanged() { done(monthChangedKey, MonthTip()) }
     static func manualPurchaseAdded() {
-        manualCount += 1
+        figures.manualCount += 1
         used(AddTip())
         refresh()
     }
 
-    /// TipKit has put this tip on screen (from `shouldDisplayUpdates`).
+    /// TipKit has put this tip on screen. True the first time only.
+    @discardableResult
+    static func recordShown(_ id: String) -> Bool { append(id, to: shownKey) }
+
+    /// The tip's action was done. True once, and only after it was shown.
+    @discardableResult
+    static func recordUsed(_ id: String) -> Bool {
+        guard (defaults.stringArray(forKey: shownKey) ?? []).contains(id) else { return false }
+        return append(id, to: usedKey)
+    }
+
     static func shown(_ id: String) {
-        var ids = UserDefaults.standard.stringArray(forKey: shownKey) ?? []
-        guard !ids.contains(id) else { return }
-        ids.append(id)
-        UserDefaults.standard.set(ids, forKey: shownKey)
-        Analytics.shared.track(.tipShown, ["id": .string(id)])
+        if recordShown(id) { Analytics.shared.track(.tipShown, ["id": .string(id)]) }
     }
 
     /// Settings › Help. TipKit forgets what was shown and closed; the "done"
     /// flags go too, so a tip about a thing already done can show once more.
     /// Visit counts stay: the tips are for people who have looked around.
-    static func showTipsAgain() {
-        let d = UserDefaults.standard
-        for key in [searchUsedKey, swipeUsedKey, chipsUsedKey, monthChangedKey, shownKey] {
-            d.removeObject(forKey: key)
+    /// False when TipKit could not reset now: it will at the next launch.
+    @discardableResult
+    static func showTipsAgain() -> Bool {
+        for key in [searchUsedKey, swipeUsedKey, chipsUsedKey, monthChangedKey, shownKey, usedKey] {
+            defaults.removeObject(forKey: key)
         }
-        d.set(true, forKey: pendingResetKey)
-        TipRules.resetDatastore()
+        let reset = TipRules.tryResetDatastore()
+        if reset { defaults.removeObject(forKey: pendingResetKey) } else { resetAtNextLaunch() }
         refresh()
+        return reset
     }
 
     // MARK: Refresh
 
-    /// Turns the counters into each tip's `eligible` parameter, one tip per
-    /// screen at most: Home (add, Apple Pay, month), Activity (swipe,
-    /// search), Insights.
-    static func refresh() {
-        let d = UserDefaults.standard
-        let past = firstSessionEnded
+    /// Each rule against the counters. Pure apart from reading the defaults.
+    static func compute() -> Eligibility {
+        let d = defaults
+        guard firstSessionEnded else { return Eligibility() }
         let setup = setupShowing
-        if LogPurchaseIntent.shortcutHasReachedApp { used(ApplePayTip()) }
+        let shortcutReached = d.object(forKey: LogPurchaseIntent.lastTapAtKey) != nil
+        let payment = SetupProfile.Payment(rawValue: d.string(forKey: SetupProfile.paymentKey) ?? "")
+        let applePayRow = payment != .cash
+            && !d.bool(forKey: SetupChecklist.hiddenKey)
+            && !d.bool(forKey: DemoData.activeKey)
+        return Eligibility(
+            add: TipRules.add(homeVisits: d.integer(forKey: homeVisitsKey),
+                              manualCount: figures.manualCount, setupShowing: setup),
+            applePay: TipRules.applePay(setupDone: d.bool(forKey: OnboardingView.doneKey),
+                                        shortcutReached: shortcutReached, rowShowing: applePayRow, setupShowing: setup),
+            month: TipRules.month(calendarMonthsOfData: figures.monthsOfData,
+                                  monthChanged: d.bool(forKey: monthChangedKey), setupShowing: setup),
+            swipe: TipRules.swipe(activityVisits: d.integer(forKey: activityVisitsKey), purchases: figures.purchases,
+                                  swipeUsed: d.bool(forKey: swipeUsedKey), setupShowing: setup),
+            search: TipRules.search(purchases: figures.purchases, searchUsed: d.bool(forKey: searchUsedKey),
+                                    setupShowing: setup),
+            insights: TipRules.insights(daysOfData: figures.daysOfData, chipsUsed: d.bool(forKey: chipsUsedKey),
+                                        setupShowing: setup))
+    }
 
-        let add = past && TipRules.add(homeVisits: d.integer(forKey: homeVisitsKey),
-                                       manualCount: manualCount, setupShowing: setup)
-        let applePay = past && TipRules.applePay(setupDone: d.bool(forKey: OnboardingView.doneKey),
-                                                 shortcutReached: LogPurchaseIntent.shortcutHasReachedApp,
-                                                 setupShowing: setup)
-        let month = past && TipRules.month(calendarMonthsOfData: monthsOfData,
-                                           monthChanged: d.bool(forKey: monthChangedKey), setupShowing: setup)
-        let swipe = past && TipRules.swipe(activityVisits: d.integer(forKey: activityVisitsKey), purchases: purchases,
-                                           swipeUsed: d.bool(forKey: swipeUsedKey), setupShowing: setup)
-        let search = past && TipRules.search(purchases: purchases, searchUsed: d.bool(forKey: searchUsedKey),
-                                             setupShowing: setup)
-        let insights = past && TipRules.insights(daysOfData: daysOfData, chipsUsed: d.bool(forKey: chipsUsedKey),
-                                                 setupShowing: setup)
+    static func refresh() { apply(compute()) }
 
-        let home = TipRules.onlyOne([add && open(AddTip()), applePay && open(ApplePayTip()), month && open(MonthTip())])
+    /// Writes each tip's `eligible` parameter, one tip per screen at most:
+    /// Home (add, Apple Pay, month), Activity (swipe, search), Insights.
+    /// A tip already closed or invalidated gives its place to the next.
+    private static func applyToTipKit(_ e: Eligibility) {
+        if defaults.object(forKey: LogPurchaseIntent.lastTapAtKey) != nil { used(ApplePayTip()) }
+        let home = TipRules.onlyOne([e.add && open(AddTip()), e.applePay && open(ApplePayTip()), e.month && open(MonthTip())])
         set(&AddTip.eligible, home == 0)
         set(&ApplePayTip.eligible, home == 1)
         set(&MonthTip.eligible, home == 2)
-        let activity = TipRules.onlyOne([swipe && open(SwipeTip()), search && open(SearchTip())])
+        let activity = TipRules.onlyOne([e.swipe && open(SwipeTip()), e.search && open(SearchTip())])
         set(&SwipeTip.eligible, activity == 0)
         set(&SearchTip.eligible, activity == 1)
-        set(&InsightsTip.eligible, insights && open(InsightsTip()))
+        set(&InsightsTip.eligible, e.insights && open(InsightsTip()))
     }
 
     // MARK: Helpers
 
     private static func bump(_ key: String) {
-        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+        defaults.set(defaults.integer(forKey: key) + 1, forKey: key)
         refresh()
     }
 
     private static func done(_ key: String, _ tip: some Tip) {
-        UserDefaults.standard.set(true, forKey: key)
+        let already = defaults.bool(forKey: key)
+        defaults.set(true, forKey: key)
         used(tip)
-        refresh()
+        if !already { refresh() }
     }
 
     /// Invalidates the tip because its action was performed. `tip_used`
@@ -347,9 +439,7 @@ enum TipState {
     private static func used(_ tip: some Tip) {
         guard open(tip) else { return }
         tip.invalidate(reason: .actionPerformed)
-        if (UserDefaults.standard.stringArray(forKey: shownKey) ?? []).contains(tip.id) {
-            Analytics.shared.track(.tipUsed, ["id": .string(tip.id)])
-        }
+        if recordUsed(tip.id) { Analytics.shared.track(.tipUsed, ["id": .string(tip.id)]) }
     }
 
     /// Not yet closed or invalidated.
@@ -362,21 +452,63 @@ enum TipState {
     private static func set(_ parameter: inout Bool, _ value: Bool) {
         if parameter != value { parameter = value }
     }
+
+    /// Adds `id` to the list at `key`. False when it was there already.
+    private static func append(_ id: String, to key: String) -> Bool {
+        var ids = defaults.stringArray(forKey: key) ?? []
+        guard !ids.contains(id) else { return false }
+        ids.append(id)
+        defaults.set(ids, forKey: key)
+        return true
+    }
+}
+
+// MARK: - Visibility
+
+/// Which tips TipKit would show right now, kept from each tip's
+/// `shouldDisplayUpdates`. The inline cards read it so a hidden tip leaves
+/// no empty row behind. Started once at launch, after `Tips.configure`.
+@MainActor @Observable
+final class TipVisibility {
+    static let shared = TipVisibility()
+
+    private(set) var showing: Set<String> = []
+    private var started = false
+
+    func start() {
+        guard !started else { return }
+        started = true
+        let all: [any Tip] = [AddTip(), ApplePayTip(), SwipeTip(), SearchTip(), InsightsTip(), MonthTip()]
+        for tip in all {
+            Task { @MainActor in
+                self.set(tip.id, tip.shouldDisplay)
+                for await on in tip.shouldDisplayUpdates { self.set(tip.id, on) }
+            }
+        }
+    }
+
+    func isShowing(_ id: String) -> Bool { showing.contains(id) }
+
+    private func set(_ id: String, _ on: Bool) {
+        if on { showing.insert(id) } else { showing.remove(id) }
+    }
 }
 
 // MARK: - Views
 
 /// A popover tip that records `tip_shown` when TipKit presents it. `nil`
-/// attaches nothing.
+/// attaches nothing. `arrowEdge` is where the arrow sits on the anchor:
+/// `.top` puts the tip below it (anchors near the top of the screen),
+/// `.bottom` above it (anchors lower down, so the tab bar stays clear).
 extension View {
-    func sortdTip(_ tip: (any Tip)?, arrowEdge: Edge? = nil) -> some View {
+    func sortdTip(_ tip: (any Tip)?, arrowEdge: Edge) -> some View {
         modifier(SortdPopoverTip(tip: tip, arrowEdge: arrowEdge))
     }
 }
 
 private struct SortdPopoverTip: ViewModifier {
     let tip: (any Tip)?
-    let arrowEdge: Edge?
+    let arrowEdge: Edge
 
     func body(content: Content) -> some View {
         content
@@ -385,14 +517,18 @@ private struct SortdPopoverTip: ViewModifier {
     }
 }
 
-/// An inline tip card that records `tip_shown` when TipKit presents it.
+/// An inline tip card. Only in the tree while TipKit is showing the tip,
+/// so a hidden tip leaves no empty row. Records `tip_shown`.
 struct SortdTipView: View {
     let tip: any Tip
+    private let visibility = TipVisibility.shared
 
     var body: some View {
-        TipView(tip)
-            .tipCornerRadius(20)
-            .modifier(TipShownReporter(tip: tip))
+        if visibility.isShowing(tip.id) {
+            TipView(tip)
+                .tipCornerRadius(20)
+                .modifier(TipShownReporter(tip: tip))
+        }
     }
 }
 
