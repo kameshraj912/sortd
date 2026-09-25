@@ -11,9 +11,8 @@ import Foundation
 /// declared) and checks each event's Swift case identifier (e.g. `setupStarted`)
 /// appears as `.setupStarted` somewhere in that text.
 ///
-/// Expected to fail until swift-builder wires each event into the screen or flow
-/// the spec names for it (setup, activation, purchases, Gmail, Apple Pay taps,
-/// tabs, tips, backup/restore, opt-out).
+/// Every event is wired (sub-spec 2). This stays so a new `Event` case cannot
+/// be added without a real call site.
 struct AnalyticsEventCoverageTests {
     private static var spendRoot: URL {
         URL(fileURLWithPath: #filePath)

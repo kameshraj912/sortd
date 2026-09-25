@@ -236,9 +236,10 @@ struct RootView: View {
 
             // Keep the Router in step with taps on the tab bar, so a link to
             // the tab you left (a check-in, a widget) still switches back.
-            .onChange(of: tab) { _, new in
+            .onChange(of: tab, initial: true) { _, new in
                 if router.tab != new { router.tab = new }
-                // Which tabs get used. The + slot never becomes `tab`.
+                // Which tabs get used, the first one at launch included. The +
+                // slot never becomes `tab`.
                 Analytics.shared.track(.tabOpened, ["tab": .string(new.title.lowercased())])
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }

@@ -50,6 +50,9 @@ final class Analytics {
         /// flags: false, so the default screen shows. Optional: a sink
         /// without flags (a spy in tests) leaves it out.
         func isFeatureEnabled(_ key: String) -> Bool
+        /// The SDK's own opt-out switch (PostHog keeps it in its storage,
+        /// which `reset()` wipes). Optional; a spy leaves it out.
+        func setOptedOut(_ out: Bool)
     }
 
     /// Only scalars can be a property: no arrays, no dictionaries, nothing
@@ -68,6 +71,8 @@ final class Analytics {
     }
 
     static let enabledKey = "analyticsEnabled"
+    /// When the switch was last flipped: the consent record, kept on the phone.
+    static let consentChangedAtKey = "analyticsConsentChangedAt"
     static let saltKey = "analyticsSalt"
     /// Prefix for `trackOnce`: "<prefix>.<event>" is set once per install.
     static let activatedKey = "analyticsActivated"
@@ -113,16 +118,21 @@ final class Analytics {
 
     private let sink: Sink
     private let defaults: UserDefaults
+    /// Sample data is loaded: `trackOnce` (activation) must not count it.
+    private let isDemo: @MainActor () -> Bool
     /// Mirrors the persisted flag so SwiftUI sees the switch change.
     private var enabled: Bool
 
     /// Privacy guard trail, for tests: "event.key" per property dropped.
     private(set) var violations: [String] = []
 
-    init(sink: Sink, defaults: UserDefaults) {
+    init(sink: Sink, defaults: UserDefaults, isDemo: @escaping @MainActor () -> Bool = { DemoData.isActive }) {
         self.sink = sink
         self.defaults = defaults
+        self.isDemo = isDemo
         self.enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        // First launch only; never overwritten (preserveConsent keeps it
+        // across Delete All).
         if defaults.object(forKey: Self.installedAtKey) == nil {
             defaults.set(Date.now, forKey: Self.installedAtKey)
         }
@@ -135,18 +145,35 @@ final class Analytics {
         get { enabled }
         set {
             guard newValue != enabled else { return }
+            defaults.set(Date.now, forKey: Self.consentChangedAtKey)
             if newValue {
                 enabled = true
                 defaults.set(true, forKey: Self.enabledKey)
-                (sink as? PostHogSink)?.optIn()
+                sink.setOptedOut(false)
             } else {
                 // Sent while still enabled, so the sink takes it.
                 sink.capture(Event.analyticsOptedOut.rawValue, properties: [:])
                 enabled = false
                 defaults.set(false, forKey: Self.enabledKey)
-                (sink as? PostHogSink)?.optOut()
+                sink.setOptedOut(true)
             }
         }
+    }
+
+    /// Runs `work` (a wipe of the app's defaults, and `signedOut()`, which
+    /// clears PostHog's own opt-out flag) and then puts the consent record
+    /// back: the switch, when it was flipped, and the install date. Someone
+    /// who turned analytics off and then chose Delete All Data stays off.
+    func preserveConsent(across work: () -> Void) {
+        let wasEnabled = enabled
+        let changedAt = defaults.object(forKey: Self.consentChangedAtKey)
+        let installedAt = defaults.object(forKey: Self.installedAtKey)
+        work()
+        defaults.set(wasEnabled, forKey: Self.enabledKey)
+        if let changedAt { defaults.set(changedAt, forKey: Self.consentChangedAtKey) }
+        if let installedAt { defaults.set(installedAt, forKey: Self.installedAtKey) }
+        enabled = wasEnabled
+        if !wasEnabled { sink.setOptedOut(true) }
     }
 
     /// Sends the event with its safe properties. The guard can drop
@@ -176,8 +203,11 @@ final class Analytics {
     /// (`hours_bucket`). Used for activation: the first purchase the app
     /// logged by itself. Never for sample data; callers skip test taps.
     func trackOnce(_ event: Event, _ properties: [String: AnalyticsValue] = [:]) {
+        // Off: nothing is sent and the once-flag stays, so the event can
+        // still fire if the switch comes back on.
+        guard enabled, !isDemo() else { return }
         let key = "\(Self.activatedKey).\(event.rawValue)"
-        guard !DemoData.isActive, !defaults.bool(forKey: key) else { return }
+        guard !defaults.bool(forKey: key) else { return }
         defaults.set(true, forKey: key)
         let installed = defaults.object(forKey: Self.installedAtKey) as? Date ?? .now
         let hours = Date.now.timeIntervalSince(installed) / 3600
@@ -231,6 +261,7 @@ final class Analytics {
 
 extension Analytics.Sink {
     func isFeatureEnabled(_ key: String) -> Bool { false }
+    func setOptedOut(_ out: Bool) {}
 }
 
 /// No key in this build: nothing is sent anywhere.
@@ -274,6 +305,7 @@ final class PostHogSink: Analytics.Sink {
     func screen(_ name: String) { PostHogSDK.shared.screen(name) }
     func isFeatureEnabled(_ key: String) -> Bool { PostHogSDK.shared.isFeatureEnabled(key) }
 
-    func optIn() { PostHogSDK.shared.optIn() }
-    func optOut() { PostHogSDK.shared.optOut() }
+    func setOptedOut(_ out: Bool) {
+        if out { PostHogSDK.shared.optOut() } else { PostHogSDK.shared.optIn() }
+    }
 }
