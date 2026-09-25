@@ -6,12 +6,16 @@ enum Pace {
     /// Where the once-a-month record lives: "2026-09" once nudged.
     static let nudgedKey = "paceNudgeMonth"
 
+    /// No projection before this day of the month: one big shop on the 1st
+    /// is not a pace, and must not use up the month's one alert.
+    static let minimumDay = 7
+
     /// The first day of the month on which spend, at today's rate, passes
-    /// the budget. Nil when there is no budget, nothing spent yet, the
-    /// budget is already passed (Home says so in its own words), or the
-    /// month ends under budget.
+    /// the budget. Nil before `minimumDay`, when there is no budget, nothing
+    /// spent yet, the budget is already passed (Home says so in its own
+    /// words), or the month ends under budget.
     static func projectedOverDay(spent: Double, budget: Double, day: Int, daysInMonth: Int) -> Int? {
-        guard budget > 0, spent > 0, day > 0, daysInMonth > 0, spent < budget else { return nil }
+        guard budget > 0, spent > 0, day >= minimumDay, daysInMonth > 0, spent < budget else { return nil }
         let rate = spent / Double(day)
         // Day d has spent rate * d; the first d where that is over the budget.
         let over = Int((budget / rate).rounded(.down)) + 1

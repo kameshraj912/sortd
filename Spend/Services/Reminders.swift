@@ -112,13 +112,22 @@ enum Reminders {
     // MARK: Budget pace
 
     private static let paceID = "budget-pace"
+    /// Settings › Bills & Reminders › Budget pace alert. Its own switch,
+    /// not the bills one. On by default; it only ever fires when
+    /// notifications are already allowed (`checkBudgetPace` never asks).
+    nonisolated static let paceAlertKey = "budgetPaceAlert"
+
+    nonisolated static func paceAlertOn(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: paceAlertKey) as? Bool ?? true
+    }
 
     /// "On track to pass your budget by the 22nd", at most once a calendar
     /// month, and only when notifications are already allowed: this never
-    /// asks. Nothing when the pace is fine.
+    /// asks. Nothing when the pace is fine. The title is the whole message:
+    /// no amount goes on the lock screen.
     static func checkBudgetPace(_ transactions: [Transaction], budget: Double, now: Date = .now,
                                 defaults: UserDefaults = .standard, calendar: Calendar = .current) async {
-        guard shouldSchedule(enabled: enabled), Pace.shouldNudge(now: now, defaults: defaults, calendar: calendar),
+        guard paceAlertOn(defaults), Pace.shouldNudge(now: now, defaults: defaults, calendar: calendar),
               let month = calendar.dateInterval(of: .month, for: now) else { return }
         let spent = transactions.filter { month.contains($0.date) }.audTotal.double
         guard let day = Pace.projectedOverDay(spent: spent, budget: budget, now: now, calendar: calendar) else { return }
@@ -129,7 +138,6 @@ enum Reminders {
 
         let content = UNMutableNotificationContent()
         content.title = Pace.line(day: day)
-        content.body = "\(Money.format(Decimal(spent), Money.home, cents: false)) of \(Money.format(Decimal(budget), Money.home, cents: false)) spent so far this month."
         content.sound = .default
         Pace.markNudged(now: now, defaults: defaults, calendar: calendar)
         try? await center.add(UNNotificationRequest(identifier: paceID, content: content, trigger: nil))
