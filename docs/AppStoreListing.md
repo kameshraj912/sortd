@@ -18,7 +18,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## Promotional text (170)
 
-Pay with Apple Pay and Sortd writes it down. With Sortd Pro, see every subscription before it charges you. No bank login, no account, nothing leaves your iPhone.
+Pay with Apple Pay and Sortd writes it down. No bank login, no account, nothing leaves your iPhone.
 
 ## Description (4000)
 
@@ -39,9 +39,9 @@ SEE WHERE IT WENT
 • 30+ currencies, converted to your home currency at that day's European Central Bank rate. Handy if you live or travel across countries.
 • Categories learn: change one purchase and that shop stays fixed.
 • Home Screen and Lock Screen widgets: today, this month and what's about to charge you. Amounts are hidden on the Lock Screen unless you choose to show them.
-• An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it. Free.
+• An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it.
 
-SORTD PRO
+EVEN MORE
 • Gmail receipts: deliveries, rides, app stores and bank alerts, read from your inbox on your iPhone. Read-only.
 • Receipt camera: point at a paper receipt and Sortd fills in the shop and total. Read on your iPhone; the photo isn't kept.
 • Insights: this month next to last month, day by day.
@@ -56,7 +56,7 @@ PRIVATE BY DESIGN
 • Face ID lock, save a backup file, export everything as a spreadsheet, or delete it all in one tap.
 
 PRICING
-Sortd is free to use, including Apple Pay auto-logging, check-ins and widgets. Sortd Pro is available monthly, yearly or as a one-time purchase; the App Store shows the price in your currency before you buy. The yearly plan has a free trial for new subscribers. When the trial ends, the yearly price is charged unless you cancel at least 24 hours before it ends. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the period. Cancel any time in Settings › your name › Subscriptions; Pro keeps working until the end of the period you paid for.
+Sortd is free. Every feature, no catch.
 
 Terms of Use: https://sortd.page/terms
 Privacy Policy: https://sortd.page/privacy
@@ -83,17 +83,4 @@ Fill in App Store Connect directly (name, phone, email). Review notes: docs/AppR
 5. A page for every card (Card)
 6. Set up in three minutes (Setup guide)
 
-## In-app purchases (create in App Store Connect)
-
-| Reference name | Product ID | Type | Price | Offer |
-|---|---|---|---|---|
-| Sortd Pro Yearly | com.kameshraj.spend.pro.yearly | Auto-renewable, group "Sortd Pro", level 1 | US$49.99 | Intro: 2-week free trial |
-| Sortd Pro Monthly | com.kameshraj.spend.pro.monthly | Auto-renewable, group "Sortd Pro", level 2 | US$6.99 | none |
-| Sortd Pro Lifetime | com.kameshraj.spend.pro.lifetime | Non-consumable | US$99.99 | — |
-
-Turn on Family Sharing for all three. Each needs a display name, description and a review
-screenshot of the paywall (docs/screenshots/paywall.png).
-
-Note: Apple allows one introductory offer per subscription. The website's "$29.99 first year"
-launch price can't be combined with the free trial as an intro offer; run it as an Offer Code
-campaign instead, or drop it. The site should be updated to match whichever you choose.
+In-app purchases: see `docs/AppStoreChecklist.md`.

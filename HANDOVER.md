@@ -36,6 +36,11 @@ are pushed to origin now, and `docs/AgentPipeline.md` says why none should be me
 
 ## What got done
 
+### 25 Sep — the free-app overhaul, starting
+
+Raj decided to remove Pro and make the whole app free, with a tip jar. Nine sub-specs,
+ship order and gate for each: `docs/specs/2026-09-25-free-app-overhaul-overview.md`.
+
 ### 24 Sep, overnight — the agent pipeline, and the old branches sorted
 
 - **CI was red** on every push since 23 Sep. One cause: `accessibilityPrefersCrossFadeTransitions`
@@ -185,10 +190,10 @@ onboarding budget step at AX5. The paywall is the one that breaks (above).
 `ViewThatFits` instead of `minimumScaleFactor` on money rows, concentric
 corners, layered app icon in Icon Composer, widget accented-rendering check.
 
-### 6. `SORTD_BETA` still on in Release
+### 6. `SORTD_BETA` — done
 
-Right for TestFlight, fatal for the App Store — App Review would never see the
-paywall. `scripts/preflight.sh --appstore` correctly exits 1 on it.
+Removed by the free-app overhaul, sub-spec 1 (`docs/specs/2026-09-25-free-app-overhaul-1-free.md`):
+the whole app is free now, so there is no paywall left to give away. PR pending.
 
 ---
 
@@ -208,9 +213,9 @@ That line decides whether the fix worked or whether it is Apple's timeout.
 
 1. **UI pass finding 13** (the budget jumped to JP¥1,850,000 with no save): `finding-verifier`
    read every writer and found none that fires without a tap. Unreproduced; watch for it.
-2. **Sentry** — still linked. Either remove the package and
-   `CrashReporting.swift`, or change the App Privacy label to Crash Data (not
-   linked). Preflight fails on it today.
+2. **Sentry** — decided: keep it, run it live. Lands in sub-spec 2b
+   (`docs/specs/2026-09-25-free-app-overhaul-2b-crash-reports.md`), alongside the App
+   Privacy label change to Crash Data, linked. Preflight still fails on it until then.
 3. **Privacy policy** — whether it names a person or a business entity. Needs a
    lawyer.
 4. **Old branches** — `forwarding-inbox`, `paywall-steps`, confetti, `LaunchOverlay`, and the
