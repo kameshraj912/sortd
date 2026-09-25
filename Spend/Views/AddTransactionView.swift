@@ -441,6 +441,8 @@ struct AddTransactionView: View {
             // Counts only: never the amount, shop or note.
             Analytics.shared.track(.purchaseAddedManually, ["category_changed": .bool(categoryTouched),
                                                             "has_note": .bool(!noteToSave.isEmpty)])
+            // The "add by hand" tip is over.
+            TipState.manualPurchaseAdded()
             Task { await FXService.backfill(in: context) }
             dismiss()
         } catch {

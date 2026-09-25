@@ -45,6 +45,8 @@ struct InsightsView: View {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
         }
+        // Tips: the rules read the purchase figures.
+        .onChange(of: transactions.count, initial: true) { TipState.update(from: transactions) }
     }
 
     // MARK: Category breakdown

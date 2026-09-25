@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import TipKit
 import UserNotifications
 
 @main
@@ -49,6 +50,18 @@ struct SpendApp: App {
         TipJar.shared.start()
         // PostHog starts here (or logs once that it has no key and stays off).
         Analytics.start()
+        // In-app tips: one new tip a day at most, in the app's own store.
+        // A reset asked for last session lands before the store opens.
+        TipState.applyPendingReset()
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["SPEND_TIPS_NOW"] == "1" { TipState.forceNow() }
+        #endif
+        do {
+            try Tips.configure([.displayFrequency(.daily), .datastoreLocation(.applicationDefault)])
+        } catch {
+            log.error("tips: configure failed: \(error.localizedDescription)")
+        }
+        TipVisibility.shared.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
@@ -102,6 +115,9 @@ struct SpendApp: App {
             }
         }
         #endif
+        // No tips in the first-launch session; after the demo flag, which
+        // marks setup done.
+        TipState.launched(setupDone: UserDefaults.standard.bool(forKey: OnboardingView.doneKey))
     }
 
     var body: some Scene {
@@ -193,6 +209,11 @@ struct RootView: View {
     @State private var tab: AppTab = .home
     #endif
 
+    /// Setup is on screen (first run, "Run Setup Again", or a debug flag).
+    private var setupPresented: Bool {
+        !setupFinished && (!onboarded || rerun || Self.forceSetup)
+    }
+
     private var coverState: CoverState {
         if lock.isLocked { return .locked }
         // Not behind iOS's own permission alerts (they make the scene
@@ -246,6 +267,8 @@ struct RootView: View {
                 // Which tabs get used, the first one at launch included. The +
                 // slot never becomes `tab`.
                 Analytics.shared.track(.tabOpened, ["tab": .string(new.title.lowercased())])
+                // A tip visit: a tab opened, not a return from a pushed row.
+                if !setupPresented { TipState.visited(new) }
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .feedback(.select, trigger: tab)
@@ -273,6 +296,8 @@ struct RootView: View {
         })
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
+            // Coming back to the app on a tab is a visit to it.
+            if phase == .active, !setupPresented { TipState.visited(tab) }
             #if SORTD_ICLOUD
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
@@ -294,12 +319,16 @@ struct RootView: View {
         // open setup again straight away, not on the next launch.
         .onChange(of: onboarded) { _, done in if !done { setupFinished = false } }
         .onChange(of: rerun) { _, again in if again { setupFinished = false } }
-        .fullScreenCover(isPresented: .constant(!setupFinished && (!onboarded || rerun || Self.forceSetup))) {
+        .fullScreenCover(isPresented: .constant(setupPresented)) {
             OnboardingView {
                 setupClosedAt = .now
                 setupFinished = true
             }
         }
+        // No tips while setup is up; the screens behind it re-check when it
+        // closes, and the tab it closed onto counts as visited then.
+        .onChange(of: setupPresented, initial: true) { _, showing in TipState.setupShowing = showing }
+        .onChange(of: setupPresented) { _, showing in if !showing { TipState.visited(tab) } }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }

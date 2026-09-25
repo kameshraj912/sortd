@@ -26,6 +26,9 @@ struct SearchView: View {
             .modifier(OwnSearchField(enabled: external == nil, query: $own))
             .navigationDestination(for: Transaction.self) { TransactionDetailView(transaction: $0) }
         }
+        // Tips: the rules read the purchase figures; typing is the search tip's "done".
+        .onChange(of: transactions.count, initial: true) { TipState.update(from: transactions) }
+        .onChange(of: trimmed) { _, text in if !text.isEmpty { TipState.searchUsed() } }
     }
 
     // MARK: Before typing
@@ -37,6 +40,12 @@ struct SearchView: View {
                        message: "Purchases you log show up here.")
                 .listRowBackground(Color.clear)
         } else {
+            // The search field is the system's own, so the tip sits under
+            // it as a card rather than pointing at it.
+            SortdTipView(tip: SearchTip())
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             Section(bold: "Top Shops This Month") {
                 ForEach(topMerchants, id: \.name) { m in
                     Button { query = m.name } label: {

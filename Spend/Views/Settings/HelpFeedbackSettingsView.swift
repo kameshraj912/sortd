@@ -8,6 +8,9 @@ struct HelpFeedbackSettingsView: View {
     /// No mail app to open: show the address instead.
     @State private var showingAddress = false
     @State private var copied = false
+    /// Counts "Show Tips Again" taps that took effect, for the confirm haptic.
+    @State private var tipsReset = 0
+    @State private var tipsNeedRelaunch = false
 
     static let supportEmail = "support@sortd.page"
 
@@ -34,10 +37,18 @@ struct HelpFeedbackSettingsView: View {
                 } label: {
                     Label("Run Setup Again", systemImage: "arrow.counterclockwise")
                 }
+                Button {
+                    // TipKit's reset can fail while its store is open; the
+                    // counters are cleared either way and the reset runs at
+                    // the next launch.
+                    if TipState.showTipsAgain() { tipsReset += 1 } else { tipsNeedRelaunch = true }
+                } label: {
+                    Label("Show Tips Again", systemImage: "lightbulb")
+                }
             } header: {
                 BoldHeader("Get Help")
             } footer: {
-                Text("Feedback opens Mail with your app version, iOS version and iPhone model. Nothing else is added. Running setup again keeps your purchases and cards.")
+                Text("Feedback opens Mail with your app version, iOS version and iPhone model. Nothing else is added. Running setup again keeps your purchases and cards. Tips are the short notes that point out what a screen can do.")
             }
 
             Section {
@@ -64,6 +75,12 @@ struct HelpFeedbackSettingsView: View {
             Text("Mail isn't set up on this iPhone. Send your feedback to \(Self.supportEmail) from any email app.")
         }
         .feedback(.confirm, trigger: copied)
+        .feedback(.confirm, trigger: tipsReset)
+        .alert("Tips Will Come Back", isPresented: $tipsNeedRelaunch) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Tips will come back after you reopen Sortd.")
+        }
     }
 
     /// A pre-filled mailto with just enough to debug a report: app version,
