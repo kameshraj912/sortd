@@ -35,6 +35,10 @@ struct AddTransactionView: View {
     @State private var confirmingDiscard = false
     /// Keystrokes the amount field refused (too long, a third decimal).
     @State private var refusedKeys = 0
+    /// Shops you go to at about this time, from the last few months of
+    /// history on this phone. Gone once a name is typed.
+    @State private var suggestions: [Suggestions.Suggestion] = []
+    @State private var suggestionTaps = 0
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -127,6 +131,14 @@ struct AddTransactionView: View {
                     scanButton
                 }
                 .listRowBackground(Color.clear)
+
+                if !suggestions.isEmpty, merchant.isEmpty {
+                    Section {
+                        suggestionChips
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 8, trailing: 4))
+                }
 
                 Section {
                     quickField
@@ -233,13 +245,52 @@ struct AddTransactionView: View {
             .onAppear {
                 card = Card.mine.contains(lastCard) ? lastCard : (Card.mine.first ?? .other)
                 amountFocused = true
+                loadSuggestions()
             }
+            .feedback(.select, trigger: suggestionTaps)
             .feedback(.confirm, trigger: saved)
             .feedback(.fail, trigger: saveError) { _, new in new != nil }
             .alert("Couldn't Save Purchase", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: { Text(saveError ?? "") }
         }
+    }
+
+    /// Up to three shops as chips, wrapping so every name stays whole at
+    /// any text size. Tapping one fills in the shop and its category.
+    private var suggestionChips: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(suggestions) { s in
+                Button {
+                    suggestionTaps += 1
+                    withAnimation(.snappy) {
+                        merchant = s.merchant
+                        category = s.category
+                        categoryTouched = true
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        CategoryIcon(category: s.category, size: 22)
+                        Text(s.merchant)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .chip(selected: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(s.merchant), \(s.category.name)")
+                .accessibilityHint("Fills in the shop and category")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Suggestions")
+    }
+
+    /// The last 90 days is enough to see a habit and cheap to read.
+    private func loadSuggestions() {
+        let since = Calendar.current.date(byAdding: .day, value: -90, to: .now) ?? .now
+        let recent = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))) ?? []
+        suggestions = Suggestions.forNow(recent)
     }
 
     /// Anything typed that would be lost by closing the sheet.

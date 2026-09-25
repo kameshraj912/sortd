@@ -186,11 +186,14 @@ enum TransactionLogger {
 
     /// Other purchases a new category for `t` would also move: the ones
     /// sharing its rule key (same shop). Empty when the shop has no name.
-    static func samePlace(as t: Transaction, in context: ModelContext) throws -> [Transaction] {
+    /// `excluding`: rows to leave alone, such as ones waiting on a pending
+    /// delete.
+    static func samePlace(as t: Transaction, in context: ModelContext,
+                          excluding: Set<UUID> = []) throws -> [Transaction] {
         let key = ruleKey(t)
         guard !key.isEmpty else { return [] }
         return try context.fetch(FetchDescriptor<Transaction>())
-            .filter { $0.id != t.id && ruleKey($0) == key }
+            .filter { $0.id != t.id && !excluding.contains($0.id) && ruleKey($0) == key }
     }
 
     /// Raj picked a new category for one purchase.
@@ -198,23 +201,94 @@ enum TransactionLogger {
     /// `applyToOthers` true: remember it as a rule for the shop and move his
     /// other purchases there too. False ("Just This One"): change only `t`,
     /// learn nothing.
+    ///
+    /// Returns what changed, so the screen can say "Moved 12 others at
+    /// Coles · Undo" and `undo(_:in:)` can put every one of them back.
+    @discardableResult
     static func recategorise(_ t: Transaction, to category: SpendCategory, in context: ModelContext,
-                             applyToOthers: Bool = true) throws {
+                             applyToOthers: Bool = true, excluding: Set<UUID> = []) throws -> RecategoriseChange {
+        var change = RecategoriseChange(merchant: t.merchant, to: category,
+                                        moved: [.init(id: t.id, fromRaw: t.categoryRaw)])
         t.category = category
         let key = ruleKey(t)
-        guard applyToOthers, !key.isEmpty else { try context.save(); return }
+        guard applyToOthers, !key.isEmpty else { try context.save(); return change }
 
         let existing = try context.fetch(FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.key == key }))
+        change.ruleKey = key
         if let rule = existing.first {
+            change.ruleBefore = rule.category
+            change.ruleUpdatedAtBefore = rule.updatedAt
             rule.categoryRaw = category.rawValue
             rule.updatedAt = .now
         } else {
             context.insert(MerchantRule(key: key, category: category))
         }
 
-        for other in try samePlace(as: t, in: context) {
+        for other in try samePlace(as: t, in: context, excluding: excluding) where other.category != category {
+            change.moved.append(.init(id: other.id, fromRaw: other.categoryRaw))
             other.category = category
         }
         try context.save()
+        return change
+    }
+
+    /// Reverses `recategorise`: every moved purchase gets its old category
+    /// back, and the shop's rule goes back to what it was (or away, if the
+    /// change made it). Purchases deleted since are skipped.
+    static func undo(_ change: RecategoriseChange, in context: ModelContext) throws {
+        let ids = change.moved.map(\.id)
+        let from = Dictionary(change.moved.map { ($0.id, $0.fromRaw) }, uniquingKeysWith: { a, _ in a })
+        let touched = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { ids.contains($0.id) }))
+        for t in touched {
+            // The raw string as it was, so a value newer than this build
+            // survives the round trip.
+            if let old = from[t.id] { t.categoryRaw = old }
+        }
+        if let key = change.ruleKey {
+            let rules = try context.fetch(FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.key == key }))
+            if let before = change.ruleBefore {
+                if let rule = rules.first {
+                    rule.categoryRaw = before.rawValue
+                    rule.updatedAt = change.ruleUpdatedAtBefore ?? .now
+                } else {
+                    let rule = MerchantRule(key: key, category: before)
+                    if let stamp = change.ruleUpdatedAtBefore { rule.updatedAt = stamp }
+                    context.insert(rule)
+                }
+            } else {
+                for rule in rules { context.delete(rule) }
+            }
+        }
+        try context.save()
+    }
+}
+
+/// What one `TransactionLogger.recategorise` did, enough to undo it.
+struct RecategoriseChange: Equatable, Sendable {
+    struct Moved: Equatable, Sendable {
+        let id: UUID
+        /// `categoryRaw` as it was; `from` reads it as a category.
+        let fromRaw: String
+        var from: SpendCategory { SpendCategory(rawValue: fromRaw) ?? .other }
+    }
+
+    /// The shop, for the toast.
+    let merchant: String
+    let to: SpendCategory
+    /// The purchase picked first, then every other one that changed.
+    var moved: [Moved]
+    /// The rule key learned or updated; nil for "Just This One".
+    var ruleKey: String?
+    /// The rule's category before, nil when the change made the rule.
+    var ruleBefore: SpendCategory?
+    var ruleUpdatedAtBefore: Date?
+
+    /// How many purchases moved besides the one picked.
+    var others: Int { max(0, moved.count - 1) }
+
+    /// "Moved 12 others at Coles"; nil when nothing else moved.
+    var toastText: String? {
+        guard others > 0 else { return nil }
+        return "Moved \(others) \(others == 1 ? "other" : "others") at \(merchant)"
     }
 }

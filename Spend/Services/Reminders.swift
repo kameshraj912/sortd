@@ -108,6 +108,41 @@ enum Reminders {
             try? await center.add(UNNotificationRequest(identifier: prefix + r.key, content: content, trigger: trigger))
         }
     }
+
+    // MARK: Budget pace
+
+    private static let paceID = "budget-pace"
+    /// Settings › Bills & Reminders › Budget pace alert. Its own switch,
+    /// not the bills one. On by default; it only ever fires when
+    /// notifications are already allowed (`checkBudgetPace` never asks).
+    nonisolated static let paceAlertKey = "budgetPaceAlert"
+
+    nonisolated static func paceAlertOn(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: paceAlertKey) as? Bool ?? true
+    }
+
+    /// "On track to pass your budget by the 22nd", at most once a calendar
+    /// month, and only when notifications are already allowed: this never
+    /// asks. Nothing when the pace is fine. The title is the whole message:
+    /// no amount goes on the lock screen.
+    static func checkBudgetPace(_ transactions: [Transaction], budget: Double, now: Date = .now,
+                                defaults: UserDefaults = .standard, calendar: Calendar = .current) async {
+        guard paceAlertOn(defaults), Pace.shouldNudge(now: now, defaults: defaults, calendar: calendar),
+              let month = calendar.dateInterval(of: .month, for: now) else { return }
+        let spent = transactions.filter { month.contains($0.date) }.audTotal.double
+        guard let day = Pace.projectedOverDay(spent: spent, budget: budget, now: now, calendar: calendar) else { return }
+
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = Pace.line(day: day)
+        content.sound = .default
+        Pace.markNudged(now: now, defaults: defaults, calendar: calendar)
+        try? await center.add(UNNotificationRequest(identifier: paceID, content: content, trigger: nil))
+    }
+
     // MARK: Category limits
 
     private static let limitPrefix = "category-limit-"

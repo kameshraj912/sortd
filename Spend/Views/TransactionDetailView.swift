@@ -147,9 +147,12 @@ struct TransactionDetailView: View {
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
-                try? TransactionLogger.recategorise(transaction, to: category, in: context)
+                recategorise(to: category)
             }
         }
+        // Shared with Activity: going back keeps the Undo for the rest of
+        // its window.
+        .recategoriseUndoToast()
         .confirmationDialog("Delete this purchase?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 context.delete(transaction)
@@ -264,6 +267,15 @@ struct TransactionDetailView: View {
         if !merchantFocused {
             merchantText = transaction.merchant
             loadedMerchant = merchantText
+        }
+    }
+
+    /// Moves the shop and, when others moved too, offers Undo for a while.
+    private func recategorise(to category: SpendCategory) {
+        guard let change = try? TransactionLogger.recategorise(transaction, to: category, in: context) else { return }
+        PendingRecategorise.shared.stage(change)
+        if let text = change.toastText {
+            AccessibilityNotification.Announcement("\(text). Undo available.").post()
         }
     }
 
