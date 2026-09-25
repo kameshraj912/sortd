@@ -41,4 +41,18 @@ struct PaceTests {
 
         #expect(Pace.shouldNudge(now: october, defaults: defaults, calendar: calendar))
     }
+
+    @Test func noProjectionBeforeDaySeven() {
+        // 900 on day 1 would spend the month's one alert on a single big shop.
+        #expect(Pace.projectedOverDay(spent: 900, budget: 1000, day: 3, daysInMonth: 30) == nil)
+        #expect(Pace.projectedOverDay(spent: 900, budget: 1000, day: 6, daysInMonth: 30) == nil)
+        #expect(Pace.projectedOverDay(spent: 420, budget: 1000, day: 7, daysInMonth: 30) != nil)
+    }
+
+    @Test func theAlertHasItsOwnSwitchThatIsOnByDefault() {
+        let defaults = UserDefaults(suiteName: "PaceTests.switch.\(UUID().uuidString)")!
+        #expect(Reminders.paceAlertOn(defaults))
+        defaults.set(false, forKey: Reminders.paceAlertKey)
+        #expect(!Reminders.paceAlertOn(defaults))
+    }
 }
