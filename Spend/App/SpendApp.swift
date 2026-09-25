@@ -308,6 +308,14 @@ struct RootView: View {
             defer { pass.end() }
             // Not needed for anything on screen: don't make the rest wait.
             Task { await GoogleAuth.retryPendingRevokes() }
+            #if SORTD_SIGNIN
+            // A withdrawn Sign in with Apple, and account deletes that
+            // couldn't reach the provider or the Worker last time.
+            Task {
+                await AccountStore.shared.checkCredentialAtLaunch()
+                await AccountStore.shared.retryPendingDeletes()
+            }
+            #endif
             #if SORTD_ICLOUD
             // A Delete All Data that couldn't reach iCloud last time.
             Task { await CloudBackup.shared.retryPendingDelete() }
