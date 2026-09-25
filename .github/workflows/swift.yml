@@ -3,16 +3,25 @@
 
 name: Swift
 
+# macOS runners cost 10x minutes against the 2,000-minute monthly quota, so:
+# docs-only changes skip CI, and a new push to a branch cancels its stale run.
 on:
   push:
     branches: [ "main" ]
+    paths-ignore: [ "docs/**", "**/*.md", "Brand/**", "site/**", "claude-project/**", ".claude/**", "media/**" ]
   pull_request:
     branches: [ "main" ]
+    paths-ignore: [ "docs/**", "**/*.md", "Brand/**", "site/**", "claude-project/**", ".claude/**", "media/**" ]
+
+concurrency:
+  group: swift-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
 
     runs-on: macos-latest
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v4
