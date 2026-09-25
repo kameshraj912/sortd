@@ -54,12 +54,15 @@ First step: `AccountStore` with sign in, sign out and delete, behind a protocol,
     - clear the Keychain and call `reset()`;
     - offer "also delete purchases on this phone and in iCloud" (the Delete All Data path).
   - **Export:** CSV and backup already exist.
-- **Analytics.** Call `identify` with `sha256(appSalt + provider + subject)` only. Never the email or name.
+- **Analytics.** Call `identify` with `sha256(appSalt + provider + subject)` only. Never the email or name. `appSalt` is `Analytics.accountSalt`, one fixed string compiled into the app (not a secret; it only stops a plain lookup of a known subject). A per-phone salt would make one person two PostHog persons on two phones, and Delete All Data would wipe it. `AccountStore.hash` and `Analytics.signedIn` use that one function and salt.
+- **Delete order.** The provider and the Worker are asked first, with the hash made from the still-signed-in account; the local wipe comes after. A job that could not be sent is queued in `accountPendingDeletes` with the hash inside it, never recomputed.
 
 ## Files
 
-- New `Spend/Services/AccountStore.swift`.
-- `Spend/Services/GoogleAuth.swift`: an identity-only `signIn(scopes:)` variant.
+- New `Spend/Services/AccountStore.swift`: the protocols, `AccountStore`, `KeychainAccountStore` (own Keychain service, this device only), `WorkerRevoker` (URL from `ACCOUNT_WORKER_URL` in `Config.xcconfig`; empty means every delete is queued), `AnalyticsIdentitySink`, `AppleCredentialChecker`, `AppleIdentityProvider`, `GoogleIdentityProvider`. Always compiled.
+- The account screen and the Settings row are behind a new `SORTD_SIGNIN` compile flag, off in both configs (the capability needs the paid account). Turn on: Xcode > Spend target > Build Settings > Active Compilation Conditions > add `SORTD_SIGNIN`.
+- The Worker request shape is provisional until its spec is approved: JSON `{"action":"revoke","provider","subject"}` and `{"action":"delete_person","hash"}`, POST to the one URL.
+- `Spend/Services/GoogleAuth.swift`: `identityScopes` and the identity-only `signInForIdentity()`; `revokeIdentity()` for delete.
 - `Spend/Services/Keychain.swift`, `Spend/Services/Analytics.swift` (identify and reset).
 - `Spend.entitlements`: the Sign in with Apple capability. **Needs the paid account.**
 - New `Spend/Views/Settings/AccountSettingsView.swift`; `Spend/Views/SettingsView.swift`, `Spend/Views/DataControlsView.swift`.
