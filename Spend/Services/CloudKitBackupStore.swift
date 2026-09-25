@@ -20,7 +20,8 @@ final class CloudKitBackupStore: CloudBackupStore {
     func save(_ blob: Data, modified: Date) async throws {
         let url = FileManager.default.temporaryDirectory
             .appending(path: "sortd-cloud-backup-\(UUID().uuidString).bin")
-        try blob.write(to: url, options: .atomic)
+        // Off the main thread: a long history is a few megabytes.
+        try await Task.detached(priority: .utility) { try blob.write(to: url, options: .atomic) }.value
         defer { try? FileManager.default.removeItem(at: url) }
 
         let record = CKRecord(recordType: Self.recordType, recordID: recordID)
@@ -62,8 +63,8 @@ final class CloudKitBackupStore: CloudBackupStore {
         }
     }
 
-    /// CloudKit's errors as the few Sortd shows. Anything else passes through
-    /// and lands in `.failed` with its own words.
+    /// CloudKit's errors as the few Sortd acts on. Anything else becomes a
+    /// `Failure` with plain words for the status line, never CloudKit's own.
     nonisolated static func map(_ error: Error) -> Error {
         guard let ck = error as? CKError else { return error }
         switch ck.code {
@@ -76,9 +77,24 @@ final class CloudKitBackupStore: CloudBackupStore {
         case .partialFailure:
             // Our one record's own error is inside.
             if let inner = ck.partialErrorsByItemID?.values.first { return map(inner) }
-            return error
+            return Failure(code: ck.code)
         default:
-            return error
+            return Failure(code: ck.code)
+        }
+    }
+
+    /// A CloudKit problem Sortd has no special handling for, said plainly.
+    struct Failure: LocalizedError {
+        let code: CKError.Code
+        var errorDescription: String? {
+            switch code {
+            case .networkUnavailable, .networkFailure:
+                "iCloud couldn't be reached. Check the connection; Sortd will try again."
+            case .accountTemporarilyUnavailable:
+                "iCloud isn't available right now. Sortd will try again."
+            default:
+                "iCloud had a problem (code \(code.rawValue)). Sortd will try again later."
+            }
         }
     }
 }
