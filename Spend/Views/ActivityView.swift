@@ -83,6 +83,12 @@ struct TransactionsScreen: View {
         .modifier(ActivitySearch(enabled: fixedCard != nil || NavOption.current.searchInActivity,
                                  text: $search))
         .scrollDismissesKeyboard(.immediately)
+        // Tips: the rules read the purchase figures (visits are counted by
+        // RootView, on the tab), and typing a search is the search tip's "done".
+        .onChange(of: transactions.count, initial: true) { if fixedCard == nil { TipState.update(from: transactions) } }
+        .onChange(of: search) { _, text in
+            if !text.trimmingCharacters(in: .whitespaces).isEmpty { TipState.searchUsed() }
+        }
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
                 ToolbarItem(placement: .topBarLeading) { filterMenu }
@@ -235,12 +241,23 @@ struct TransactionsScreen: View {
     // MARK: List
 
     private var list: some View {
-        List {
+        let days = days
+        // The swipe tip points at the first row of the main list.
+        let firstRow = fixedCard == nil ? days.first?.items.first?.persistentModelID : nil
+        return List {
             ListPageTitle(title: fixedCard?.name ?? "Activity")
             chips
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+            if fixedCard == nil, NavOption.current.searchInActivity {
+                // The search field is the system's own, so the tip sits
+                // under it as a card rather than pointing at it.
+                SortdTipView(tip: SearchTip())
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
 
             if filtered.isEmpty {
                 Section {
@@ -250,7 +267,9 @@ struct TransactionsScreen: View {
             }
             ForEach(days, id: \.date) { day in
                 Section {
-                    ForEach(day.items) { t in row(t) }
+                    ForEach(day.items) { t in
+                        row(t).sortdTip(t.persistentModelID == firstRow ? SwipeTip() : nil, arrowEdge: .top)
+                    }
                 } header: {
                     dayHeader(day)
                 }
@@ -381,11 +400,11 @@ struct TransactionsScreen: View {
         .listRowBackground(Color.card)
         .alignmentGuide(.listRowSeparatorLeading) { _ in 48 }
         .swipeActions(edge: .leading) {
-            Button("Category", systemImage: "tag") { recategorising = t }
+            Button("Category", systemImage: "tag") { TipState.swipeUsed(); recategorising = t }
                 .tint(t.category.color)
         }
         .swipeActions(edge: .trailing) {
-            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+            Button("Delete", systemImage: "trash", role: .destructive) { TipState.swipeUsed(); delete(t) }
                 .tint(.red)
         }
         .contextMenu {
