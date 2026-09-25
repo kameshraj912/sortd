@@ -51,6 +51,7 @@ Full design: `docs/AgentPipeline.md`.
   edits**. Deploy only when `git status site/` is clean and matches the pushed branch.
 - One session deploys at a time.
 - The account Worker deploys from `worker/` (`cd worker && npx wrangler deploy`), separately from the site. See `worker/README.md`.
+- The launch (hype) site soon.sortd.page deploys from `launch/` (`cd launch && npx wrangler deploy`). Its form posts to sortd.page/api/beta, so deploy `site/` first. See `launch/README.md`.
 
 **6. Finish.**
 - `scripts/worktree-done.sh <task>` removes the worktree, its simulator and its build folder,
