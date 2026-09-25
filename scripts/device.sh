@@ -24,5 +24,11 @@ grep -E "error:|Developer Mode" "$log" | sort -u | head -8
 app=$(find "$dd/Build/Products/Debug-iphoneos" -maxdepth 1 -name "*.app" | head -1)
 xcrun devicectl device install app --device "$udid" "$app" | tail -1 || die "install failed (phone locked?)"
 bundle=$(defaults read "$app/Info.plist" CFBundleIdentifier)
-xcrun devicectl device process launch --device "$udid" "$bundle" | tail -1
-ok "installed and launched $bundle"
+ok "installed $bundle"
+if xcrun devicectl device process launch --device "$udid" "$bundle" > "$ROOT/.build/device-launch.log" 2>&1; then
+  ok "launched $bundle"
+elif grep -q "Locked" "$ROOT/.build/device-launch.log"; then
+  warn "installed, but the phone is locked: unlock it and tap Sortd"
+else
+  tail -3 "$ROOT/.build/device-launch.log"; die "installed, but launch failed; log: $ROOT/.build/device-launch.log"
+fi
