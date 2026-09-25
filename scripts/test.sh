@@ -3,7 +3,7 @@
 #
 #   scripts/test.sh                       everything except known bugs and StoreKit
 #   scripts/test.sh --known-bugs          also run the tests tagged as known bugs
-#   scripts/test.sh --storekit            also run ProStoreTests (needs iOS 27 sim)
+#   scripts/test.sh --storekit            also run TipJarTests (needs iOS 27 sim)
 #   scripts/test.sh --only SomeTests      one suite, e.g. --only MoneyFixesTests
 #   scripts/test.sh --all                 known bugs + StoreKit
 #
@@ -35,7 +35,7 @@ rm -rf "$bundle"
 
 args=(-project "$PROJECT" -scheme "$SCHEME" -destination "id=$udid"
       -derivedDataPath "$DERIVED" -resultBundlePath "$bundle" CODE_SIGNING_ALLOWED=NO)
-[ $storekit -eq 1 ] || args+=(-skip-testing:SpendTests/ProStoreTests)
+[ $storekit -eq 1 ] || args+=(-skip-testing:SpendTests/TipJarTests)
 [ -n "$only" ] && args+=(-only-testing:"SpendTests/$only")
 [ $known -eq 1 ] && export TEST_RUNNER_SORTD_KNOWN_BUGS=1
 
