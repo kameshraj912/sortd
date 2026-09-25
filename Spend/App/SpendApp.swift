@@ -183,6 +183,13 @@ struct RootView: View {
     #else
     static let forceSetup = false
     #endif
+    /// Debug: SPEND_INTRO_NOW=1 shows the app intro at once, ignoring
+    /// "seen", for screenshots.
+    #if DEBUG
+    static let forceIntro = ProcessInfo.processInfo.environment["SPEND_INTRO_NOW"] == "1"
+    #else
+    static let forceIntro = false
+    #endif
 
     @Environment(\.modelContext) private var context
     @AppStorage(OnboardingView.doneKey) private var onboarded = false
@@ -201,6 +208,10 @@ struct RootView: View {
     /// button mustn't land on the tab bar underneath.
     @State private var setupClosedAt: Date = .distantPast
     @State private var searchQuery = ""
+    /// The app intro (docs/specs/2026-09-25-app-intro.md), seeded from the
+    /// "seen" flag so a `RootView` made mid-session (a preview, a test)
+    /// doesn't show it again.
+    @State private var intro = IntroTour(seen: UserDefaults.standard.bool(forKey: IntroTour.seenKey))
     private let layout = NavLayout.current
     private let nav = NavOption.current
     #if DEBUG
@@ -322,6 +333,42 @@ struct RootView: View {
         // closes, and the tab it closed onto counts as visited then.
         .onChange(of: setupPresented, initial: true) { _, showing in TipState.setupShowing = showing }
         .onChange(of: setupPresented) { _, showing in if !showing { TipState.visited(tab) } }
+        // The intro: once right after setup closes, and once for an
+        // existing install (the `initial: true` check fires at launch,
+        // where `setupPresented` is already false). Never while setup,
+        // App Lock or a sheet is up.
+        .onChange(of: setupPresented, initial: true) { _, showing in if !showing { startIntroIfEligible() } }
+        // An existing install with App Lock on is locked at cold launch:
+        // the check above misses it, so try again once it unlocks.
+        .onChange(of: lock.isLocked) { _, locked in if !locked { startIntroIfEligible() } }
+        // Same idea: a sheet up at the eligible moment just delays it.
+        .onChange(of: router.showingSettings) { _, showing in if !showing { startIntroIfEligible() } }
+        .onChange(of: showingAdd) { _, showing in if !showing { startIntroIfEligible() } }
+        .onChange(of: router.pendingIntroReplay) { _, pending in
+            guard pending else { return }
+            router.pendingIntroReplay = false
+            intro.replay()
+        }
+        .onChange(of: intro, initial: true) { old, new in
+            TipState.introShowing = new.step != nil
+            UserDefaults.standard.set(new.seen, forKey: IntroTour.seenKey)
+            if let step = new.step {
+                if tab != step.tab { tab = step.tab }
+                if old.step == nil { Analytics.shared.track(.introShown) }
+            }
+            if new.finished, !old.finished {
+                Analytics.shared.track(.introFinished, ["skipped": .bool(new.skipped),
+                                                         "step": .int((old.step ?? .move).rawValue)])
+            }
+        }
+        // Everything behind the intro is unreachable while it's up; the
+        // overlay itself carries its own accessibility elements.
+        .accessibilityHidden(introShowing)
+        .overlay {
+            if introShowing {
+                IntroOverlay(tour: $intro, onNext: { intro.next() }, onSkip: { intro.skip() })
+            }
+        }
         .task(id: scenePhase) {
             // Purchases logged in the background may still need an AUD value.
             guard scenePhase == .active else { return }
@@ -364,6 +411,32 @@ struct RootView: View {
 
 
 extension RootView {
+    var introShowing: Bool { intro.step != nil }
+
+    /// Starts the intro if it's eligible and nothing else is on screen:
+    /// setup, App Lock and the add or Settings sheets all win.
+    func startIntroIfEligible() {
+        guard intro.step == nil, !showingAdd, !router.showingSettings else { return }
+        // SpendTests hosts inside Sortd.app, so the real app (and this
+        // view) genuinely launches for unit tests too. The intro must not
+        // start there: `TipState.introShowing` is a global the pure-logic
+        // tests depend on staying false with nothing to reset it.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        if Self.forceIntro {
+            intro.start()
+            #if DEBUG
+            // Screenshots: SPEND_INTRO_STEP=1 or 2 jumps straight to that
+            // step (0 is the default from start()).
+            if let n = Int(ProcessInfo.processInfo.environment["SPEND_INTRO_STEP"] ?? "") {
+                for _ in 0..<max(0, min(n, IntroTour.steps.count - 1)) { intro.next() }
+            }
+            #endif
+            return
+        }
+        guard intro.shouldShow(setupDone: onboarded, setupShowing: setupPresented, locked: lock.isLocked) else { return }
+        intro.start()
+    }
+
     /// The tab bar's selection. The + slot is an action, not a place: picking
     /// it opens the add sheet and the current tab stays put (no flash of an
     /// empty tab, one haptic).
