@@ -125,6 +125,7 @@ async function checkAttest(request: Request, env: Env, deps: Deps, route: Route,
     allowDevelop: isDev,
     nowMs: now,
     roots: deps.attestRoots,
+    rootSha256: deps.attestRootSha256,
   });
 }
 

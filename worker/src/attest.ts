@@ -25,7 +25,7 @@
 //
 // Only WebCrypto and the small DER and CBOR readers below. No libraries.
 
-import { b64decode, concat, equalBytes, pemToDer, sha256, utf8 } from "./bytes";
+import { b64decode, concat, equalBytes, pemToDer, sha256, toHex, utf8 } from "./bytes";
 import { WorkerError } from "./errors";
 
 export { pemToDer };
@@ -36,7 +36,8 @@ export { pemToDer };
  * (Apple PKI: https://www.apple.com/certificateauthority/private/).
  * Valid 18 Mar 2020 to 15 Mar 2045. SHA-256 fingerprint
  * 1C:B9:82:3B:A2:8B:A6:AD:2D:33:A0:06:94:1D:E2:AE:4F:51:3E:F1:D4:E8:31:B9:F7:E0:FA:7B:62:42:C9:32
- * A test checks that it parses and that its self-signature verifies.
+ * Tests check that it parses, that its self-signature verifies, and that its SHA-256 equals
+ * APPLE_APP_ATTEST_ROOT_SHA256 below.
  */
 export const APPLE_APP_ATTEST_ROOT_PEM = `-----BEGIN CERTIFICATE-----
 MIICITCCAaegAwIBAgIQC/O+DvHN0uD7jG5yH2IXmDAKBggqhkjOPQQDAzBSMSYw
@@ -53,6 +54,12 @@ CgYIKoZIzj0EAwMDaAAwZQIwQgFGnByvsiVbpTKwSga0kP0e8EeDS4+sQmTvb7vn
 oyFraWVIyd/dganmrduC1bmTBGwD
 -----END CERTIFICATE-----`;
 
+/**
+ * The pin. A root is trusted only if SHA-256 of its DER is in this list, so a certificate
+ * that merely copies Apple's name (or a swapped PEM above) is not trusted.
+ */
+export const APPLE_APP_ATTEST_ROOT_SHA256 = "1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932";
+
 export interface AttestInput {
   /** Base64 key id, as the app's DCAppAttestService gives it. */
   keyId: string;
@@ -65,8 +72,10 @@ export interface AttestInput {
   /** Accept the "appattestdevelop" environment (ENV=dev only). */
   allowDevelop: boolean;
   nowMs: number;
-  /** DER of the pinned root(s). */
+  /** DER of the root(s). */
   roots: Uint8Array[];
+  /** SHA-256 (lowercase hex) of each root allowed; roots not listed are ignored. */
+  rootSha256: string[];
 }
 
 const OID_NONCE = "1.2.840.113635.100.8.2";
@@ -403,7 +412,9 @@ async function verify(input: AttestInput): Promise<void> {
   // 1. Certificate chain to the pinned root.
   const leaf = parseCertificate(leafDer!);
   const intermediate = parseCertificate(intermediateDer!);
-  const roots = input.roots.map(parseCertificate);
+  const pinned: Uint8Array[] = [];
+  for (const der of input.roots) if (input.rootSha256.includes(toHex(await sha256(der)))) pinned.push(der);
+  const roots = pinned.map(parseCertificate);
   if (roots.length === 0) invalid();
   if (!(await chainIsValid(leaf, intermediate, roots, input.nowMs))) invalid();
   if (leaf.curve.name !== "P-256" || leaf.publicKey.length !== 65) invalid();

@@ -163,6 +163,16 @@ describe("rate limits", () => {
     expect(ip.keys).toEqual(["ip:203.0.113.7", "ip:203.0.113.7"]);
   });
 
+  it("a limiter that throws -> 503 misconfigured (fails closed), no upstream call", async () => {
+    const throwing = { limit: async () => { throw new Error("binding broke"); } };
+    for (const over of [{ IP_LIMIT: throwing }, { ID_LIMIT: throwing }]) {
+      const { res, body, f } = await run(await attestedRequest("posthog/delete-person", DELETE_BODY), over);
+      expect(res.status).toBe(503);
+      expect(body).toEqual({ error: "misconfigured" });
+      expect(f.calls).toHaveLength(0);
+    }
+  });
+
   it("limiter binding missing in prod -> 503 misconfigured (fails closed)", async () => {
     for (const over of [{ IP_LIMIT: undefined }, { ID_LIMIT: undefined }]) {
       const { res, body, f } = await run(await attestedRequest("posthog/delete-person", DELETE_BODY), over);
@@ -226,6 +236,14 @@ describe("App Attest on the action routes", () => {
     const dev = await run(mk(), { ENV: "dev", DEV_BYPASS_TOKEN });
     expect(dev.res.status).toBe(204);
     expect(dev.f.calls).toHaveLength(1);
+  });
+
+  it("X-Sortd-Debug in dev with a matching but too-short configured token (< 16 chars) -> 401", async () => {
+    const short = "short-token-15ch";
+    const req = post("/v1/posthog/delete-person", JSON.stringify(DELETE_BODY), { "x-sortd-debug": short.slice(0, 15) });
+    const { res, f } = await run(req, { ENV: "dev", DEV_BYPASS_TOKEN: short.slice(0, 15) });
+    expect(res.status).toBe(401);
+    expect(f.calls).toHaveLength(0);
   });
 
   it("X-Sortd-Debug in dev with a wrong token, or with no token configured -> 401", async () => {

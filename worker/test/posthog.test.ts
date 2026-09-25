@@ -31,9 +31,26 @@ describe("POST /v1/posthog/delete-person", () => {
     expect((await send(f, undefined, env)).res.status).toBe(204);
   });
 
-  it("idempotent: a 400 that names our id as unknown -> 204", async () => {
-    const f = fakeFetch({ "/bulk_delete/": json({ type: "validation_error", detail: `Unknown distinct_ids: ${DISTINCT_ID}` }, 400) });
+  it("idempotent: a validation_error about distinct_ids that lists our id -> 204", async () => {
+    const f = fakeFetch({
+      "/bulk_delete/": json({ type: "validation_error", code: "invalid_input", attr: "distinct_ids", detail: "Unknown distinct_ids", distinct_ids: [DISTINCT_ID] }, 400),
+    });
     expect((await send(f)).res.status).toBe(204);
+  });
+
+  it("a 400 that merely echoes our id in another shape -> 502 posthog_rejected", async () => {
+    for (const reply of [
+      new Response(`bad request for ${DISTINCT_ID}`, { status: 400 }),
+      json({ detail: `Unknown distinct_ids: ${DISTINCT_ID}` }, 400),
+      json({ type: "validation_error", detail: `Unknown distinct_ids: ${DISTINCT_ID}` }, 400),
+      json({ type: "validation_error", attr: "delete_events", ids: [DISTINCT_ID] }, 400),
+      json({ type: "validation_error", attr: "distinct_ids", ids: [`x${DISTINCT_ID}`] }, 400),
+    ]) {
+      const f = fakeFetch({ "/bulk_delete/": reply });
+      const { res, text } = await send(f);
+      expect(res.status).toBe(502);
+      expect(JSON.parse(text)).toEqual({ error: "posthog_rejected" });
+    }
   });
 
   it("a 400 that does not name our id -> 502 posthog_rejected", async () => {
