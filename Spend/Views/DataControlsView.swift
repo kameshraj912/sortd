@@ -126,6 +126,8 @@ enum DataReset {
         // would otherwise lose.
         GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
+        // The account lives in its own Keychain service: sign out by name.
+        AccountStore.shared.signOut()
         // Any backup or spreadsheet copies made for sharing.
         Exports.clear()
         CardBook.shared.replaceAll([])
