@@ -88,7 +88,7 @@ struct SuggestionsTests {
     @Test func testTapsAreNeverSuggested() throws {
         var history: [Transaction] = []
         for day in tuesdays {
-            history.append(try log(TapTestButton.testMerchant, at: date(2026, 9, day, 8, 0)))
+            history.append(try log(LogPurchaseIntent.legacyTestMerchant, at: date(2026, 9, day, 8, 0)))
         }
         let now = date(2026, 10, 6, 8, 10)
         #expect(Suggestions.forNow(history, now: now, calendar: utc).isEmpty)

@@ -323,7 +323,7 @@ struct AnalyticsTests {
     }
 
     @Test func aTestTapNeverCountsAsActivation() {
-        #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: TapTestButton.testMerchant))
+        #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: LogPurchaseIntent.legacyTestMerchant))
         #expect(!LogPurchaseIntent.countsAsActivation(added: false, merchant: "Woolworths"))
         #expect(LogPurchaseIntent.countsAsActivation(added: true, merchant: "Woolworths"))
     }
