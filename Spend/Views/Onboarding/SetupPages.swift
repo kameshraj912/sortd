@@ -104,7 +104,7 @@ struct OptionCard: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: selected)
+        .feedback(.select, trigger: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -286,7 +286,7 @@ struct BuildingPage: View {
         }
         .contentShape(.rect)
         .onTapGesture(perform: done)
-        .sensoryFeedback(.success, trigger: shown == lines.count)
+        .feedback(.confirm, trigger: shown == lines.count)
         .task {
             if voiceOver {
                 shown = lines.count

@@ -322,7 +322,7 @@ struct CardStyleView: View {
         }
         .background(Color.page)
         .brandedTitle("Card Style")
-        .sensoryFeedback(.selection, trigger: styleRaw)
+        .feedback(.select, trigger: styleRaw)
     }
 
     private func group(_ title: String, _ styles: [SpendGradient.Style]) -> some View {
