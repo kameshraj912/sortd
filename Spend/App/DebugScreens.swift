@@ -26,13 +26,6 @@ struct DebugScreenHost: View {
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()
             case "backup": BackupDataSettingsView()
-            // TODO(free-app): move to TipJar once the tip jar lands on this branch.
-            // Until then the tip event has no real screen; SPEND_SCREEN=tip-left
-            // sends it once so the wiring can be checked.
-            case "tip-left":
-                Text("tip_left sent").onAppear {
-                    Analytics.shared.track(.tipLeft, ["tier": .string("debug")])
-                }
             case "import": Color.page.sheet(isPresented: .constant(true)) { ImportView() }
             case "widgets": WidgetsGuideView()
             case "card": CardDetailView(card: Card.mine.first ?? .other)
