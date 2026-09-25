@@ -24,11 +24,21 @@ struct HomeView: View {
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
     @State private var confirmingClearDemo = false
+    /// Which way the last month change went, so the totals slide that way.
+    @State private var monthDirection: Motion.Direction = .forward
+    @Environment(\.crossFades) private var crossFades
+    /// A card or a Recent row grows into its detail from where it was tapped.
+    @Namespace private var zoom
 
     /// Writing the month through here is what makes the numericText
     /// transition on the total — and the rest of the page — actually run.
+    /// The direction is set first, outside the animation, so the outgoing
+    /// totals already know which way to leave.
     private var animatedMonth: Binding<Date> {
-        Binding(get: { month }, set: { new in withAnimation(.snappy) { month = new } })
+        Binding(get: { month }, set: { new in
+            monthDirection = Motion.direction(from: month, to: new, calendar: cal)
+            withAnimation(.snappy) { month = new }
+        })
     }
 
     private var cal: Calendar { .current }
@@ -84,6 +94,8 @@ struct HomeView: View {
             }
             .navigationDestination(for: Card.self) { card in
                 CardDetailView(card: card)
+                    // The detail grows out of the card in the carousel.
+                    .navigationTransition(.zoom(sourceID: card, in: zoom))
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
             // "add" links open from RootView (one add sheet for the whole
@@ -236,6 +248,23 @@ struct HomeView: View {
             .padding(.trailing, NavOption.current.gearOnEveryTab ? 60 : 0)
             .padding(.top, 8)
 
+            // A ZStack, so the old and new totals overlap while one slides
+            // out and the other in; in a VStack they would stack for a frame.
+            ZStack(alignment: .leading) {
+                totals(spent: spent, over: over)
+                    .id(month)
+                    // Next month comes in from the right, last month from the
+                    // left; a fade under Reduce Motion or Prefer Cross-Fade.
+                    .transition(Motion.transition(monthDirection, crossFades: crossFades))
+            }
+            .clipped()
+        }
+    }
+
+    /// The big total and the line under it, replaced as one when the
+    /// month changes.
+    private func totals(spent: Double, over: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text(Money.format(monthItems.audTotal, Money.home, cents: false))
                 .font(.system(size: totalSize, weight: .bold))
                 .foregroundStyle(Color.ink)
@@ -375,6 +404,7 @@ struct HomeView: View {
                                 .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w) }
                         }
                         .buttonStyle(CardPressStyle())
+                        .matchedTransitionSource(id: card, in: zoom)
                         .id(card.rawValue)
                     }
                 }
@@ -473,6 +503,9 @@ struct HomeView: View {
                             ForEach(rows) { t in
                                 NavigationLink {
                                     TransactionDetailView(transaction: t)
+                                        // Grows out of the row you tapped, as
+                                        // on Activity.
+                                        .navigationTransition(.zoom(sourceID: t.persistentModelID, in: zoom))
                                 } label: {
                                     TransactionRow(transaction: t, showTime: true)
                                         .padding(.vertical, 10)
@@ -480,6 +513,7 @@ struct HomeView: View {
                                         .contentShape(.rect)
                                 }
                                 .buttonStyle(.plain)
+                                .matchedTransitionSource(id: t.persistentModelID, in: zoom)
                                 if t.id != rows.last?.id {
                                     Divider().padding(.leading, 64)
                                 }
