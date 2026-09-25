@@ -1,5 +1,7 @@
 import Foundation
 import AuthenticationServices
+import CryptoKit
+import DeviceCheck
 import Observation
 import Security
 
@@ -7,9 +9,11 @@ import Security
 // server, so an account holds nothing: it is an identity for support and one
 // PostHog person. The ID (Apple `user`, Google `sub`) lives in this phone's
 // Keychain and never syncs. Deleting the account asks the provider to cancel
-// the sign-in and a stateless Worker to delete the PostHog person; if either
-// cannot be reached the job is queued in `accountPendingDeletes` and retried
-// at the next launch (the same pattern as `GoogleAuth.retryPendingRevokes`).
+// the sign-in and a stateless Worker (docs/specs/2026-09-25-account-worker.md)
+// to delete the PostHog person. A job the network could not carry is queued
+// in `accountPendingDeletes` as hashes only and retried at the next launch
+// (the same pattern as `GoogleAuth.retryPendingRevokes`). An Apple revoke is
+// never queued: it needs a fresh authorization code, which lives five minutes.
 //
 // The Sign in with Apple capability needs the paid developer account, so the
 // account screen ships behind the SORTD_SIGNIN compile flag (off in both
@@ -44,9 +48,15 @@ struct Account: Codable, Equatable, Sendable {
 
 enum AccountError: LocalizedError, Equatable {
     case cancelled
+    /// Could not be reached now; the store queues the job and retries.
     case offline
     /// The provider answered without a usable ID.
     case noIdentity
+    /// The Worker or the provider said no for good (a 502, a used code, a
+    /// different account). Never retried; the text is shown to the user.
+    case rejected(String)
+    /// App Attest is not available here (simulator, some devices).
+    case notSupported
     case server(String)
 
     var errorDescription: String? {
@@ -54,6 +64,8 @@ enum AccountError: LocalizedError, Equatable {
         case .cancelled: "Sign-in was cancelled."
         case .offline: "Sortd couldn't reach the server. It will try again next time you open the app."
         case .noIdentity: "Sign-in didn't finish. Please try again."
+        case .rejected(let text): text
+        case .notSupported: "This device can't prove it is running Sortd, so the server was not asked. " + WorkerRevoker.appleManualSteps
         case .server(let text): text
         }
     }
@@ -76,11 +88,22 @@ protocol AccountKeychain {
 }
 
 /// Cancels the sign-in with the provider and deletes the PostHog person.
-/// Throws when it cannot reach whatever it needs; the store queues the job.
+/// `offline` means "queue it and retry"; any other error drops the job.
 @MainActor
 protocol AccountRevoker {
     func revoke(_ account: Account) async throws
     func deletePerson(hash: String) async throws
+    /// A revoke queued earlier. The queue keeps no subject or email, only
+    /// the provider and sha256(subject). Optional: a fake leaves it out.
+    func revoke(queued provider: AccountProvider, subjectHash: String) async throws
+}
+
+extension AccountRevoker {
+    /// For conformers without a queued path (the test fakes): the same
+    /// call with a placeholder account that carries the subject hash.
+    func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
+        try await revoke(Account(provider: provider, subject: subjectHash, email: nil))
+    }
 }
 
 /// The analytics identity: `identify` with the hash, `reset` on the way
@@ -105,6 +128,13 @@ protocol CredentialStateChecker {
     func isRevoked(_ account: Account) async -> Bool
 }
 
+/// App Attest: proves to the Worker that a real copy of Sortd is calling.
+@MainActor
+protocol AppAttester {
+    var isSupported: Bool { get }
+    func attest(clientDataHash: Data) async throws -> (keyID: String, attestation: Data)
+}
+
 // MARK: - Store
 
 @MainActor @Observable
@@ -120,6 +150,7 @@ final class AccountStore {
     private let checker: CredentialStateChecker
     private let defaults: UserDefaults
     private let salt: String
+    private var retrying = false
 
     init(keychain: AccountKeychain, revoker: AccountRevoker, sink: IdentitySink,
          checker: CredentialStateChecker, defaults: UserDefaults, salt: String) {
@@ -147,6 +178,12 @@ final class AccountStore {
         Analytics.distinctId(salt: salt, provider: provider.rawValue, subject: subject)
     }
 
+    /// sha256 of the subject alone, for the queue: enough to tell two
+    /// accounts apart, not enough to name one.
+    nonisolated static func subjectHash(_ subject: String) -> String {
+        SHA256.hash(data: Data(subject.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     /// Runs the provider's sheet. A cancel throws `AccountError.cancelled`
     /// and leaves nothing behind.
     func signIn(with provider: IdentityProvider) async throws {
@@ -158,34 +195,93 @@ final class AccountStore {
         log.info("account: signed in with \(account.provider.rawValue, privacy: .public)")
     }
 
-    /// Forgets the ID on this phone. Purchases stay.
+    /// Forgets the ID on this phone. Purchases stay. Says `signed_out`
+    /// under the old id, then resets.
     func signOut() {
         guard current != nil else { return }
+        sink.signedOut()
         forgetLocally()
+        sink.reset()
         log.info("account: signed out")
     }
 
-    /// Cancels the sign-in with the provider and deletes the PostHog person,
-    /// then forgets the account here. The provider and the Worker are asked
-    /// first, with the hash made now; whatever cannot be reached is queued
-    /// (hash included, never recomputed) and retried at the next launch.
-    func deleteAccount() async {
-        guard let account = current else { return }
+    /// Resets the analytics id first (nothing may be sent under the person
+    /// about to be deleted, so no `signed_out`), then asks the provider to
+    /// cancel the sign-in and the Worker to delete the PostHog person, then
+    /// forgets the account here. Jobs the network could not carry are
+    /// queued, hash included, and retried at the next launch. Returns what
+    /// could not be done for good, in words for the user.
+    @discardableResult
+    func deleteAccount() async -> [String] {
+        guard let account = current else { return [] }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
-        var jobs = [PendingDelete.revoke(account), .person(hash)]
-        await run(&jobs)
+        let subjectHash = Self.subjectHash(account.subject)
+        sink.reset()
+        var failed: [PendingDelete] = []
+        var problems: [String] = []
+        do {
+            try await revoker.revoke(account)
+        } catch {
+            sort(error, job: PendingDelete(kind: .revoke, provider: account.provider, subjectHash: subjectHash, hash: hash),
+                 failed: &failed, problems: &problems)
+        }
+        do {
+            try await revoker.deletePerson(hash: hash)
+        } catch {
+            sort(error, job: PendingDelete(kind: .person, provider: account.provider, subjectHash: subjectHash, hash: hash),
+                 failed: &failed, problems: &problems)
+        }
         forgetLocally()
         // Behind any jobs an earlier delete left, never over them.
-        queue(pending + jobs)
-        log.info("account: deleted, \(jobs.count, privacy: .public) job(s) still pending")
+        queue(pending + failed)
+        log.info("account: deleted, \(failed.count, privacy: .public) job(s) queued, \(problems.count, privacy: .public) dropped")
+        return problems
     }
 
-    /// Tries the delete jobs that failed before. Called at launch.
+    /// Delete All Data: the PostHog person goes too, so its delete is
+    /// queued (and sent by the caller's retry, or at the next launch). The
+    /// sign-in itself is not cancelled; the user may sign in again.
+    func signOutForDeleteAll() {
+        guard let account = current else { return }
+        let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
+        sink.reset()
+        forgetLocally()
+        queue(pending + [PendingDelete(kind: .person, provider: account.provider,
+                                       subjectHash: Self.subjectHash(account.subject), hash: hash)])
+        log.info("account: signed out for Delete All, person delete queued")
+    }
+
+    /// Runs `work` (the Delete All defaults wipe) and puts the queue back
+    /// afterwards, so a delete that had not reached the Worker survives.
+    func preservePendingDeletes(across work: () -> Void) {
+        let kept = pending
+        work()
+        queue(kept)
+    }
+
+    /// Tries the delete jobs that failed before. Called at launch. Only the
+    /// jobs that succeed (or are dropped) leave the queue: a delete that
+    /// happens while this runs keeps its own jobs.
     func retryPendingDeletes() async {
-        var jobs = pending
+        guard !retrying else { return }
+        retrying = true
+        defer { retrying = false }
+        let jobs = pending
         guard !jobs.isEmpty else { return }
-        await run(&jobs)
-        queue(jobs)
+        var stillOffline: [PendingDelete] = []
+        var problems: [String] = []
+        for job in jobs {
+            do {
+                switch job.kind {
+                case .revoke: try await revoker.revoke(queued: job.provider, subjectHash: job.subjectHash)
+                case .person: try await revoker.deletePerson(hash: job.hash)
+                }
+            } catch {
+                sort(error, job: job, failed: &stillOffline, problems: &problems)
+            }
+        }
+        let done = Set(jobs).subtracting(stillOffline)
+        queue(pending.filter { !done.contains($0) })
     }
 
     /// Signed in, but the provider says the sign-in was withdrawn: sign out
@@ -193,7 +289,7 @@ final class AccountStore {
     func checkCredentialAtLaunch() async {
         guard let account = current else { return }
         if await checker.isRevoked(account) {
-            forgetLocally()
+            signOut()
             log.notice("account: the \(account.provider.rawValue, privacy: .public) sign-in was withdrawn, signed out")
         }
     }
@@ -201,27 +297,23 @@ final class AccountStore {
     // MARK: Private
 
     private func forgetLocally() {
-        sink.signedOut()
         current = nil
         try? keychain.delete()
-        sink.reset()
     }
 
-    /// Runs each job, keeping only the ones that failed.
-    private func run(_ jobs: inout [PendingDelete]) async {
-        var failed: [PendingDelete] = []
-        for job in jobs {
-            do {
-                switch job {
-                case .revoke(let account): try await revoker.revoke(account)
-                case .person(let hash): try await revoker.deletePerson(hash: hash)
-                }
-            } catch {
-                log.notice("account: delete job failed, queued (\(error.localizedDescription, privacy: .public))")
-                failed.append(job)
-            }
+    /// `offline` keeps the job for a retry; a cancel drops it quietly;
+    /// anything else drops it and keeps the reason for the user.
+    private func sort(_ error: Error, job: PendingDelete, failed: inout [PendingDelete], problems: inout [String]) {
+        switch error as? AccountError {
+        case .offline:
+            failed.append(job)
+            log.notice("account: \(job.kind.rawValue, privacy: .public) job could not be sent, queued")
+        case .cancelled:
+            log.notice("account: \(job.kind.rawValue, privacy: .public) job cancelled, dropped")
+        default:
+            problems.append(error.localizedDescription)
+            log.error("account: \(job.kind.rawValue, privacy: .public) job dropped (\(error.localizedDescription, privacy: .public))")
         }
-        jobs = failed
     }
 
     private var pending: [PendingDelete] {
@@ -237,12 +329,23 @@ final class AccountStore {
     }
 
     /// One queued job, stored as a JSON string in the defaults array.
-    enum PendingDelete: Codable, Equatable {
-        case revoke(Account)
-        case person(String)
+    /// Hashes only: never the subject, never the email.
+    struct PendingDelete: Codable, Hashable {
+        enum Kind: String, Codable { case revoke, person }
+        let kind: Kind
+        let provider: AccountProvider
+        let subjectHash: String
+        let hash: String
 
         var encoded: String {
             String(decoding: (try? JSONEncoder().encode(self)) ?? Data(), as: UTF8.self)
+        }
+
+        init(kind: Kind, provider: AccountProvider, subjectHash: String, hash: String) {
+            self.kind = kind
+            self.provider = provider
+            self.subjectHash = subjectHash
+            self.hash = hash
         }
 
         init?(encoded: String) {
@@ -295,19 +398,68 @@ final class KeychainAccountStore: AccountKeychain {
     }
 }
 
-/// The stateless revoke Worker (its own spec, not in this repo yet). With no
-/// URL in the build every call throws `offline`, so the store keeps the job
-/// queued until a build with a Worker retries it. Google sign-ins are
-/// cancelled by `GoogleAuth` directly, which has its own retry list.
+/// The stateless account Worker, to docs/specs/2026-09-25-account-worker.md:
+/// `POST /v1/challenge` binds a challenge to the route and the exact body,
+/// App Attest signs that challenge, and the action route gets the body with
+/// the three `X-Attest-*` headers. With no URL in the build every call
+/// throws `offline`, so the store keeps the job queued until a build with a
+/// Worker retries it.
 ///
-/// Request shape is provisional until the Worker spec is approved: JSON
-/// `{"action":"revoke","provider":…,"subject":…}` and
-/// `{"action":"delete_person","hash":…}`.
+/// Apple: a fresh authorization code is needed each time (re-authenticate
+/// at delete), so a failure after that is `rejected` with Apple's manual
+/// steps, never queued. Google needs no Worker: `GoogleAuth` revokes from
+/// the phone, with its own retry list. The Google grant is one per account,
+/// so when Gmail is connected for the same address the identity token is
+/// forgotten locally and the grant is left alone.
 @MainActor
 final class WorkerRevoker: AccountRevoker {
-    let url: URL?
+    typealias Transport = @MainActor (URLRequest) async throws -> (Data, HTTPURLResponse)
 
-    init(url: URL?) { self.url = url }
+    /// A fresh Sign in with Apple: which Apple user answered, and the code.
+    struct AppleCode {
+        let user: String
+        let code: String
+    }
+
+    struct Dependencies {
+        var transport: Transport
+        var attester: AppAttester
+        /// Asks Apple again and returns the single-use code.
+        var appleCode: @MainActor (Account) async throws -> AppleCode
+        /// Emails of the Gmail accounts connected for receipts.
+        var connectedGmail: @MainActor () -> [String]
+        var googleRevoke: @MainActor () async -> Void
+        var clientID: String
+
+        static var live: Dependencies {
+            Dependencies(
+                transport: { req in
+                    let (data, response) = try await GoogleAuth.session.data(for: req)
+                    guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                    return (data, http)
+                },
+                attester: DeviceAppAttester(),
+                appleCode: { _ in
+                    let auth = try await AppleIdentityProvider().authorize()
+                    guard let code = auth.authorizationCode else { throw AccountError.rejected(appleManualSteps) }
+                    return AppleCode(user: auth.account.subject, code: code)
+                },
+                connectedGmail: { GmailSync.accounts.map(\.email) },
+                googleRevoke: { await GoogleAuth.revokeIdentity() },
+                clientID: Bundle.main.bundleIdentifier ?? "com.kameshraj.spend")
+        }
+    }
+
+    nonisolated static let appleManualSteps = "Apple couldn't be asked to cancel the sign-in. To stop Sortd using your Apple Account: Settings › your name › Sign in with Apple › Sortd › Stop Using."
+    nonisolated static let wrongAppleAccount = "That's a different Apple Account. Sortd is signed in with another one, so nothing was cancelled."
+
+    let url: URL?
+    private let deps: Dependencies
+
+    init(url: URL?, deps: Dependencies? = nil) {
+        self.url = url
+        self.deps = deps ?? .live
+    }
 
     /// `ACCOUNT_WORKER_URL` from Info.plist (Config.xcconfig / Secrets.xcconfig).
     static func fromBundle() -> WorkerRevoker {
@@ -320,35 +472,114 @@ final class WorkerRevoker: AccountRevoker {
         return WorkerRevoker(url: url)
     }
 
+    /// Gmail is connected for this same Google account: revoking the
+    /// identity token would cancel that grant too.
+    nonisolated static func keepsGmail(_ account: Account, connected: [String]) -> Bool {
+        guard account.provider == .google, let email = account.email?.lowercased() else { return false }
+        return connected.contains { $0.lowercased() == email }
+    }
+
     func revoke(_ account: Account) async throws {
         switch account.provider {
         case .google:
-            await GoogleAuth.revokeIdentity()
+            if Self.keepsGmail(account, connected: deps.connectedGmail()) {
+                log.notice("account: Gmail is connected for this Google account, grant kept")
+                GoogleAuth.forgetIdentityToken()
+                return
+            }
+            await deps.googleRevoke()
         case .apple:
-            try await post(["action": "revoke", "provider": account.provider.rawValue, "subject": account.subject])
+            // A cancel in Apple's sheet passes through as `cancelled`.
+            let fresh = try await deps.appleCode(account)
+            guard fresh.user == account.subject else { throw AccountError.rejected(Self.wrongAppleAccount) }
+            do {
+                try await post(route: "apple/revoke", body: ["client_id": deps.clientID, "authorization_code": fresh.code])
+            } catch {
+                // The code is single-use and lives five minutes: no retry can succeed.
+                throw AccountError.rejected(Self.appleManualSteps)
+            }
+        }
+    }
+
+    func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
+        switch provider {
+        case .google: await deps.googleRevoke()
+        case .apple: throw AccountError.rejected(Self.appleManualSteps)
         }
     }
 
     func deletePerson(hash: String) async throws {
-        try await post(["action": "delete_person", "hash": hash])
+        try await post(route: "posthog/delete-person", body: ["distinct_id": hash])
     }
 
-    private func post(_ body: [String: String]) async throws {
+    // MARK: Worker calls
+
+    /// Challenge, attest, act. `offline` for anything worth retrying (no
+    /// URL, network, 429, 503), `rejected` for a 4xx or 502.
+    private func post(route: String, body: [String: String]) async throws {
         guard let url else { throw AccountError.offline }
+        guard deps.attester.isSupported else { throw AccountError.notSupported }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let bodyData = try encoder.encode(body)
+        let bodyHash = SHA256.hash(data: bodyData).map { String(format: "%02x", $0) }.joined()
+
+        let (challengeData, challengeResponse) = try await send(
+            url.appending(path: "v1/challenge"),
+            body: try encoder.encode(["route": route, "body_sha256": bodyHash]), headers: [:])
+        try Self.check(challengeResponse, data: challengeData)
+        guard let json = try? JSONSerialization.jsonObject(with: challengeData) as? [String: Any],
+              let challenge = json["challenge"] as? String, !challenge.isEmpty else {
+            throw AccountError.offline
+        }
+
+        let (keyID, attestation) = try await deps.attester.attest(clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
+        let (data, response) = try await send(url.appending(path: "v1/" + route), body: bodyData, headers: [
+            "X-Attest-Key-Id": keyID,
+            "X-Attest-Object": attestation.base64EncodedString(),
+            "X-Attest-Challenge": challenge,
+        ])
+        try Self.check(response, data: data)
+    }
+
+    private func send(_ url: URL, body: Data, headers: [String: String]) async throws -> (Data, HTTPURLResponse) {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode(body)
+        for (key, value) in headers { req.setValue(value, forHTTPHeaderField: key) }
+        req.httpBody = body
         req.timeoutInterval = 20
-        let response: URLResponse
         do {
-            (_, response) = try await GoogleAuth.session.data(for: req)
+            return try await deps.transport(req)
         } catch {
             throw AccountError.offline
         }
-        guard let code = (response as? HTTPURLResponse)?.statusCode, (200..<300).contains(code) else {
-            throw AccountError.offline
+    }
+
+    /// 2xx is done. 429 and 503 are the Worker's own "try later". 502 is
+    /// Apple's or PostHog's no, and any other 4xx is ours: neither is retried.
+    private static func check(_ response: HTTPURLResponse, data: Data) throws {
+        switch response.statusCode {
+        case 200..<300: return
+        case 429, 503: throw AccountError.offline
+        default:
+            let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            throw AccountError.rejected(code ?? "http_\(response.statusCode)")
         }
+    }
+}
+
+/// App Attest through `DCAppAttestService`. A fresh key each time: the
+/// Worker keeps nothing, so it cannot verify an assertion from an old one.
+@MainActor
+final class DeviceAppAttester: AppAttester {
+    var isSupported: Bool { DCAppAttestService.shared.isSupported }
+
+    func attest(clientDataHash: Data) async throws -> (keyID: String, attestation: Data) {
+        let service = DCAppAttestService.shared
+        let keyID = try await service.generateKey()
+        let attestation = try await service.attestKey(keyID, clientDataHash: clientDataHash)
+        return (keyID, attestation)
     }
 }
 
@@ -377,23 +608,28 @@ final class AppleCredentialChecker: CredentialStateChecker {
 
 // MARK: - Providers
 
+/// What Apple's sheet returned: the account, and the single-use code the
+/// Worker exchanges to revoke (nil when Apple sent none).
+struct AppleAuthorization: Sendable {
+    let account: Account
+    let authorizationCode: String?
+}
+
 /// Sign in with Apple through `ASAuthorizationController`, email scope
 /// only. The SwiftUI `SignInWithAppleButton` runs the same controller
 /// itself; its result goes through `account(from:)` and `error(from:)`.
 @MainActor
-final class AppleIdentityProvider: NSObject, IdentityProvider,
-                                   ASAuthorizationControllerDelegate,
-                                   ASAuthorizationControllerPresentationContextProviding {
+final class AppleIdentityProvider: NSObject, IdentityProvider, ASAuthorizationControllerDelegate {
     /// The delegate is called by the system on whatever thread it likes;
     /// the box takes the callback and hands the result to the waiting
     /// caller once. A `let` of a Sendable type, so nonisolated code can read it.
     nonisolated private final class Pending: @unchecked Sendable {
         private let lock = NSLock()
-        private var continuation: CheckedContinuation<Account, Error>?
-        func wait(_ c: CheckedContinuation<Account, Error>) {
+        private var continuation: CheckedContinuation<AppleAuthorization, Error>?
+        func wait(_ c: CheckedContinuation<AppleAuthorization, Error>) {
             lock.lock(); continuation = c; lock.unlock()
         }
-        func resume(_ result: Result<Account, Error>) {
+        func resume(_ result: Result<AppleAuthorization, Error>) {
             lock.lock()
             let c = continuation
             continuation = nil
@@ -402,17 +638,36 @@ final class AppleIdentityProvider: NSObject, IdentityProvider,
         }
     }
 
+    /// Hands the system the window the sheet goes in. Made only when there
+    /// is one; with none the controller picks for itself, so no code path
+    /// has to invent a window.
+    nonisolated private final class Anchor: NSObject, ASAuthorizationControllerPresentationContextProviding {
+        let window: ASPresentationAnchor
+        init(_ window: ASPresentationAnchor) { self.window = window }
+        func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor { window }
+    }
+
     private let pending = Pending()
     private var controller: ASAuthorizationController?
+    private var anchor: Anchor?
 
     func signIn() async throws -> Account {
+        try await authorize().account
+    }
+
+    /// Apple's sheet; the account plus the code (for a revoke).
+    func authorize() async throws -> AppleAuthorization {
         let request = ASAuthorizationAppleIDProvider().createRequest()
         request.requestedScopes = [.email]
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
-        controller.presentationContextProvider = self
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let window = scenes.compactMap(\.keyWindow).first ?? scenes.first.map({ ASPresentationAnchor(windowScene: $0) }) {
+            anchor = Anchor(window)
+            controller.presentationContextProvider = anchor
+        }
         self.controller = controller
-        defer { self.controller = nil }
+        defer { self.controller = nil; anchor = nil }
         return try await withCheckedThrowingContinuation { cont in
             pending.wait(cont)
             controller.performRequests()
@@ -420,9 +675,14 @@ final class AppleIdentityProvider: NSObject, IdentityProvider,
     }
 
     /// The Apple ID credential as an account, or nil when it is not one.
-    nonisolated static func account(from authorization: ASAuthorization) -> Account? {
+    nonisolated static func account(from auth: ASAuthorization) -> Account? {
+        authorization(from: auth)?.account
+    }
+
+    nonisolated static func authorization(from authorization: ASAuthorization) -> AppleAuthorization? {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else { return nil }
-        return Account(provider: .apple, subject: credential.user, email: credential.email)
+        return AppleAuthorization(account: Account(provider: .apple, subject: credential.user, email: credential.email),
+                                  authorizationCode: credential.authorizationCode.map { String(decoding: $0, as: UTF8.self) })
     }
 
     /// A cancel in Apple's sheet as `AccountError.cancelled`; the rest as is.
@@ -433,20 +693,13 @@ final class AppleIdentityProvider: NSObject, IdentityProvider,
 
     nonisolated func authorizationController(controller: ASAuthorizationController,
                                              didCompleteWithAuthorization authorization: ASAuthorization) {
-        let result: Result<Account, Error> = Self.account(from: authorization).map { .success($0) } ?? .failure(AccountError.noIdentity)
+        let result: Result<AppleAuthorization, Error> = Self.authorization(from: authorization).map { .success($0) }
+            ?? .failure(AccountError.noIdentity)
         pending.resume(result)
     }
 
     nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         pending.resume(.failure(Self.error(from: error)))
-    }
-
-    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        MainActor.assumeIsolated {
-            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            if let window = scenes.compactMap(\.keyWindow).first { return window }
-            return ASPresentationAnchor(windowScene: scenes[0])
-        }
     }
 }
 
