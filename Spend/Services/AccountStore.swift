@@ -659,8 +659,14 @@ final class AppleIdentityProvider: NSObject, IdentityProvider, ASAuthorizationCo
         try await authorize().account
     }
 
-    /// Apple's sheet; the account plus the code (for a revoke).
+    /// Apple's sheet; the account plus the code (for a revoke). The sheet
+    /// makes the scene inactive, so it runs under `SystemPrompt` to keep
+    /// the privacy cover off it.
     func authorize() async throws -> AppleAuthorization {
+        try await SystemPrompt.shared.showing { try await presentSheet() }
+    }
+
+    private func presentSheet() async throws -> AppleAuthorization {
         let request = ASAuthorizationAppleIDProvider().createRequest()
         request.requestedScopes = [.email]
         let controller = ASAuthorizationController(authorizationRequests: [request])
