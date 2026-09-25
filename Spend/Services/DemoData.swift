@@ -13,16 +13,26 @@ enum DemoData {
 
     static var isActive: Bool { UserDefaults.standard.bool(forKey: activeKey) }
 
-    /// True when the flag says sample data is loaded *and* it really is.
+    /// True when the sample rows are really in the database, however the
+    /// flag reads.
     ///
     /// The flag lives in UserDefaults and the rows live in the database, and
-    /// those two can come apart: restoring an iPhone backup brings
-    /// preferences across, and a store that fails to migrate leaves the flag
-    /// saying "loaded" over an empty app. Checking both means a stuck app
-    /// fixes itself instead of sitting there empty.
+    /// those two can come apart both ways. Restoring an iPhone backup brings
+    /// preferences across without the store, leaving the flag saying
+    /// "loaded" over an empty app — checking the rows too means a stuck app
+    /// fixes itself instead of sitting there empty. The other way round
+    /// matters just as much: `context.save()` commits the rows at once, but
+    /// `UserDefaults.set` doesn't flush on the same schedule, so a launch
+    /// killed between those two lines (or a restore that dropped just this
+    /// one preference) leaves the rows saved with the flag back to false.
+    /// Trusting the flag alone there made the next launch insert a second
+    /// full copy on top of the first. The rows are the source of truth
+    /// either way, so a flag that disagrees with them is repaired here
+    /// rather than believed.
     static func isLoaded(in context: ModelContext) -> Bool {
-        guard isActive else { return false }
-        return hasRows(in: context)
+        guard hasRows(in: context) else { return false }
+        if !isActive { UserDefaults.standard.set(true, forKey: activeKey) }
+        return true
     }
 
     static func hasRows(in context: ModelContext) -> Bool {
