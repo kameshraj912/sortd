@@ -19,25 +19,40 @@ struct FreeAppTests {
         return ModelContext(container)
     }
 
-    /// `Reminders.checkCategoryLimits` (`Spend/Services/Reminders.swift:77`
+    /// `Reminders.checkCategoryLimits` (`Spend/Services/Reminders.swift:105`
     /// today) still guards on `ProStore.shared.isPro`. In the test process
     /// nothing is ever purchased, so with the gate still in place this stays
-    /// red: it schedules no over-limit notification even though a category
-    /// is well over its limit and reminders are on.
+    /// red: it never records the over-limit alert even though a category is
+    /// well over its limit and reminders are on.
+    ///
+    /// Asserts on `CategoryBudgets.sentAlerts`, not on
+    /// `UNUserNotificationCenter.pendingNotificationRequests()`: the unit
+    /// test host has no notification authorization on this simulator (no
+    /// UI to grant it, and `simctl privacy` has no `notifications` service),
+    /// so `center.add` always fails here regardless of the Pro gate.
+    /// `saveSentAlerts` runs right after the same gate this test is about,
+    /// before the OS call, so it is a reliable stand-in for "an alert fired".
     @Test func categoryLimitCheckHasNoProCondition() async throws {
         let standardDefaults = UserDefaults.standard
         let wasEnabled = standardDefaults.bool(forKey: Reminders.enabledKey)
         standardDefaults.set(true, forKey: Reminders.enabledKey)
         defer { standardDefaults.set(wasEnabled, forKey: Reminders.enabledKey) }
 
-        let center = UNUserNotificationCenter.current()
-        for request in await center.pendingNotificationRequests() where request.identifier.hasPrefix("category-limit-") {
-            center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+        // The test host's home currency depends on the simulator's region
+        // (e.g. SGD on en_SG); logging in a hardcoded "AUD" would leave
+        // audValue at 0 on a non-AUD host and fail for FX reasons, not the
+        // Pro condition this test is about. Pin the home currency and log
+        // the purchase in it.
+        let wasHome = standardDefaults.string(forKey: Money.homeKey)
+        standardDefaults.set("AUD", forKey: Money.homeKey)
+        defer {
+            if let wasHome { standardDefaults.set(wasHome, forKey: Money.homeKey) }
+            else { standardDefaults.removeObject(forKey: Money.homeKey) }
         }
 
         let context = try store()
         let now = Date(timeIntervalSince1970: 1_790_000_000)
-        let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 500, currency: "AUD",
+        let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 500, currency: Money.home,
                                         card: .other, source: .email)
         let txn = try TransactionLogger.log(purchase, in: context).transaction
 
@@ -46,9 +61,7 @@ struct FreeAppTests {
 
         await Reminders.checkCategoryLimits([txn], now: now, defaults: limits)
 
-        let pending = await center.pendingNotificationRequests().filter { $0.identifier.hasPrefix("category-limit-") }
-        #expect(!pending.isEmpty, "expected an over-limit notification with no Pro purchased")
-        for request in pending { center.removePendingNotificationRequests(withIdentifiers: [request.identifier]) }
+        #expect(!CategoryBudgets.sentAlerts(limits).isEmpty, "expected an over-limit alert with no Pro purchased")
     }
 
     // MARK: Upcoming bills, Siri
