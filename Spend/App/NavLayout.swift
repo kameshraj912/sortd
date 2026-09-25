@@ -58,25 +58,25 @@ enum NavOption: String {
 
     var hasSearchTab: Bool { self == .today || self == .gearEverywhere }
     var hasYouTab: Bool { self == .youTab }
-    /// The gear floats top-right over every tab (like the account button in
-    /// Apple's own apps), instead of sitting in Home's header.
+    /// The gear is a toolbar button top-right on every tab (like the account
+    /// button in Apple's own apps), instead of sitting in Home's header.
     var gearOnEveryTab: Bool { self == .threeTabs || self == .gearEverywhere }
     var gearOnHome: Bool { self == .today }
     var searchInActivity: Bool { self == .threeTabs }
 }
 
-/// The Settings button, the same glass circle wherever it appears.
-struct SettingsButton: View {
-    var body: some View {
-        Button { Router.shared.showingSettings = true } label: {
-            Image(systemName: "gearshape")
-                .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
+/// The Settings gear, top-right in a tab's navigation bar. A real toolbar
+/// item (Liquid Glass draws it as a glass circle), so it never sits on the
+/// search field and it moves with the bar, not over it. Nav options that
+/// keep Settings on Home or in a You tab add nothing.
+struct SettingsToolbarButton: ToolbarContent {
+    var body: some ToolbarContent {
+        if NavOption.current.gearOnEveryTab {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Settings", systemImage: "gearshape") { Router.shared.showingSettings = true }
+                    .tint(Color.ink)
+            }
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .tint(Color.ink)
-        .accessibilityLabel("Settings")
     }
 }
 
