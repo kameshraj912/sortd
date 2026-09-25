@@ -12,7 +12,7 @@ Everything below was verified, not assumed — where I could not verify somethin
 | Branch | `main` @ `18a2d1c` (`git rev-parse --short origin/main`, 25 Sep) |
 | Tests | **733** at PR #41 — this is the figure I was given for this handover; I read PR #41's body directly and it does **not** state a total, only its own new suites (TipRulesTests 29, TipCopyTests 6, TipStateTests 13). Total run count **not verified** by me. |
 | Known bugs | **21**, from the pre-overhaul baseline (`docs/ux-research/baseline-2026-09-25/README.md`, `scripts/test.sh --known-bugs` on commit `c379a0e`). Confirmed unchanged through the overhaul: sub-spec 1's and 8's gates both require the count not to rise, and PR #41's body says "known-bug set unchanged from baseline (21)". I did not re-run the script myself (docs-only task, no builds). |
-| CI | GitHub Actions minutes were exhausted on 25 Sep. Every PR since #30 was gated locally instead: `scripts/check.sh --all` (build + full test run + known-bugs + StoreKit) plus a by-hand comparison of the known-bug test **names** against the baseline list, since CI could not be trusted to run. I spot-checked three of the actual CI check runs (#30, #33, #41): #33 shows a normal green run; #30 and #41 show the **build** step itself failing after real minutes were spent (not a "skipped, no runner" state) — so "CI minutes exhausted" explains why CI could not be relied on, but I could not independently confirm from the run logs that exhaustion (rather than a real build issue) is why those two specific runs are red. Take the local gate as the source of truth, per the PR bodies. |
+| CI | Green on `main` at PR #42 (Xcode 26.6, 733 tests). The Actions quota ran out in the small hours of 25 Sep (GitHub: "job was not started"), so PRs #30 to #41 were gated locally: `scripts/check.sh --all` plus a comparison of the failing known-bug test **names** against the baseline list. Minutes came back during the day; the first CI runs then failed the **build** step on Xcode 26.6 (`Activation.swift`: a generic-inference difference between Swift 6.4 locally and 6.2 on the runner) and one sign-in test that compared JSON key order. Both fixed in PR #42. Lesson: local Xcode 27 is not proof; CI on the pinned Xcode is. |
 | Pipeline | `docs/AgentPipeline.md` — agents in `.claude/agents/`, skills `sortd-*`, scripts in `scripts/`. This is the working bible; it now also has a "Lessons from the first overhaul" section (see below). |
 
 ## 2. What shipped in the overhaul
@@ -63,7 +63,7 @@ Enrolment is the blocker for both of the above — see §4.
 
 ## 4. Only Raj can do these
 
-1. **GitHub Actions minutes.** Exhausted 25 Sep; CI cannot be relied on until this is sorted (billing/plan, not something I have access to check from here).
+1. **GitHub Actions minutes.** The quota ran out once on 25 Sep and came back the same day. Decide the standing fix: a small spending limit on the card, a public repo, or a self-hosted runner. Until then a heavy day can exhaust it again.
 2. **PostHog project**: create it, get the project key, pick the region (default assumed EU per the overview spec, **not verified** as actually created), and turn on **Discard client IP data**.
 3. **Sentry DSN**: create the project, get the DSN for `Secrets.xcconfig`, and turn on **Prevent storing IP addresses** (Settings › Security & Privacy) so the server side matches the app's `sendDefaultPii = false`.
 4. **App Store Connect**: create the three tip consumables (sub-spec 1's gate needs these before any store build).
@@ -109,4 +109,4 @@ New from this overhaul:
 
 ---
 
-*Things I could not verify from this worktree, listed together: the 733 test count at PR #41 (not in the PR body); the CI-minutes-exhausted explanation for the two red build checks I sampled (#30, #41 — the jobs did run and spend real minutes before failing, which I could not reconcile with "exhausted" from the logs alone); anything needing a device, a real account, a real PostHog/Sentry project, or App Attest against real hardware; whether the App Store Connect tip products already exist.*
+*Things I could not verify from this worktree, listed together: anything needing a device, a real account, a real PostHog/Sentry project, or App Attest against real hardware; whether the App Store Connect tip products already exist.*
