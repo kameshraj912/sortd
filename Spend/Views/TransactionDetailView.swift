@@ -153,12 +153,16 @@ struct TransactionDetailView: View {
         // Shared with Activity: going back keeps the Undo for the rest of
         // its window.
         .recategoriseUndoToast()
-        .confirmationDialog("Delete this purchase?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+        // An alert, like the other irreversible confirmations: a dialog on
+        // this form anchored itself to the Card row at the top, nowhere near
+        // the Delete button (UI pass, 25 Sep).
+        .alert("Delete this purchase?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) {
                 context.delete(transaction)
                 try? context.save()
                 dismiss()
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("\(Money.format(transaction.amount, transaction.currencyCode)) at \(transaction.merchant)")
         }
