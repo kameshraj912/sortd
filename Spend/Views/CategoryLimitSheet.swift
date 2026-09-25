@@ -116,7 +116,7 @@ struct CategoryLimitSheet: View {
                 Button("Done") { focused = false }.fontWeight(.semibold)
             }
         }
-        .sensoryFeedback(.success, trigger: saved)
+        .feedback(.confirm, trigger: saved)
         .presentationDetents([.height(420), .large])
         .presentationBackground(Color(.systemBackground))
         .presentationDragIndicator(.visible)

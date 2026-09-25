@@ -101,7 +101,7 @@ struct BudgetSheet: View {
                 Button("Done") { focused = false }.fontWeight(.semibold)
             }
         }
-        .sensoryFeedback(.success, trigger: saved)
+        .feedback(.confirm, trigger: saved)
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.height(420), .large])
         // Solid, so the cards behind don't bleed through the glass.
         .presentationBackground(Color(.systemBackground))

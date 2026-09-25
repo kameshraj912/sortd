@@ -66,7 +66,7 @@ extension View {
             }
         }
         .animation(.spring(duration: 0.35), value: note.wrappedValue)
-        .sensoryFeedback(.success, trigger: note.wrappedValue) { _, new in new?.ok == true }
-        .sensoryFeedback(.error, trigger: note.wrappedValue) { _, new in new?.ok == false }
+        .feedback(.confirm, trigger: note.wrappedValue) { _, new in new?.ok == true }
+        .feedback(.fail, trigger: note.wrappedValue) { _, new in new?.ok == false }
     }
 }
