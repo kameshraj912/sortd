@@ -80,16 +80,22 @@ struct OptionCard: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                // At the largest text sizes the words need the room.
-                if !typeSize.isAccessibilitySize { RowIcon(symbol) }
+            // At the largest text sizes the words need the whole width:
+            // the icon goes, and the check drops under the title, so a
+            // word never breaks as "Singa-pore" (UI pass, 25 Sep).
+            let stacked = typeSize.isAccessibilitySize
+            (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
+                if !stacked { RowIcon(symbol) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body).foregroundStyle(Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let detail {
                         Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if !stacked { Spacer(minLength: 8) }
                 Image(systemName: selected ? (multi ? "checkmark.circle.fill" : "largecircle.fill.circle") : "circle")
                     .font(.title3)
                     .foregroundStyle(selected ? Color.ink : Color.secondary.opacity(0.5))
