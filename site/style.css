@@ -734,14 +734,20 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 .early::before { content: ""; position: absolute; inset: auto -10% -60% -10%; height: 90%; pointer-events: none;
   background: radial-gradient(40% 60% at 20% 50%, rgba(240,100,61,.35), transparent 70%), radial-gradient(40% 60% at 50% 50%, rgba(123,107,240,.3), transparent 70%), radial-gradient(40% 60% at 80% 50%, rgba(43,176,122,.3), transparent 70%); }
 .early > * { position: relative; }
-.early::backdrop { background: #121214; }
+.early::backdrop { background: rgba(18,18,20,.28); }
+/* Behind the card: a blurred glimpse of the real app screens (only while gated). */
+.early-peek { display: none; }
+.gate .early-peek { display: flex; position: fixed; inset: -10%; z-index: 0; align-items: center; justify-content: center; gap: clamp(20px, 4vw, 56px);
+  background: #121214; filter: blur(14px) saturate(1.35) brightness(1.1); transform: rotate(-8deg) scale(1.05); pointer-events: none; }
+.gate .early-peek img { width: clamp(170px, 22vw, 300px); height: auto; border-radius: 12%/5.5%; box-shadow: 0 30px 60px rgba(0,0,0,.6); opacity: 1; flex: none; }
+.gate .early-peek img:nth-child(odd) { transform: translateY(12%); }
 .early img { width: 72px; height: 72px; border-radius: 17px; margin: 0 auto 18px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
 .early h2 { color: var(--invert-text); margin: 0 0 10px; font-size: clamp(28px, 6vw, 36px); text-wrap: balance; }
 .early p { margin: 0 auto; max-width: 360px; color: color-mix(in srgb, var(--invert-text) 72%, transparent); font-size: 17px; text-wrap: balance; }
 .early p b { color: var(--invert-text); font-variant-numeric: tabular-nums; }
 .early-actions { display: grid; gap: 10px; margin: 24px auto 18px; max-width: 320px; }
 /* Hide the site from the first paint while the home page is gated (set in site.js, in <head>). */
-.gate .site-header, .gate main, .gate .site-footer { visibility: hidden; }
+.gate .site-header, .gate main, .gate .site-footer { display: none; }
 .early-note { font-size: 13.5px !important; margin-top: 4px !important; }
 .early-note a { color: inherit; }
 @media (prefers-reduced-motion: no-preference) { .early[open] { animation: early-in .35s cubic-bezier(.2,.7,.2,1); } }
