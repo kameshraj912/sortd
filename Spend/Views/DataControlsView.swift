@@ -6,6 +6,9 @@ import UserNotifications
 /// wipe it. Required reading for the App Store privacy review, and simply
 /// fair to users.
 struct PrivacyView: View {
+    /// Observable: the switch redraws when the flag changes.
+    private let analytics = Analytics.shared
+
     var body: some View {
         List {
             ListPageTitle(title: "Privacy")
@@ -18,7 +21,21 @@ struct PrivacyView: View {
                 row("building.columns", "No bank logins", "Sortd never asks for your bank username or password.")
                 row("number", "Only the last 4 digits", "Cards are matched by their last 4 digits. Full card numbers are never asked for or stored.")
                 row("arrow.left.arrow.right", "Exchange rates", "Daily rates come from frankfurter.dev. Only currency codes and dates are sent.")
-                row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no analytics, and nothing is sold or shared.")
+                row("chart.bar.xaxis", "No ads, no tracking", "No advertising, no tracking across other apps or sites, and nothing is sold or shared.")
+            }
+            Section {
+                Toggle(isOn: Binding(
+                    get: { analytics.isEnabled },
+                    set: { on in
+                        // Off: the facade sends one .analyticsOptedOut, then nothing.
+                        if !on { log.notice("analytics: switch off, \(Analytics.Event.analyticsOptedOut.rawValue) then nothing") }
+                        analytics.isEnabled = on
+                    })) {
+                    Label("Share usage data", systemImage: "chart.bar.xaxis")
+                }
+                .accessibilityHint("Counts what you use, never what you spend.")
+            } footer: {
+                Text("Counts what you use, never what you spend. You can turn it off any time.")
             }
             Section {
                 Text("Sortd isn't a bank, can't move money and doesn't give financial advice. Amounts come from Apple Pay, receipts and what you type, so check your bank statement for exact figures.")
@@ -117,6 +134,8 @@ enum DataReset {
         if let domain = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: domain)
         }
+        // Back to an anonymous analytics id; the salt went with the defaults.
+        Analytics.shared.signedOut()
         // Recreate the saved (empty) card list so old cards can't come back,
         // and set these explicitly so open screens notice and setup reopens.
         CardBook.shared.replaceAll([])
