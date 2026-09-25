@@ -128,7 +128,9 @@ struct AddTransactionView: View {
             Form {
                 Section {
                     amountField
+                        .listRowSeparator(.hidden)
                     scanButton
+                        .listRowSeparator(.hidden)
                 }
                 .listRowBackground(Color.clear)
 
@@ -212,6 +214,12 @@ struct AddTransactionView: View {
                     Button("Cancel", systemImage: "xmark") {
                         if hasInput { confirmingDiscard = true } else { dismiss() }
                     }
+                    // Anchored here, not on the sheet, so it grows out of the
+                    // X instead of popping up in the middle of the screen.
+                    .confirmationDialog("Discard this purchase?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                        Button("Discard", role: .destructive) { dismiss() }
+                        Button("Keep Editing", role: .cancel) {}
+                    }
                 }
                 .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
@@ -231,10 +239,6 @@ struct AddTransactionView: View {
             // A half-typed purchase is real work; swiping the sheet away used
             // to bin it without a word.
             .interactiveDismissDisabled(hasInput)
-            .confirmationDialog("Discard this purchase?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { dismiss() }
-                Button("Keep Editing", role: .cancel) {}
-            }
             .sheet(isPresented: $showingScanner) { ReceiptScanView(onRead: apply) }
             .sheet(isPresented: $showingCategories) {
                 CategoryPickerSheet(selected: category, footer: CategoryPickerSheet.moveAllFooter) { picked in
