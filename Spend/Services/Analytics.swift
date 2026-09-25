@@ -89,7 +89,10 @@ final class Analytics {
         let host = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let enabled = UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
-        guard !key.isEmpty, let hostURL = URL(string: host.isEmpty ? PostHogSink.defaultHost : host) else {
+        // A host with no scheme is a broken xcconfig line ("//" is a comment
+        // there): fall back to the EU host rather than send to nowhere.
+        let hostText = host.contains("://") ? host : PostHogSink.defaultHost
+        guard !key.isEmpty, let hostURL = URL(string: hostText) else {
             log.notice("analytics off: no key (POSTHOG_API_KEY is empty), nothing is sent")
             return Analytics(sink: NoopSink(), defaults: .standard)
         }
