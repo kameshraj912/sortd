@@ -63,7 +63,7 @@ struct HelpFeedbackSettingsView: View {
         } message: {
             Text("Mail isn't set up on this iPhone. Send your feedback to \(Self.supportEmail) from any email app.")
         }
-        .sensoryFeedback(.success, trigger: copied)
+        .feedback(.confirm, trigger: copied)
     }
 
     /// A pre-filled mailto with just enough to debug a report: app version,

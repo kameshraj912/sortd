@@ -24,6 +24,7 @@ struct TransactionsScreen: View {
     @State private var showingAdd = false
     @State private var recategorising: Transaction?
     @State private var deleted = 0
+    @State private var undone = 0
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
@@ -104,7 +105,8 @@ struct TransactionsScreen: View {
         } message: { change in
             Text("\"All\" also puts new \(change.transaction.merchant) purchases in \(change.category.name).")
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: deleted)
+        .feedback(.delete, trigger: deleted)
+        .feedback(.undo, trigger: undone)
         .overlay(alignment: .bottom) {
             if !pending.isEmpty {
                 UndoToast(text: pending.text) { undoDelete() }
@@ -172,6 +174,7 @@ struct TransactionsScreen: View {
             closingToast = false
             pending.undo()
         }
+        undone += 1
     }
 
     /// Delete now, with no toast animation: used when the list goes away.
@@ -431,7 +434,7 @@ struct CategoryPickerSheet: View {
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
-            .sensoryFeedback(.selection, trigger: picked)
+            .feedback(.select, trigger: picked)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
