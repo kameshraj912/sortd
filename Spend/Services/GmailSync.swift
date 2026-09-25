@@ -198,9 +198,9 @@ enum GmailSync {
     private static func syncAccounts(_ emails: [String], in context: ModelContext, force: Bool, rethrow: Bool,
                                      job: Int) async throws -> EmailSync.Summary {
         var total = EmailSync.Summary()
-        // Gmail receipts are Pro. A lapsed subscription (or a build without
-        // Gmail) stops reading the inbox; the account stays until disconnected.
-        guard Features.gmail, ProStore.shared.isPro else {
+        // A build without Gmail never reads the inbox; the account stays
+        // until disconnected.
+        guard Features.gmail else {
             SyncStatus.gmail.update(.idle, job: job)
             return total
         }

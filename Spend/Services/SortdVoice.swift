@@ -35,44 +35,6 @@ nonisolated enum SortdVoice {
         "If this is a bank statement, try your bank's CSV export."
     }
 
-    #if DEBUG
-    // MARK: The code screen
-    //
-    // Debug builds only, like `SecretCodeSheet`. These codes only go to close
-    // friends, so the joke can be at their expense. It's the one screen in
-    // the app where the reader definitely knows whoever wrote it.
-
-    static var proUnlocked: String {
-        [
-            "Pro unlocked. You didn't pay for this and we're both going to have to live with that.",
-            "Pro unlocked. Someone gave you a code instead of a birthday present. Sit with that.",
-            "Pro unlocked. Free — the correct price for something you were never going to buy.",
-            "Pro unlocked. Congratulations on knowing exactly one useful person.",
-            "Pro unlocked. Every feature, none of the money. Classic you.",
-            "Pro unlocked. Somewhere a developer is quietly recalculating his runway.",
-        ].randomElement() ?? "Pro unlocked."
-    }
-
-    static var codeAlreadyUsed: String {
-        [
-            "Already unlocked. Don't be greedy.",
-            "You have it. One is plenty. Give the next one to someone with less.",
-            "Already on. Collecting these isn't a personality.",
-            "Unlocked already. Typing it twice isn't a strategy.",
-            "You've got it. Hoarding codes is a choice, and it's the wrong one.",
-        ].randomElement() ?? "Already unlocked. Don't be greedy."
-    }
-
-    static var notACode: String {
-        [
-            "No. Keep going though, it's fascinating to watch.",
-            "That's not it. Confidence, though. Real confidence.",
-            "Nope. Whoever gave you that code was lying to you.",
-            "Not a code. Just a word you typed with real conviction.",
-        ].randomElement() ?? "That's not it."
-    }
-    #endif
-
     // MARK: Hidden
 
     /// Long press the mark under a title.

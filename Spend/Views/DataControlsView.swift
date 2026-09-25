@@ -100,9 +100,6 @@ enum DataReset {
         // would otherwise lose.
         GoogleAuth.revokeAll(gmail.map(\.email))
         Keychain.deleteAll()
-        #if DEBUG
-        CompedPro.clear()
-        #endif
         // Any backup or spreadsheet copies made for sharing.
         Exports.clear()
         CardBook.shared.replaceAll([])

@@ -6,7 +6,6 @@ import SwiftData
 struct BillsRemindersSettingsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Reminders.enabledKey) private var reminders = false
-    @State private var showingPaywall = false
     @AppStorage(SetupProfile.checkInKey) private var checkIn = SetupProfile.CheckIn.needed.rawValue
     @State private var notificationsBlocked = false
     @Environment(\.openURL) private var openURL
@@ -41,7 +40,7 @@ struct BillsRemindersSettingsView: View {
             }
             Section {
                 NavigationLink {
-                    ProGate(feature: .recurring) { RecurringView() }
+                    RecurringView()
                 } label: {
                     Label("Subscriptions & Bills", systemImage: "arrow.triangle.2.circlepath")
                 }
@@ -49,7 +48,6 @@ struct BillsRemindersSettingsView: View {
                     Label("Remind Me the Day Before", systemImage: "bell")
                 }
                 .onChange(of: reminders) { _, on in
-                    if on, !ProStore.shared.isPro { reminders = false; showingPaywall = true; return }
                     Task {
                         if on, !(await Reminders.requestPermission()) { reminders = false }
                         let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
@@ -59,13 +57,12 @@ struct BillsRemindersSettingsView: View {
             } header: {
                 BoldHeader("Bills")
             } footer: {
-                Text("Part of Sortd Pro. A notification at 9 am the day before each subscription or bill.")
+                Text("A notification at 9 am the day before each subscription or bill.")
             }
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Bills & Reminders")
-        .sheet(isPresented: $showingPaywall) { PaywallView() }
         .alert("Notifications are off for Sortd", isPresented: $notificationsBlocked) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
