@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeClientSecret } from "../src/apple";
-import { handle } from "../src/index";
+import { handle } from "../src/handler";
 import {
   CLIENT_ID,
   KEY_ID,
