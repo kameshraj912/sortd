@@ -1,50 +1,63 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 
-/// Settings › About: purchase count, where things are stored, the app
-/// version, the tip jar, and the legal links.
+/// Settings › About: the app icon and version, a tagline, the tip jar,
+/// and the App Store / website / legal links.
 struct AboutSettingsView: View {
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var tipping = false
+    @Environment(\.requestReview) private var requestReview
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—" }
+    private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—" }
 
     var body: some View {
         List {
             ListPageTitle(title: "About")
             Section {
-                LabeledContent("Purchases", value: "\(transactions.count)")
-                LabeledContent("Stored", value: "On this iPhone only")
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                VStack(spacing: 8) {
+                    Image("BrandIcon")
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                        .clipShape(.rect(cornerRadius: 15, style: .continuous))
+                        .accessibilityHidden(true)
+                    Text("Sortd").font(.title2.weight(.semibold))
+                    Text("Version \(version) (\(build))")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Text("Tap to pay. Sortd writes it down.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
             }
+            .listRowBackground(Color.clear)
 
             Section {
                 Button { tipping = true } label: {
-                    HStack {
-                        Label("Leave a Tip", systemImage: "heart")
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    .contentShape(.rect)
+                    Label("Leave a Tip", systemImage: "heart")
                 }
                 .accessibilityHint("Opens the tip jar")
-            } footer: {
-                Text("Sortd is free. A tip unlocks nothing; it just says thanks.")
             }
             .tint(Color.ink)
 
             Section {
+                Button { requestReview() } label: {
+                    Label("Rate on the App Store", systemImage: "star")
+                }
+                Link(destination: URL(string: "https://sortd.page/changelog")!) {
+                    Label("What's New", systemImage: "sparkles")
+                }
+                Link(destination: URL(string: "https://sortd.page")!) {
+                    Label("Website", systemImage: "globe")
+                }
                 Link(destination: URL(string: "https://sortd.page/privacy")!) {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
                 Link(destination: URL(string: "https://sortd.page/terms")!) {
                     Label("Terms of Use", systemImage: "doc.text")
                 }
-                Link(destination: URL(string: "https://sortd.page/support")!) {
-                    Label("Support", systemImage: "questionmark.circle")
-                }
-            } header: {
-                BoldHeader("Legal")
-            } footer: {
-                Text("No Sortd account and no server. Your purchases, cards, settings and setup answers stay on this iPhone.")
             }
             .tint(Color.ink)
         }
