@@ -33,7 +33,10 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 BoldHeader("Security")
             } footer: {
-                Text("With the lock on, Sortd locks when you open it or come back after a minute. Widgets hide amounts on the Lock Screen and in StandBy unless Show Amounts When Locked is on.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Locks when you open the app or come back after a minute.")
+                    Link("Learn more", destination: URL(string: "https://sortd.page/help#app-lock")!)
+                }
             }
 
             Section {
@@ -47,16 +50,14 @@ struct PrivacySecuritySettingsView: View {
             }
 
             Section {
-                row("checklist", "Your setup answers",
-                    "Kept only on this iPhone. They choose your setup steps and check-in time. Change them in Help & Feedback › Run Setup Again. Delete All Data removes them.")
-                row("bell", "Notifications",
-                    "Made on this iPhone, with no push server. Your check-in never shows amounts. Bill reminders show the shop and amount.")
-                row("sparkles", "Apple Intelligence",
-                    "Where your iPhone has it, reads what you type, scan or get in a receipt email, on this iPhone. Nothing is sent anywhere. Check what it fills in.")
-                row("square.grid.2x2", "Widgets",
-                    "Show a summary kept on this iPhone. Only Sortd and its widgets can open it.")
+                row("checklist", "Your setup answers", "Kept only on this iPhone.")
+                row("bell", "Notifications", "Made on this iPhone. Check-ins never show amounts.")
+                row("sparkles", "Apple Intelligence", "Reads receipts on this iPhone. Nothing is sent anywhere.")
+                row("square.grid.2x2", "Widgets", "A summary kept on this iPhone.")
             } header: {
                 BoldHeader("Stays on This iPhone")
+            } footer: {
+                Link("Learn more", destination: URL(string: "https://sortd.page/help#stays-on-iphone")!)
             }
 
             Section {
