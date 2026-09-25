@@ -42,9 +42,31 @@ struct ApplePayStatusTests {
         #expect(status == .tapLogged(date: tapped, merchant: "Seven Seeds", amount: Decimal(string: "4.50")!, currency: "AUD"))
     }
 
-    @Test func onlyDemoDataTapsAreNotConnected() {
-        let t = tap("Uber", at: tapped, note: DemoData.marker)
+    /// `DemoData.load` only ever inserts with `source: .manual`, so an
+    /// untouched sample row never has `.tap` in `seenIn`.
+    @Test func untouchedDemoRowsAreNotConnected() {
+        let t = Transaction(date: tapped, merchant: "Uber", amount: Decimal(string: "4.50")!, currencyCode: "AUD",
+                            card: .other, category: .eatingOut, source: .manual, note: DemoData.marker)
         #expect(ApplePayStatus.resolve(lastReachedAt: nil, taps: [t]) == .notConnected)
+    }
+
+    /// Router feel check, 26 Sep 2026: a real refund tap deduped onto a
+    /// same-day, same-amount demo row (`TransactionLogger.merge` adds `.tap`
+    /// to `seenIn` but never clears `note`). It's a real event and must
+    /// count, even though the note still says "Sample purchase".
+    @Test func aRealTapMergedIntoADemoRowStillCounts() {
+        let t = tap("Uniqlo", amount: Decimal(string: "59.90")!, at: tapped, note: DemoData.marker)
+        let status = ApplePayStatus.resolve(lastReachedAt: nil, taps: [t])
+        #expect(status == .tapLogged(date: tapped, merchant: "Uniqlo", amount: Decimal(string: "59.90")!, currency: "AUD"))
+    }
+
+    /// A received tap with a shop and an amount beats "reached", even when
+    /// the flag was set at (or after) the same moment: the tap is the more
+    /// specific, more real event.
+    @Test func aReceivedTapWithShopAndAmountBeatsReached() {
+        let t = tap("Uniqlo", amount: Decimal(string: "59.90")!, at: tapped)
+        let status = ApplePayStatus.resolve(lastReachedAt: tapped, taps: [t])
+        #expect(status == .tapLogged(date: tapped, merchant: "Uniqlo", amount: Decimal(string: "59.90")!, currency: "AUD"))
     }
 
     @Test func onlyLegacyTestTapsAreNotConnected() {
