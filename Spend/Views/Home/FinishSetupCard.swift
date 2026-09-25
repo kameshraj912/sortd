@@ -26,8 +26,8 @@ struct FinishSetupCard: View {
         return SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards,
                                     // A finished setup counts even before the first shop tap:
                                     // Shortcuts reaching the app at all is the proof.
-                                    tapped: transactions.contains { $0.seenIn.contains(.tap) }
-                                        || LogPurchaseIntent.shortcutHasReachedApp,
+                                    tapped: ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt,
+                                                                   taps: transactions).isConnected,
                                     widgetAdded: widgetAdded, gmailConnected: !GmailSync.accounts.isEmpty)
     }
 

@@ -2,9 +2,10 @@ import Foundation
 import SwiftData
 
 /// The aha moment (overhaul sub-spec 6): the first purchase Sortd logged by
-/// itself, from an Apple Pay tap or a Gmail receipt. Sample data and the
-/// "Send a Test Tap" purchase never count: they prove nothing about the
-/// person's own spending.
+/// itself, from an Apple Pay tap or a Gmail receipt. Sample data and a
+/// legacy "Send a Test Tap" purchase (`LogPurchaseIntent.legacyTestMerchant`,
+/// the test button was removed 25 Sep 2026) never count: they prove nothing
+/// about the person's own spending.
 ///
 /// Pure detection plus two once-only flags in UserDefaults. Home reads the
 /// flags and shows the card; nothing here draws anything or asks for a
@@ -26,7 +27,7 @@ enum Activation {
     /// not count as the aha.
     static func detect(_ t: Transaction) -> Source? {
         guard t.note != DemoData.marker else { return nil }
-        guard t.merchant != TapTestButton.testMerchant, t.rawMerchant != TapTestButton.testMerchant else { return nil }
+        guard t.merchant != LogPurchaseIntent.legacyTestMerchant, t.rawMerchant != LogPurchaseIntent.legacyTestMerchant else { return nil }
         let seen = t.seenIn
         if seen.contains(.tap) { return .tap }
         if seen.contains(.email) { return .email }
