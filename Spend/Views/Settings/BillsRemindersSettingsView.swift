@@ -6,6 +6,7 @@ import SwiftData
 struct BillsRemindersSettingsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Reminders.enabledKey) private var reminders = false
+    @AppStorage(Reminders.paceAlertKey) private var paceAlert = true
     @AppStorage(SetupProfile.checkInKey) private var checkIn = SetupProfile.CheckIn.needed.rawValue
     @State private var notificationsBlocked = false
     @Environment(\.openURL) private var openURL
@@ -58,6 +59,15 @@ struct BillsRemindersSettingsView: View {
                 BoldHeader("Bills")
             } footer: {
                 Text("A notification at 9 am the day before each subscription or bill.")
+            }
+            Section {
+                Toggle(isOn: $paceAlert) {
+                    Label("Budget Pace Alert", systemImage: "gauge.with.needle")
+                }
+            } header: {
+                BoldHeader("Budget")
+            } footer: {
+                Text("One notification a month if you're on track to pass your budget, like \u{201C}On track to pass your budget by the 22nd\u{201D}. Only if notifications are already allowed.")
             }
         }
         .scrollContentBackground(.hidden)

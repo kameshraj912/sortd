@@ -111,11 +111,13 @@ struct TransactionsScreen: View {
                             titleVisibility: .visible,
                             presenting: confirmingChange) { change in
             Button("All \(change.total)") {
-                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context)
+                recategorise(change.transaction, to: change.category)
             }
             Button("Just This One") {
-                try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
-                                                    applyToOthers: false)
+                // Nobody else moves: nothing to offer Undo for.
+                PendingRecategorise.shared.dismiss()
+                _ = try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
+                                                        applyToOthers: false)
             }
             Button("Cancel", role: .cancel) {}
         } message: { change in
@@ -124,13 +126,16 @@ struct TransactionsScreen: View {
         .feedback(.delete, trigger: deleted)
         .feedback(.undo, trigger: undone)
         .overlay(alignment: .bottom) {
-            if !pending.isEmpty {
-                UndoToast(text: pending.text) { undoDelete() }
-                    .padding(.bottom, 12)
-                    .opacity(closingToast ? 0 : 1)
-                    .offset(y: closingToast ? 40 : 0)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            VStack(spacing: 8) {
+                RecategoriseUndoToast()
+                if !pending.isEmpty {
+                    UndoToast(text: pending.text) { undoDelete() }
+                        .opacity(closingToast ? 0 : 1)
+                        .offset(y: closingToast ? 40 : 0)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .padding(.bottom, 12)
         }
         // The list used to jump on every keystroke and every chip tap.
         .animation(.snappy, value: search)
@@ -204,11 +209,26 @@ struct TransactionsScreen: View {
     /// No other purchases from the shop: change it and learn, as before.
     /// Otherwise ask first, once the sheet has closed.
     private func pick(_ category: SpendCategory, for t: Transaction) {
-        let others = (try? TransactionLogger.samePlace(as: t, in: context)) ?? []
+        let others = (try? TransactionLogger.samePlace(as: t, in: context, excluding: pendingDeleteIDs)) ?? []
         if others.allSatisfy({ $0.category == category }) {
-            try? TransactionLogger.recategorise(t, to: category, in: context)
+            recategorise(t, to: category)
         } else {
             stagedChange = CategoryChange(transaction: t, category: category, total: others.count + 1)
+        }
+    }
+
+    /// Rows swiped away but not yet deleted: a category change leaves them
+    /// alone, and never counts them in "Moved N others".
+    private var pendingDeleteIDs: Set<UUID> { Set(pending.items.map(\.id)) }
+
+    /// Moves the shop and, when others moved too, offers Undo for a while
+    /// (the shared `PendingRecategorise` window).
+    private func recategorise(_ t: Transaction, to category: SpendCategory) {
+        guard let change = try? TransactionLogger.recategorise(t, to: category, in: context,
+                                                               excluding: pendingDeleteIDs) else { return }
+        PendingRecategorise.shared.stage(change)
+        if let text = change.toastText {
+            AccessibilityNotification.Announcement("\(text). Undo available.").post()
         }
     }
 
