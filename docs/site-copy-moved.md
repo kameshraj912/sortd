@@ -117,3 +117,28 @@ a direct link to it, matching the anchor named in the router's note. Content is
 otherwise already correct and doesn't need rewriting — check it against
 `Spend/Views/WalletSetupGuide.swift`'s `byHandPages` if the in-app steps ever
 change, since the two can drift.
+
+## Apple Pay Logging: "Good to Know" (26 Sep 2026, second feel check)
+
+**Why:** same page, same ask — Raj wants it short. The "Good to Know" section had
+three lines; the page now shows at most one short line under the timeout text
+("In-app and online Apple Pay comes from your email receipts." / "Add in-app and
+online Apple Pay by hand." when Gmail is off — `SetupGuideView`, the `Section`
+around `ApplePaySetupPanel` now has that as its `footer:`). The other two lines
+move here, both already anchored `support#apple-pay`:
+
+- **Missing amount:** already covered on the site, under `<h3>A tap shows the
+  wrong shop, amount or card</h3>`: "If Apple Pay sent no amount, Sortd still
+  saves the purchase and marks it so you can add the amount." No change needed —
+  except that sentence currently starts "Open Settings › Purchase Sources ›
+  Apple Pay Logging in Sortd. Under **Last Tap Received** you'll see exactly what
+  Apple Pay sent" — that section is gone from the app (it's a long-press on the
+  status card now, 26 Sep 2026, first feel check). Worth a small rewrite:
+  "Open Settings › Purchase Sources › Apple Pay Logging in Sortd and press and
+  hold the status card — you'll see exactly what Apple Pay sent."
+- **Currency follows time zone:** not on the site yet. Add under `<h2
+  id="apple-pay">`, after the existing `<p class="note">…</p>`:
+
+  ```html
+  <p class="note">The purchase currency follows your time zone, so travel spending is converted automatically.</p>
+  ```
