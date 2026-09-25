@@ -18,7 +18,7 @@ struct TipJarView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Sortd is free, and every feature stays free. If it helps you, you can leave a tip. A tip unlocks nothing; it just says thanks.")
+                    Text("Sortd is free. A tip unlocks nothing, it just says thanks.")
                         .font(.subheadline).foregroundStyle(.secondary)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
