@@ -78,10 +78,15 @@ struct TipJarTests {
         s.clearTransactions()
     }
 
-    /// A cancelled purchase gives `.cancelled`, and (per the spec) no
-    /// thank-you shows -- which for this pure layer means the outcome is
-    /// not `.thanked`.
-    @Test func cancellingGivesCancelledAndNoThanks() async throws {
+    /// A real user cancel gives `.cancelled` -- that's the builder's
+    /// handling of `Product.PurchaseResult.userCancelled`, which the
+    /// StoreKit Testing harness has no way to simulate. What the harness
+    /// *can* force is StoreKit 2 failing the purchase outright: with
+    /// `failureError` set, that surfaces as a bare `StoreKitError.unknown`,
+    /// not a user cancel. So this test pins the harness-reachable case: a
+    /// failed purchase is `.failed(_)`, never `.thanked`, and finishes no
+    /// transaction.
+    @Test func aFailedPurchaseIsNotThanked() async throws {
         let s = try Self.session()
         s.failTransactionsEnabled = true
         s.failureError = .paymentCancelled
@@ -92,10 +97,16 @@ struct TipJarTests {
 
         let outcome = await jar.tip(small)
 
-        guard case .cancelled = outcome else {
-            Issue.record("expected .cancelled, got \(outcome)")
+        guard case .failed = outcome else {
+            Issue.record("expected .failed, got \(outcome)")
             return
         }
+
+        var unfinished: [StoreKit.Transaction] = []
+        for await result in StoreKit.Transaction.unfinished {
+            if case .verified(let t) = result { unfinished.append(t) }
+        }
+        #expect(!unfinished.contains { $0.productID == small.id })
         s.clearTransactions()
     }
 
