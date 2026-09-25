@@ -19,8 +19,12 @@ import os
 /// person is the same PostHog person on every phone and after a reinstall,
 /// and the id never carries the email or the raw subject. `signedOut` resets.
 ///
-/// Consent: on by default (Settings › Privacy has the switch). Turning it
-/// off sends `analytics_opted_out` once, then nothing.
+/// Consent: until the user flips the switch (Settings › Privacy), the
+/// default depends on the iPhone's region: off in the EU/EEA, the UK and
+/// Switzerland (and when the region is unknown), where the law wants opt-in,
+/// and on elsewhere. The default is never stored, so only a real choice is.
+/// Off at launch means PostHog is not even set up and Sentry does not start.
+/// Turning it off sends `analytics_opted_out` once, then nothing.
 @MainActor @Observable
 final class Analytics {
     enum Event: String, CaseIterable {
@@ -112,17 +116,18 @@ final class Analytics {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let host = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let enabled = UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+        let region = Locale.current.region?.identifier
+        let enabled = UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? defaultConsent(regionCode: region)
         // A host with no scheme is a broken xcconfig line ("//" is a comment
         // there): fall back to the EU host rather than send to nowhere.
         let hostText = host.contains("://") ? host : PostHogSink.defaultHost
         guard !key.isEmpty, let hostURL = URL(string: hostText) else {
             log.notice("analytics off: no key (POSTHOG_API_KEY is empty), nothing is sent")
-            return Analytics(sink: NoopSink(), defaults: .standard)
+            return Analytics(sink: NoopSink(), defaults: .standard, regionCode: region)
         }
         let sink = PostHogSink(apiKey: key, host: hostURL, enabled: enabled)
         log.info("analytics on: PostHog at \(hostURL.host() ?? host, privacy: .public), sharing \(enabled ? "on" : "off", privacy: .public)")
-        return Analytics(sink: sink, defaults: .standard)
+        return Analytics(sink: sink, defaults: .standard, regionCode: region)
     }()
 
     /// Call once at launch so the SDK starts (and logs) before any event.
@@ -152,11 +157,12 @@ final class Analytics {
     nonisolated var identityHash: String? { identityBox.withLock { $0 } }
     private nonisolated let identityBox = OSAllocatedUnfairLock<String?>(initialState: nil)
 
-    init(sink: Sink, defaults: UserDefaults, isDemo: @escaping @MainActor () -> Bool = { DemoData.isActive }) {
+    init(sink: Sink, defaults: UserDefaults, isDemo: @escaping @MainActor () -> Bool = { DemoData.isActive },
+         regionCode: String? = Locale.current.region?.identifier) {
         self.sink = sink
         self.defaults = defaults
         self.isDemo = isDemo
-        self.enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        self.enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? Self.defaultConsent(regionCode: regionCode)
         if let kept = defaults.string(forKey: Self.identityHashKey), kept.count == 64 {
             identityBox.withLock { $0 = kept }
         }
@@ -167,7 +173,8 @@ final class Analytics {
         }
     }
 
-    /// Persisted at `analyticsEnabled`, default true. Off sends the one
+    /// Persisted at `analyticsEnabled` once the user flips it; until then
+    /// `defaultConsent(regionCode:)`. Off sends the one
     /// opt-out event on the transition, then `track` and `screen` do nothing
     /// until it is on again. Off while already off does nothing.
     var isEnabled: Bool {
@@ -195,12 +202,14 @@ final class Analytics {
     /// clears PostHog's own opt-out flag) and then puts the consent record
     /// back: the switch, when it was flipped, and the install date. Someone
     /// who turned analytics off and then chose Delete All Data stays off.
+    /// Someone who never chose still has no stored choice afterwards.
     func preserveConsent(across work: () -> Void) {
         let wasEnabled = enabled
+        let choice = defaults.object(forKey: Self.enabledKey) as? Bool
         let changedAt = defaults.object(forKey: Self.consentChangedAtKey)
         let installedAt = defaults.object(forKey: Self.installedAtKey)
         work()
-        defaults.set(wasEnabled, forKey: Self.enabledKey)
+        if let choice { defaults.set(choice, forKey: Self.enabledKey) }
         if let changedAt { defaults.set(changedAt, forKey: Self.consentChangedAtKey) }
         if let installedAt { defaults.set(installedAt, forKey: Self.installedAtKey) }
         enabled = wasEnabled
@@ -275,6 +284,34 @@ final class Analytics {
         sink.reset()
     }
 
+    /// Where analytics needs opt-in: the EU 27 (with its regions outside
+    /// mainland Europe that have their own region codes), the rest of the
+    /// EEA, the UK with its Crown dependencies and Gibraltar, and Switzerland.
+    nonisolated static let optInRegions: Set<String> = [
+        // EU 27
+        "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
+        "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
+        // EU regions with their own codes: French overseas regions, Saint
+        // Martin, Åland, the Canary Islands, Ceuta and Melilla
+        "GF", "GP", "MQ", "RE", "YT", "MF", "AX", "IC", "EA",
+        // Rest of the EEA
+        "IS", "LI", "NO",
+        // UK, Crown dependencies, Gibraltar
+        "GB", "GG", "JE", "IM", "GI",
+        // Switzerland
+        "CH",
+    ]
+
+    /// The switch before the user has touched it, from the iPhone's region
+    /// (`Locale.current.region`): off where the law wants opt-in, and off
+    /// when the region is unknown or not a country ("150" is Europe), on
+    /// elsewhere.
+    nonisolated static func defaultConsent(regionCode: String?) -> Bool {
+        guard let code = regionCode?.uppercased(), code.count == 2,
+              code.allSatisfy({ $0.isASCII && $0.isLetter }) else { return false }
+        return !optInRegions.contains(code)
+    }
+
     /// sha256(salt + provider + subject) as 64 lowercase hex characters.
     nonisolated static func distinctId(salt: String, provider: String, subject: String) -> String {
         SHA256.hash(data: Data((salt + provider + subject).utf8))
@@ -310,10 +347,30 @@ final class NoopSink: Analytics.Sink {
 /// The real thing. Session replay off, element autocapture off until the
 /// audit in the spec passes, screen views sent by hand (`Analytics.screen`)
 /// so only named screens are counted.
+///
+/// With sharing off at launch the SDK is not set up at all: set up, even
+/// opted out, it still fetches its remote config and feature flags. It is
+/// set up the first time the switch goes on.
 final class PostHogSink: Analytics.Sink {
     static let defaultHost = "https://eu.i.posthog.com"
 
+    private let apiKey: String
+    private let host: URL
+    private var isSetUp = false
+
     init(apiKey: String, host: URL, enabled: Bool) {
+        self.apiKey = apiKey
+        self.host = host
+        if enabled {
+            setUp()
+        } else {
+            log.notice("analytics: sharing is off, PostHog not set up")
+        }
+    }
+
+    private func setUp() {
+        guard !isSetUp else { return }
+        isSetUp = true
         // `init(apiKey:host:)` is deprecated in 3.82; same thing, new name.
         let config = PostHogConfig(projectToken: apiKey, host: host.absoluteString)
         config.sessionReplay = false
@@ -325,22 +382,46 @@ final class PostHogSink: Analytics.Sink {
         // Crashes are Sentry's (CrashReporting.swift), not PostHog's. Off by
         // default in 3.82; set here so a later default cannot switch it on.
         config.errorTrackingConfig.autoCapture = false
-        // The switch was off last time: the SDK must not send lifecycle
-        // events before the facade has a chance to say so.
-        config.optOut = !enabled
+        // Only set up with sharing on. A stored SDK opt-out from an earlier
+        // "off" is cleared by `setOptedOut(false)` right after.
+        config.optOut = false
         PostHogSDK.shared.setup(config)
     }
 
+    // Before set-up (sharing off since launch) there is nothing to send to;
+    // the facade already drops events while off.
     func capture(_ name: String, properties: [String: Any]) {
+        guard isSetUp else { return }
         PostHogSDK.shared.capture(name, properties: properties)
     }
 
-    func identify(_ id: String) { PostHogSDK.shared.identify(id) }
-    func reset() { PostHogSDK.shared.reset() }
-    func screen(_ name: String) { PostHogSDK.shared.screen(name) }
-    func isFeatureEnabled(_ key: String) -> Bool { PostHogSDK.shared.isFeatureEnabled(key) }
+    func identify(_ id: String) {
+        guard isSetUp else { return }
+        PostHogSDK.shared.identify(id)
+    }
+
+    func reset() {
+        guard isSetUp else { return }
+        PostHogSDK.shared.reset()
+    }
+
+    func screen(_ name: String) {
+        guard isSetUp else { return }
+        PostHogSDK.shared.screen(name)
+    }
+
+    func isFeatureEnabled(_ key: String) -> Bool {
+        guard isSetUp else { return false }
+        return PostHogSDK.shared.isFeatureEnabled(key)
+    }
 
     func setOptedOut(_ out: Bool) {
-        if out { PostHogSDK.shared.optOut() } else { PostHogSDK.shared.optIn() }
+        if out {
+            guard isSetUp else { return }
+            PostHogSDK.shared.optOut()
+        } else {
+            setUp()
+            PostHogSDK.shared.optIn()
+        }
     }
 }
