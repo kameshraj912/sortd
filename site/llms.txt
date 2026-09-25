@@ -1,16 +1,16 @@
 # Sortd Money
 
-> Sortd Money is an iPhone spending tracker. Apple Pay taps log themselves through one Shortcuts automation, and receipts can come from Gmail (read-only) or the camera. Data is stored on the iPhone. There is no Sortd server, no account, no ads, no analytics and no trackers. No bank passwords, ever.
+> Sortd Money is an iPhone spending tracker. Apple Pay taps log themselves through one Shortcuts automation, and receipts can come from Gmail (read-only) or the camera. Purchases are stored on the iPhone, with optional encrypted iCloud backup to the user's own iCloud. No ads, no tracking across apps, no bank passwords. Anonymous usage counts and crash reports (never amounts, shops or card digits) can be turned off in Settings. Signing in with Apple or Google is optional.
 
 - Platform: iPhone, iOS 26 or later
-- Price: free to use, including Apple Pay auto-logging. Sortd Pro (Gmail receipts, receipt camera, Insights, subscriptions and bills, category budgets) is monthly, yearly with a free trial for new subscribers, or a one-time purchase.
+- Price: free. Every feature, including Gmail receipts, the receipt camera, Insights, subscriptions and bills, and budgets. An optional tip jar unlocks nothing.
 - Currencies: 30+ currencies, converted at that day's European Central Bank rate.
-- Status: beta, via TestFlight.
+- Status: not released yet. The TestFlight beta is planned to open around 9 October 2026; sign up to get the link.
 
 ## Pages
 
 - [Home](https://sortd.page/): what Sortd does and how the Apple Pay logging works
-- [Help and support](https://sortd.page/support): setup, Gmail, card digits, currencies, deleting data
-- [Privacy policy](https://sortd.page/privacy): what data exists and where it stays
+- [Help and support](https://sortd.page/support): setup, Gmail, card digits, currencies, iCloud backup, accounts, deleting data
+- [Privacy policy](https://sortd.page/privacy): what data exists, where it stays, and what usage data is sent
 - [Terms of use](https://sortd.page/terms)
 - [Join the beta](https://sortd.page/beta)
