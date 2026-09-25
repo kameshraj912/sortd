@@ -1,0 +1,57 @@
+// Sortd account Worker (spec: docs/specs/2026-09-25-account-worker.md).
+// Revokes Sign in with Apple tokens and deletes PostHog persons for account deletion.
+// Stores nothing: no KV, no D1, no Durable Objects.
+//
+// Deploy (one session at a time, from a clean tree that matches the pushed branch):
+//   cd worker && npx wrangler deploy            -> sortd-account     (prod, account.sortd.page)
+//   cd worker && npx wrangler deploy --env dev  -> sortd-account-dev (dev, workers.dev)
+//
+// Secrets are NEVER in this file. Set each one with `npx wrangler secret put <NAME>`
+// (and again with `--env dev`; secrets are not shared between environments):
+//   APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_CLIENT_ID, APPLE_PRIVATE_KEY (.p8 PEM),
+//   POSTHOG_API_KEY (phx_, person:write on one project), POSTHOG_PROJECT_ID,
+//   CHALLENGE_KEY (openssl rand -base64 32). Dev only: DEV_BYPASS_TOKEN.
+// See worker/README.md.
+{
+  "name": "sortd-account",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-23", // newest date the bundled workerd (1.20260923.1, wrangler 4.140.0) supports
+  // Nothing about a request (bodies, headers, codes, ids) should reach Cloudflare logs.
+  // The Worker itself logs only route, status and error code.
+  "observability": { "enabled": false },
+  "workers_dev": false,
+  "routes": [{ "pattern": "account.sortd.page", "custom_domain": true }],
+  "vars": {
+    "ENV": "prod",
+    // PostHog's API host, not the ingest host (eu.i.posthog.com). Not verified with a real key yet.
+    "POSTHOG_API_HOST": "https://eu.posthog.com"
+  },
+  // Flood guards, same binding as site/wrangler.jsonc (BETA_LIMIT, namespace 1001).
+  // Counters live at the edge and are approximate; nothing is stored.
+  // namespace_id is just a unique number per limiter on the account.
+  "ratelimits": [
+    // Per cf-connecting-ip, checked before the body is read.
+    { "name": "IP_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+    // Per PostHog distinct id (already a hash), checked after App Attest passes.
+    { "name": "ID_LIMIT", "namespace_id": "1003", "simple": { "limit": 3, "period": 60 } }
+  ],
+  "env": {
+    // Dev Worker for DEBUG builds, simulators and Macs (no App Attest there).
+    // Accepts X-Sortd-Debug: <DEV_BYPASS_TOKEN> in place of App Attest, and
+    // accepts the appattestdevelop environment. Prod ignores both.
+    "dev": {
+      "name": "sortd-account-dev",
+      "workers_dev": true,
+      "routes": [],
+      "observability": { "enabled": false },
+      "vars": {
+        "ENV": "dev",
+        "POSTHOG_API_HOST": "https://eu.posthog.com"
+      },
+      "ratelimits": [
+        { "name": "IP_LIMIT", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
+        { "name": "ID_LIMIT", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } }
+      ]
+    }
+  }
+}
