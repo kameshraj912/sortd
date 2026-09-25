@@ -11,7 +11,7 @@ import UIKit
 final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProviding {
     /// iOS OAuth client in the "Sortd" Google Cloud project. Public by design
     /// (every iOS app ships its client ID); it is not a secret.
-    static let clientID = "36410288175-4hr5juudo6umb5pcv925t4rocn2riug7.apps.googleusercontent.com"
+    nonisolated static let clientID = "36410288175-4hr5juudo6umb5pcv925t4rocn2riug7.apps.googleusercontent.com"
     static let scopes = ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly"]
     /// Sign in with Google as an identity only (AccountStore): who the user
     /// is, nothing from Gmail. Never the readonly scope, so the identity
@@ -24,12 +24,13 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     }
     static var redirectURI: String { redirectScheme + ":/oauth2redirect" }
 
-    enum AuthError: LocalizedError {
-        case cancelled, noCode, noRefreshToken, missingGmailAccess, server(String)
+    enum AuthError: LocalizedError, Equatable {
+        case cancelled, noCode, noRefreshToken, missingGmailAccess, providerFailed, server(String)
         var errorDescription: String? {
             switch self {
             case .cancelled: "Sign-in was cancelled."
             case .noCode: "Google didn't finish signing in. Please try again."
+            case .providerFailed: "Google's answer didn't check out. Please try again."
             case .noRefreshToken: "Google didn't allow ongoing access. Please try again."
             case .missingGmailAccess: "Sortd needs permission to read receipts. Please tick the Gmail box when Google asks."
             case .server(let text): text
@@ -78,9 +79,24 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     func signInForIdentity() async throws -> Account {
         let (code, verifier) = try await authorize(scopes: Self.identityScopes)
         let tokens = try await Self.exchange(code: code, verifier: verifier)
-        guard let idToken = tokens.id_token, let claims = Self.claims(fromIDToken: idToken),
-              let sub = claims["sub"] as? String, !sub.isEmpty else { throw AuthError.noCode }
+        guard let idToken = tokens.id_token else { throw AuthError.providerFailed }
+        let account = try Self.identity(fromIDToken: idToken)
         Keychain.set(tokens.refresh_token ?? tokens.access_token, for: Self.identityTokenKey)
+        return account
+    }
+
+    /// The account in an ID token, after the checks that need no key: it
+    /// was minted for our client (`aud`), by Google (`iss`), and has not
+    /// expired. Anything else is `providerFailed`.
+    nonisolated static func identity(fromIDToken token: String, clientID: String = clientID, now: Date = .now) throws -> Account {
+        guard let claims = claims(fromIDToken: token) else { throw AuthError.providerFailed }
+        let audience: [String] = (claims["aud"] as? [String]) ?? (claims["aud"] as? String).map { [$0] } ?? []
+        guard audience.contains(clientID) else { throw AuthError.providerFailed }
+        guard let issuer = claims["iss"] as? String, ["https://accounts.google.com", "accounts.google.com"].contains(issuer) else {
+            throw AuthError.providerFailed
+        }
+        guard let exp = claims["exp"] as? Double, exp > now.timeIntervalSince1970 else { throw AuthError.providerFailed }
+        guard let sub = claims["sub"] as? String, !sub.isEmpty else { throw AuthError.providerFailed }
         return Account(provider: .google, subject: sub, email: claims["email"] as? String)
     }
 
@@ -90,6 +106,12 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         guard let token = Keychain.get(identityTokenKey) else { return }
         Keychain.delete(identityTokenKey)
         await revoke(token)
+    }
+
+    /// Forgets the identity token without telling Google (Gmail is
+    /// connected for the same account, and one revoke would end both).
+    static func forgetIdentityToken() {
+        Keychain.delete(identityTokenKey)
     }
 
     private static let identityTokenKey = "google-identity-token"
@@ -234,13 +256,13 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     }
 
     /// The `email` claim from Google's ID token (a JWT; its middle part is JSON).
-    static func email(fromIDToken token: String) -> String? {
+    nonisolated static func email(fromIDToken token: String) -> String? {
         claims(fromIDToken: token)?["email"] as? String
     }
 
     /// The ID token's payload, decoded and not verified: only for a token
     /// that came straight from Google's token endpoint (see `signInForIdentity`).
-    static func claims(fromIDToken token: String) -> [String: Any]? {
+    nonisolated static func claims(fromIDToken token: String) -> [String: Any]? {
         let parts = token.split(separator: ".")
         guard parts.count >= 2, let data = Data(base64URL: String(parts[1])),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
