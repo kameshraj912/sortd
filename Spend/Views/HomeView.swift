@@ -279,8 +279,7 @@ struct HomeView: View {
 
     /// One line about categories over their limit, this month only.
     private var overLimitLine: String? {
-        // Category limits are Pro: a lapsed subscription hides the warning too.
-        guard isCurrentMonth, !limits.isEmpty, ProStore.shared.isPro else { return nil }
+        guard isCurrentMonth, !limits.isEmpty else { return nil }
         let over = CategoryBudgets.progress(for: monthItems, limits: limits)
             .filter { $0.value.status == .over }
             .sorted { $0.value.left < $1.value.left }

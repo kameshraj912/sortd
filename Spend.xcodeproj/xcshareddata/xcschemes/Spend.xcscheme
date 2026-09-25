@@ -68,7 +68,7 @@
          </BuildableReference>
       </BuildableProductRunnable>
       <StoreKitConfigurationFileReference
-         identifier = "../../Spend/SortdPro.storekit">
+         identifier = "../../Spend/SortdTips.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
