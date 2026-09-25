@@ -54,12 +54,17 @@ First step: `AccountStore` with sign in, sign out and delete, behind a protocol,
     - clear the Keychain and call `reset()`;
     - offer "also delete purchases on this phone and in iCloud" (the Delete All Data path).
   - **Export:** CSV and backup already exist.
-- **Analytics.** Call `identify` with `sha256(appSalt + provider + subject)` only. Never the email or name.
+- **Analytics.** Call `identify` with `sha256(appSalt + provider + subject)` only. Never the email or name. `appSalt` is `Analytics.accountSalt`, one fixed string compiled into the app (not a secret; it only stops a plain lookup of a known subject). A per-phone salt would make one person two PostHog persons on two phones, and Delete All Data would wipe it. `AccountStore.hash` and `Analytics.signedIn` use that one function and salt.
+- **Delete order.** The provider and the Worker are asked first, with the hash made from the still-signed-in account; the local wipe comes after. A job that could not be sent is queued in `accountPendingDeletes` with the hash inside it, never recomputed.
 
 ## Files
 
-- New `Spend/Services/AccountStore.swift`.
-- `Spend/Services/GoogleAuth.swift`: an identity-only `signIn(scopes:)` variant.
+- New `Spend/Services/AccountStore.swift`: the protocols, `AccountStore`, `KeychainAccountStore` (own Keychain service, this device only), `WorkerRevoker` (URL from `ACCOUNT_WORKER_URL` in `Config.xcconfig`; empty means every delete is queued), `AnalyticsIdentitySink`, `AppleCredentialChecker`, `AppleIdentityProvider`, `GoogleIdentityProvider`. Always compiled.
+- The account screen and the Settings row are behind a new `SORTD_SIGNIN` compile flag, off in both configs (the capability needs the paid account). Turn on: Xcode > Spend target > Build Settings > Active Compilation Conditions > add `SORTD_SIGNIN`.
+- `WorkerRevoker` follows `2026-09-25-account-worker.md`: `POST /v1/challenge` (route and the body's sha256), App Attest on the challenge (a fresh key each time, `X-Attest-*` headers), then `/v1/apple/revoke` with a fresh authorization code (Apple's sheet again at delete time) or `/v1/posthog/delete-person` with the hash. 429, 503 and network errors are retried; 502 and any 4xx are dropped with the reason shown. An Apple revoke is never queued (the code lives five minutes): the user sees Apple's manual steps instead. A Google identity revoke is skipped when Gmail is connected for the same address, since one revoke ends the whole grant.
+- The queue (`accountPendingDeletes`) holds kind, provider, sha256(subject) and the identity hash: never the subject or the email. Delete All Data keeps the queue across its defaults wipe and queues the PostHog person delete when signed in.
+- Delete order for analytics: `reset()` first, so nothing is sent under the person being deleted, and no `signed_out` event. Sign Out sends `signed_out` then `reset()`.
+- `Spend/Services/GoogleAuth.swift`: `identityScopes` and the identity-only `signInForIdentity()`; `revokeIdentity()` for delete.
 - `Spend/Services/Keychain.swift`, `Spend/Services/Analytics.swift` (identify and reset).
 - `Spend.entitlements`: the Sign in with Apple capability. **Needs the paid account.**
 - New `Spend/Views/Settings/AccountSettingsView.swift`; `Spend/Views/SettingsView.swift`, `Spend/Views/DataControlsView.swift`.

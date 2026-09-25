@@ -11,6 +11,9 @@ struct SettingsView: View {
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage(Money.homeKey) private var home = Money.detectedHome
     @AppStorage(AppLock.enabledKey) private var lockEnabled = false
+    #if SORTD_SIGNIN
+    @State private var account = AccountStore.shared
+    #endif
 
     var body: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
@@ -18,6 +21,13 @@ struct SettingsView: View {
                 ListPageTitle(title: "Settings")
 
                 Section {
+                    #if SORTD_SIGNIN
+                    NavigationLink {
+                        AccountSettingsView()
+                    } label: {
+                        SettingsRowLabel(title: "Account", subtitle: accountSubtitle, symbol: "person.crop.circle")
+                    }
+                    #endif
                     NavigationLink {
                         PurchaseSourcesSettingsView()
                     } label: {
@@ -84,6 +94,12 @@ struct SettingsView: View {
             .onAppear { Exports.clear() }
         }
     }
+
+    #if SORTD_SIGNIN
+    private var accountSubtitle: String {
+        account.current.map { "Signed in with \($0.provider.name)" } ?? "Not signed in"
+    }
+    #endif
 
     private var sourcesSubtitle: String {
         guard let last = transactions.first(where: { $0.seenIn.contains(.tap) }) else {
