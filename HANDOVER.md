@@ -1,257 +1,112 @@
 # Sortd — handover
 
-Last updated 24 September 2026, morning. Written for whoever picks this up next.
-Read `docs/AgentPipeline.md` first: it is how work gets done here now.
-Everything below was verified, not assumed — where I could not verify
-something, it says so.
+Written 25 September 2026, after the free-app overhaul (PRs #30–#41).
+Read `docs/AgentPipeline.md` first: it is the working bible for how work gets done here.
+Everything below was verified, not assumed — where I could not verify something, it says so.
 
-## Where things are
+## 1. Where things are
 
 | | |
 |---|---|
-| Repo | `/Users/kameshraj/Developer/Sortd` (moved here from `~/Documents/Spend`) |
-| Branch | `main` @ `ed752cc` — **pushed**, CI green, nothing outstanding |
-| Tests | **445 passing**, 23 known bugs skipped, 468 in the run; measured with `scripts/test.sh` on 24 Sep (`--known-bugs` runs the 29, `--storekit` adds ProStoreTests) |
-| Pipeline | `docs/AgentPipeline.md` · agents in `.claude/agents/` · skills `sortd-*` · scripts in `scripts/` |
+| Repo | `/Users/kameshraj/Developer/Sortd` (folder on disk is still named `Spend`; the product is Sortd) |
+| Branch | `main` @ `18a2d1c` (`git rev-parse --short origin/main`, 25 Sep) |
+| Tests | **733** at PR #41 — this is the figure I was given for this handover; I read PR #41's body directly and it does **not** state a total, only its own new suites (TipRulesTests 29, TipCopyTests 6, TipStateTests 13). Total run count **not verified** by me. |
+| Known bugs | **21**, from the pre-overhaul baseline (`docs/ux-research/baseline-2026-09-25/README.md`, `scripts/test.sh --known-bugs` on commit `c379a0e`). Confirmed unchanged through the overhaul: sub-spec 1's and 8's gates both require the count not to rise, and PR #41's body says "known-bug set unchanged from baseline (21)". I did not re-run the script myself (docs-only task, no builds). |
+| CI | Green on `main` at PR #42 (Xcode 26.6, 733 tests). The Actions quota ran out in the small hours of 25 Sep (GitHub: "job was not started"), so PRs #30 to #41 were gated locally: `scripts/check.sh --all` plus a comparison of the failing known-bug test **names** against the baseline list. Minutes came back during the day; the first CI runs then failed the **build** step on Xcode 26.6 (`Activation.swift`: a generic-inference difference between Swift 6.4 locally and 6.2 on the runner) and one sign-in test that compared JSON key order. Both fixed in PR #42. Lesson: local Xcode 27 is not proof; CI on the pinned Xcode is. |
+| Pipeline | `docs/AgentPipeline.md` — agents in `.claude/agents/`, skills `sortd-*`, scripts in `scripts/`. This is the working bible; it now also has a "Lessons from the first overhaul" section (see below). |
 
-Branches still holding work (`scripts/worktree-audit.sh` shows the live picture; all
-are pushed to origin now, and `docs/AgentPipeline.md` says why none should be merged whole):
+## 2. What shipped in the overhaul
 
-- **Ported to `main` overnight on 24 Sep** (each through its own PR, CI green): the
-  preflight debug-flag check, the static launch screen and "App Lock off"
-  (`launch-screen`), beta Pro cached + Redeem Code + `BetaAccessTests` (`358c363`),
-  the faster Gmail sync with `SyncStatus`, `Perf` and Gmail tests (`speed-loading`),
-  and the abuse findings as known-bug tests (`abuse-findings`).
-- **Raj's call, not merged:** `forwarding-inbox` (6,300 lines: a Cloudflare Worker
-  that receives forwarded receipts, not wired into the app), `paywall-steps` (a
-  multi-step paywall, now committed, depends on `isBetaFree` which main has since),
-  confetti and `RefreshCoordinator` in `pull-refresh`, `LaunchOverlay` in
-  `launch-screen`, and PR #8 `rename-sortd` (only the `Spend/`→`Sortd/` folder rename
-  is not on main; the PR conflicts and would undo the CI fix, so redo it fresh if wanted).
-- **Nothing left to port:** `ux-refresh`, `settings-redesign`, `copy-trim`, `beta-ops`,
-  `beta-rc1` (a merge of the others). Their worktrees hold only screenshot folders.
-- `beta-prep` is retired. The base branch is `main`.
+Nine sub-specs planned in `docs/specs/2026-09-25-free-app-overhaul-overview.md` (approved by Raj 25 Sep). Eight shipped; one is still open.
 
----
+**1 — Free, tip jar** (PR #30, docs follow-up PR #31). Removes `ProStore`, `CompedPro`, `PaywallView`, `SecretCodeSheet`; adds `Services/TipJar.swift`, `Settings/TipJarView.swift`, `SortdTips.storekit`. `SORTD_BETA` is gone (confirmed: not in `project.pbxproj` any more). No compile flag — nothing is gated, everything is unlocked. **Not verified:** the three tip consumables exist in App Store Connect (blocked on Raj, see §4).
 
-## What got done
+**2 — Analytics** (PR #33). `Services/Analytics.swift`, consent switch in Settings › Privacy. Keyed by `POSTHOG_API_KEY`/`POSTHOG_HOST` (see §3). No compile flag; PostHog feature flags are used for A/B only. Signed-in identity is `sha256(accountSalt + provider + subject)` — see the `accountSalt` trap below. **Not verified:** real PostHog project, region, autocapture audit.
 
-### 25 Sep — the free-app overhaul, starting
+**2b — Crash reports (Sentry, live)** (PR #36). `Services/CrashReporting.swift`, keyed by `SENTRY_DSN`. Shares the analytics consent switch — crash reports are off if consent is off, if the DSN is empty, or in DEBUG builds (confirmed in `CrashReporting.swift`: three separate `log.notice("crash reports off: …")` guards). No compile flag. **Not verified:** a real DSN, "Prevent storing IP addresses" being set server-side, the forced-crash check.
 
-Raj decided to remove Pro and make the whole app free, with a tip jar. Nine sub-specs,
-ship order and gate for each: `docs/specs/2026-09-25-free-app-overhaul-overview.md`.
+**3 — iCloud backup** (PR #32). `Services/CloudBackup.swift`, `Settings/BackupDataSettingsView.swift`, `Spend.entitlements`. Behind the **`SORTD_ICLOUD`** compile flag — confirmed off in both Debug and Release in `project.pbxproj` (the flag string does not appear anywhere in the file). `CloudBackup` itself and its tests (fakes only) compile and run regardless; only the Settings section, save hook, scene-phase backup and the Delete All Data step are compiled out. Chose option A (snapshot to CloudKit private DB), not live sync — see §7. **Not verified:** device, real iCloud account, a real restore round-trip (the sub-spec's own gate requires this on a real device).
 
-### 24 Sep, overnight — the agent pipeline, and the old branches sorted
+**4 — Sign-in (Apple or Google)** (PR #39; spec drafted in PR #35; Worker implemented in PR #38). `Services/AccountStore.swift`, `GoogleAuth.swift`, `Settings/AccountSettingsView.swift`, `Spend.entitlements`. Behind the **`SORTD_SIGNIN`** compile flag — also confirmed off in both configs. Keyed by `ACCOUNT_WORKER_URL` (see §3). `AccountStore` and its providers always compile; only the account screen and its Settings row are gated. **Not verified:** real device, App Attest against a real key, real Apple/Google accounts, the Worker's production secrets.
 
-- **CI was red** on every push since 23 Sep. One cause: `accessibilityPrefersCrossFadeTransitions`
-  only ships in the Xcode 27 SDK and GitHub's `latest-stable` was Xcode 26.6. Fixed with a
-  `#if compiler(>=6.4)` guard; CI now pins Xcode 26.6 (PR #9).
-- **Scripts and hooks** (PR #10): `scripts/worktree-new.sh`, `worktree-done.sh`, `build.sh`,
-  `test.sh`, `sim.sh`, `worktree-audit.sh`, `clean.sh`; pre-commit blocks secrets, big files,
-  debug flags outside `#if DEBUG`; pre-push refuses direct pushes to `main`. GitHub branch
-  protection is refused on this private repo without a paid plan (Raj has the Student plan;
-  the benefit is not active on the account).
-- **Ten agents** in `.claude/agents/` (PR #11) and **ten skills** `sortd-idea` … `sortd-status`
-  plus the `bug-hunt` workflow and `docs/testing/attacks.md` (PR #12).
-- **The abuse findings are on `main`** as known-bug tests, 29 of them, CI green (PR #13). The
-  currency substring bug is fixed.
-- **Ports from old branches** (PRs #14, #15, #16), listed under "Where things are".
-- **The UI adversarial pass ran** (PR #17, `docs/UIPass-2026-09-24.md`): no crashes, 2 P1,
-  11 P2, 3 P3. See "Still to do → 2".
+**5 — Motion** (PR #34). `Components/Feedback.swift`, one haptic map across 14 files, direction-aware transitions. The day-by-day Activity pager is behind the DEBUG-only **`SPEND_ACTIVITY_DAYS`** env var (`ActivityView.swift`); the list view stays the default until the pager gets its own UI pass.
 
-### The Apple Pay bug — fixed
+**6 — Onboarding** (PR #37). `SetupFlow.swift`, tap-through setup with sensible defaults, the activation moment. Behind the DEBUG-only **`SPEND_NEW_SETUP`** env var (`SetupFlow.usesNewFlow`); the old flow is still the shipped default. Flag removal is a follow-up PR (§5).
 
-Raj reported that real Apple Pay taps logged nothing.
+**7 — Tips (TipKit)** (PR #41). `Components/Tips.swift`, six tips, one on screen at a time, pure eligibility rules. **`SPEND_TIPS_NOW`** is a DEBUG convenience only (skips the first-session wait and visit counts so a tip shows immediately for testing) — the tips themselves ship unconditionally, there is no feature flag gating them. Review found one must-fix (an off-screen Apple Pay tip blocking the month tip) and five should-fixes, both applied per the PR body.
 
-**Root cause:** the ready-made shortcut's field mappings were **silently dropped
-on import**. A parameter written as a bare `WFTextTokenAttachment` is discarded
-by Shortcuts. It has to be a `WFTextTokenString` holding the variable as an
-attachment at position 0. Confirmed by importing the file on an iOS 26.4
-simulator before and after — every field came back a grey placeholder before,
-intact after.
+**8 — Instant** (PR #40). Undo for category moves, suggestions, budget pace, outcomes. No compile flag. Gate required known-bug count not to rise — confirmed still 21.
 
-**Design now: one mapping only.** A Text action holds the whole Shortcut Input
-and passes it to the intent's `transaction` parameter, where
-`WalletTapText.parse` splits it.
+**9 — Brand** (in progress, no PR yet). Icon renders and new store screenshots. What exists: flat-PNG app icon with light/dark/tinted appearances, `Brand/icon-source/*.html`, locked wordmark and colours (`Brand/README.md`). Missing: a layered Icon Composer icon for proper Liquid Glass rendering. **Waiting on Raj to approve the icon renders** (§4).
 
-> The three property mappings (Amount, Merchant, Card or Pass) do survive import
-> now, but their property *sub-selection* does not — so all three would receive
-> the whole transaction and the shop name would be a blob.
-> **Do not re-add them without testing on a real device.**
+## 3. Secrets and switches
 
-- Builder: `scripts/build-apple-pay-shortcut.py`
-- Sign: `shortcuts sign --mode anyone --input <out> --output site/apple-pay.shortcut`
-- Live at `https://sortd.page/apple-pay.shortcut` — 22,243 bytes,
-  sha256 `8e91834720c17f2b6b722c9dc8b0b1f5a91b38b6619f2f05a96a764fd1c79b99`
+**`Secrets.xcconfig`** (gitignored; copy from `Secrets.xcconfig.example`, next to `Config.xcconfig`; `#include?` means a missing file never breaks the build):
 
-Also added: a 5-page picture guide for the setup, a **Send a Test Tap** button
-(proves Sortd's half only — it works even with no shortcut installed, and the
-copy says so), and a three-state connected status so a configured user stops
-seeing "Waiting for your first tap".
+| Key | Empty behaviour |
+|---|---|
+| `POSTHOG_API_KEY` | Analytics off. Logs `"analytics off: no key (POSTHOG_API_KEY is empty), nothing is sent"` once. The key is write-only (`phc_...`) — a leak allows fake events, not reads. |
+| `POSTHOG_HOST` | Defaults to `https://eu.i.posthog.com` in `Config.xcconfig` even if unset. |
+| `SENTRY_DSN` | Crash reports off. Logs `"crash reports off: no DSN (SENTRY_DSN is empty)"`. Also off in DEBUG builds and when analytics consent is off, regardless of the DSN. |
+| `ACCOUNT_WORKER_URL` | Account deletes are queued on the phone (hash only) and retried at the next launch, instead of calling the Worker immediately. |
 
-**Not fixable by us:** Apple's Wallet trigger waits for the issuer to push
-transaction details and silently gives up on timeout — radars FB14035016 /
-FB16379100, broken since iOS 18. Unattended terminals (vending machines,
-transit, parking) are the worst case. FinanceKit is US/UK only, so there is no
-alternative for AU/SG.
+**Worker secrets** (`worker/README.md`, `cd worker && npx wrangler secret put <NAME>`, repeat with `--env dev` for the dev environment — secrets are not shared between environments):
+`APPLE_TEAM_ID`, `APPLE_CLIENT_ID` (`com.kameshraj.spend`), `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (piped in from the `.p8`), `POSTHOG_API_KEY` (the personal `phx_...` key, not the app's `phc_...` one), `POSTHOG_PROJECT_ID`, `CHALLENGE_KEY` (random, `openssl rand -base64 32`). Dev only: `DEV_BYPASS_TOKEN`, which also has to go in the app's DEBUG xcconfig and must never reach the prod Worker.
 
-### Polish — six passes, measured not guessed
+**Compile flags** (Xcode → Spend target → Build Settings → Active Compilation Conditions → add to both Debug and Release). Confirmed all three below are absent from `project.pbxproj` today — nothing is turned on yet:
 
-| What | Before | After |
-|---|---|---|
-| `Color.down` as text | 3.66:1 — **failed WCAG AA** | 5.83:1 |
-| `Color.up` as text | 3.09:1 — **failed** | 5.03:1 |
-| Setup buttons | 62.7pt | 51pt |
-| Restore Purchases / Terms / Privacy | ~16pt | 44pt |
+- **`SORTD_ICLOUD`** — needs paid enrolment first, then the iCloud capability on the App ID.
+- **`SORTD_SIGNIN`** — needs paid enrolment first, then the Sign in with Apple capability on the App ID (the entitlement is already listed in `Spend.entitlements`; without the capability the Apple button fails at runtime with error 1000).
+- `SORTD_GMAIL` is already on in Release (`SWIFT_ACTIVE_COMPILATION_CONDITIONS = "SORTD_GMAIL $(inherited)"`) — unrelated to the overhaul, listed here only so the other two aren't mistaken for it.
 
-- VoiceOver read "S$25.00" as "S, dollars twenty-five" → added `Money.spoken()`
-  and switched every label that speaks an amount.
-- Home's spending chart announced three category names and nothing else. Now
-  labelled, with individually navigable points.
-- One `Font.money` — amounts had been split between SF Rounded and plain SF, so
-  numbers changed shape between screens.
-- Primary CTAs use `.glassProminent`. Apple's `PrimitiveButtonStyle` owns the
-  press animation *and* Reduce Motion. **I first wrote a custom scale style and
-  research corrected me — never stack a custom scale on a system glass style.**
-- Activity search → `.searchable`; no results → `ContentUnavailableView.search`.
-- Row → detail uses `matchedTransitionSource` + `navigationTransition(.zoom)`.
-- Reduce Motion and `accessibilityPrefersCrossFadeTransitions` (26.4,
-  availability-gated) honoured.
-- Data loss stopped: the add sheet no longer bins typed input on swipe-away;
-  number pads got a keyboard Done; "Not Recurring" got an undo; sample-data
-  Clear got a confirmation.
-- Pull-to-refresh was **completely silent** — ran the sync, threw the result
-  away. Now reports what it found or that it failed.
-- Import set `busy` true and false in one runloop turn, so the spinner never
-  drew and a big statement looked like a freeze.
-- Delete All Data and Replace Everything are **alerts**, not dialogs. A dialog
-  anchored to a row renders as a narrow popover that wrapped the message into
-  five ragged lines and hid Cancel.
-- SE/Pro/Pro Max clipping: budget overflow, bank grid truncation, Insights row
-  wrap, sheet detent clipping Remove, `FlowLayout` placing chips off-screen.
+Enrolment is the blocker for both of the above — see §4.
+
+## 4. Only Raj can do these
+
+1. **GitHub Actions minutes.** The quota ran out once on 25 Sep and came back the same day. Decide the standing fix: a small spending limit on the card, a public repo, or a self-hosted runner. Until then a heavy day can exhaust it again.
+2. **PostHog project**: create it, get the project key, pick the region (default assumed EU per the overview spec, **not verified** as actually created), and turn on **Discard client IP data**.
+3. **Sentry DSN**: create the project, get the DSN for `Secrets.xcconfig`, and turn on **Prevent storing IP addresses** (Settings › Security & Privacy) so the server side matches the app's `sendDefaultPii = false`.
+4. **App Store Connect**: create the three tip consumables (sub-spec 1's gate needs these before any store build).
+5. **Paid Apple Developer enrolment**, then the **iCloud**, **Sign in with Apple**, and **App Attest** capabilities on the App ID — this unblocks sub-specs 3 and 4 and the two compile flags above.
+6. **A Sign in with Apple key (.p8)**: Apple Developer → Keys → new key → Sign in with Apple, configured for `com.kameshraj.spend`. Downloads once — save it. Note the Key ID and Team ID. Then run the `wrangler secret put` list in §3.
+7. **Approve the icon renders** for sub-spec 9 (still in progress — no PR yet).
+8. **Retest Apple Pay at a staffed till** (carried over from the last handover — the vending-machine test used the pre-fix shortcut; nobody has retested the fixed one on a real device). Steps unchanged: Sortd → Apple Pay step → Get the Shortcut → Replace → buy something small on a Visa at a staffed till, not a vending machine → check Settings → Purchase Sources → Apple Pay Logging → Last Tap Received.
+
+The disputed-tests item from the last handover is closed: of the 30 abuse findings from the 24 Sep run, 1 was fixed and Raj had 7 deleted as disputed, leaving the 21 in the current baseline. Nothing open there.
+
+## 5. Still to do
+
+- **Sub-spec 9 screenshots** — new App Store screenshot set, once the icon renders are approved.
+- **Live Activities** (Gmail sync progress, monthly budget) and **Share Extension** (share a receipt into Sortd) — each needs a new app target, so each gets its own spec first. Not started.
+- **UI pass after the overhaul**: see `docs/UIPass-2026-09-25.md` — this file does **not exist yet** (confirmed); it is the planned follow-up to `docs/UIPass-2026-09-24.md`, and the router is expected to fill in the counts once it runs.
+- **CloudKit live sync (option B)**, if Raj wants it — its own migration-first sub-spec, see §7.
+- **Flag removals** for `SORTD_ICLOUD`, `SORTD_SIGNIN`, `SPEND_NEW_SETUP` and `SPEND_ACTIVITY_DAYS` once each has had its own UI pass and Raj has approved making it the default.
+
+## 6. Traps — read before spending a day on these
+
+Carried over, still true:
+
+- **Two research agents surveyed the wrong checkout once** and reported a P0 that did not exist on the branch being worked on. Always verify an agent's survey against the actual worktree before acting.
+- **Do not give several agents the same worktree.** Test files land in the shared `SpendTests/`; one half-written file breaks every build.
+- **One simulator per worktree**, or sessions fight over it (`scripts/worktree-new.sh` clones one per task automatically).
+- **StoreKit tests are simulator-dependent.** Use the iOS 27 simulator, not iOS 26.x. New this round: they also flake right after a simulator has just booted — if one fails immediately after boot, rerun it alone before assuming it's a real failure.
+- **Apple doc bugs.** `.searchToolbarBehavior(.minimize)`, not `.minimized`; `toolbarMinimizationBehavior(_:for:)`, not `toolbarMinimizeBehavior`.
+- **Disk.** Each `derivedDataPath` is ~3.5 GB; `scripts/clean.sh --yes` frees it.
+
+New from this overhaul:
+
+- **CI pins Xcode 26.6; local is 27.** An SDK-only symbol needs `#if compiler(>=6.4)`, not just `#available`. This bit the pipeline once already (`accessibilityPrefersCrossFadeTransitions`); check for the same pattern in new SDK-only APIs.
+- **Zero-width characters in test log lines break naive name comparisons.** The known-bug gate compares test names from `scripts/test.sh --known-bugs` output against the baseline list by hand; a plain string match can silently fail on copy-pasted names.
+- **zsh does not word-split unquoted variables in loops.** A `for x in $list` that relies on bash-style word-splitting will not iterate the way it does in bash — quote or use an array.
+- **The analytics `accountSalt`** (`Analytics.swift:91`) is one fixed string compiled into the app, on purpose — it is what makes the signed-in PostHog id the same across reinstalls and phones. Do not treat a hardcoded salt here as a bug to fix.
+- **`Backup.restore` inserts `Transaction` rows directly** (`Backup.swift:379`), by design — it is restoring rows the logger already checked once, not new data. `CLAUDE.md` names only `DemoData` as allowed to bypass `TransactionLogger`; this is a known, accepted exception, not an oversight.
+
+## 7. Decisions still open
+
+1. **Privacy policy entity.** Whether it names a person or a business entity. Needs a lawyer (per the overhaul's own "for a lawyer" line: EU consent and the policy name).
+2. **Site copy.** Being redone separately from the app; its privacy page must match the App Privacy label before App Store submission.
+3. **CloudKit option A vs live sync (option B).** Shipped: option A, a snapshot to the CloudKit private DB (reuses the tested `Backup.Snapshot` format and restore path, no model change). Option B — `ModelConfiguration` with CloudKit, live sync across devices — is deferred; it needs its own migration-first sub-spec (it would drop `.unique` in a `SchemaV2`) and ships alone if Raj wants it.
 
 ---
 
-## Still to do
-
-### 1. The abuse findings — on `main` as known-bug tests
-
-`SpendTests/AbuseMoneyAgentTests.swift` and `AbuseDataAgentTests.swift` are on
-`main`. Every test that fails is tagged `.knownBug` and skipped unless you ask:
-
-```
-scripts/test.sh --known-bugs
-```
-
-CI does not run them, so it stays green. **23 tagged tests fail.** (The run on 24 Sep
-2026 found 30, one only on CI; one is fixed and Raj had the 7 disputed ones deleted.) Each
-test's doc comment says what is wrong and where. Fixing one means removing its tag.
-
-**Fixed:** `AmountParser.currency(in:)` matched markers as substrings
-(MYRTLE → ringgit, CARMENS → ringgit, HOURS. → rupees). Markers must now
-stand alone.
-
-### 2. UI adversarial pass — ran on 24 Sep, findings not fixed
-
-Full table in `docs/UIPass-2026-09-24.md`. iPhone SE, 18 Pro and 18 Pro Max on iOS 27;
-default, dark, AX5 and Reduce Motion. Worst first:
-
-- **P1** Paywall at AX5: the "Start Free Trial" footer covers the plan list, so only the
-  default plan can be picked; the terms are cut off; Restore/Terms/Privacy break mid-word.
-- **P2 (was "P1, P0 if confirmed")** Undo on the delete toast: `finding-verifier` read the
-  code (`ActivityView.swift:103-158`). Taps cannot fall through a live toast. But the purchase
-  is really deleted 6 s after the swipe, and the toast then fades for 0.35 s during which a
-  visible "Undo" does nothing and the tap reaches the row below. Fix: longer window (8–10 s,
-  like Mail), and commit only after the fade ends.
-- **P2** Insights 1W/1M/3M chips wrap at normal size and are unreadable at AX5.
-- **P2** Yen shows two decimals everywhere except the Home headline (`JP¥69,326.02`).
-- **P2** The Settings gear sits over the search Cancel button.
-- **P2** The monthly budget changed from JP¥185,295 to JP¥1,850,000 with no save; step unknown.
-- **Not checked:** VoiceOver in the running app (the simulator's accessibility inspect was
-  unavailable; labels were read from code, and `Money.spoken` gives "25.00 Australian dollars",
-  not words), emoji input, tab switching during a real sync, import with a real file, About,
-  Help, Cards & Appearance, Learned Categories.
-
-### 3. No backup, no CloudKit
-
-Local-only SwiftData: losing the phone loses every transaction. The biggest
-structural gap and the clearest miss against HIG Agency.
-
-### 4. Dynamic Type at AX5 — now looked at
-
-`xcrun simctl ui <udid> content_size accessibility-extra-extra-extra-large` works on this
-Xcode. The UI pass covered Home, Activity, Insights, add sheet, detail, paywall and the
-onboarding budget step at AX5. The paywall is the one that breaks (above).
-
-### 5. Smaller, all traceable to Apple docs
-
-`navigationSubtitle` (0 uses), `SnippetIntent` on the Siri intents,
-`UndoableIntent` on `LogWalletTapIntent`, `accessibilityChartDescriptor`,
-`ViewThatFits` instead of `minimumScaleFactor` on money rows, concentric
-corners, layered app icon in Icon Composer, widget accented-rendering check.
-
-### 6. `SORTD_BETA` — done
-
-Removed by the free-app overhaul, sub-spec 1 (`docs/specs/2026-09-25-free-app-overhaul-1-free.md`):
-the whole app is free now, so there is no paywall left to give away. PR pending.
-
----
-
-## The one thing only Raj can do
-
-His vending-machine test used the **old** shortcut, before the fix. The fixed
-file went live afterwards. Nobody has retested.
-
-1. Sortd → Apple Pay step → **Get the Shortcut**
-2. Choose **Replace**
-3. Buy something small at a **staffed till** on a Visa — not a vending machine
-4. Read Settings → Purchase Sources → Apple Pay Logging → **Last Tap Received**
-
-That line decides whether the fix worked or whether it is Apple's timeout.
-
-## Decisions still open
-
-1. **UI pass finding 13** (the budget jumped to JP¥1,850,000 with no save): `finding-verifier`
-   read every writer and found none that fires without a tap. Unreproduced; watch for it.
-2. **Sentry** — decided: keep it, run it live. Lands in sub-spec 2b
-   (`docs/specs/2026-09-25-free-app-overhaul-2b-crash-reports.md`), alongside the App
-   Privacy label change to Crash Data, linked. Preflight still fails on it until then.
-3. **Privacy policy** — whether it names a person or a business entity. Needs a
-   lawyer.
-4. **Old branches** — `forwarding-inbox`, `paywall-steps`, confetti, `LaunchOverlay`, and the
-   folder rename in PR #8. Build, drop, or leave; see "Where things are".
-5. **GitHub Pro** — the Student pack should give it; until it is active on the account there is
-   no branch protection, only the pre-push hook.
-
----
-
-## Traps — read before spending a day on these
-
-- **Two research agents surveyed the wrong checkout** and reported a "P0
-  FlatTabBar" that did not exist on the branch being worked on. Always verify an
-  agent's survey against the actual worktree before acting.
-- **Do not give several agents the same worktree.** Their test files land in the
-  shared `SpendTests/`, folder-synced groups compile everything, and one
-  half-written file breaks every build.
-- **One simulator each**, or they fight over it.
-- **StoreKit tests are simulator-dependent.** `ProStoreTests` fails on the
-  iPhone 17 Pro / iOS 26.4 sim (`DCA7DC0C-…`) with `Product.products(for:)`
-  returning nil, and passes on iPhone 18 Pro / iOS 27 (`E8041708-…`). It is not
-  a code fault. **Use the iOS 27 simulator.**
-- **Disk.** It filled to 98% and git began failing with `mmap failed`. Each
-  `derivedDataPath` is ~3.5 GB — delete them when done.
-- **Apple doc bugs.** The symbol is `.searchToolbarBehavior(.minimize)`, not
-  `.minimized` (Apple's own sample is wrong), and it is
-  `toolbarMinimizationBehavior(_:for:)`, not `toolbarMinimizeBehavior`.
-
-## Things I got wrong
-
-Listed so nobody repeats them:
-
-- I said `preflight.sh` prints "Not ready" but exits 0. **False** — it exits 1.
-  My test was reading `tail`'s exit status.
-- I said the SE Activity list clipped rows under the tab bar. **False** — I
-  scrolled to the end and it clears.
-- I acted on an agent survey of the wrong checkout before verifying it.
-- I first replaced `.buttonStyle(.plain)` with a hand-rolled scale on primary
-  buttons; Apple's own styles already do it better.
+*Things I could not verify from this worktree, listed together: anything needing a device, a real account, a real PostHog/Sentry project, or App Attest against real hardware; whether the App Store Connect tip products already exist.*

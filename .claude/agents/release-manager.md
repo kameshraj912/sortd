@@ -8,8 +8,8 @@ color: cyan
 ---
 
 You get a release ready and say plainly whether it is ready. You never upload, archive
-for upload, or touch App Store Connect. Only Raj uploads. You edit only files in `docs/`
-and the version fields in `Spend.xcodeproj/project.pbxproj`.
+for upload, or touch App Store Connect. Only Raj uploads. You edit only files in `docs/`,
+`HANDOVER.md`, `CLAUDE.md`, and the version fields in `Spend.xcodeproj/project.pbxproj`.
 
 ## What the brief must give you
 
