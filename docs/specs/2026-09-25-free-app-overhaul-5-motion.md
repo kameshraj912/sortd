@@ -53,7 +53,7 @@ Add a `.feedback(_:trigger:)` modifier and replace the 20 calls. Never on scroll
 - Home month change: `.push(from: .trailing/.leading)` on the totals, by direction, and `.opacity` under Reduce Motion or Prefer Cross-Fade. Reuse setup's `crossFade` logic. Move it to a shared helper, keeping its `#if compiler(>=6.4)` guard.
 - Tab switches stay the system's (instant). HIG does not ask for animated tab changes.
 
-**3. Behind a DEBUG flag `SPEND_ACTIVITY_DAYS` (TeuxDeux reference):** Activity as one day per page, swiping between days. The old list stays until the UI pass (pipeline rule 3).
+**3. Day pages (TeuxDeux reference):** Activity as one day per page, swiping between days. Shipped behind a DEBUG flag until the UI pass (pipeline rule 3); the default since 25 Sep 2026, with the old list left in for the DEBUG escape `SPEND_ACTIVITY_LIST=1`. The header says where the day sits ("Yesterday · 2 of 14") and one swipe moves one day.
 
 First step: the `Feedback` map and its tests.
 
