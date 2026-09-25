@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import Observation
 import PostHog
+import os
 
 /// The one door to PostHog. Nothing else in the app calls the SDK; every
 /// screen goes through `Analytics.shared`, which sends named events with
@@ -126,6 +127,12 @@ final class Analytics {
     /// Privacy guard trail, for tests: "event.key" per property dropped.
     private(set) var violations: [String] = []
 
+    /// The identified id (the salted hash) while signed in, else nil. Read
+    /// by `CrashReporting` from Sentry's own thread, so it sits behind a
+    /// lock rather than on the main actor.
+    nonisolated var identityHash: String? { identityBox.withLock { $0 } }
+    private nonisolated let identityBox = OSAllocatedUnfairLock<String?>(initialState: nil)
+
     init(sink: Sink, defaults: UserDefaults, isDemo: @escaping @MainActor () -> Bool = { DemoData.isActive }) {
         self.sink = sink
         self.defaults = defaults
@@ -157,6 +164,8 @@ final class Analytics {
                 defaults.set(false, forKey: Self.enabledKey)
                 sink.setOptedOut(true)
             }
+            // One switch for both: crash reports follow analytics consent.
+            CrashReporting.consentChanged(to: newValue, analytics: self)
         }
     }
 
@@ -232,11 +241,14 @@ final class Analytics {
             salt = (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max)) }.joined()
             defaults.set(salt, forKey: Self.saltKey)
         }
-        sink.identify(Self.distinctId(salt: salt, provider: provider, subject: subject))
+        let id = Self.distinctId(salt: salt, provider: provider, subject: subject)
+        identityBox.withLock { $0 = id }
+        sink.identify(id)
     }
 
     /// Sign-out and Delete All: back to an anonymous id.
     func signedOut() {
+        identityBox.withLock { $0 = nil }
         sink.reset()
     }
 
