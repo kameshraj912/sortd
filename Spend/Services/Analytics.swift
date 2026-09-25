@@ -37,6 +37,8 @@ final class Analytics {
         case applePayTapLogged = "apple_pay_tap_logged"
         case tabOpened = "tab_opened"
         case tipLeft = "tip_left"
+        case tipShown = "tip_shown"
+        case tipUsed = "tip_used"
         case backupCompleted = "backup_completed"
         case restoreCompleted = "restore_completed"
         case analyticsOptedOut = "analytics_opted_out"
