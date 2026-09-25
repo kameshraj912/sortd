@@ -31,7 +31,7 @@ enum Suggestions {
             var latest: Transaction
         }
         var byShop: [String: Tally] = [:]
-        for t in history where !t.refunded && t.category != .transfers && !t.merchant.isEmpty {
+        for t in history where counts(t) {
             let key = MerchantName.key(t.merchant)
             guard !key.isEmpty else { continue }
             let day = calendar.component(.weekday, from: t.date)
@@ -49,9 +49,19 @@ enum Suggestions {
 
         return byShop.values
             .filter { $0.visits >= minimumVisits && $0.score > 0 }
-            .sorted { a, b in a.score == b.score ? a.latest.date > b.latest.date : a.score > b.score }
+            .sorted { a, b in
+                if a.score != b.score { return a.score > b.score }
+                return a.latest.merchant < b.latest.merchant
+            }
             .prefix(limit)
             .map { Suggestion(merchant: $0.latest.merchant, category: $0.latest.category) }
+    }
+
+    /// A real visit: not sample data, not the setup test tap, not a refund
+    /// or a transfer.
+    static func counts(_ t: Transaction) -> Bool {
+        !t.refunded && t.category != .transfers && !t.merchant.isEmpty
+            && t.note != DemoData.marker && t.merchant != TapTestButton.testMerchant
     }
 
     /// Same weekday 1, same kind of day (both weekdays, both weekend) 0.6,
