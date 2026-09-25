@@ -52,6 +52,8 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
+        // The aha: the first purchase a tap or a receipt logged by itself.
+        Activation.watchSaves()
         #if SORTD_ICLOUD
         CloudBackup.watchSaves()
         #endif
