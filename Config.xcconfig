@@ -1,0 +1,14 @@
+// Base build configuration for the Spend app target (Debug and Release).
+//
+// PostHog analytics: the project key and host. Both are read into the app's
+// Info.plist (POSTHOG_API_KEY, POSTHOG_HOST) and from there by
+// Spend/Services/Analytics.swift. With an empty key the app runs with
+// analytics off and logs "analytics off: no key" once.
+//
+// Never put the real key here: copy Secrets.xcconfig.example to
+// Secrets.xcconfig (gitignored) and fill it in. It is included below when it
+// exists and its values win over these defaults.
+POSTHOG_API_KEY =
+POSTHOG_HOST = https://eu.i.posthog.com
+
+#include? "Secrets.xcconfig"
