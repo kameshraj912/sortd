@@ -338,7 +338,11 @@ final class AccountStore {
         let hash: String
 
         var encoded: String {
-            String(decoding: (try? JSONEncoder().encode(self)) ?? Data(), as: UTF8.self)
+            // Sorted keys: the queue is compared as strings, and key order
+            // differs between Swift versions (CI's Xcode 26.6 vs local 27).
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            return String(decoding: (try? encoder.encode(self)) ?? Data(), as: UTF8.self)
         }
 
         init(kind: Kind, provider: AccountProvider, subjectHash: String, hash: String) {
