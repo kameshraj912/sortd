@@ -50,6 +50,7 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
+        CloudBackup.watchSaves()
         Self.removeAppsScriptLink()
         // Share-sheet copies of the backup or CSV from a past session.
         Exports.clear()
@@ -258,6 +259,8 @@ struct RootView: View {
         })
         .onChange(of: scenePhase) { _, phase in
             lock.sceneChanged(to: phase, enabled: lockEnabled, onboarded: onboarded && !Self.forceSetup)
+            // Leaving the app is the natural moment to back up what was done.
+            if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
         }
         // A tap on a widget opens the app at what the widget was showing.
         .onOpenURL { url in
