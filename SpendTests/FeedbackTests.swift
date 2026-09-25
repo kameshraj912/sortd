@@ -13,6 +13,14 @@ import SwiftUI
 ///   undo -> .impact(weight: .light), aha -> .success.
 /// There is no case for scroll: haptics never fire on scroll.
 ///
+/// `SensoryFeedback.impact(weight:)` values compare equal to each other on
+/// this SDK regardless of weight, so weight cannot be pinned through
+/// `sensory` alone. `Feedback` also exposes `var impactWeight:
+/// SensoryFeedback.Weight?` — `.medium` for delete, `.light` for undo, `nil`
+/// for every other case — and `sensory` must be built from `impactWeight`
+/// for those two cases (`.impact(weight: impactWeight!)`) so the property
+/// and the map cannot drift apart.
+///
 /// `Motion` decides whether the app slides or cross-fades (Reduce Motion, or
 /// iOS 26.4+ Prefer Cross-Fade Transitions), and which way Home's month
 /// change should slide. Tie rule pinned here: the same month counts as
@@ -50,16 +58,14 @@ struct FeedbackTests {
         #expect(Feedback.aha.sensory == .success)
     }
 
-    /// On this SDK (Xcode 27.0 / iOS 27, checked with a standalone script
-    /// outside this test run), `SensoryFeedback.impact(weight:)` values are
-    /// `==` to each other regardless of weight, and `String(describing:)`
-    /// collapses to the same text too — both routes the spec allows for
-    /// comparison are blind to weight here. This assertion is written the
-    /// way the contract asks (`!=` via Equatable); expect it to stay red on
-    /// this SDK even once `Feedback` exists correctly, and say so rather
-    /// than loosen it to hide the platform gap.
+    /// On this SDK, `SensoryFeedback.impact(weight:)` values are `==` to
+    /// each other regardless of weight (checked with a standalone script
+    /// outside this test run), so weight is pinned through `impactWeight`
+    /// instead of `sensory ==`.
     @Test func deleteAndUndoDifferInWeight() {
-        #expect(Feedback.delete.sensory != Feedback.undo.sensory)
+        #expect(Feedback.delete.impactWeight == .medium)
+        #expect(Feedback.undo.impactWeight == .light)
+        #expect(Feedback.select.impactWeight == nil)
     }
 
     /// Exhaustive: every case has a mapping, and there is no eighth case for
