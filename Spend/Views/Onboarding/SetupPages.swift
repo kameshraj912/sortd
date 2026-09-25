@@ -145,6 +145,22 @@ enum SetupCopy {
         SetupFlow.usesNewFlow ? new[step] : old[step]
     }
 
+    /// The currency step once a currency other than the phone's is picked
+    /// (the default line would then be untrue). Nil in the old flow.
+    static var currencyPicked: String? {
+        SetupFlow.usesNewFlow ? "Totals will show in this one. Change it any time." : nil
+    }
+
+    /// The email step. With iCloud backup in the build, receipts can leave
+    /// the phone, for the person's own iCloud only: say so.
+    private static let emailLine: String = {
+        #if SORTD_ICLOUD
+        "It stays on your phone, and in your iCloud if you turn backup on."
+        #else
+        "Read on your iPhone. Nothing leaves it."
+        #endif
+    }()
+
     private static let old: [SetupFlow.Step: String] = [
         .welcome: "Your spending, logged by itself.",
         .goals: "Pick any.",
@@ -170,7 +186,7 @@ enum SetupCopy {
         .cards: "Tap each bank you pay with. Fine to skip for now.",
         .cardDetails: "So receipts find the right card. Fine to skip today.",
         .applePay: "About a minute, once. Or do it later from Home.",
-        .email: "Read on your iPhone. Nothing leaves it.",
+        .email: emailLine,
     ]
 }
 
