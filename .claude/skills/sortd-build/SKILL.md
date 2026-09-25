@@ -42,9 +42,9 @@ Ask Raj, **one question at a time**, only for what is missing:
      the CI Xcode (`#if compiler(>=...)` for new SDK symbols)."
    - "Run `scripts/build.sh` and `scripts/test.sh` before reporting. Paste the last
      lines. Commit by name on `<task>`. Do not push, do not merge."
-6. Router checks the report with scripts, not trust: `scripts/build.sh`, then
-   `scripts/test.sh`, in the worktree. Both must pass. Also `scripts/test.sh --known-bugs`
-   if a known bug was fixed, to see the count drop by one.
+6. Router checks the report with scripts, not trust: `scripts/check.sh` in the worktree
+   (clean tree, build, full tests; its exit code is the answer, never grep a pipe). Add
+   `--known-bugs` if a known bug was fixed, to see the count drop by one.
 7. Spawn `code-reviewer` (`subagent_type: code-reviewer`). Brief: "Review
    `git -C <path> diff main...<task>`. Read only." Any **must fix** goes back to
    swift-builder, then steps 6 and 7 again. After two rounds still failing, stop and
