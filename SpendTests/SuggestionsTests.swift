@@ -73,4 +73,45 @@ struct SuggestionsTests {
 
         #expect(suggestions.first?.merchant == "Common Grounds")
     }
+
+    @Test func sampleRowsAreNeverSuggested() throws {
+        var history: [Transaction] = []
+        for day in tuesdays {
+            let p = IncomingPurchase(date: date(2026, 9, day, 8, 0), merchant: "Sample Cafe", amount: 6.50, currency: "AUD",
+                                     card: .other, source: .manual, note: DemoData.marker)
+            history.append(try TransactionLogger.log(p, in: context).transaction)
+        }
+        let now = date(2026, 10, 6, 8, 10)
+        #expect(Suggestions.forNow(history, now: now, calendar: utc).isEmpty)
+    }
+
+    @Test func testTapsAreNeverSuggested() throws {
+        var history: [Transaction] = []
+        for day in tuesdays {
+            history.append(try log(TapTestButton.testMerchant, at: date(2026, 9, day, 8, 0)))
+        }
+        let now = date(2026, 10, 6, 8, 10)
+        #expect(Suggestions.forNow(history, now: now, calendar: utc).isEmpty)
+    }
+
+    @Test func refundedRowsAreNeverSuggested() throws {
+        var history: [Transaction] = []
+        for day in tuesdays {
+            let t = try log("Returned Goods", at: date(2026, 9, day, 8, 0))
+            t.refunded = true
+            history.append(t)
+        }
+        let now = date(2026, 10, 6, 8, 10)
+        #expect(Suggestions.forNow(history, now: now, calendar: utc).isEmpty)
+    }
+
+    @Test func anExactTieBreaksByMerchantName() throws {
+        var history: [Transaction] = []
+        for day in tuesdays {
+            history.append(try log("Zed Cafe", at: date(2026, 9, day, 8, 0)))
+            history.append(try log("Alpha Cafe", at: date(2026, 9, day, 8, 0)))
+        }
+        let now = date(2026, 10, 6, 8, 10)
+        #expect(Suggestions.forNow(history, now: now, calendar: utc).map(\.merchant) == ["Alpha Cafe", "Zed Cafe"])
+    }
 }
