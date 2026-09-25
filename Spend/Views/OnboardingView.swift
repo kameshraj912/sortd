@@ -628,7 +628,7 @@ struct OnboardingView: View {
 
     private var setupTasks: [SetupTask] {
         SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty,
-                             tapped: tapConnected || shortcutReached,
+                             tapped: applePayStatus.isConnected,
                              widgetAdded: false, gmailConnected: !gmail.isEmpty)
     }
 
@@ -1072,114 +1072,18 @@ struct OnboardingView: View {
     /// run does this). Enough to say the setup is done.
     private var shortcutReached: Bool { LogPurchaseIntent.shortcutHasReachedApp }
 
+    /// Every state comes from a real event (spec 2026-09-25, option A): a
+    /// real ▶ run or a real shop tap, never the app's own check.
+    private var applePayStatus: ApplePayStatus {
+        ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
+    }
+
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay by itself", SetupCopy.line(.applePay))
-            tapStatus
-
-            // Step 1: the ready-made shortcut. It arrives with the amount,
-            // shop and card already matched to the parts of the tap, which
-            // is the part people get wrong by hand.
-            VStack(alignment: .leading, spacing: 12) {
-                miniStep(1, "Add the Sortd shortcut", "Opens Safari, then tap the download and Add Shortcut.")
-                Button {
-                    openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
-                    shortcutOpened = true
-                } label: {
-                    Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
-                        .font(.headline)
-                        .foregroundStyle(Color.onBrand)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glassProminent)
-                .tint(Color.brand)
-                .controlSize(.large)
-
-                Divider()
-
-                miniStep(2, "Turn it on for your cards", "Swipe through the pictures — they show every screen in Shortcuts.")
-                // Reading the path ("Automation › + › Wallet › …") was the
-                // part people got lost in, so show the screens instead.
-                if #available(iOS 27.0, *) {
-                    WalletSetupGuide(route: .quick)
-                }
-                Button {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
-                } label: {
-                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                        .font(.headline)
-                        .foregroundStyle(Color.ink)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-
-                Divider()
-
-                // Without this, the only way to know whether any of it worked
-                // was to go and buy something.
-                miniStep(3, "Check it works", "Runs a made-up purchase through the same code a real tap uses, then lets you delete it.")
-                TapTestButton()
-            }
-            .setupCard()
-            .padding(.top, 10)
-
-            Button { showingGuide = true } label: {
-                HStack(spacing: 12) {
-                    RowIcon("list.number")
-                    Text("Rather do it by hand?").font(.body).foregroundStyle(Color.ink)
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .frame(minHeight: 56)
-                .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 10)
+            ApplePaySetupPanel(status: applePayStatus) { showingGuide = true }
+                .padding(.top, 10)
         }
-    }
-
-    /// Checks itself: listens for the first tap and celebrates when it lands.
-    private var tapStatus: some View {
-        // Three states, not two. Without the middle one, someone who has
-        // finished the setup but not yet paid for anything sees the same
-        // screen as someone who has done nothing — so it reads as broken.
-        HStack(spacing: 14) {
-            Image(systemName: tapConnected ? "checkmark" : (shortcutReached ? "link" : "wave.3.right"))
-                .font(.title3.weight(.bold))
-                .foregroundStyle(Color.onBrand)
-                .frame(width: 46, height: 46)
-                .background(tapConnected ? Color.up : Color.brand, in: .circle)
-                .symbolEffect(.variableColor.iterative, isActive: !tapConnected && !shortcutReached)
-                .symbolEffect(.bounce, value: tapConnected)
-                .contentTransition(.symbolEffect(.replace))
-            VStack(alignment: .leading, spacing: 2) {
-                if let t = firstTap {
-                    Text("Connected").font(.headline)
-                    Text("Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant)")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else if shortcutReached {
-                    Text("Connected and running").font(.headline)
-                    Text("The shortcut reached Sortd. Your next Apple Pay tap in a shop gets logged.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Waiting for your first tap").font(.headline)
-                    Text("Do the steps below, then pay with Apple Pay.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tapConnected || shortcutReached ? Color.up.opacity(0.12) : Color.card,
-                    in: .rect(cornerRadius: 20, style: .continuous))
-        .animation(.snappy, value: tapConnected)
-        .feedback(.confirm, trigger: tapConnected)
-        .accessibilityElement(children: .combine)
     }
 
     /// What the finished Shortcuts action looks like, so people can check theirs.
