@@ -1,0 +1,107 @@
+import Testing
+import Foundation
+import SwiftData
+import UserNotifications
+@testable import Spend
+
+/// Pins behaviours from `docs/specs/2026-09-25-free-app-overhaul-1-free.md`
+/// (sub-spec 1: the whole app is free). Everything Pro used to gate --
+/// reminders, category-limit alerts, the bills Siri answer -- now works with
+/// no Pro condition at all.
+@MainActor
+struct FreeAppTests {
+
+    // MARK: Category limits
+
+    private func store() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        return ModelContext(container)
+    }
+
+    /// `Reminders.checkCategoryLimits` (`Spend/Services/Reminders.swift:77`
+    /// today) still guards on `ProStore.shared.isPro`. In the test process
+    /// nothing is ever purchased, so with the gate still in place this stays
+    /// red: it schedules no over-limit notification even though a category
+    /// is well over its limit and reminders are on.
+    @Test func categoryLimitCheckHasNoProCondition() async throws {
+        let standardDefaults = UserDefaults.standard
+        let wasEnabled = standardDefaults.bool(forKey: Reminders.enabledKey)
+        standardDefaults.set(true, forKey: Reminders.enabledKey)
+        defer { standardDefaults.set(wasEnabled, forKey: Reminders.enabledKey) }
+
+        let center = UNUserNotificationCenter.current()
+        for request in await center.pendingNotificationRequests() where request.identifier.hasPrefix("category-limit-") {
+            center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+        }
+
+        let context = try store()
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 500, currency: "AUD",
+                                        card: .other, source: .email)
+        let txn = try TransactionLogger.log(purchase, in: context).transaction
+
+        let limits = UserDefaults(suiteName: "FreeAppTests-limits-\(UUID().uuidString)")!
+        CategoryBudgets.set(50, for: txn.category, limits)
+
+        await Reminders.checkCategoryLimits([txn], now: now, defaults: limits)
+
+        let pending = await center.pendingNotificationRequests().filter { $0.identifier.hasPrefix("category-limit-") }
+        #expect(!pending.isEmpty, "expected an over-limit notification with no Pro purchased")
+        for request in pending { center.removePendingNotificationRequests(withIdentifiers: [request.identifier]) }
+    }
+
+    // MARK: Upcoming bills, Siri
+
+    /// `UpcomingBillsIntent.perform()` (`Spend/Intents/SpendQuestionIntents.swift:124`
+    /// today) answers "Upcoming bills are part of Sortd Pro..." when
+    /// `ProStore.shared.isPro` is false. The free app always gives the real
+    /// answer, so that literal string must be gone from the source.
+    @Test func upcomingBillsAnswerNeverMentionsPro() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Spend/Intents/SpendQuestionIntents.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        #expect(!source.contains("Sortd Pro"))
+    }
+
+    /// The pure answer builder behind the intent never mentions Pro either --
+    /// this one already passes and pins that it stays that way.
+    @Test func upcomingBillsPureAnswerNeverMentionsPro() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let nextDate = now.addingTimeInterval(86_400)
+        let bill = Recurring(key: "netflix", merchant: "Netflix", category: .subscriptions, card: .other,
+                             cadence: .monthly, amount: 15.99, currency: "AUD", audAmount: 15.99,
+                             lastDate: now, nextDate: nextDate, charges: 3, previousAmount: nil,
+                             status: .active, chargedAfterCancel: false)
+        let text = SpendSummary.upcomingBills([bill], hasPurchases: true, now: now)
+        #expect(!text.contains("Pro"))
+    }
+
+    // MARK: Source scan
+
+    /// Script-level check the builder must satisfy before this sub-spec is
+    /// done: nothing under `Spend/` still mentions Pro, the paywall, or
+    /// entitlements. This is expected to fail today -- the whole point of
+    /// the overhaul is to remove every one of these.
+    @Test func sourceTreeHasNoProOrPaywallReferences() throws {
+        let spendRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Spend")
+        let pattern = try NSRegularExpression(
+            pattern: "isPro|ProStore|PaywallView|ProGate|SORTD_BETA|CompedPro|currentEntitlements")
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: spendRoot, includingPropertiesForKeys: [.isRegularFileKey]) else {
+            Issue.record("could not enumerate \(spendRoot.path)")
+            return
+        }
+        var hits: [String] = []
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "swift" else { continue }          // skips SortdTips.storekit too
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let range = NSRange(text.startIndex..., in: text)
+            if pattern.firstMatch(in: text, range: range) != nil {
+                hits.append(url.path.replacingOccurrences(of: spendRoot.deletingLastPathComponent().path + "/", with: ""))
+            }
+        }
+        #expect(hits.isEmpty, "found matches in: \(hits.sorted())")
+    }
+}
