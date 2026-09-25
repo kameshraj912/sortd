@@ -6,7 +6,7 @@ enum Features {
     /// gmail.readonly scope (until then only 100 test users can connect).
     /// Removing SORTD_GMAIL from Release hides Gmail in the App Store build.
     static let gmail: Bool = {
-        #if DEBUG || SORTD_BETA || SORTD_GMAIL
+        #if DEBUG || SORTD_GMAIL
         return true
         #else
         return false

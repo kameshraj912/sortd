@@ -32,14 +32,13 @@ while IFS= read -r f; do
 done <<< "$staged"
 
 # 4. Debug escapes stay inside #if DEBUG. Any Swift file that names one must
-#    also contain "#if DEBUG". (ProStore.swift is the documented exception.)
+#    also contain "#if DEBUG".
 while IFS= read -r f; do
   case "$f" in
     Spend/*.swift|SortdWidget/*.swift) ;;
     *) continue ;;
   esac
-  [ "$f" = "Spend/Services/ProStore.swift" ] && continue
-  if git show ":$f" | grep -qE 'SPEND_(PRO|DEMO|PAYWALL_DEMO|REEL_TAP|ONBOARD_STEP|BETA)'; then
+  if git show ":$f" | grep -qE 'SPEND_[A-Z_]+'; then
     git show ":$f" | grep -q '#if DEBUG' || bad "$f uses a debug flag with no #if DEBUG."
   fi
 done <<< "$staged"

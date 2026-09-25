@@ -4,7 +4,7 @@
 #   scripts/preflight.sh              before a TestFlight build
 #   scripts/preflight.sh --appstore   before an App Store submission
 #
-# The App Store mode fails if the beta Pro unlock is still compiled in.
+# Both modes fail if the old beta Pro unlock (SORTD_BETA) comes back.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
@@ -22,21 +22,12 @@ build=$(grep -m1 'CURRENT_PROJECT_VERSION' "$PBX" | tr -d ' \t;' | cut -d= -f2)
 say "Sortd $version ($build)  —  $MODE"
 say ""
 
-# 1. The beta Pro unlock must not reach the App Store.
+# 1. The whole app is free. SORTD_BETA (the old beta Pro unlock) is gone
+#    and must stay gone: nothing in the code reads it any more.
 if grep -q 'SORTD_BETA' "$PBX"; then
-  if [ "$MODE" = "--appstore" ]; then
-    bad "SORTD_BETA is still in $PBX. Remove it from the Release config, or"
-    say "      App Review never sees the paywall and Pro is free to everyone in review."
-  else
-    ok "SORTD_BETA on — TestFlight testers get Pro without buying."
-  fi
+  bad "SORTD_BETA is back in $PBX. The app is free; remove it from the Release config."
 else
-  if [ "$MODE" = "--appstore" ]; then
-    ok "SORTD_BETA removed."
-  else
-    warn "SORTD_BETA is off. Testers will hit an empty paywall unless the"
-    say "      three products exist in App Store Connect."
-  fi
+  ok "SORTD_BETA absent."
 fi
 
 # 1b. Sentry crash reports are for TestFlight only. The App Store label says
@@ -98,7 +89,7 @@ if [ -n "$flagfile" ]; then
       cur = depth > 0 ? dbg[depth] : 0
       code = raw
       sub(/\/\/.*/, "", code)
-      if (cur == 0 && code ~ /SPEND_DEMO|SPEND_PRO|SPEND_PAYWALL_DEMO|SPEND_REEL_TAP|SPEND_BETA/) {
+      if (cur == 0 && code ~ /SPEND_[A-Z_]+/) {
         print FILENAME ":" FNR ":" raw
       }
     }
@@ -107,7 +98,7 @@ if [ -n "$flagfile" ]; then
     bad "a DEBUG-only flag is used outside #if DEBUG:"
     while IFS= read -r line; do say "      $line"; done < "$flagfile"
   else
-    ok "debug flags (SPEND_DEMO, SPEND_PRO, SPEND_PAYWALL_DEMO, SPEND_REEL_TAP, SPEND_BETA) all stay inside #if DEBUG."
+    ok "debug flags (every SPEND_*) all stay inside #if DEBUG."
   fi
 fi
 

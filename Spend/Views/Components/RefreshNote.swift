@@ -20,7 +20,7 @@ struct RefreshNote: Equatable {
         if summary.failed > 0 {
             return RefreshNote(text: "Couldn't check your email. Pull down to try again.", ok: false)
         }
-        if !Features.gmail || !ProStore.shared.isPro || GmailSync.accounts.isEmpty {
+        if !Features.gmail || GmailSync.accounts.isEmpty {
             // Nothing to sync is not a failure, and saying "0 new" would be
             // misleading when no inbox is connected at all.
             return RefreshNote(text: "Up to date", ok: true)

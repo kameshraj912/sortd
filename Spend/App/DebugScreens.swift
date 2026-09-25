@@ -21,7 +21,7 @@ struct DebugScreenHost: View {
             case "add": Color.page.sheet(isPresented: .constant(true)) { AddTransactionView() }
             case "budget": Color.page.sheet(isPresented: .constant(true)) { BudgetSheet(budget: $budget) }
             case "setup": SetupGuideView()
-            case "paywall": Color.page.sheet(isPresented: .constant(true)) { PaywallView() }
+            case "tip": Color.page.sheet(isPresented: .constant(true)) { TipJarView() }
             case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()

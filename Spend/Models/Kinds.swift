@@ -109,12 +109,14 @@ final class CardBook {
         // Tests run inside the app on the simulator; keep their cards apart
         // so they never overwrite the real ones.
         var defaults = defaults
+        #if DEBUG
         if defaults == .standard, ProcessInfo.processInfo.environment["SPEND_IN_MEMORY"] == "1",
            let scratch = UserDefaults(suiteName: "spend.tests") {
             scratch.removePersistentDomain(forName: "spend.tests")
             scratch.set(try? JSONEncoder().encode(CardInfo.legacy), forKey: Self.key)
             defaults = scratch
         }
+        #endif
         self.defaults = defaults
         if let data = defaults.data(forKey: Self.key),
            let saved = try? JSONDecoder().decode([CardInfo].self, from: data) {
