@@ -53,6 +53,11 @@ struct OnboardingView: View {
     /// used. Never what was answered.
     @State private var stepsSeen = 0
     @State private var usedSkip = false
+    #if SORTD_ICLOUD
+    /// "Restore from iCloud" on the welcome screen (new flow): what happened.
+    @State private var restoring = false
+    @State private var restoreNote: String?
+    #endif
 
     typealias Step = SetupFlow.Step
     #if DEBUG
@@ -140,10 +145,23 @@ struct OnboardingView: View {
         .sheet(isPresented: $showingGuide) {
             NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
         }
+        #if SORTD_ICLOUD
+        .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(restoreNote ?? "")
+        }
+        #endif
         .feedback(.select, trigger: step)
         .onChange(of: step) {
             stepChangedAt = .now
             scroll.scrollTo(edge: .top)
+        }
+        // Where people get to, for the drop-off funnel: the step's name and
+        // place, never an answer. `initial` counts the first screen.
+        .onChange(of: step, initial: true) {
+            Analytics.shared.track(.setupStepViewed, ["step": .string(String(describing: step)),
+                                                      "index": .int(step.rawValue)])
         }
         // The real permission, for the building and plan text (it may have
         // been turned off in Settings, or asked in an earlier setup).
@@ -174,6 +192,12 @@ struct OnboardingView: View {
     private var checkInLine: (symbol: String, text: String) {
         let choice = effectiveCheckIn
         if choice != .needed, notificationsOff {
+            // New flow: nothing has asked yet, so "off" would be wrong. The
+            // aha card on Home asks, once.
+            if newFlow {
+                return ("bell", choice == .sunday ? "We'll ask about a Sunday recap later"
+                                                  : "We'll ask about check-ins later")
+            }
             return ("bell.slash", "Check-ins off (notifications are off)")
         }
         return (choice.symbol, choice == .needed ? "No regular check-ins" : choice.summary)
@@ -190,8 +214,12 @@ struct OnboardingView: View {
                   gmailFeature: Features.gmail)
     }
     private var wantsGmail: Bool { flow.wantsGmail }
-    /// The check-in step asks for notifications only if something will use them.
-    private var asksNotifications: Bool { checkIn != .needed || billIntent }
+    /// Tap-through setup (sub-spec 6): Continue everywhere, no permission
+    /// alert until the aha card on Home. See `SetupFlow.usesNewFlow`.
+    private var newFlow: Bool { SetupFlow.usesNewFlow }
+    /// The check-in step asks for notifications only if something will use
+    /// them, and never in the new flow (the ask moved to Home).
+    private var asksNotifications: Bool { !newFlow && (checkIn != .needed || billIntent) }
 
     private var goalsBinding: Binding<Set<SetupProfile.Goal>> {
         Binding(get: { goals }, set: { goalsRaw = SetupProfile.raw($0) })
@@ -327,6 +355,14 @@ struct OnboardingView: View {
                 case .welcome:
                     primaryButton(primaryTitle, action: primaryAction)
                     secondaryButton("Bring In Past Spending") { showingImport = true }
+                    #if SORTD_ICLOUD
+                    // A new iPhone: put the iCloud copy back before answering
+                    // anything. Only the new flow offers it (sub-spec 6).
+                    if newFlow, transactions.isEmpty, !rerun {
+                        secondaryButton(restoring ? "Restoring…" : "Restore from iCloud") { restoreFromCloud() }
+                            .disabled(restoring)
+                    }
+                    #endif
                     // Not when setup is run again: sample data would mix into
                     // real purchases, and its Clear forces a full setup.
                     if transactions.isEmpty, !rerun {
@@ -337,11 +373,15 @@ struct OnboardingView: View {
                     }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
-                    tertiaryButton("Do this later and look around") { finish() }
+                    // New flow: the chores wait in the Finish Setup card on Home.
+                    tertiaryButton(newFlow ? "Do this later" : "Do this later and look around") { finish() }
+                case .email where gmail.isEmpty && newFlow:
+                    primaryButton(primaryTitle, action: primaryAction)
+                    secondaryButton("Connect Gmail") { connectingGmail = true }
                 case .email where gmail.isEmpty:
                     primaryButton("Connect Gmail") { connectingGmail = true }
                     tertiaryButton("I'll do this later") { go(1) }
-                case .applePay where !tapConnected && !shortcutReached:
+                case .applePay where !tapConnected && !shortcutReached && !newFlow:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     }
@@ -349,10 +389,12 @@ struct OnboardingView: View {
                 case .checkIn where asksNotifications:
                     primaryButton(primaryTitle, action: primaryAction)
                     tertiaryButton("Not now") {
-                        // No notifications: no check-in, no bill reminders.
+                        // No notifications: no check-in, no bill reminders,
+                        // and the aha card never asks again (research 03 §9).
                         checkInRaw = SetupProfile.CheckIn.needed.rawValue
                         billIntent = false
                         checkInChosen = true
+                        Activation.markNotificationAsked()
                         go(1)
                     }
                 default:
@@ -366,6 +408,9 @@ struct OnboardingView: View {
     }
 
     private var primaryTitle: String {
+        // New flow: one word on every step. Skipping is just continuing,
+        // with the defaults (`SetupFlow.defaults`) left in place.
+        if newFlow { return "Continue" }
         let last = neighbour(of: step, 1) == nil
         switch step {
         case .welcome: return "Get Started"
@@ -384,6 +429,9 @@ struct OnboardingView: View {
 
     private func primaryAction() {
         guard !finished else { return }
+        // New flow: Continue past a question nobody answered is a skip, so
+        // setup_finished(skipped) means the same thing in both flows.
+        if newFlow, untouched(step) { usedSkip = true }
         if step == .checkIn {
             checkInRaw = checkIn.rawValue   // keep the pre-picked default too
             checkInChosen = true
@@ -396,6 +444,8 @@ struct OnboardingView: View {
                     let allowed = await Reminders.requestPermission()
                     let actual = await Self.notificationsAllowed()
                     notificationsOff = !(allowed || actual)
+                    // Asked here: the aha card must never ask a second time.
+                    Activation.markNotificationAsked()
                     requesting = false
                     if step == from { go(1) }
                 }
@@ -403,6 +453,18 @@ struct OnboardingView: View {
             }
         }
         go(1)
+    }
+
+    /// A question left as it was: no goal, no payment, no feeling, no limit.
+    /// Currency and check-in always hold a default, so they never count.
+    private func untouched(_ s: Step) -> Bool {
+        switch s {
+        case .goals: goals.isEmpty
+        case .payment: payment == nil
+        case .feeling: feelingRaw.isEmpty
+        case .budget: budget == 0
+        default: false
+        }
     }
 
     private func go(_ delta: Int) {
@@ -413,7 +475,7 @@ struct OnboardingView: View {
             if delta > 0 { finish() }
             return
         }
-        if delta > 0 { stepDone(step) }
+        if delta > 0 { stepDone(step, skipped: newFlow && untouched(step)) }
         withAnimation(.snappy) { step = next }
     }
 
@@ -452,20 +514,25 @@ struct OnboardingView: View {
         guard !finished else { return }
         finished = true
         Task { await FXService.rebase(to: home, in: context) }
-        // Skipped the question: keep an earlier answer, otherwise no check-in.
+        // Skipped the question: keep an earlier answer. Otherwise the old
+        // flow saves no check-in; the new flow saves the default (Sunday),
+        // to be scheduled once the aha card on Home gets a yes.
         if !checkInChosen, UserDefaults.standard.string(forKey: SetupProfile.checkInKey) == nil {
-            checkInRaw = SetupProfile.CheckIn.needed.rawValue
+            checkInRaw = (newFlow ? SetupFlow.defaults(locale: .current).checkIn : .needed).rawValue
         }
         // A limit set a moment ago, then "Spend less" un-ticked: undo it.
         if !goals.contains(.spendLess), let before = budgetBefore { budget = before }
         let choice = checkIn
+        let keepUnscheduled = newFlow
         Task {
             // Only if notifications are allowed; otherwise clear any old one,
             // and say so in Settings rather than show a time that never comes.
+            // The new flow keeps the answer: nothing has asked yet, and the
+            // aha card on Home will.
             let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
             let allowed = status == .authorized || status == .provisional
             await CheckInReminder.schedule(allowed ? choice : .needed)
-            if !allowed {
+            if !allowed, !keepUnscheduled {
                 UserDefaults.standard.set(SetupProfile.CheckIn.needed.rawValue, forKey: SetupProfile.checkInKey)
             }
         }
@@ -478,6 +545,29 @@ struct OnboardingView: View {
         Analytics.shared.track(.setupFinished, ["skipped": .bool(usedSkip), "steps_seen": .int(stepsSeen)])
         onFinish()
     }
+
+    #if SORTD_ICLOUD
+    /// Puts the iCloud copy back (adding what's missing) and says what came
+    /// back. Setup carries on after: the answers aren't in the backup.
+    private func restoreFromCloud() {
+        guard !restoring else { return }
+        restoring = true
+        Task {
+            defer { restoring = false }
+            do {
+                guard let added = try await CloudBackup.shared.restoreIfPresent(into: context, mode: .merge) else {
+                    restoreNote = "No backup in iCloud yet. Turn on Back up to iCloud on the iPhone that has your purchases."
+                    return
+                }
+                Task { await FXService.backfill(in: context) }
+                restoreNote = added == 0 ? "Nothing to add. Everything in the backup is already here."
+                    : "\(added) purchase\(added == 1 ? "" : "s") back. Carry on with setup."
+            } catch {
+                restoreNote = error.localizedDescription
+            }
+        }
+    }
+    #endif
 
     /// The limit that will actually be in place when setup ends.
     private var effectiveBudget: Double {
@@ -495,7 +585,10 @@ struct OnboardingView: View {
         case .currency: currency
         case .feeling: FeelingPage(counter: counter(.feeling), feeling: feelingBinding)
         case .budget: budgetPage
-        case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent)
+        // New flow: no bill toggle here; it would need the permission this
+        // flow no longer asks for. Settings › Bills & reminders asks then.
+        case .checkIn: CheckInPage(counter: counter(.checkIn), checkIn: checkInBinding, billReminders: $billIntent,
+                                   showBills: !newFlow)
         case .building: BuildingPage(lines: buildingLines) { if step == .building { go(1) } }
         case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
@@ -522,7 +615,7 @@ struct OnboardingView: View {
         return lines
     }
 
-    private var planSummary: String { "Built from your answers. Change any of it in Settings." }
+    private var planSummary: String { SetupCopy.line(.plan) ?? "" }
 
     private var planSettings: [(String, String)] {
         var chips = [(Self.currencySymbol(home), "Totals in \(home)"
@@ -567,7 +660,7 @@ struct OnboardingView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Sortd")
-                Text("Your spending, logged by itself.")
+                Text(SetupCopy.line(.welcome) ?? "")
                     .font(.body).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 18) {
@@ -594,7 +687,9 @@ struct OnboardingView: View {
     private var currency: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.currency), title: "Your main currency",
-                        subtitle: nil)
+                        // "We picked the one your iPhone uses" only while
+                        // that is still true.
+                        subtitle: home == Money.detectedHome ? SetupCopy.line(.currency) : SetupCopy.currencyPicked)
             VStack(spacing: 10) {
                 ForEach(currencyChoices, id: \.self) { code in
                     OptionCard(symbol: Self.currencySymbol(code), title: "\(code) · \(name(of: code))",
@@ -717,7 +812,7 @@ struct OnboardingView: View {
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Your cards", "Tap each bank you pay with. Two cards at one bank? Tap twice.")
+            header("Your cards", SetupCopy.line(.cards))
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
             // Below the grid, so adding a card never moves the buttons.
@@ -897,7 +992,7 @@ struct OnboardingView: View {
 
     private var cardDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Last 4 digits", "So receipts land on the right card. Only the last 4.")
+            header("Last 4 digits", SetupCopy.line(.cardDetails))
             VStack(spacing: 16) {
                 ForEach(book.active) { info in
                     CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
@@ -955,7 +1050,7 @@ struct OnboardingView: View {
 
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Log Apple Pay by itself", "Three steps, about a minute.")
+            header("Log Apple Pay by itself", SetupCopy.line(.applePay))
             tapStatus
 
             // Step 1: the ready-made shortcut. It arrives with the amount,
@@ -1117,7 +1212,7 @@ struct OnboardingView: View {
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Catch online receipts", "From receipts and bank alerts in your Gmail.")
+            header("Catch online receipts", SetupCopy.line(.email))
             FlowLayout(spacing: 8) {
                 ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
                          ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
@@ -1191,7 +1286,7 @@ struct OnboardingView: View {
     private var budgetPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             SetupHeader(counter: counter(.budget), title: "Want a monthly limit?",
-                        subtitle: "Change it any time.")
+                        subtitle: SetupCopy.line(.budget))
 
             // One big amount, typed or picked.
             VStack(spacing: 8) {
