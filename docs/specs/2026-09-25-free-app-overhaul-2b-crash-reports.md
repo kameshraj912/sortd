@@ -59,7 +59,8 @@ Part of `2026-09-25-free-app-overhaul-overview.md`. Ships in the same release as
 
 ## Gate
 
-- Raj provides the DSN.
+- Raj provides the DSN (`SENTRY_DSN` in `Secrets.xcconfig`).
+- Raj turns on "Prevent storing IP addresses" in the Sentry project (Settings › Security & Privacy), so the server side matches `sendDefaultPii = false`.
 - The label and in-app privacy copy change in the same release.
 - The forced-crash check passes.
 
