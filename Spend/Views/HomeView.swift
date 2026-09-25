@@ -75,6 +75,12 @@ struct HomeView: View {
                         .padding(.bottom, 32)
                         .animation(.snappy, value: focused)
                     }
+                    // Without this, the automatic top scroll edge fade only
+                    // covers the status bar, not the row the gear sits in
+                    // (Home hides the nav bar title, .toolbar(removing:
+                    // .title)), so scrolled content slides in sharp under the
+                    // glass gear. Forcing the soft style covers the whole bar.
+                    .scrollEdgeEffectStyle(.soft, for: .top)
                     .refreshable {
                         withAnimation(.snappy) { refreshing = true }
                         refreshNote = await RefreshNote.run(in: context)
