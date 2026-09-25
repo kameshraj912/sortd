@@ -84,7 +84,12 @@ enum Activation {
         guard SetupFlow.usesNewFlow, !UserDefaults.standard.bool(forKey: seenKey) else { return }
         let context = SpendStore.container.mainContext
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: .main) { note in
-            MainActor.assumeIsolated { check(inserted: inserted(in: note, context: context), since: launchedAt) }
+            // `_ =` and the explicit Void: Xcode 26.6's Swift cannot infer
+            // assumeIsolated's T when the closure's single expression returns
+            // a value (Swift 6.4 can), and CI pins Xcode 26.6.
+            MainActor.assumeIsolated { () -> Void in
+                _ = check(inserted: inserted(in: note, context: context), since: launchedAt)
+            }
         }
     }
 
