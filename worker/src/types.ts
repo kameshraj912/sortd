@@ -30,4 +30,6 @@ export interface Deps {
   now: () => number;
   /** DER bytes of the trusted App Attest root certificate(s). */
   attestRoots: Uint8Array[];
+  /** SHA-256 (lowercase hex) of each root allowed. A root not listed here is ignored. */
+  attestRootSha256: string[];
 }

@@ -129,14 +129,20 @@ async function makeKeys(curve: "P-256" | "P-384"): Promise<CryptoKeyPair> {
 
 async function makeCert(opts: {
   subject: Signer;
+  /** Whose name goes in the issuer field. */
   issuer: Signer;
+  /** Whose key signs (default: the issuer). Lets a test forge a certificate that names someone else. */
+  signWith?: Signer;
+  /** Signature hash (default: SHA-384 for a P-384 signer, SHA-256 for P-256). */
+  hash?: "SHA-256" | "SHA-384";
   serial: number;
   notBefore: Date;
   notAfter: Date;
   ca: boolean;
   extraExtensions?: Uint8Array[];
 }): Promise<Uint8Array> {
-  const hash = opts.issuer.curve === "P-384" ? "SHA-384" : "SHA-256";
+  const signer = opts.signWith ?? opts.issuer;
+  const hash = opts.hash ?? (signer.curve === "P-384" ? "SHA-384" : "SHA-256");
   const alg = seq(oid(hash === "SHA-384" ? OID.ecdsaSha384 : OID.ecdsaSha256));
   const spki = new Uint8Array((await subtle.exportKey("spki", opts.subject.keys.publicKey) as ArrayBuffer));
   const exts: Uint8Array[] = [];
@@ -152,7 +158,7 @@ async function makeCert(opts: {
     spki,
     explicit(3, seq(...exts)),
   );
-  const raw = new Uint8Array(await subtle.sign({ name: "ECDSA", hash }, opts.issuer.keys.privateKey, tbs));
+  const raw = new Uint8Array(await subtle.sign({ name: "ECDSA", hash }, signer.keys.privateKey, tbs));
   return seq(tbs, alg, bitString(rawSigToDer(raw)));
 }
 
@@ -182,18 +188,42 @@ export function cbor(v: CborValue): Uint8Array {
 
 export interface FakeCA {
   rootDer: Uint8Array;
+  /** SHA-256 of rootDer, lowercase hex: what the Worker pins. */
+  rootSha256: string;
+  root: Signer;
   intermediate: Signer;
   intermediateDer: Uint8Array;
 }
 
-export async function makeCA(label = "Test App Attestation"): Promise<FakeCA> {
+export interface CAOptions {
+  /** Root CN is "<label> Root CA". "Apple App Attestation" makes a same-name impostor of Apple's root. */
+  label?: string;
+  rootNotAfter?: Date;
+  intermediateNotAfter?: Date;
+  /** Intermediate without basicConstraints cA=true. */
+  intermediateNotCA?: boolean;
+  /** Intermediate that names the root as issuer but signs itself. */
+  intermediateSelfSigned?: boolean;
+}
+
+export async function makeCA(opts: CAOptions | string = {}): Promise<FakeCA> {
+  const o: CAOptions = typeof opts === "string" ? { label: opts } : opts;
+  const label = o.label ?? "Test App Attestation";
   const root: Signer = { cn: `${label} Root CA`, keys: await makeKeys("P-384"), curve: "P-384" };
   const intermediate: Signer = { cn: `${label} CA 1`, keys: await makeKeys("P-384"), curve: "P-384" };
   const from = new Date(NOW - 365 * 86400_000);
   const to = new Date(NOW + 10 * 365 * 86400_000);
-  const rootDer = await makeCert({ subject: root, issuer: root, serial: 1, notBefore: from, notAfter: to, ca: true });
-  const intermediateDer = await makeCert({ subject: intermediate, issuer: root, serial: 2, notBefore: from, notAfter: to, ca: true });
-  return { rootDer, intermediate, intermediateDer };
+  const rootDer = await makeCert({ subject: root, issuer: root, serial: 1, notBefore: from, notAfter: o.rootNotAfter ?? to, ca: true });
+  const intermediateDer = await makeCert({
+    subject: intermediate,
+    issuer: root,
+    signWith: o.intermediateSelfSigned ? intermediate : root,
+    serial: 2,
+    notBefore: from,
+    notAfter: o.intermediateNotAfter ?? to,
+    ca: !o.intermediateNotCA,
+  });
+  return { rootDer, rootSha256: hex(await sha256(rootDer)), root, intermediate, intermediateDer };
 }
 
 let sharedCA: Promise<FakeCA> | undefined;
@@ -219,6 +249,18 @@ export interface AttestOptions {
   nonceChallenge?: string;
   leafNotAfter?: Date;
   fmt?: string;
+  /** Leaf key curve (Apple's is P-256). */
+  leafCurve?: "P-256" | "P-384";
+  /** Hash the intermediate signs the leaf with (default SHA-256; see attest.test.ts). */
+  leafHash?: "SHA-256" | "SHA-384";
+  /** Leaf names the intermediate as issuer but a stranger's key signs it. */
+  leafSignedByStranger?: boolean;
+  /** Leaf signed by the real intermediate key, but naming a different issuer. */
+  leafIssuerCN?: string;
+  /** authData flags byte (default 0x41: UP + AT). */
+  flags?: number;
+  /** Override x5c (default [leaf, intermediate]). Gets the built DERs. */
+  x5c?: (leaf: Uint8Array, intermediate: Uint8Array, root: Uint8Array) => Uint8Array[];
 }
 
 export interface Attestation {
@@ -228,8 +270,9 @@ export interface Attestation {
 
 export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
   const ca = o.ca ?? (await testCA());
-  const leafKeys = await makeKeys("P-256");
-  const point = new Uint8Array((await subtle.exportKey("raw", leafKeys.publicKey) as ArrayBuffer)); // 65-byte uncompressed point
+  const leafCurve = o.leafCurve ?? "P-256";
+  const leafKeys = await makeKeys(leafCurve);
+  const point = new Uint8Array((await subtle.exportKey("raw", leafKeys.publicKey) as ArrayBuffer)); // uncompressed point
   const keyIdBytes = await sha256(point);
 
   const aaguid = new Uint8Array(16);
@@ -242,7 +285,7 @@ export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
   const coseKeyPlaceholder = cbor({ "1": "EC2" });
   const authData = concat(
     await sha256(`${o.teamId ?? TEAM_ID}.${o.bundleId ?? CLIENT_ID}`),
-    Uint8Array.of(0x41), // UP + AT flags
+    Uint8Array.of(o.flags ?? 0x41), // UP + AT flags
     counter,
     aaguid,
     credLen,
@@ -253,10 +296,15 @@ export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
   const nonce = await sha256(concat(authData, clientDataHash));
   const nonceExt = seq(oid(OID.appAttestNonce), octet(seq(explicit(1, octet(nonce)))));
 
-  const leaf: Signer = { cn: hex(keyIdBytes), keys: leafKeys, curve: "P-256" };
+  const leaf: Signer = { cn: hex(keyIdBytes), keys: leafKeys, curve: leafCurve };
+  const stranger: Signer | undefined = o.leafSignedByStranger
+    ? { cn: ca.intermediate.cn, keys: await makeKeys("P-384"), curve: "P-384" }
+    : undefined;
   const leafDer = await makeCert({
     subject: leaf,
-    issuer: ca.intermediate,
+    issuer: o.leafIssuerCN ? { ...ca.intermediate, cn: o.leafIssuerCN } : ca.intermediate,
+    signWith: stranger ?? ca.intermediate,
+    hash: o.leafHash ?? "SHA-256",
     serial: 3,
     notBefore: new Date(NOW - 86400_000),
     notAfter: o.leafNotAfter ?? new Date(NOW + 2 * 86400_000),
@@ -266,7 +314,7 @@ export async function makeAttestation(o: AttestOptions): Promise<Attestation> {
 
   const object = cbor({
     fmt: o.fmt ?? "apple-appattest",
-    attStmt: { x5c: [leafDer, ca.intermediateDer], receipt: new Uint8Array(8) },
+    attStmt: { x5c: o.x5c ? o.x5c(leafDer, ca.intermediateDer, ca.rootDer) : [leafDer, ca.intermediateDer], receipt: new Uint8Array(8) },
     authData,
   });
   const keyId = o.wrongKeyId || o.keyNotCertified ? b64(otherKeyId) : b64(keyIdBytes);
@@ -361,7 +409,8 @@ export async function makeEnv(over: Partial<Env> = {}): Promise<Env> {
 }
 
 export async function makeDeps(fetchFn: Deps["fetch"], over: Partial<Deps> = {}): Promise<Deps> {
-  return { fetch: fetchFn, now: () => NOW, attestRoots: [(await testCA()).rootDer], ...over };
+  const ca = await testCA();
+  return { fetch: fetchFn, now: () => NOW, attestRoots: [ca.rootDer], attestRootSha256: [ca.rootSha256], ...over };
 }
 
 // ---------- requests ----------
