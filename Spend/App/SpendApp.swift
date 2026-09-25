@@ -47,6 +47,8 @@ struct SpendApp: App {
         CrashReporting.start()
         // Finish any tip left unfinished, listen for new ones, load prices.
         TipJar.shared.start()
+        // PostHog starts here (or logs once that it has no key and stays off).
+        Analytics.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
@@ -234,7 +236,11 @@ struct RootView: View {
 
             // Keep the Router in step with taps on the tab bar, so a link to
             // the tab you left (a check-in, a widget) still switches back.
-            .onChange(of: tab) { _, new in if router.tab != new { router.tab = new } }
+            .onChange(of: tab) { _, new in
+                if router.tab != new { router.tab = new }
+                // Which tabs get used. The + slot never becomes `tab`.
+                Analytics.shared.track(.tabOpened, ["tab": .string(new.title.lowercased())])
+            }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         .sensoryFeedback(.selection, trigger: tab)
         // The + never assigns `tab`, so the app's main action was the
