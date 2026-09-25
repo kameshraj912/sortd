@@ -11,6 +11,8 @@ struct TipJarView: View {
     @State private var buying: String?
     @State private var thanked = false
     @State private var message: String?
+    /// A Try Again in flight, so the row shows a spinner.
+    @State private var retrying = false
 
     var body: some View {
         NavigationStack {
@@ -59,16 +61,34 @@ struct TipJarView: View {
         }
     }
 
+    /// A spinner while loading (including a retry, held long enough to
+    /// be seen: with no App Store the load fails at once, so a tap on Try
+    /// Again used to change nothing on screen), then a plain line when
+    /// nothing came back.
     private var loadingRow: some View {
         HStack(spacing: 10) {
-            if jar.loadError == nil { ProgressView() }
-            Text(jar.loadError ?? "Loading tips…").font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
-            if jar.loadError != nil {
-                Button("Try Again") { Task { await jar.load() } }.font(.subheadline.weight(.semibold))
+            if loading {
+                ProgressView()
+                Text("Loading tips…").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                Text("Tips need the App Store. Try again later.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button("Try Again") { Task { await retry() } }.font(.subheadline.weight(.semibold))
             }
         }
-        .accessibilityElement(children: .combine)
+        .animation(.snappy, value: loading)
+    }
+
+    private var loading: Bool { retrying || jar.loadError == nil }
+
+    private func retry() async {
+        retrying = true
+        defer { retrying = false }
+        await jar.load()
+        // Keep the spinner up for a moment so the tap visibly did something.
+        try? await Task.sleep(for: .milliseconds(600))
     }
 
     private func tipRow(_ product: Product) -> some View {
