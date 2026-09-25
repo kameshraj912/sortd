@@ -45,6 +45,8 @@ final class TipJar {
     private(set) var loadError: String?
 
     @ObservationIgnored private var updates: Task<Void, Never>?
+    /// The load in flight, shared so launch and the sheet never race.
+    @ObservationIgnored private var loading: Task<Void, Never>?
 
     init() {}
 
@@ -66,15 +68,27 @@ final class TipJar {
         }
     }
 
+    /// Loads the prices. A second call while one is running waits for that
+    /// one. A failed load keeps whatever was loaded before.
     func load() async {
+        if let loading { return await loading.value }
+        let task = Task { await fetch() }
+        loading = task
+        await task.value
+        loading = nil
+    }
+
+    private func fetch() async {
         loadError = nil
         do {
             let found = try await Product.products(for: ID.all)
-            products = found.sorted { $0.price < $1.price }
-            if products.isEmpty { loadError = "The App Store didn't return the tips. Check your connection and try again." }
+            if found.isEmpty {
+                if products.isEmpty { loadError = "The App Store didn't return the tips. Check your connection and try again." }
+            } else {
+                products = found.sorted { $0.price < $1.price }
+            }
         } catch {
-            products = []
-            loadError = "Couldn't reach the App Store. Check your connection and try again."
+            if products.isEmpty { loadError = "Couldn't reach the App Store. Check your connection and try again." }
         }
     }
 
