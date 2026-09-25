@@ -43,7 +43,7 @@ Today's steps (`SetupFlow.Step`), read in code:
 
 ## Recommendation
 
-A, behind a DEBUG flag `SPEND_NEW_SETUP` until the UI pass.
+A. Built behind a DEBUG flag until the UI pass; the default since 25 Sep 2026 (`SetupFlow.usesNewFlow`). The old flow stays in for the DEBUG escape `SPEND_OLD_SETUP=1`.
 
 **Setup changes:**
 - On checkIn, the primary button says "Continue" and keeps Sunday. The notification alert moves to the aha moment (research 03 §9: "ask after the aha").

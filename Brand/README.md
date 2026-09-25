@@ -20,20 +20,17 @@ Dark, clear and tinted come from Icon Composer's appearance handling, not from s
 images. Open it with Xcode > Open Developer Tool > Icon Composer to tune glass, specular
 and shadow. In `icon.json` the first group is the frontmost.
 
-**It is not the active icon yet.** `AppIcon.appiconset` (flat PNGs) stays active until CI on
-the pinned Xcode 26.6 has built the package. Xcode 27 builds it (checked 25 Sep 2026).
-A `.icon` with the same name as the appiconset silently wins with no warning, which is why
-this one is not called `AppIcon.icon`.
+**Active since 25 Sep 2026** (branch `flags-on`): both `ASSETCATALOG_COMPILER_APPICON_NAME`
+lines in `Spend.xcodeproj/project.pbxproj` (Debug and Release of the Spend target; the widget
+target is untouched) point at `"AppIcon-Glass"`. Pending Raj's look on the phone in light,
+dark, clear and tinted, and CI green on the pinned Xcode 26.6. `AppIcon.appiconset` (flat
+PNGs) stays in the catalog until then. A `.icon` with the same name as the appiconset
+silently wins with no warning, which is why this one is not called `AppIcon.icon`.
 
-To switch (one setting, two places):
+Once Raj has approved it on the phone and CI is green: `git mv Spend/AppIcon-Glass.icon
+Spend/AppIcon.icon`, set the setting back to `AppIcon`, and delete
+`Spend/Assets.xcassets/AppIcon.appiconset` (Apple: a `.icon` replaces the catalog icon;
+Xcode renders the pre-26 fallback PNGs from it).
 
-1. In `Spend.xcodeproj/project.pbxproj`, change both `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;`
-   lines (Debug and Release of the Spend target) to `ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-Glass";`.
-2. `scripts/build.sh`, then install on the simulator and check the Home Screen in light,
-   dark, clear and tinted.
-3. Push and wait for CI (Xcode 26.6) to go green.
-4. Only then: `git mv Spend/AppIcon-Glass.icon Spend/AppIcon.icon`, set the setting back to
-   `AppIcon`, and delete `Spend/Assets.xcassets/AppIcon.appiconset` (Apple: a `.icon` replaces
-   the catalog icon; Xcode renders the pre-26 fallback PNGs from it).
-
-To revert: put the setting back to `AppIcon`. Nothing else changes.
+To revert: put both `ASSETCATALOG_COMPILER_APPICON_NAME` lines back to `AppIcon`. Nothing
+else changes; the flat PNGs are still in the catalog.
