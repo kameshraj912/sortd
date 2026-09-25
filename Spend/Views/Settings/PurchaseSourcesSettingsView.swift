@@ -37,15 +37,20 @@ struct PurchaseSourcesSettingsView: View {
         .brandedTitle("Purchase Sources")
     }
 
+    private var status: ApplePayStatus {
+        ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
+    }
+
     private var lastTapText: String {
-        if let last = transactions.first(where: { $0.seenIn.contains(.tap) }) {
-            return "Last tap \(last.date.formatted(.relative(presentation: .named)))"
-        }
+        switch status {
+        case .tapLogged(let date, let merchant, _, _):
+            return "Last tap \(date.formatted(.relative(presentation: .named))) · \(merchant)"
         // Set up but nothing bought yet. "No taps yet" on its own reads as
         // "this isn't working".
-        if LogPurchaseIntent.shortcutHasReachedApp {
+        case .shortcutReached:
             return "Connected · waiting for a shop tap"
+        case .notConnected:
+            return "Not set up yet"
         }
-        return "Not set up yet"
     }
 }
