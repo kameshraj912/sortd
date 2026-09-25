@@ -846,10 +846,15 @@ struct SpendChart: View {
     }
 
     /// Cumulative spend per day from `start`, for `days` days, plotted on
-    /// the current period's dates so the two lines line up.
-    private func series(from start: Date, days: Int) -> [Point] {
+    /// the current period's dates so the two lines line up. Purchases on or
+    /// after `until` are left out: last month's line runs for this month's
+    /// day count, so after a shorter month it would otherwise pick up the
+    /// first days of this one (April 1,000 then 200 on 1 May read as "17%
+    /// less" on 31 May). Past `until` the line stays flat.
+    private func series(from start: Date, days: Int, until: Date? = nil) -> [Point] {
         var byDay: [Int: Double] = [:]
         for t in transactions {
+            if let until, t.date >= until { continue }
             let offset = cal.dateComponents([.day], from: start, to: cal.startOfDay(for: t.date)).day ?? -1
             if offset >= 0 && offset < days, t.category != .transfers { byDay[offset, default: 0] += t.audValue.double }
         }
@@ -870,7 +875,7 @@ struct SpendChart: View {
     }
 
     private var current: [Point] { series(from: interval.start, days: daysSoFar) }
-    private var previous: [Point] { series(from: previousStart, days: totalDays) }
+    private var previous: [Point] { series(from: previousStart, days: totalDays, until: interval.start) }
 
     private var showBudget: Bool { range == .month && budget > 0 }
 
@@ -919,7 +924,8 @@ struct SpendChart: View {
                         .foregroundStyle(diff >= 0 ? Color.down : Color.up)
                     // The outcome as a share, for the month: "12% less than
                     // last month by now" says more than the amount alone.
-                    if range == .month, let outcome = Outcome.line(thisMonth: now, lastMonthToSameDay: prevSameDay) {
+                    if range == .month, let outcome = Outcome.line(
+                        thisMonth: now, lastMonthToSameDay: Outcome.lastMonthToSameDay(transactions, calendar: cal)) {
                         Text(outcome)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
