@@ -369,6 +369,7 @@ struct ImportView: View {
                 Task { await FXService.backfill(in: context) }
                 imported += 1
                 done = result.summary
+                Analytics.shared.track(.restoreCompleted, ["mode": .string(String(describing: mode))])
             } catch {
                 self.error = error.localizedDescription
             }
