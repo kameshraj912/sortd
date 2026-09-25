@@ -17,4 +17,10 @@ POSTHOG_API_KEY =
 POSTHOG_HOST = https:/$()/eu.i.posthog.com
 SENTRY_DSN =
 
+// Account sign-in (sub-spec 4): the stateless revoke Worker that cancels an
+// Apple sign-in and deletes the PostHog person. Read into Info.plist as
+// ACCOUNT_WORKER_URL. Empty (the default, and until the Worker exists):
+// account deletes are queued on the phone and retried at each launch.
+ACCOUNT_WORKER_URL =
+
 #include? "Secrets.xcconfig"
