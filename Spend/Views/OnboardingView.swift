@@ -31,9 +31,6 @@ struct OnboardingView: View {
     @AppStorage(SetupProfile.billsKey) private var billIntent = false
     @AppStorage(SetupProfile.rerunKey) private var rerun = false
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// iOS 26.4 added a precise signal for "cross-fade instead of slide";
-    /// before that, Reduce Motion is the only thing to go on.
-
     /// They answered the check-in question this time (not skipped, not "Not now").
     @State private var checkInChosen = false
     /// Asking iOS for notification permission; one tap is enough.
