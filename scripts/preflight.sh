@@ -41,11 +41,16 @@ if grep -q 'sentry-cocoa' "$PBX"; then
   dsn=""
   [ -f Secrets.xcconfig ] && dsn=$(grep -m1 '^SENTRY_DSN' Secrets.xcconfig | cut -d= -f2- | tr -d ' \t')
   [ -z "$dsn" ] && dsn=$(grep -m1 '^SENTRY_DSN' Config.xcconfig 2>/dev/null | cut -d= -f2- | tr -d ' \t')
-  if [ -z "$dsn" ] || printf '%s' "$dsn" | grep -q 'replace_me'; then
+  # Read it as Xcode does: "//" starts a comment, so a DSN pasted without the
+  # $() reads back as "https:"; then the $() drops out. Set means what is left
+  # still has the scheme, the key and the ingest host.
+  [ -n "$dsn" ] && dsn=$(printf '%s' "$dsn" | sed 's#//.*$##; s/\$()//g')
+  if [ -z "$dsn" ] || printf '%s' "$dsn" | grep -q 'replace_me' \
+     || ! { printf '%s' "$dsn" | grep -q '://' && printf '%s' "$dsn" | grep -q '@' && printf '%s' "$dsn" | grep -q 'ingest'; }; then
     if [ "$MODE" = "--appstore" ]; then
-      bad "SENTRY_DSN is empty. Copy Secrets.xcconfig.example to Secrets.xcconfig and paste the DSN."
+      bad "SENTRY_DSN is empty or not a DSN (needs https:/\$()/<key>@<org>.ingest.sentry.io/<id>). See Secrets.xcconfig.example."
     else
-      warn "SENTRY_DSN is empty: this build sends no crash reports (see Secrets.xcconfig.example)."
+      warn "SENTRY_DSN is empty or not a DSN: this build sends no crash reports (see Secrets.xcconfig.example)."
     fi
   else
     ok "Sentry DSN set."
