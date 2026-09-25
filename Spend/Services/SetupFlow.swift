@@ -4,11 +4,11 @@ import Foundation
 /// Pure (no SwiftUI, no stores), so every kind of person can be walked
 /// through it in tests.
 struct SetupFlow: Equatable {
-    /// Questions first, then what the answers built, then the few chores,
-    /// then Pro. Nothing is asked for before the app has earned it.
+    /// Questions first, then what the answers built, then the few chores.
+    /// Nothing is asked for before the app has earned it.
     enum Step: Int, CaseIterable, Sendable {
         case welcome, goals, payment, currency, feeling, budget, checkIn, building, plan
-        case cards, cardDetails, applePay, pro, email
+        case cards, cardDetails, applePay, email
     }
 
     var goals: Set<SetupProfile.Goal> = []
@@ -16,7 +16,6 @@ struct SetupFlow: Equatable {
     var hasCards = false
     /// The Gmail feature is switched on in this build.
     var gmailFeature = false
-    var isPro = false
 
     var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
 
@@ -25,7 +24,7 @@ struct SetupFlow: Equatable {
         case .budget: goals.contains(.spendLess)
         case .cardDetails: hasCards
         case .applePay: payment != .cash
-        case .email: gmailFeature && isPro && wantsGmail
+        case .email: gmailFeature && wantsGmail
         default: true
         }
     }
