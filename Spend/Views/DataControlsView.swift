@@ -21,10 +21,14 @@ struct PrivacyView: View {
                         if !on { log.notice("analytics: switch off, \(Analytics.Event.analyticsOptedOut.rawValue) then nothing") }
                         analytics.isEnabled = on
                     })) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Share usage data")
-                        Text("Usage counts, never amounts. Turn off anytime.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Share usage data")
+                            Text("Usage counts, never amounts. Turn off anytime.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "chart.bar")
                     }
                 }
                 .accessibilityHint("Counts what you use, never what you spend.")
