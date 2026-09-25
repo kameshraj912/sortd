@@ -132,8 +132,8 @@ struct HomeView: View {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
         }
-        // Tips: each visit counts, and the rules read the purchase figures.
-        .onAppear { TipState.visitedHome() }
+        // Tips: the rules read the purchase figures (visits are counted by
+        // RootView, on the tab, so a return from a detail is not one).
         .onChange(of: transactions.count, initial: true) { TipState.update(from: transactions) }
     }
 
