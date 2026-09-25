@@ -245,7 +245,7 @@ struct OnboardingView: View {
                     onFinish()
                 } label: {
                     Image(systemName: "xmark").font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 30, height: 30)
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
@@ -253,7 +253,7 @@ struct OnboardingView: View {
             } else if step != .welcome && step != .building {
                 Button { if !tapsLocked { go(-1) } } label: {
                     Image(systemName: "chevron.left").font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 30, height: 30)
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
@@ -300,7 +300,7 @@ struct OnboardingView: View {
     /// An invisible copy of the round back button, so the progress bar
     /// stays put on steps with nothing on one side.
     private var placeholderCircle: some View {
-        Button {} label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
+        Button {} label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
             .hidden()
