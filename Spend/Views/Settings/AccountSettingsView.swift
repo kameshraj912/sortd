@@ -20,8 +20,13 @@ struct AccountSettingsView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var store = AccountStore.shared
     @State private var working = false
-    @State private var failure: String?
+    @State private var notice: Notice?
     @State private var confirmingDelete = false
+
+    struct Notice {
+        let title: String
+        let message: String
+    }
 
     var body: some View {
         List {
@@ -42,10 +47,10 @@ struct AccountSettingsView: View {
         } message: {
             Text(deleteMessage)
         }
-        .alert("Sign-in didn't work", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("OK") {}
         } message: {
-            Text(failure ?? "")
+            Text(notice?.message ?? "")
         }
     }
 
@@ -130,8 +135,20 @@ struct AccountSettingsView: View {
     }
 
     private var deleteMessage: String {
-        let provider = store.current?.provider.name ?? "the provider"
-        return "Sortd forgets who you are on this iPhone, asks \(provider) to cancel the sign-in and deletes your usage record. Your purchases stay unless you also delete all data."
+        guard let account = store.current else { return "" }
+        var text: String
+        if WorkerRevoker.keepsGmail(account, connected: GmailSync.accounts.map(\.email)) {
+            text = "Sortd forgets who you are on this iPhone and deletes your usage record. Gmail stays connected."
+        } else {
+            text = "Sortd forgets who you are on this iPhone, asks \(account.provider.name) to cancel the sign-in and deletes your usage record."
+            if account.provider == .apple { text += " Apple will ask you to sign in once more to confirm." }
+        }
+        #if SORTD_ICLOUD
+        text += " Your purchases stay unless you also delete all data, on this iPhone and in iCloud."
+        #else
+        text += " Your purchases stay unless you also delete all data."
+        #endif
+        return text
     }
 
     // MARK: Actions
@@ -144,7 +161,7 @@ struct AccountSettingsView: View {
         } catch AccountError.cancelled {
             // Closed the sheet: nothing to say.
         } catch {
-            failure = error.localizedDescription
+            notice = Notice(title: "Sign-in didn't work", message: error.localizedDescription)
         }
     }
 
@@ -153,7 +170,10 @@ struct AccountSettingsView: View {
         // this can take a moment when the network is slow.
         working = true
         defer { working = false }
-        await store.deleteAccount()
+        let problems = await store.deleteAccount()
+        if let first = problems.first {
+            notice = Notice(title: "Account deleted, with one thing left", message: first)
+        }
         guard alsoData else { return }
         DataReset.deleteEverything(in: context)
         // Setup can't open over the Settings sheet: close it.
