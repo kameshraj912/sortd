@@ -83,6 +83,7 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `gmail_connected(accounts)`, `gmail_sync_finished(ok, forced, error_code)`: no email or purchase counts (Google Limited Use)
 - `backup_completed`, `restore_completed(mode)`
 - `tip_left(size: small|medium|large)`: never the price
+- `tip_shown(id)`, `tip_used(id)`: in-app tips (sub-spec 7). `id` is the tip's `TipCopy` id (`add`, `apple_pay`, `swipe`, `search`, `insights`, `month`); shown once per tip per install, used once when the thing the tip was about is done after it was shown
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
 - `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
 
