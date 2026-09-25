@@ -58,13 +58,16 @@ private final class FakeCredentialStateChecker: CredentialStateChecker {
 @MainActor
 struct AccountStoreTests {
 
-    private func makeStore(keychain: FakeAccountKeychain = FakeAccountKeychain(),
-                            revoker: FakeAccountRevoker = FakeAccountRevoker(),
-                            sink: FakeIdentitySink = FakeIdentitySink(),
-                            checker: FakeCredentialStateChecker = FakeCredentialStateChecker(),
+    private func makeStore(keychain: FakeAccountKeychain? = nil,
+                            revoker: FakeAccountRevoker? = nil,
+                            sink: FakeIdentitySink? = nil,
+                            checker: FakeCredentialStateChecker? = nil,
                             defaults: UserDefaults,
                             salt: String = "test-salt") -> AccountStore {
-        AccountStore(keychain: keychain, revoker: revoker, sink: sink, checker: checker,
+        AccountStore(keychain: keychain ?? FakeAccountKeychain(),
+                     revoker: revoker ?? FakeAccountRevoker(),
+                     sink: sink ?? FakeIdentitySink(),
+                     checker: checker ?? FakeCredentialStateChecker(),
                      defaults: defaults, salt: salt)
     }
 
