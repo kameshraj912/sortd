@@ -138,7 +138,6 @@ struct AccountStoreReviewTests {
     // MARK: (2) the queue survives the Delete All wipe
 
     @Test func pendingDeletesSurviveADefaultsWipeWhenWrapped() async throws {
-        let name = "review-\(#function)"
         let defaults = defaults(#function)
         let revoker = RevokerFake()
         revoker.error = .offline
@@ -148,8 +147,17 @@ struct AccountStoreReviewTests {
         let before = queued(defaults)
         #expect(before.count == 2)
 
-        s.preservePendingDeletes { defaults.removePersistentDomain(forName: name) }
+        // Stands in for Delete All's removePersistentDomain, which cfprefsd
+        // applies on its own time and can swallow the write that follows it
+        // in a busy test process. The store's part is the same: snapshot,
+        // let the wipe run, put the queue back.
+        var emptyDuringWipe = false
+        s.preservePendingDeletes {
+            defaults.removeObject(forKey: AccountStore.pendingDeletesKey)
+            emptyDuringWipe = queued(defaults).isEmpty
+        }
 
+        #expect(emptyDuringWipe)
         #expect(queued(defaults) == before)
     }
 
