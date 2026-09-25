@@ -8,7 +8,6 @@ struct SetupTask: Identifiable, Equatable, Sendable {
     let symbol: String
     let title: String
     let detail: String
-    let pro: Bool
     var done: Bool
     var id: String { kind.rawValue }
 }
@@ -24,19 +23,19 @@ enum SetupChecklist {
         // Starts one step in: answering the questions counts (people finish
         // a list that's already begun more often than a blank one).
         var list = [SetupTask(kind: .answers, symbol: "checklist", title: "Answer a few questions",
-                              detail: "Done", pro: false, done: true)]
+                              detail: "Done", done: true)]
         list.append(SetupTask(kind: .cards, symbol: "creditcard", title: "Add the cards you pay with",
-                              detail: "30 seconds", pro: false, done: hasCards))
+                              detail: "30 seconds", done: hasCards))
         if flow.payment == .cash {
             list.append(SetupTask(kind: .widget, symbol: "square.grid.2x2", title: "Add Sortd to your Home Screen",
-                                  detail: "Log cash in one tap", pro: false, done: widgetAdded))
+                                  detail: "Log cash in one tap", done: widgetAdded))
         } else {
             list.append(SetupTask(kind: .applePay, symbol: "wave.3.right", title: "Log Apple Pay by itself",
-                                  detail: "2 minutes, once", pro: false, done: tapped))
+                                  detail: "2 minutes, once", done: tapped))
         }
         if flow.gmailFeature, flow.wantsGmail {
             list.append(SetupTask(kind: .gmail, symbol: "envelope", title: "Catch receipts from Gmail",
-                                  detail: "1 minute", pro: true, done: gmailConnected))
+                                  detail: "1 minute", done: gmailConnected))
         }
         return list
     }

@@ -223,9 +223,7 @@ struct AddTransactionView: View {
                 Button("Discard", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
             }
-            .sheet(isPresented: $showingScanner) {
-                if ProStore.shared.isPro { ReceiptScanView(onRead: apply) } else { PaywallView(feature: .camera) }
-            }
+            .sheet(isPresented: $showingScanner) { ReceiptScanView(onRead: apply) }
             .sheet(isPresented: $showingCategories) {
                 CategoryPickerSheet(selected: category, footer: CategoryPickerSheet.moveAllFooter) { picked in
                     category = picked
