@@ -58,7 +58,7 @@ struct ImportView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Import")
-        .sensoryFeedback(.success, trigger: imported)
+        .feedback(.confirm, trigger: imported)
         .fileImporter(isPresented: $pickingFile,
                       allowedContentTypes: StatementReader.readableTypes) { result in
             switch result {

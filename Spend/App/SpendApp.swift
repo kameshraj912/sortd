@@ -243,10 +243,10 @@ struct RootView: View {
                 Analytics.shared.track(.tabOpened, ["tab": .string(new.title.lowercased())])
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
-        .sensoryFeedback(.selection, trigger: tab)
+        .feedback(.select, trigger: tab)
         // The + never assigns `tab`, so the app's main action was the
         // one tab that gave no feedback at all.
-        .sensoryFeedback(.selection, trigger: showingAdd) { _, open in open }
+        .feedback(.select, trigger: showingAdd) { _, open in open }
         .sheet(isPresented: $router.showingSettings, onDismiss: {
             // Next time Settings opens on its main list, not a page a link pushed.
             router.settingsPath = []
