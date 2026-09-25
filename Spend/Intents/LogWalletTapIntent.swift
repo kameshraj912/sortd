@@ -67,8 +67,8 @@ struct LogWalletTapIntent: AppIntent {
         let result = try await LogPurchaseIntent.handle(merchant: parts.merchant, amount: parts.amount,
                                                         card: parts.card, in: context, book: book, now: now)
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
-        // purchase; "Send a Test Tap" is the app's own check, not a tap).
-        if result.transaction != nil, parts.merchant != TapTestButton.testMerchant {
+        // purchase; a legacy "Send a Test Tap" row is not a real tap).
+        if result.transaction != nil, parts.merchant != LogPurchaseIntent.legacyTestMerchant {
             Analytics.shared.track(.applePayTapLogged, ["merged": .bool(result.merged)])
         }
         return result

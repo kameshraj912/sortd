@@ -5,8 +5,8 @@ import SwiftData
 
 /// Overhaul sub-spec 6: the aha moment. "The aha is the first `Transaction`
 /// whose `seenIn` contains `.tap` or `.email`. It must not be sample data
-/// (`DemoData`) and must not be a Send a Test Tap purchase
-/// (`TapTestButton.testMerchant`)."
+/// (`DemoData`) and must not be a legacy Send a Test Tap purchase
+/// (`LogPurchaseIntent.legacyTestMerchant`)."
 ///
 /// Adapted to the real names read in `Spend/Models/Transaction.swift` and
 /// `Spend/Services/DemoData.swift`:
@@ -24,15 +24,10 @@ import SwiftData
 /// `Transaction.isDemo`/`isSample` flag, so `detect` must check
 /// `t.note == DemoData.marker`, not a new field.
 ///
-/// `TapTestButton.testMerchant` ("Sortd Test") is currently `private` in
-/// `Spend/Views/Components/TapTestButton.swift`; `Activation.detect` cannot
-/// reference a private symbol from another file, so this file references it
-/// directly and expects the access level to change (to `static let
-/// testMerchant` visible at least `internal`) as part of making this compile.
-///
-/// This file does not compile until `Activation` exists with the members
-/// above and `TapTestButton.testMerchant` is no longer `private`. Expected
-/// red state; see the test-writer report for the exact compiler errors.
+/// The "Send a Test Tap" button (`Spend/Views/Components/TapTestButton.swift`)
+/// was removed 25 Sep 2026 (`docs/specs/2026-09-25-apple-pay-page.md`). Its
+/// merchant name lives on as `LogPurchaseIntent.legacyTestMerchant` ("Sortd
+/// Test"), kept only so purchases already in people's stores stay excluded.
 @MainActor
 struct ActivationTests {
     let context: ModelContext
@@ -78,9 +73,10 @@ struct ActivationTests {
     }
 
     /// The Send a Test Tap button proves Sortd's half only; it must not
-    /// count as the aha (spec: "milestone, not the aha").
+    /// count as the aha (spec: "milestone, not the aha"). The button is
+    /// gone, but old rows under its merchant name must stay excluded.
     @Test func testTapMerchantIsNotActivation() throws {
-        let t = try log(TapTestButton.testMerchant, source: .tap)
+        let t = try log(LogPurchaseIntent.legacyTestMerchant, source: .tap)
         #expect(Activation.detect(t) == nil)
     }
 
