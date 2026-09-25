@@ -89,7 +89,7 @@ if [ -n "$flagfile" ]; then
       cur = depth > 0 ? dbg[depth] : 0
       code = raw
       sub(/\/\/.*/, "", code)
-      if (cur == 0 && code ~ /SPEND_DEMO|SPEND_REEL_TAP/) {
+      if (cur == 0 && code ~ /SPEND_[A-Z_]+/) {
         print FILENAME ":" FNR ":" raw
       }
     }
@@ -98,7 +98,7 @@ if [ -n "$flagfile" ]; then
     bad "a DEBUG-only flag is used outside #if DEBUG:"
     while IFS= read -r line; do say "      $line"; done < "$flagfile"
   else
-    ok "debug flags (SPEND_DEMO, SPEND_REEL_TAP) all stay inside #if DEBUG."
+    ok "debug flags (every SPEND_*) all stay inside #if DEBUG."
   fi
 fi
 

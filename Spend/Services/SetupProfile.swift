@@ -14,7 +14,7 @@ enum SetupProfile {
     static let rerunKey = "setup.rerun"
 
     /// Someone asked for bill reminders during setup and the request is
-    /// still pending (an older build waited for Pro). Turn them on, once.
+    /// still pending. Turn them on, once.
     @MainActor
     static func applyPendingBillReminders(defaults: UserDefaults = .standard) {
         guard defaults.bool(forKey: billsKey) else { return }

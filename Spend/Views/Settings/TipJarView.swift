@@ -5,6 +5,7 @@ import StoreKit
 /// prices, and a plain thank-you after one. Nothing in the app changes.
 struct TipJarView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var jar = TipJar.shared
     /// The product being bought right now, so its row shows a spinner.
     @State private var buying: String?
@@ -27,6 +28,7 @@ struct TipJarView: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Color.up)
                             .accessibilityAddTraits(.isStaticText)
+                            .onAppear { AccessibilityNotification.Announcement("Thank you").post() }
                     }
                 }
 
@@ -73,21 +75,33 @@ struct TipJarView: View {
         Button {
             Task { await tip(product) }
         } label: {
-            HStack {
-                Text(product.displayName).foregroundStyle(Color.ink)
-                Spacer()
-                if buying == product.id {
-                    ProgressView()
+            Group {
+                if typeSize.isAccessibilitySize {
+                    // Name over price at accessibility sizes, so neither is
+                    // squeezed beside the other.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(product.displayName).foregroundStyle(Color.ink)
+                        if buying == product.id { ProgressView() } else { price(product) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Text(product.displayPrice)
-                        .font(.body.weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(Color.ink)
+                    HStack {
+                        Text(product.displayName).foregroundStyle(Color.ink)
+                        Spacer()
+                        if buying == product.id { ProgressView() } else { price(product) }
+                    }
                 }
             }
             .contentShape(.rect)
         }
         .disabled(buying != nil)
         .accessibilityLabel("\(product.displayName), \(Money.spoken(product.price, product.priceFormatStyle.currencyCode))")
+    }
+
+    private func price(_ product: Product) -> some View {
+        Text(product.displayPrice)
+            .font(.body.weight(.semibold)).monospacedDigit()
+            .foregroundStyle(Color.ink)
     }
 
     private func tip(_ product: Product) async {

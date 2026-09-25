@@ -38,7 +38,7 @@ while IFS= read -r f; do
     Spend/*.swift|SortdWidget/*.swift) ;;
     *) continue ;;
   esac
-  if git show ":$f" | grep -qE 'SPEND_(DEMO|REEL_TAP|ONBOARD_STEP)'; then
+  if git show ":$f" | grep -qE 'SPEND_[A-Z_]+'; then
     git show ":$f" | grep -q '#if DEBUG' || bad "$f uses a debug flag with no #if DEBUG."
   fi
 done <<< "$staged"
