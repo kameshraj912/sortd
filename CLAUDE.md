@@ -6,7 +6,7 @@ stays on the phone.
 
 **Status (20 Sep 2026):** heading for TestFlight. Paid Apple Developer enrolment is the
 open blocker — nothing can be uploaded until it clears. Site is live at sortd.page.
-Google OAuth restricted-scope review submitted 20 Sep 2026.
+Google OAuth restricted-scope review submitted 20 Sep 2026. The app is free since 25 Sep 2026.
 
 - Store readiness: `docs/AppStoreChecklist.md` (read the top section before any App Store build)
 - Listing copy: `docs/AppStoreListing.md` · Review notes: `docs/AppReviewNotes.md`
@@ -67,14 +67,12 @@ Full design: `docs/AgentPipeline.md`.
 - Sample data in the simulator: launch with env `SPEND_DEMO=1` (DEBUG only), or tap "Explore with sample data" on the first screen.
 - On the phone: Xcode → Signing & Capabilities → pick Raj's team. Free team = re-install every 7 days.
 
-## Paid features
-Pro gates Gmail, the receipt camera, Insights, Subscriptions & bills, and category budgets.
-Everything else is free forever. Entitlements come from StoreKit 2 on the device.
+## Tip jar
+Everything is free forever: Gmail, the receipt camera, Insights, Subscriptions & bills,
+and category budgets included. Settings › About has a "Leave a tip" row: three
+consumable tips that unlock nothing. StoreKit 2 stays in the app only for that.
 
-`SORTD_BETA` is set on the **Release** config so TestFlight testers get Pro without paying
-(`ProStore.isPro`). **It must come out before the App Store build** — it also unlocks Pro
-for App Review, who would then never see the paywall. `scripts/preflight.sh --appstore`
-fails while it is still there.
+`SORTD_BETA` is gone.
 
 ## Layout
 - `Spend/App` — app entry, tabs, DEBUG sample data.
@@ -90,7 +88,7 @@ fails while it is still there.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
 - No bank passwords, no screen scraping. Secrets (the Google refresh token) go in the Keychain, never in git.
-- Debug-only escapes (`SPEND_DEMO`, `SPEND_PRO`, `SPEND_PAYWALL_DEMO`, `SPEND_REEL_TAP`) stay inside `#if DEBUG`.
+- Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`) stay inside `#if DEBUG`.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 
 ## Known gaps

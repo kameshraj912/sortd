@@ -13,17 +13,12 @@ stored on the device.
 
 **Quickest way to review**
 On the first screen tap "Look around with sample data": about two months of purchases on two
-sample cards. Home, Activity, Settings and card pages are free. Tap "Clear" on the Home banner to
-go back to setup.
+sample cards, across every screen. Tap "Clear" on the Home banner to go back to setup.
 
-**Sortd Pro (in-app purchases)**
+**Every feature is free**
 Gmail receipts, Insights, Subscriptions & Bills (with local bill reminders), the receipt camera
-and category budgets are Pro; tapping one shows the paywall. Three products, same features:
-Yearly (auto-renewable, 2-week free trial for new subscribers), Monthly (auto-renewable),
-Lifetime (one-time). A sandbox purchase unlocks Pro and fills Insights and Subscriptions & Bills.
-The paywall shows the trial, the price after it and how to cancel, plus Restore Purchases, Terms
-and Privacy. Terms and Privacy are also in Settings › Privacy & Security › Privacy.
-Ongoing value: new receipt formats and bank layouts, more currencies, regular updates.
+and category budgets: nothing is locked. Settings › About › Leave a tip offers three consumable
+tips that unlock nothing. Terms and Privacy are in Settings › Privacy & Security › Privacy.
 
 **Logging Apple Pay taps (Shortcuts automation)**
 Sortd can't read Wallet itself. The user makes a personal automation. iOS 27: Shortcuts › + ›
@@ -33,7 +28,7 @@ then logged, even with the app closed. Guide with pictures: Settings › Purchas
 Pay Logging. ▶ in Shortcuts is a test: Sortd says "connected" and saves nothing. Needs a real
 device with a Wallet card; video: [VIDEO LINK]. Purchases can always be added by hand.
 
-**Gmail (optional, Pro)**
+**Gmail (optional)**
 Settings › Purchase Sources › Connect Gmail. The app explains what it reads first, then opens
 Google OAuth in ASWebAuthenticationSession with `gmail.readonly`. Only receipts and bank alerts
 are searched and read on the device; the only requests go to Google. Refresh token in the
