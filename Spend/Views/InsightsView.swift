@@ -36,7 +36,11 @@ struct InsightsView: View {
             }
             .navigationTitle("Insights")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(transactions.isEmpty ? .visible : .hidden, for: .navigationBar)
+            // With purchases the page draws its own title; the bar stays
+            // for the gear (hidden when Settings lives elsewhere).
+            .toolbar(removing: transactions.isEmpty ? nil : .title)
+            .toolbar(transactions.isEmpty || NavOption.current.gearOnEveryTab ? .visible : .hidden, for: .navigationBar)
+            .toolbar { SettingsToolbarButton() }
             .navigationDestination(item: $selectedCategory) { category in
                 CategoryDetailView(category: category)
             }

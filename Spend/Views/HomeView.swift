@@ -92,15 +92,17 @@ struct HomeView: View {
             // Home draws its own title; the bar only carries the gear.
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(removing: .title)
-            .toolbar(transactions.isEmpty || NavLayout.current == .toolbar ? .visible : .hidden, for: .navigationBar)
+            .toolbar(transactions.isEmpty || NavLayout.current == .toolbar || NavOption.current.gearOnEveryTab
+                     ? .visible : .hidden, for: .navigationBar)
             .toolbar {
                 // Top right, where the header puts it on the full Home.
-                ToolbarItem(placement: .topBarTrailing) {
-                    if NavOption.current.gearOnHome {
+                if NavOption.current.gearOnHome {
+                    ToolbarItem(placement: .topBarTrailing) {
                         Button("Settings", systemImage: "gearshape") { Router.shared.showingSettings = true }
                             .tint(Color.ink)
                     }
                 }
+                SettingsToolbarButton()
                 ToolbarItem(placement: .primaryAction) {
                     if NavLayout.current == .header || NavLayout.current == .toolbar {
                         Button("Add Purchase", systemImage: "plus") { showingAdd = true }
@@ -264,9 +266,6 @@ struct HomeView: View {
                     }
                 } }
             }
-            // The Settings gear floats top-right over every tab; keep the
-            // title row out from under it (UI pass finding 9).
-            .padding(.trailing, NavOption.current.gearOnEveryTab ? 60 : 0)
             .padding(.top, 8)
 
             // A ZStack, so the old and new totals overlap while one slides
