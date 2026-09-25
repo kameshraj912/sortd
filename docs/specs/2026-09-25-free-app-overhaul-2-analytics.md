@@ -84,7 +84,7 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `backup_completed`, `restore_completed(mode)`
 - `tip_left(size: small|medium|large)`: never the price
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
-- Sign-in (sub-spec 4) calls `identify`/`reset` rather than sending an event.
+- `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
 
 ## What Raj does in PostHog
 
