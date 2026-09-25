@@ -56,6 +56,7 @@ describe("App Attest attestation of a fresh key", () => {
 
   it("rejects a key id that is not SHA256 of the certified key", async () => {
     expect(await run({ wrongKeyId: true })).toBe("attest_invalid");
+    expect(await run({ keyNotCertified: true })).toBe("attest_invalid");
   });
 
   it("rejects a credentialId that is not the key id", async () => {

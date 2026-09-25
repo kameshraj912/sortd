@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyChallenge } from "../src/challenge";
-import { handle } from "../src/index";
+import { handle } from "../src/handler";
 import {
   BASE,
   CHALLENGE_KEY,
@@ -269,5 +269,13 @@ describe("logging", () => {
     }
     expect(all).toContain("apple_invalid_client");
     expect(all).toContain("/v1/apple/revoke");
+  });
+});
+
+describe("entry module", () => {
+  it("exports only the default handler (workerd rejects any other export from main)", async () => {
+    const mod = await import("../src/index");
+    expect(Object.keys(mod)).toEqual(["default"]);
+    expect(typeof mod.default.fetch).toBe("function");
   });
 });
