@@ -58,9 +58,6 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
-                            // The one Home tip that is not a popover: the +
-                            // lives in the tab bar, which has nothing to anchor to.
-                            SortdTipView(tip: AddTip())
                             if !demo {
                                 // The aha: the first purchase logged by itself,
                                 // then the one notification ask.

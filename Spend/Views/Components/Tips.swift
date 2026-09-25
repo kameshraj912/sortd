@@ -2,12 +2,14 @@ import SwiftUI
 import TipKit
 import Observation
 
-/// In-app tips (overhaul sub-spec 7). Six TipKit tips that appear one at a
+/// In-app tips (overhaul sub-spec 7). Five TipKit tips that appear one at a
 /// time, at the moment a feature matters: never as a tour, never during
-/// setup, never in the first-launch session.
+/// setup, never in the first-launch session, and never while the app intro
+/// (`docs/specs/2026-09-25-app-intro.md`) is up — it teaches + instead of
+/// the sixth tip, which is gone.
 ///
 /// Four parts, each on its own:
-/// - `TipCopy`: the six lines (tested for tone and length).
+/// - `TipCopy`: the five lines (tested for tone and length).
 /// - `TipRules`: the eligibility maths as pure functions (tested).
 /// - `TipState`: the counters behind the rules, in UserDefaults, and the one
 ///   `refresh()` that turns them into an `Eligibility` (tested with a
@@ -29,8 +31,6 @@ nonisolated struct TipCopy: Identifiable, Sendable {
     let message: String
     let symbol: String
 
-    static let add = TipCopy(id: "add", title: "Add cash or anything Apple Pay missed",
-                             message: "Tap the plus button to log a purchase by hand.", symbol: "plus.circle")
     static let applePay = TipCopy(id: "apple_pay", title: "Log Apple Pay by itself",
                                   message: "Set up the Shortcut once and every tap lands here on its own.",
                                   symbol: "wave.3.right")
@@ -47,7 +47,7 @@ nonisolated struct TipCopy: Identifiable, Sendable {
                                message: "Tap the month at the top to see any of the last 12 months.",
                                symbol: "calendar")
 
-    static let all: [TipCopy] = [add, applePay, swipe, search, insights, month]
+    static let all: [TipCopy] = [applePay, swipe, search, insights, month]
 }
 
 // MARK: - Rules
@@ -55,11 +55,6 @@ nonisolated struct TipCopy: Identifiable, Sendable {
 /// When each tip may show, as pure functions of the counters. `setupShowing`
 /// wins over everything: no tip while setup is on screen.
 enum TipRules {
-    /// Home seen twice, no purchase added by hand yet.
-    static func add(homeVisits: Int, manualCount: Int, setupShowing: Bool) -> Bool {
-        !setupShowing && homeVisits >= 2 && manualCount == 0
-    }
-
     /// Setup done, the Shortcut has never reached the app, and the Apple Pay
     /// row is on screen (a card user, the Finish Setup card not hidden, no
     /// sample data). A cash user gets the widget row instead.
@@ -128,15 +123,6 @@ enum TipRules {
 /// Each tip has one rule: its `eligible` parameter, set by `TipState`.
 /// That keeps the maths in `TipRules` (one place, tested) and leaves TipKit
 /// the showing, closing and once-a-day pacing.
-
-nonisolated struct AddTip: Tip {
-    @Parameter static var eligible: Bool = false
-    var id: String { TipCopy.add.id }
-    var title: Text { Text(TipCopy.add.title) }
-    var message: Text? { Text(TipCopy.add.message) }
-    var image: Image? { Image(systemName: TipCopy.add.symbol) }
-    var rules: [Rule] { #Rule(Self.$eligible) { $0 == true } }
-}
 
 nonisolated struct ApplePayTip: Tip {
     @Parameter static var eligible: Bool = false
@@ -218,6 +204,13 @@ enum TipState {
         didSet { if setupShowing != oldValue { refresh() } }
     }
 
+    /// True while the app intro is on screen. `RootView` keeps it up to
+    /// date, the same way it does `setupShowing`: no tip fights the intro
+    /// for the same spot on Home or Activity.
+    static var introShowing = false {
+        didSet { if introShowing != oldValue { refresh() } }
+    }
+
     /// The figures from the store, as the screens last reported them.
     private(set) static var figures = Figures.empty
 
@@ -256,7 +249,6 @@ enum TipState {
     /// Each rule's answer. Which one a screen shows is decided when it is
     /// applied (a tip already closed gives way to the next).
     struct Eligibility: Equatable, Sendable {
-        var add = false
         var applePay = false
         var month = false
         var swipe = false
@@ -342,7 +334,6 @@ enum TipState {
     static func monthChanged() { done(monthChangedKey, MonthTip()) }
     static func manualPurchaseAdded() {
         figures.manualCount += 1
-        used(AddTip())
         refresh()
     }
 
@@ -381,7 +372,7 @@ enum TipState {
     /// Each rule against the counters. Pure apart from reading the defaults.
     static func compute() -> Eligibility {
         let d = defaults
-        guard firstSessionEnded else { return Eligibility() }
+        guard firstSessionEnded, !introShowing else { return Eligibility() }
         let setup = setupShowing
         let shortcutReached = d.object(forKey: LogPurchaseIntent.lastTapAtKey) != nil
         let payment = SetupProfile.Payment(rawValue: d.string(forKey: SetupProfile.paymentKey) ?? "")
@@ -389,8 +380,6 @@ enum TipState {
             && !d.bool(forKey: SetupChecklist.hiddenKey)
             && !d.bool(forKey: DemoData.activeKey)
         return Eligibility(
-            add: TipRules.add(homeVisits: d.integer(forKey: homeVisitsKey),
-                              manualCount: figures.manualCount, setupShowing: setup),
             applePay: TipRules.applePay(setupDone: d.bool(forKey: OnboardingView.doneKey),
                                         shortcutReached: shortcutReached, rowShowing: applePayRow, setupShowing: setup),
             month: TipRules.month(calendarMonthsOfData: figures.monthsOfData,
@@ -406,14 +395,13 @@ enum TipState {
     static func refresh() { apply(compute()) }
 
     /// Writes each tip's `eligible` parameter, one tip per screen at most:
-    /// Home (add, Apple Pay, month), Activity (swipe, search), Insights.
+    /// Home (Apple Pay, month), Activity (swipe, search), Insights.
     /// A tip already closed or invalidated gives its place to the next.
     private static func applyToTipKit(_ e: Eligibility) {
         if defaults.object(forKey: LogPurchaseIntent.lastTapAtKey) != nil { used(ApplePayTip()) }
-        let home = TipRules.onlyOne([e.add && open(AddTip()), e.applePay && open(ApplePayTip()), e.month && open(MonthTip())])
-        set(&AddTip.eligible, home == 0)
-        set(&ApplePayTip.eligible, home == 1)
-        set(&MonthTip.eligible, home == 2)
+        let home = TipRules.onlyOne([e.applePay && open(ApplePayTip()), e.month && open(MonthTip())])
+        set(&ApplePayTip.eligible, home == 0)
+        set(&MonthTip.eligible, home == 1)
         let activity = TipRules.onlyOne([e.swipe && open(SwipeTip()), e.search && open(SearchTip())])
         set(&SwipeTip.eligible, activity == 0)
         set(&SearchTip.eligible, activity == 1)
@@ -478,7 +466,7 @@ final class TipVisibility {
     func start() {
         guard !started else { return }
         started = true
-        let all: [any Tip] = [AddTip(), ApplePayTip(), SwipeTip(), SearchTip(), InsightsTip(), MonthTip()]
+        let all: [any Tip] = [ApplePayTip(), SwipeTip(), SearchTip(), InsightsTip(), MonthTip()]
         for tip in all {
             Task { @MainActor in
                 self.set(tip.id, tip.shouldDisplay)
