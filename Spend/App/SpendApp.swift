@@ -45,6 +45,8 @@ struct SpendApp: App {
         let launch = Perf.begin("launch.init")
         defer { launch.end() }
         CrashReporting.start()
+        // Finish any tip left unfinished, listen for new ones, load prices.
+        TipJar.shared.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
@@ -287,10 +289,7 @@ struct RootView: View {
             defer { pass.end() }
             // Not needed for anything on screen: don't make the rest wait.
             Task { await GoogleAuth.retryPendingRevokes() }
-            // A subscription can expire while the app sits in memory, and
-            // expiry sends no update: check again before anything uses isPro.
-            await Perf.measure("launch.proRefresh") { await ProStore.shared.refresh() }
-            // Bill reminders asked for during setup, before they had Pro.
+            // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()
             Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
             await FXService.ensureConverted(in: context)
@@ -332,9 +331,7 @@ extension RootView {
                 Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
                 Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
                 Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .prominent) { Color.clear }
-                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                    ProGate(feature: .insights) { InsightsView() }
-                }
+                Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) { InsightsView() }
                 if nav.hasYouTab {
                     Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
                 }
@@ -364,9 +361,7 @@ extension RootView {
         TabView(selection: tabSelection) {
             Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
             Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
-            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                ProGate(feature: .insights) { InsightsView() }
-            }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) { InsightsView() }
             if nav.hasYouTab {
                 Tab(AppTab.you.title, systemImage: AppTab.you.symbol, value: AppTab.you) { SettingsView() }
             }
@@ -382,9 +377,7 @@ extension RootView {
         TabView(selection: tabSelection) {
             Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { HomeView(tab: $tab) }
             Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { ActivityView() }
-            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) {
-                ProGate(feature: .insights) { InsightsView() }
-            }
+            Tab(AppTab.insights.title, systemImage: AppTab.insights.symbol, value: AppTab.insights) { InsightsView() }
             Tab(value: AppTab.search, role: .search) {
                 SearchView(external: layout.rootSearch ? $searchQuery : nil)
             }

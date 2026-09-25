@@ -38,6 +38,10 @@ enum Reminders {
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
 
+    /// Whether reminders get scheduled at all. Only the on/off setting
+    /// decides: nothing is gated behind a purchase.
+    nonisolated static func shouldSchedule(enabled: Bool) -> Bool { enabled }
+
     /// True while Apple's notification alert is up (see `SystemPrompt`).
     static var isAskingPermission: Bool { SystemPrompt.shared.active }
 
@@ -72,9 +76,7 @@ enum Reminders {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
-        // Reminders are part of Subscriptions & bills (Pro). A lapsed
-        // subscription stops them; the setting comes back with Pro.
-        guard enabled, ProStore.shared.isPro else { return }
+        guard shouldSchedule(enabled: enabled) else { return }
 
         let cal = Calendar.current
         let horizon = cal.date(byAdding: .day, value: 45, to: now)!
@@ -102,7 +104,7 @@ enum Reminders {
     /// monthly limit. Only when reminders are on; each one fires once a month.
     static func checkCategoryLimits(_ transactions: [Transaction], now: Date = .now,
                                     defaults: UserDefaults = .standard) async {
-        guard enabled, ProStore.shared.isPro else { return }
+        guard shouldSchedule(enabled: enabled) else { return }
         let progress = CategoryBudgets.progress(for: transactions, limits: CategoryBudgets.all(defaults), now: now)
         let due = CategoryBudgets.dueAlerts(progress, month: CategoryBudgets.monthKey(now),
                                             sent: CategoryBudgets.sentAlerts(defaults))
