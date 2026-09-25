@@ -69,7 +69,7 @@ final class Analytics {
 
     static let enabledKey = "analyticsEnabled"
     static let saltKey = "analyticsSalt"
-    /// Set once by `activation`, so the event fires once per install.
+    /// Prefix for `trackOnce`: "<prefix>.<event>" is set once per install.
     static let activatedKey = "analyticsActivated"
     /// When this install first ran, for the activation hours bucket.
     static let installedAtKey = "analyticsInstalledAt"
@@ -169,12 +169,13 @@ final class Analytics {
         sink.screen(name)
     }
 
-    /// The first purchase the app logged by itself (a tap or a receipt),
-    /// once per install. Never for sample data or a test tap: callers check
-    /// the merchant; this checks the demo flag.
-    func activation(source: String) {
-        guard !DemoData.isActive, !defaults.bool(forKey: Self.activatedKey) else { return }
-        defaults.set(true, forKey: Self.activatedKey)
+    /// Once per install, with how long after install it happened
+    /// (`hours_bucket`). Used for activation: the first purchase the app
+    /// logged by itself. Never for sample data; callers skip test taps.
+    func trackOnce(_ event: Event, _ properties: [String: AnalyticsValue] = [:]) {
+        let key = "\(Self.activatedKey).\(event.rawValue)"
+        guard !DemoData.isActive, !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
         let installed = defaults.object(forKey: Self.installedAtKey) as? Date ?? .now
         let hours = Date.now.timeIntervalSince(installed) / 3600
         let bucket = switch hours {
@@ -183,7 +184,9 @@ final class Analytics {
         case ..<(24 * 7): "under_7d"
         default: "over_7d"
         }
-        track(.activationFirstAutoPurchase, ["source": .string(source), "hours_bucket": .string(bucket)])
+        var all = properties
+        all["hours_bucket"] = .string(bucket)
+        track(event, all)
     }
 
     /// Identifies as a salted hash. The salt is made once and kept on the
@@ -242,7 +245,8 @@ final class PostHogSink: Analytics.Sink {
     static let defaultHost = "https://eu.i.posthog.com"
 
     init(apiKey: String, host: URL, enabled: Bool) {
-        let config = PostHogConfig(apiKey: apiKey, host: host.absoluteString)
+        // `init(apiKey:host:)` is deprecated in 3.82; same thing, new name.
+        let config = PostHogConfig(projectToken: apiKey, host: host.absoluteString)
         config.sessionReplay = false
         config.captureApplicationLifecycleEvents = true
         config.captureScreenViews = false

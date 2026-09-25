@@ -116,6 +116,11 @@ struct LogPurchaseIntent: AppIntent {
 
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
+        // The first purchase the app logged on its own (once per install).
+        // A "Send a Test Tap" purchase is not one.
+        if case .added = outcome, name != TapTestButton.testMerchant {
+            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
+        }
         if refund, !t.refunded {
             t.refunded = true
             try? context.save()

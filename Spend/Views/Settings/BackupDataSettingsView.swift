@@ -236,6 +236,7 @@ struct BackupDataSettingsView: View {
                                       named: Exports.dated("Sortd backup", "sortdbackup"))
                 }.value
                 sharing = SharedFile(url: url)
+                Analytics.shared.track(.backupCompleted)
             } catch {
                 failure = error.localizedDescription
             }

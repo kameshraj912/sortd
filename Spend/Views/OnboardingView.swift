@@ -54,6 +54,10 @@ struct OnboardingView: View {
     /// The budget before setup started, so un-ticking "Spend less" undoes
     /// a limit set a moment ago without wiping one set weeks ago.
     @State private var budgetBefore: Double?
+    /// For analytics: how many steps this run showed, and whether Skip was
+    /// used. Never what was answered.
+    @State private var stepsSeen = 0
+    @State private var usedSkip = false
 
     typealias Step = SetupFlow.Step
     #if DEBUG
@@ -122,7 +126,14 @@ struct OnboardingView: View {
         // scrolls, instead of text running into the buttons.
         .safeAreaBar(edge: .top, spacing: 0) { topBar }
         .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
-        .onAppear { if budgetBefore == nil { budgetBefore = budget } }
+        .onAppear {
+            if budgetBefore == nil { budgetBefore = budget }
+            // Once per run of setup (a re-run from Settings counts as a run).
+            if stepsSeen == 0 {
+                stepsSeen = 1
+                Analytics.shared.track(.setupStarted, ["rerun": .bool(rerun)])
+            }
+        }
         // A budget already set (Run Setup Again) is in the old currency.
         // Convert it now, so the budget step and the plan show what will be
         // saved, not the old number with a new symbol.
@@ -263,6 +274,8 @@ struct OnboardingView: View {
                     guard !tapsLocked else { return }
                     budgetFocused = false
                     forward = true
+                    usedSkip = true
+                    stepDone(step, skipped: true)
                     withAnimation(.snappy) { step = .plan }
                 }
                 .font(.subheadline.weight(.medium))
@@ -414,7 +427,16 @@ struct OnboardingView: View {
             if delta > 0 { finish() }
             return
         }
+        if delta > 0 { stepDone(step) }
         withAnimation(.snappy) { step = next }
+    }
+
+    /// Which step was left going forward: the step's name and place, never
+    /// an answer. Where people stop is what the funnel is for.
+    private func stepDone(_ s: Step, skipped: Bool = false) {
+        stepsSeen += 1
+        Analytics.shared.track(.setupStepCompleted, ["step": .string(String(describing: s)),
+                                                     "index": .int(s.rawValue), "skipped": .bool(skipped)])
     }
 
     /// Converts the saved budget (and category limits) to the new home
@@ -467,6 +489,7 @@ struct OnboardingView: View {
         }
         rerun = false
         done = true
+        Analytics.shared.track(.setupFinished, ["skipped": .bool(usedSkip), "steps_seen": .int(stepsSeen)])
         onFinish()
     }
 

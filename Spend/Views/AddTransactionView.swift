@@ -386,6 +386,9 @@ struct AddTransactionView: View {
             }
             lastCard = card
             saved += 1
+            // Counts only: never the amount, shop or note.
+            Analytics.shared.track(.purchaseAddedManually, ["category_changed": .bool(categoryTouched),
+                                                            "has_note": .bool(!noteToSave.isEmpty)])
             Task { await FXService.backfill(in: context) }
             dismiss()
         } catch {
