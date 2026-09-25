@@ -54,7 +54,12 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
-                            if !demo { FinishSetupCard() }
+                            if !demo {
+                                // The aha: the first purchase logged by itself,
+                                // then the one notification ask.
+                                ActivationCard()
+                                FinishSetupCard()
+                            }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
