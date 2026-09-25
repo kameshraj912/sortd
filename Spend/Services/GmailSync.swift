@@ -109,7 +109,9 @@ enum GmailSync {
     @MainActor private(set) static var connecting = false
 
     /// Starts `connect` as its own task, so closing the sheet (or the whole
-    /// setup screen) doesn't stop it. Progress and errors go to `SyncStatus.gmail`.
+    /// setup screen) doesn't stop it. Progress and errors go to `SyncStatus.gmail`,
+    /// a closed Google sheet included: it says so, with Try Again, rather
+    /// than going quiet as if nothing had been tapped.
     @MainActor
     static func startConnect(in context: ModelContext) {
         let status = SyncStatus.gmail
@@ -117,8 +119,6 @@ enum GmailSync {
         status.task = Task {
             do {
                 _ = try await connect(in: context)
-            } catch GoogleAuth.AuthError.cancelled {
-                status.dismiss()
             } catch is CancellationError {
                 status.dismiss()
             } catch {

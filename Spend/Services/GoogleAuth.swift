@@ -48,6 +48,21 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
 
     private var session: ASWebAuthenticationSession?
 
+    /// The secure web sign-in sheet as one step: opens `url` and returns
+    /// the redirect that comes back on `scheme`. Tests swap in a fake.
+    typealias WebSession = @MainActor (_ url: URL, _ scheme: String) async throws -> URL
+    private let webSession: WebSession?
+    /// Holds the privacy cover off while the sheet is up (see `SystemPrompt`).
+    private let prompt: SystemPrompt
+
+    /// `prompt` nil means the app's shared one (resolved here, on the main
+    /// actor, since a default argument is evaluated outside it).
+    init(webSession: WebSession? = nil, prompt: SystemPrompt? = nil) {
+        self.webSession = webSession
+        self.prompt = prompt ?? .shared
+        super.init()
+    }
+
     /// Opens Google's sign-in page. Returns the account's email and saves the
     /// refresh token in the Keychain under that email. `onAuthorized` runs
     /// when Google's page closes with a yes, before the token exchange.
@@ -117,8 +132,10 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     private static let identityTokenKey = "google-identity-token"
 
     /// Google's sheet for `scopes`; returns the authorization code and the
-    /// PKCE verifier that goes with it.
-    private func authorize(scopes: [String]) async throws -> (code: String, verifier: String) {
+    /// PKCE verifier that goes with it. The sheet makes the scene inactive,
+    /// so the whole of it runs under `SystemPrompt`: a privacy cover on top
+    /// of the sheet would end the sign-in as cancelled after a second.
+    func authorize(scopes: [String]) async throws -> (code: String, verifier: String) {
         let verifier = Self.randomString(64)
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URL
         let state = Self.randomString(24)
@@ -134,9 +151,24 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
             .init(name: "prompt", value: "consent select_account"),
         ]
 
+        let callback: URL = try await prompt.showing {
+            if let webSession { return try await webSession(url.url!, Self.redirectScheme) }
+            return try await openSheet(url.url!)
+        }
+        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard items.first(where: { $0.name == "state" })?.value == state,
+              let code = items.first(where: { $0.name == "code" })?.value else {
+            throw AuthError.noCode
+        }
+        return (code, verifier)
+    }
+
+    /// The real sheet: `ASWebAuthenticationSession`, which returns the
+    /// redirect URL, or `cancelled` when the person closes it.
+    private func openSheet(_ url: URL) async throws -> URL {
         let sheet = Perf.begin("auth.googleSheet")
-        let callback: URL = try await withCheckedThrowingContinuation { cont in
-            let s = ASWebAuthenticationSession(url: url.url!, callback: .customScheme(Self.redirectScheme)) { url, error in
+        return try await withCheckedThrowingContinuation { cont in
+            let s = ASWebAuthenticationSession(url: url, callback: .customScheme(Self.redirectScheme)) { url, error in
                 sheet.end(url == nil ? "closed" : "")
                 if let url { cont.resume(returning: url) }
                 else if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { cont.resume(throwing: AuthError.cancelled) }
@@ -147,12 +179,6 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
             session = s
             if !s.start() { cont.resume(throwing: AuthError.noCode) }
         }
-        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        guard items.first(where: { $0.name == "state" })?.value == state,
-              let code = items.first(where: { $0.name == "code" })?.value else {
-            throw AuthError.noCode
-        }
-        return (code, verifier)
     }
 
     private static func exchange(code: String, verifier: String) async throws -> Tokens {
