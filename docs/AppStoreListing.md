@@ -51,7 +51,7 @@ EVEN MORE
 PRIVATE BY DESIGN
 • No bank passwords, ever. Sortd only keeps the last 4 digits of a card.
 • Your data is stored on your iPhone. We don't run a server, so there is nothing for us to see, sell or lose.
-• No ads, no analytics, no trackers.
+• No ads, no trackers. Usage data and crash reports only with your say-so, and never your purchases.
 • Your setup answers and notifications stay on your iPhone too. Apple Intelligence runs on the device.
 • Face ID lock, save a backup file, export everything as a spreadsheet, or delete it all in one tap.
 

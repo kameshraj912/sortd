@@ -96,6 +96,6 @@ consumable tips that unlock nothing. StoreKit 2 stays in the app only for that.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 
 ## Known gaps
-- **No backup.** SwiftData is local-only — losing the phone loses every transaction. CloudKit private database is the fix and is not built yet.
+- **Backup is one encrypted record** in the user's private iCloud (`CloudBackup`, on since 26 Sep 2026). Restore needs the same iCloud Keychain; there is no other copy.
 - Refunds and reversals never come back, so tap-logged totals drift up over time.
 - Cash and non-Apple-Pay spend is invisible unless entered by hand.
