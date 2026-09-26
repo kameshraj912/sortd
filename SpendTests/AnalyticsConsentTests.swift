@@ -21,8 +21,32 @@ struct AnalyticsConsentTests {
         func identify(_ id: String) {}
         func reset() {}
         func screen(_ name: String) { screens.append(name) }
-        func setOptedOut(_ out: Bool) { optOutCalls.append(out) }
+        func setOptedOut(_ out: Bool, identity: String?) { optOutCalls.append(out) }
     }
+
+    /// Stands in for the PostHog SDK: records set-up and person calls.
+    final class FakePostHogClient: PostHogClient {
+        private(set) var setupCount = 0
+        private(set) var identified: [String] = []
+        private(set) var resets = 0
+        private(set) var optIns = 0
+        private(set) var optOuts = 0
+        private(set) var captured: [String] = []
+        var distinctId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+
+        func setup(apiKey: String, host: URL) { setupCount += 1 }
+        func capture(_ name: String, properties: [String: Any]) { captured.append(name) }
+        func identify(_ id: String) { identified.append(id); distinctId = id }
+        func reset() { resets += 1; distinctId = "0190a1b2-0000-7e5f-8a9b-0c1d2e3f4a5b" }
+        func screen(_ name: String) {}
+        func isFeatureEnabled(_ key: String) -> Bool { true }
+        func optIn() { optIns += 1 }
+        func optOut() { optOuts += 1 }
+    }
+
+    private let host = URL(string: "https://eu.i.posthog.com")!
+    private let hashA = String(repeating: "a1", count: 32)
+    private let hashB = String(repeating: "b2", count: 32)
 
     private func fresh(_ suite: String) -> UserDefaults {
         let defaults = UserDefaults(suiteName: suite)!
@@ -38,6 +62,8 @@ struct AnalyticsConsentTests {
         "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
         "IS", "LI", "NO",
         "GB", "CH",
+        // Crown dependencies and Gibraltar follow UK-style rules.
+        "GG", "JE", "IM", "GI",
     ]
 
     @Test(arguments: optInRegions)
@@ -149,6 +175,118 @@ struct AnalyticsConsentTests {
         analytics.isEnabled = false
         let relaunch = Analytics(sink: ConsentSpySink(), defaults: defaults, regionCode: "AU")
         #expect(relaunch.isEnabled == false)
+    }
+
+    /// Older builds wrote `true` on Delete All without anyone choosing (no
+    /// change date). That is not a choice: the region default applies.
+    @Test func aStoredTrueWithoutAChangeDateIsNotAChoice() {
+        let defaults = fresh(#function)
+        defaults.set(true, forKey: Analytics.enabledKey)
+        let analytics = Analytics(sink: ConsentSpySink(), defaults: defaults, regionCode: "DE")
+        #expect(analytics.isEnabled == false)
+        #expect(Analytics.storedChoice(in: defaults) == nil)
+    }
+
+    @Test func aStoredChoiceWithAChangeDateIsKept() {
+        let defaults = fresh(#function)
+        defaults.set(true, forKey: Analytics.enabledKey)
+        defaults.set(Date.now, forKey: Analytics.consentChangedAtKey)
+        let analytics = Analytics(sink: ConsentSpySink(), defaults: defaults, regionCode: "DE")
+        #expect(analytics.isEnabled == true)
+    }
+
+    // MARK: PostHog set-up
+
+    @Test func postHogIsNotSetUpWhileSharingIsOff() {
+        let client = FakePostHogClient()
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        sink.capture("setup_started", properties: [:])
+        sink.screen("Welcome")
+        sink.identify(hashA)
+        sink.reset()
+        sink.setOptedOut(true, identity: nil)
+        #expect(client.setupCount == 0)
+        #expect(client.captured.isEmpty)
+        #expect(client.identified.isEmpty)
+        #expect(client.resets == 0)
+        #expect(sink.isFeatureEnabled("any") == false)
+    }
+
+    @Test func turningSharingOnSetsPostHogUpExactlyOnce() {
+        let client = FakePostHogClient()
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        sink.setOptedOut(false, identity: nil)
+        #expect(client.setupCount == 1)
+        #expect(client.optIns == 1)
+        sink.setOptedOut(true, identity: nil)
+        sink.setOptedOut(false, identity: nil)
+        #expect(client.setupCount == 1)
+        #expect(client.optOuts == 1)
+        sink.capture("tab_opened", properties: [:])
+        #expect(client.captured == ["tab_opened"])
+    }
+
+    @Test func postHogIsSetUpAtLaunchWhenSharingIsOn() {
+        let client = FakePostHogClient()
+        _ = PostHogSink(apiKey: "phc_test", host: host, enabled: true, identity: nil, client: client)
+        #expect(client.setupCount == 1)
+    }
+
+    /// Signed in while sharing was off: turning it on identifies as the hash.
+    @Test func turningSharingOnIdentifiesASignedInPerson() {
+        let client = FakePostHogClient()
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        sink.setOptedOut(false, identity: hashA)
+        #expect(client.identified == [hashA])
+        #expect(client.resets == 0)
+    }
+
+    /// Signed in as someone else since the SDK last saw it: identify again.
+    @Test func turningSharingOnReidentifiesWhenTheHashChanged() {
+        let client = FakePostHogClient()
+        client.distinctId = hashA
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        sink.setOptedOut(false, identity: hashB)
+        #expect(client.identified == [hashB])
+    }
+
+    @Test func turningSharingOnLeavesTheRightPersonAlone() {
+        let client = FakePostHogClient()
+        client.distinctId = hashA
+        _ = PostHogSink(apiKey: "phc_test", host: host, enabled: true, identity: hashA, client: client)
+        #expect(client.identified.isEmpty)
+        #expect(client.resets == 0)
+    }
+
+    /// Signed out or Delete All while sharing was off: the SDK still carries
+    /// the old hash, so it is reset and the deleted person doesn't come back.
+    @Test func turningSharingOnResetsAPersonWhoSignedOutMeanwhile() {
+        let client = FakePostHogClient()
+        client.distinctId = hashA
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        sink.setOptedOut(false, identity: nil)
+        #expect(client.resets == 1)
+        #expect(client.identified.isEmpty)
+    }
+
+    @Test func anAnonymousPersonIsNotReset() {
+        let client = FakePostHogClient()
+        _ = PostHogSink(apiKey: "phc_test", host: host, enabled: true, identity: nil, client: client)
+        #expect(client.resets == 0)
+        #expect(PostHogSink.looksIdentified(hashA))
+        #expect(!PostHogSink.looksIdentified(client.distinctId))
+    }
+
+    /// The facade hands the kept hash to the sink when sharing turns on.
+    @Test func theFacadePassesTheSignedInHashWhenSharingTurnsOn() {
+        let client = FakePostHogClient()
+        let sink = PostHogSink(apiKey: "phc_test", host: host, enabled: false, identity: nil, client: client)
+        let analytics = Analytics(sink: sink, defaults: fresh(#function), regionCode: "DE")
+        analytics.signedIn(hash: hashA)
+        #expect(client.identified.isEmpty, "sharing is off: nothing reaches PostHog")
+        analytics.isEnabled = true
+        #expect(client.setupCount == 1)
+        #expect(client.identified == [hashA])
     }
 
     // MARK: Delete All Data

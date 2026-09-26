@@ -158,18 +158,18 @@ struct CrashReportingTests {
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let first = Analytics(sink: SpySink(), defaults: defaults)
+        let first = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         #expect(first.identityHash == nil)
         first.signedIn(provider: "apple", subject: "001.abc")
         let hash = first.identityHash
         #expect(hash?.count == 64)
 
-        let second = Analytics(sink: SpySink(), defaults: defaults)
+        let second = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         #expect(second.identityHash == hash)
 
         second.signedOut()
         #expect(second.identityHash == nil)
-        let third = Analytics(sink: SpySink(), defaults: defaults)
+        let third = Analytics(sink: SpySink(), defaults: defaults, regionCode: "AU")
         #expect(third.identityHash == nil)
     }
 
