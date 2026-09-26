@@ -62,9 +62,10 @@ Test account: [TEST GMAIL ADDRESS] / [TEST GMAIL PASSWORD]
 - Settings › Backup & Data: Back up to iCloud (encrypted on the device, the user's own iCloud
   private database), Save a Backup, Import, Export as Spreadsheet, Delete All Data. Files are
   only made when the user taps, via the share sheet.
-- No tracking or ads. Usage analytics (PostHog) and crash reports (Sentry) are on, linked to a
+- No tracking or ads. Usage analytics (PostHog) and crash reports (Sentry) are linked to a
   salted hash, scrubbed of purchases, merchants, emails and IP, and share one switch in
-  Settings › Privacy. Privacy policy: https://sortd.page/privacy
+  Settings › Privacy. The switch starts off when the iPhone's region is in the EU/EEA, the UK
+  or Switzerland, and on elsewhere. Privacy policy: https://sortd.page/privacy
 
 Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
 

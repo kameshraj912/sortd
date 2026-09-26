@@ -605,7 +605,7 @@ struct OnboardingView: View {
             lines.append("Putting where your money goes first")
         }
         lines.append(checkInLine.text)
-        lines.append("Keeping everything on this iPhone. No bank login, ever.")
+        lines.append(SetupCopy.buildingPrivacy)
         return lines
     }
 
@@ -661,7 +661,7 @@ struct OnboardingView: View {
                 feature("wave.3.right", "Apple Pay logs itself", "Pay as usual. It shows up in a second.", Color.brandPalette[0])
                 feature("creditcard", "Every card, every currency", "Converted at the day's rate.", Color.brandPalette[1])
                 feature("arrow.triangle.2.circlepath", "Bills, seen coming", "Know what's due before it's charged.", Color.brandPalette[2])
-                feature("lock", "Private by design", "No bank login. Stays on your iPhone.", Color.brandPalette[3])
+                feature("lock", SetupCopy.welcomePrivacy.title, SetupCopy.welcomePrivacy.detail, Color.brandPalette[3])
             }
             .setupCard(padding: 20)
         }
@@ -1148,7 +1148,7 @@ struct OnboardingView: View {
             .padding(.bottom, 16)
             VStack(alignment: .leading, spacing: 14) {
                 ForEach([("lock", "Read-only. Can't send, delete or change email."),
-                         ("iphone", "Read on this iPhone, never a server."),
+                         ("iphone", SetupCopy.gmailOnDevice),
                          ("xmark.circle", "Disconnect any time in Settings.")], id: \.1) { symbol, text in
                     HStack(alignment: .top, spacing: 12) {
                         RowIcon(symbol)

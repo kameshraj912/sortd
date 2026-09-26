@@ -5,7 +5,8 @@ import Sentry
 ///
 /// Runs in the live app when three things hold: a Release build, a DSN, and
 /// the analytics consent switch on (Settings › Privacy, one switch for
-/// PostHog and Sentry). Reports carry the exception type, the stack trace,
+/// PostHog and Sentry; off by default in the EU/EEA, UK and Switzerland, see
+/// `Analytics.defaultConsent`). Reports carry the exception type, the stack trace,
 /// device model and OS, and nothing typed or shown in the app: no purchases,
 /// merchants, amounts, emails, screenshots, breadcrumbs or IP address.
 /// `scrub` is the last word on every event; `enabled` is the switch. Both are

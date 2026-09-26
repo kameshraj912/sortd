@@ -159,11 +159,11 @@ enum SetupCopy {
 
     /// The email step. With iCloud backup in the build, receipts can leave
     /// the phone, for the person's own iCloud only: say so.
-    private static let emailLine: String = {
+    static let emailLine: String = {
         #if SORTD_ICLOUD
         "It stays on your phone, and in your iCloud if you turn backup on."
         #else
-        "Read on your iPhone. Nothing leaves it."
+        "Read on your iPhone. Emails are never stored."
         #endif
     }()
 
@@ -194,6 +194,27 @@ enum SetupCopy {
         .applePay: "About a minute, once. Or do it later from Home.",
         .email: emailLine,
     ]
+
+    // MARK: Privacy lines
+    //
+    // Purchases, cards and email stay on the iPhone. Usage counts and crash
+    // reports can leave it (Settings › Privacy has the switch), so no line
+    // may say "everything" stays or "nothing" leaves. Same plain style as
+    // the Privacy screen.
+
+    /// The plan screen's footer.
+    static let planPrivacy = "Your purchases stay on this iPhone. Sortd never asks for your bank login."
+    /// The last "building your plan" line.
+    static let buildingPrivacy = "Keeping your purchases on this iPhone. No bank login, ever."
+    /// The welcome screen's privacy feature.
+    static let welcomePrivacy = (title: "No bank login", detail: "Your purchases stay on your iPhone.")
+    /// The Gmail step's on-device point.
+    static let gmailOnDevice = "Read on this iPhone. Emails are never stored."
+
+    /// Every setup line that talks about where data goes, for the tests.
+    static var privacyLines: [String] {
+        [emailLine, planPrivacy, buildingPrivacy, welcomePrivacy.title, welcomePrivacy.detail, gmailOnDevice]
+    }
 }
 
 // MARK: - Questions
@@ -409,7 +430,7 @@ struct PlanPage: View {
 
             HStack(alignment: .top, spacing: 12) {
                 RowIcon("lock.iphone")
-                Text("Everything stays on this iPhone. Sortd never asks for your bank login.")
+                Text(SetupCopy.planPrivacy)
                     .font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
