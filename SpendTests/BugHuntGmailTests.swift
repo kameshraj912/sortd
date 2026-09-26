@@ -21,8 +21,7 @@ struct BugHuntGmailTests {
     /// App Lock never locks again after the first unlock: coming back from
     /// the background goes background → inactive → active, and the
     /// `.inactive` step sets `lastActive = now`, so `.active` sees no time away.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-gmail-1", "AppLock.sceneChanged: the .inactive step on the way back resets lastActive"))
+    @Test
     func appLockLocksAgainAfterTenMinutesAway() {
         let lock = fresh()
         let t0 = Date(timeIntervalSince1970: 1_800_000_000)
