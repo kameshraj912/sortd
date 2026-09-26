@@ -28,6 +28,10 @@ enum Activation {
     static func detect(_ t: Transaction) -> Source? {
         guard t.note != DemoData.marker else { return nil }
         guard t.merchant != LogPurchaseIntent.legacyTestMerchant, t.rawMerchant != LogPurchaseIntent.legacyTestMerchant else { return nil }
+        // A refund proves nothing about the person's own spending -- and a
+        // standalone refund tap (no earlier purchase to match) would
+        // otherwise become its own row and wrongly trigger the aha.
+        guard !t.refunded else { return nil }
         let seen = t.seenIn
         if seen.contains(.tap) { return .tap }
         if seen.contains(.email) { return .email }

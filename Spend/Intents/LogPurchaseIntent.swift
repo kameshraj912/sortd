@@ -134,15 +134,18 @@ struct LogPurchaseIntent: AppIntent {
 
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
-        // The first purchase the app logged on its own (once per install).
-        // A "Send a Test Tap" purchase is not one.
-        if case .added = outcome, Self.countsAsActivation(added: true, merchant: name) {
-            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
-        }
+        // A standalone refund tap (no earlier purchase to match) becomes its
+        // own row here. It proves nothing about the person's own spending,
+        // so this returns before the activation event below ever sees it.
         if refund, !t.refunded {
             t.refunded = true
             try? context.save()
             return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false)
+        }
+        // The first purchase the app logged on its own (once per install).
+        // A "Send a Test Tap" purchase is not one.
+        if case .added = outcome, Self.countsAsActivation(added: true, merchant: name) {
+            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
         }
         await FXService.backfill(in: context)
 
