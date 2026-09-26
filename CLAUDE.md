@@ -72,8 +72,9 @@ Full design: `docs/AgentPipeline.md`.
 
 ## Tip jar
 Everything is free forever: Gmail, the receipt camera, Insights, Subscriptions & bills,
-and category budgets included. Settings › About has a "Leave a tip" row: three
-consumable tips that unlock nothing. StoreKit 2 stays in the app only for that.
+and category budgets included. Settings › About shows a "Leave a tip" row only once the three
+consumable tips exist in App Store Connect (`TipJar` loads them; empty means no row). StoreKit 2
+stays in the app only for that.
 
 `SORTD_BETA` is gone.
 
