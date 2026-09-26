@@ -121,6 +121,17 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
                                transaction: nil, merged: true)
             }
+            // No whole purchase matches: maybe this refund is only part of a
+            // bigger one (one returned item from a A$59.90 basket).
+            if let reduced = EmailSync.markPartiallyRefunded(amount: p.amount, currency: currency, card: cardID,
+                                                             merchant: name, platform: nil, before: now,
+                                                             lookbackDays: 60, in: context) {
+                try? context.save()
+                await FXService.backfill(in: context)
+                let shop = reduced.merchant.isEmpty ? (name.isEmpty ? "the shop" : name) : reduced.merchant
+                return Outcome(message: "\(Money.format(p.amount, currency)) refund on \(shop) noted",
+                               transaction: reduced, merged: true)
+            }
         }
         let purchase = IncomingPurchase(
             date: now,

@@ -53,8 +53,7 @@ struct BugHuntUITests {
     /// only matches a refund whose amount equals a whole purchase
     /// (`EmailSync.markRefunded`, `t.amount == amount`); anything else falls
     /// through to lines 140-144 and becomes a standalone refunded row.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-ui-01", "a partial refund tap says 'noted' but the total does not go down"))
+    @Test
     func aPartialRefundTapLowersTheTotal() async throws {
         let ctx = try store()
         let b = book()
