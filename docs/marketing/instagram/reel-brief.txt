@@ -1,0 +1,31 @@
+REEL: "My own app snitched on me"  (10 seconds, vertical, filmed on your iPhone)
+
+WHY THIS ONE: a real face + a real place + the real notification is what makes a reel feel
+human (research: phone-shot videos got ~40% more views than polished ones; text-on-gradient
+reels read as AI templates). The joke is on you, never the viewer.
+
+FILM THESE 3 CLIPS (front camera, natural light, no editing):
+  1. YOUR FACE (2 s), deadpan, looking at the camera like you've been caught.
+  2. THE TAP (3 s): back camera, your hand tapping your phone/Watch to pay at a café counter.
+     Before you tap, start the iPhone SCREEN RECORDING (Control Centre) on the phone you pay
+     with, so you also get clip 3 for free.
+  3. THE NOTIFICATION (2-3 s): that screen recording, showing Sortd's real banner
+     "Logged $5.50 at ... · Eating Out" dropping in after the tap.
+     (Needs the Apple Pay Shortcut set up on your phone, which you already have.)
+  4. OPTIONAL: your face again (2 s), tired, like "again?".
+
+TEXT (type it in Instagram's editor, "Classic" style with the black box, lowercase,
+keep it in the middle of the screen, not near the bottom):
+  0-2 s   i built an app that snitches on my apple pay
+  2-5 s   (no text, let the tap play)
+  5-7 s   it logged it. by itself. (i did nothing.)
+  7-9 s   it's tuesday. that's the fourth one.
+  9-10 s  beta soon. link in bio.
+
+AUDIO: your own voice or a quiet "caught" reaction sound from Instagram's trending audio.
+CAPTION: Made an app to track my spending. It's working. Unfortunately. Beta soon, link in bio.
+
+TIP: the café's name shows in the banner. If it's a real café, that's fine as your own real
+purchase; if you'd rather not name it, pay somewhere with a generic name.
+
+Send me the clips and I'll cut them together (text, timing, captions) if you'd rather not edit.
