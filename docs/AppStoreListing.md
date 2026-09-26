@@ -6,7 +6,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 ## App information
 
 - **Name** (30): Sortd Money
-- **Subtitle** (30): Tap-to-pay spending, logged
+- **Subtitle** (30): Spending that logs itself
   (Not "Apple Pay": Apple's rules (5.2.1, Apple Pay marketing guidelines) keep its marks out of names and subtitles. The description can still say Apple Pay.)
 - **Primary category**: Finance
 - **Secondary category**: Productivity
