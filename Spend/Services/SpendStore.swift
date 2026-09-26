@@ -95,7 +95,7 @@ enum TransactionLogger {
         let pool = nearby.map {
             Deduper.Candidate(date: $0.date, merchant: $0.rawMerchant, amount: $0.amount,
                               currency: $0.currencyCode, card: $0.card, source: $0.source,
-                              platform: $0.platform)
+                              platform: $0.platform, seenIn: $0.seenIn)
         }
 
         if let i = Deduper.match(candidate, in: pool) {
