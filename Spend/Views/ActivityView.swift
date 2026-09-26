@@ -773,12 +773,14 @@ private struct ActivitySearch: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content
-                // Under the large title, like Messages: it scrolls away with
-                // the list and a pull down brings it back, at every text size.
+                // A search button in the bar that opens into the field
+                // (iOS 26 minimize), so the page title sits where Home's and
+                // Insights' do instead of under a permanent search pill.
                 // The long prompt has no room at accessibility sizes and the
                 // field showed as an empty pill (UI pass finding 8).
-                .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .automatic),
+                .searchable(text: $text, placement: .toolbar,
                             prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
+                .searchToolbarBehavior(.minimize)
                 .searchFocused($focused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
