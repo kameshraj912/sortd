@@ -64,6 +64,7 @@ struct HomeView: View {
                                 // then the one notification ask.
                                 ActivationCard()
                                 FinishSetupCard()
+                                ApplePayNudgeCard()
                             }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard

@@ -51,6 +51,16 @@ struct DeveloperMenuView: View {
                 } header: {
                     BoldHeader("Status")
                 }
+
+                // Apple Pay tap pipeline (spec 2026-09-26, failsafe #12): what
+                // last arrived, what's waiting on a retry, what the last retry did.
+                Section {
+                    LabeledContent("Last tap received", value: lastTapReceivedText)
+                    LabeledContent("Queued taps", value: "\(TapQueue.count)")
+                    LabeledContent("Last replay", value: TapQueue.lastReplaySummary)
+                } header: {
+                    BoldHeader("Apple Pay Tap Queue")
+                }
             }
             .navigationTitle("Developer")
             .navigationBarTitleDisplayMode(.inline)
@@ -70,5 +80,10 @@ struct DeveloperMenuView: View {
                 Text("Sortd will close right away.")
             }
         }
+    }
+
+    private var lastTapReceivedText: String {
+        guard let date = LogPurchaseIntent.lastTapReceivedAt else { return "Never" }
+        return date.formatted(date: .abbreviated, time: .standard)
     }
 }
