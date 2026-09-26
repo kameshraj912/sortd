@@ -1,4 +1,5 @@
 import SwiftUI
+import PostHog
 
 enum Money {
     nonisolated static let homeKey = "homeCurrency"
@@ -117,6 +118,7 @@ struct TransactionRow: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(big ? 3 : 1)
+                    .postHogMask()
                 Text(showCategory ? "\(transaction.category.name) · \(transaction.paidWithLabel)" : transaction.paidWithLabel)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -136,6 +138,7 @@ struct TransactionRow: View {
                         .foregroundStyle(transaction.refunded ? .secondary : .primary)
                         .strikethrough(transaction.refunded)
                         .monospacedDigit()
+                        .postHogMask()
                 }
                 Text(trailingDetail)
                     .font(.caption)

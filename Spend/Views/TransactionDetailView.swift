@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PostHog
 
 struct TransactionDetailView: View {
     @Bindable var transaction: Transaction
@@ -61,6 +62,7 @@ struct TransactionDetailView: View {
                     .textInputAutocapitalization(.words)
                     .focused($merchantFocused)
                     .onSubmit(commitMerchant)
+                    .postHogMask()
                 LabeledContent("Amount") {
                     TextField("0.00", text: $amountText)
                         .keyboardType(.decimalPad)
@@ -77,6 +79,7 @@ struct TransactionDetailView: View {
                         .accessibilityLabel("Amount")
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
+                        .postHogMask()
                 }
                 Picker("Currency", selection: $transaction.currencyCode) {
                     ForEach(Self.currencies, id: \.self) { Text($0).tag($0) }
@@ -105,6 +108,7 @@ struct TransactionDetailView: View {
             Section(bold: "Note") {
                 TextField("Add a note", text: $transaction.note, axis: .vertical)
                     .lineLimit(1...5)
+                    .postHogMask()
             }
 
             Section {
@@ -174,6 +178,7 @@ struct TransactionDetailView: View {
             Text(Money.format(transaction.amount, transaction.currencyCode))
                 .font(.money)
                 .contentTransition(.numericText(value: transaction.amount.double))
+                .postHogMask()
             BrandBar(width: 14, height: 3)
             // Chip and date on one line while they fit; otherwise stacked, so
             // neither breaks mid-word ("8:24 A / M", "Every-day"): finding 11.
