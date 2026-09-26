@@ -141,14 +141,21 @@ struct ConnectGmailSheet: View {
             }
             .background(Color.page)
             .safeAreaInset(edge: .bottom) {
-                Button(action: primaryAction) {
+                Group {
                     if showsDone {
-                        Text(status.isBusy ? "Close" : "Done").primaryPill(enabled: true)
+                        Button(action: primaryAction) {
+                            Text(status.isBusy ? "Close" : "Done").primaryPill(enabled: true)
+                        }
+                        .primaryGlass()
                     } else {
-                        GoogleButtonLabel(working: status.phase == .signingIn)
+                        // Google's own capsule already carries the branding;
+                        // `.primaryGlass()` used to wrap it in a second, darker one.
+                        Button(action: primaryAction) {
+                            GoogleButtonLabel(working: status.phase == .signingIn)
+                        }
+                        .googleButton()
                     }
                 }
-                .primaryGlass()
                 .disabled(status.phase == .signingIn)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
@@ -203,13 +210,23 @@ struct ConnectGmailSheet: View {
 /// OAuth review checks: the official G (cropped unchanged from Google's
 /// asset pack), light theme white with a #747775 border and #1F1F1F text,
 /// dark theme #131314 with #8E918F and #E3E3E3, 16 / 12 / 16 pt spacing.
+/// Google's guidelines allow a rounded-rectangle shape (not only the full
+/// pill); this uses `GoogleButtonLabel.cornerRadius` so it sits next to Sign
+/// in with Apple as a matched pair, same height and corner radius. Draws its
+/// own background and border: apply `.googleButton()`, not `.primaryGlass()`,
+/// or the glass style wraps it in a second, darker capsule.
 /// https://developers.google.com/identity/branding-guidelines
 struct GoogleButtonLabel: View {
     var working = false
     @Environment(\.colorScheme) private var scheme
 
+    /// Matches `SignInWithAppleButton`'s default corner radius, so the two
+    /// sign-in buttons on the Account screen read as a pair.
+    static let cornerRadius: CGFloat = 12
+
     var body: some View {
         let dark = scheme == .dark
+        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
         HStack(spacing: 12) {
             if working {
                 ProgressView().frame(width: 20, height: 20)
@@ -223,9 +240,9 @@ struct GoogleButtonLabel: View {
         .padding(.leading, 16)
         .padding(.trailing, 16)
         .frame(maxWidth: .infinity, minHeight: 50)
-        .background(Color(hex: dark ? 0x131314 : 0xFFFFFF), in: .capsule)
-        .overlay(Capsule().strokeBorder(Color(hex: dark ? 0x8E918F : 0x747775), lineWidth: 1))
-        .contentShape(.capsule)
+        .background(Color(hex: dark ? 0x131314 : 0xFFFFFF), in: shape)
+        .overlay(shape.strokeBorder(Color(hex: dark ? 0x8E918F : 0x747775), lineWidth: 1))
+        .contentShape(shape)
     }
 }
 
