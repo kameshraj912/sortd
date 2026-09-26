@@ -14,13 +14,18 @@ struct LockView: View {
             Button {
                 Task { await lock.unlock() }
             } label: {
-                Text("Unlock").primaryPill(enabled: !lock.authenticating)
+                Text(buttonTitle).primaryPill(enabled: !lock.authenticating)
             }
             .primaryGlass()
             .disabled(lock.authenticating)
             .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            if usesBiometrics {
+                Text("Or use your iPhone passcode.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.page.ignoresSafeArea())
         .task(id: scenePhase) {
@@ -29,6 +34,14 @@ struct LockView: View {
             prompted = true
             await lock.unlock()
         }
+    }
+
+    /// No biometry enrolled (or none on the device): the system sheet only
+    /// offers the passcode, so the button says "Unlock" plainly.
+    private var usesBiometrics: Bool { AppLock.methodName != "Passcode" }
+
+    private var buttonTitle: String {
+        usesBiometrics ? "Unlock with \(AppLock.methodName)" : "Unlock"
     }
 }
 

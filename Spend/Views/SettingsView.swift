@@ -56,7 +56,7 @@ struct SettingsView: View {
                     NavigationLink {
                         PrivacySecuritySettingsView()
                     } label: {
-                        SettingsRowLabel(title: "Privacy & Security", subtitle: lockEnabled ? "\(AppLock.methodName) on" : "App Lock off", symbol: "lock.shield")
+                        SettingsRowLabel(title: "Privacy & Security", subtitle: lockEnabled ? "\(AppLock.methodName) · \(AppLock.requireAfter.label)" : "App Lock off", symbol: "lock.shield")
                     }
                     NavigationLink {
                         BackupDataSettingsView()
