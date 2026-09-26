@@ -179,7 +179,7 @@ enum SetupCopy {
     ]
 
     private static let new: [SetupFlow.Step: String] = [
-        .welcome: "Hi. Let's get your spending to log itself.",
+        .welcome: "Tap to pay. Sortd writes it down.",
         .goals: "Tap any that fit. Not sure? Just continue.",
         .payment: "So the right things get set up first.",
         .currency: "We picked the one your iPhone uses.",
