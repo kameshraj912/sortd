@@ -9,6 +9,8 @@ struct PrivacySecuritySettingsView: View {
     @AppStorage(AppLock.requireAfterKey) private var requireAfterRaw = AppLock.RequireAfter.immediately.rawValue
     @AppStorage(WidgetSummary.showWhenLockedKey) private var widgetShowWhenLocked = false
 
+    @State private var lockFailed = false
+
     var body: some View {
         List {
             ListPageTitle(title: "Privacy & Security")
@@ -21,6 +23,10 @@ struct PrivacySecuritySettingsView: View {
                         Task {
                             if await AppLock.authenticate(reason: "Turn on the lock for Sortd.") {
                                 lockEnabled = true
+                            } else {
+                                // Say so: a toggle that springs back with no word
+                                // reads as broken (feel check, 27 Sep).
+                                lockFailed = true
                             }
                         }
                     }
@@ -87,6 +93,11 @@ struct PrivacySecuritySettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Privacy & Security")
+        .alert("Couldn't turn on \(AppLock.methodName)", isPresented: $lockFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check that \(AppLock.methodName) or a passcode is set up in iPhone Settings, then try again.")
+        }
     }
 
     private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
