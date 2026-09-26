@@ -110,3 +110,29 @@ they're missing here, not that they're unchanged.
 - extraDecimalsAreNotTurnedIntoThousands
 - replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted
 - theAmountBeatsAnyOtherNumberInTheText
+
+## Added 26 Sep 2026 (bug hunt, docs/BugHunt-2026-09-26.md)
+- aBankAlertWithNoGmailAuthenticationResultIsNotTrusted
+- aBillInACurrencyWithNoRateIsNotShownAsZero
+- aCRLFStatementKeepsEveryRow
+- aCreditCardExportKeepsPurchasesAsSpending
+- aFieldWithAWindowsLineBreakIsQuoted
+- aForeignAmountInTheDescriptionIsNotThePurchase
+- aPartialRefundTapLowersTheTotal
+- aPurchaseAtAnRSLClubIsNotARefund
+- aRowWithNoSymbolTakesTheCardsCurrency
+- aTapPostedAfterTheWeekendStillMerges
+- aTapTheNextDayIsANewPurchaseEvenAfterAnEmailMergedIn
+- aTextTapThatIsOnlyACardNameIsNotAPurchase
+- aTransactionTypeColumnIsNotTheMerchant
+- absurdYearsAreRejected
+- appLockLocksAgainAfterTenMinutesAway
+- bahtPesoWonAndYuanSignsNameTheirCurrency
+- justThisOneOnADeliveryOrderSurvivesALaunch
+- justThisOneToOtherSurvivesALaunch
+- mergeDoesNotReadASingaporeBudgetAsAustralianDollars
+- narrowSpaceAndApostropheThousandsAreRead
+- rupiahDotThousandsAreNotCents
+- theFirstAmountInTheAlertIsThePurchase
+- theWidgetReloadDateIsTheNextMidnightAcrossDaylightSaving
+- zeroDecimalTotalsAreRead
