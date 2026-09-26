@@ -4,8 +4,8 @@ Logs Apple Pay taps, reads receipts from Gmail and the camera, and shows where t
 money goes. Multi-currency (AUD, SGD and others) with on-device FX. No server: everything
 stays on the phone.
 
-**Status (20 Sep 2026):** heading for TestFlight. Paid Apple Developer enrolment is the
-open blocker — nothing can be uploaded until it clears. Site is live at sortd.page.
+**Status (26 Sep 2026):** heading for TestFlight. The paid Apple Developer account is active
+(team 7CLGYQ9P3L) with iCloud, Sign in with Apple and App Attest on the App ID. Site is live at sortd.page.
 Google OAuth restricted-scope review submitted 20 Sep 2026. The app is free since 25 Sep 2026.
 
 - Store readiness: `docs/AppStoreChecklist.md` (read the top section before any App Store build)
@@ -66,9 +66,9 @@ Full design: `docs/AgentPipeline.md`.
 - CI (`.github/workflows/swift.yml`) builds and tests on a pinned Xcode. Code must compile on
   that Xcode too: an SDK-only symbol needs `#if compiler(>=...)`, not just `#available`.
 - Sample data in the simulator: launch with env `SPEND_DEMO=1` (DEBUG only), or tap "Explore with sample data" on the first screen.
-- On the phone: `scripts/device.sh` (Developer Mode on, phone unlocked). Free team = re-install every 7 days.
-  Debug signs with `Spend-Development.entitlements` (app groups only); the paid capabilities stay in
-  `Spend.entitlements` for Release.
+- On the phone: `scripts/device.sh` (Developer Mode on, phone unlocked). Both configs sign with
+  `Spend.entitlements` (iCloud, Sign in with Apple, App Attest, app groups); Xcode needs Raj's Apple ID
+  in Settings › Accounts to refresh the profile. `SORTD_SIGNIN` and `SORTD_ICLOUD` are on in both configs.
 
 ## Tip jar
 Everything is free forever: Gmail, the receipt camera, Insights, Subscriptions & bills,
