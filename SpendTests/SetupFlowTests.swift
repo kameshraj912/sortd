@@ -10,19 +10,20 @@ import Foundation
 ///
 ///     struct SetupFlow: Equatable {
 ///         enum Step: Int, CaseIterable, Sendable {
-///             case welcome, goals, payment, currency, feeling, budget, checkIn, building, plan
-///             case cards, cardDetails, applePay, email
+///             case welcome, account, goals, payment, currency, budget, checkIn, building, plan
+///             case cards, applePay, email
 ///         }
 ///         var goals: Set<SetupProfile.Goal> = []
 ///         var payment: SetupProfile.Payment?
 ///         var hasCards = false
 ///         var gmailFeature = false
+///         var signInFeature = false
 ///         // no `isPro`
 ///         var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
 ///         func isShown(_ s: Step) -> Bool {
 ///             switch s {
+///             case .account: signInFeature
 ///             case .budget: goals.contains(.spendLess)
-///             case .cardDetails: hasCards
 ///             case .applePay: payment != .cash
 ///             case .email: gmailFeature && wantsGmail   // no isPro
 ///             default: true
@@ -30,11 +31,10 @@ import Foundation
 ///         }
 ///     }
 ///
-/// These tests are written against that signature. Until swift-builder drops
-/// `isPro`/`.pro` from `SetupFlow`, this whole file fails to compile
-/// (`SetupFlow` has no `isPro`/`hasTipped`... has extra `isPro` member and
-/// `Step` still has `.pro`; the initializer calls below don't match). That is
-/// expected: see the test-writer report for the exact compiler errors.
+/// `.feeling` and `.cardDetails` are gone (UX pass, fresh-user walkthrough):
+/// the feeling answer was never read outside setup, and the last-4 digit
+/// fields moved to Settings › Cards, leaving `.cardDetails` folded into
+/// `.cards`.
 struct SetupFlowTests {
     typealias Step = SetupFlow.Step
 
@@ -62,27 +62,27 @@ struct SetupFlowTests {
     @Test func cashUserWhoWantsToSpendLess() {
         let flow = SetupFlow(goals: [.spendLess], payment: .cash)
         // No Pro step, no Apple Pay chores for someone who mostly pays cash.
-        #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .budget, .checkIn,
+        #expect(flow.path == [.welcome, .goals, .payment, .currency, .budget, .checkIn,
                               .building, .plan, .cards])
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "widget"])
-        #expect(flow.counter(.budget) == "Question 5 of 6")
+        #expect(flow.counter(.budget) == "Question 4 of 5")
     }
 
     @Test func notSureYetApplePayUser() {
         let flow = SetupFlow(goals: [], payment: nil)
-        #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .checkIn,
+        #expect(flow.path == [.welcome, .goals, .payment, .currency, .checkIn,
                               .building, .plan, .cards, .applePay])
         #expect(!flow.path.contains(.budget))
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay"])
-        #expect(flow.counter(.checkIn) == "Question 5 of 5")
+        #expect(flow.counter(.checkIn) == "Question 4 of 4")
     }
 
     /// A person whose goals want receipts, with Gmail switched on in this
     /// build, sees the email step -- with no Pro condition anywhere.
     @Test func receiptsGoalWithGmailFeatureShowsTheEmailStep() {
         let flow = SetupFlow(goals: [.receipts], payment: .online, hasCards: true, gmailFeature: true)
-        #expect(flow.path == [.welcome, .goals, .payment, .currency, .feeling, .checkIn, .building, .plan,
-                              .cards, .cardDetails, .applePay, .email])
+        #expect(flow.path == [.welcome, .goals, .payment, .currency, .checkIn, .building, .plan,
+                              .cards, .applePay, .email])
         #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay", "gmail"])
     }
 
@@ -112,9 +112,48 @@ struct SetupFlowTests {
 
     @Test func questionsOnlyHaveCounters() {
         let flow = SetupFlow(goals: [.spendLess])
-        #expect(flow.counter(.goals) == "Question 1 of 6")
+        #expect(flow.counter(.goals) == "Question 1 of 5")
         #expect(flow.counter(.plan) == nil)
         #expect(flow.counter(.cards) == nil)
+    }
+
+    // MARK: The `.account` step (sub-spec 4)
+
+    @Test func accountStepShownOnlyWithTheSignInFeature() {
+        let off = SetupFlow(goals: [.spendLess], payment: .cash)
+        #expect(!off.path.contains(.account))
+        let on = SetupFlow(goals: [.spendLess], payment: .cash, signInFeature: true)
+        #expect(on.path.contains(.account))
+    }
+
+    @Test func accountStepSitsRightAfterWelcomeBeforeGoals() {
+        let flow = SetupFlow(goals: [.spendLess], payment: .cash, signInFeature: true)
+        #expect(flow.path == [.welcome, .account, .goals, .payment, .currency, .budget, .checkIn,
+                              .building, .plan, .cards])
+    }
+
+    @Test func accountStepNeighboursForwardAndBack() {
+        let on = SetupFlow(signInFeature: true)
+        #expect(on.neighbour(of: .welcome, 1) == .account)
+        #expect(on.neighbour(of: .account, 1) == .goals)
+        #expect(on.neighbour(of: .goals, -1) == .account)
+        #expect(on.neighbour(of: .account, -1) == .welcome)
+
+        // The flag off: welcome and goals are neighbours directly, `.account`
+        // never appears in between.
+        let off = SetupFlow()
+        #expect(off.neighbour(of: .welcome, 1) == .goals)
+        #expect(off.neighbour(of: .goals, -1) == .welcome)
+    }
+
+    /// Not a "Question n of m" screen, but the progress bar still counts it
+    /// like any other shown step.
+    @Test func accountStepIsNotAQuestionButCountsInProgress() {
+        let flow = SetupFlow(signInFeature: true)
+        #expect(!flow.questionSteps.contains(.account))
+        #expect(flow.counter(.account) == nil)
+        #expect(flow.progress(at: .welcome) < flow.progress(at: .account))
+        #expect(flow.progress(at: .account) < flow.progress(at: .goals))
     }
 
     // MARK: Every combination
@@ -148,8 +187,9 @@ struct SetupFlowTests {
             // Conditional steps only when they should be.
             #expect(path.contains(.budget) == flow.goals.contains(.spendLess))
             #expect(path.contains(.applePay) == (flow.payment != .cash))
-            #expect(path.contains(.cardDetails) == flow.hasCards)
             #expect(path.contains(.email) == (flow.gmailFeature && flow.wantsGmail))
+            // `signInFeature` defaults to false for everyone in this matrix.
+            #expect(!path.contains(.account))
             // The path ends on the last step (in declaration order) this
             // person is shown -- no fixed "last screen" any more.
             let lastShown = Step.allCases.last { flow.isShown($0) }
