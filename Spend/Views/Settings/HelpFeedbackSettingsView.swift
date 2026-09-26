@@ -98,6 +98,7 @@ struct HelpFeedbackSettingsView: View {
         }
         .feedback(.confirm, trigger: copied)
         .feedback(.confirm, trigger: tipsReset)
+        .onAppear { Analytics.shared.track(.helpOpened) }
         .alert("Tips Will Come Back", isPresented: $tipsNeedRelaunch) {
             Button("OK", role: .cancel) {}
         } message: {

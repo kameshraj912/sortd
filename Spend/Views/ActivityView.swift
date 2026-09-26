@@ -99,7 +99,10 @@ struct TransactionsScreen: View {
         // RootView, on the tab), and typing a search is the search tip's "done".
         .onChange(of: transactions.count, initial: true) { if fixedCard == nil { TipState.update(from: transactions) } }
         .onChange(of: search) { _, text in
-            if !text.trimmingCharacters(in: .whitespaces).isEmpty { TipState.searchUsed() }
+            if !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                TipState.searchUsed()
+                Analytics.shared.trackOncePerSession(.searchUsed)
+            }
         }
         // The intro's `.move` step: a real day change alongside its finger
         // tap, if there's a second day to move to (fresh, empty demo data
@@ -144,8 +147,10 @@ struct TransactionsScreen: View {
             Button("Just This One") {
                 // Nobody else moves: nothing to offer Undo for.
                 PendingRecategorise.shared.dismiss()
+                let from = change.transaction.category
                 _ = try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
                                                         applyToOthers: false)
+                Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(change.category.rawValue)])
             }
             Button("Cancel", role: .cancel) {}
         } message: { change in
@@ -252,8 +257,10 @@ struct TransactionsScreen: View {
     /// Moves the shop and, when others moved too, offers Undo for a while
     /// (the shared `PendingRecategorise` window).
     private func recategorise(_ t: Transaction, to category: SpendCategory) {
+        let from = t.category
         guard let change = try? TransactionLogger.recategorise(t, to: category, in: context,
                                                                excluding: pendingDeleteIDs) else { return }
+        Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(category.rawValue)])
         PendingRecategorise.shared.stage(change)
         if let text = change.toastText {
             AccessibilityNotification.Announcement("\(text). Undo available.").post()
@@ -390,12 +397,18 @@ struct TransactionsScreen: View {
     private func pagerHeader(_ day: (date: Date, items: [Transaction]), position: DayPager.Position) -> some View {
         // The 44pt frame sits inside the label, so the whole square takes
         // the tap; outside it, only the glyph would.
-        let newer = Button { stepDay(-1) } label: {
+        let newer = Button {
+            stepDay(-1)
+            Analytics.shared.track(.dayStepped, ["direction": .string("newer")])
+        } label: {
             Label("Newer Day", systemImage: "chevron.left")
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .disabled(position.index == 0)
-        let older = Button { stepDay(1) } label: {
+        let older = Button {
+            stepDay(1)
+            Analytics.shared.track(.dayStepped, ["direction": .string("older")])
+        } label: {
             Label("Older Day", systemImage: "chevron.right")
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
