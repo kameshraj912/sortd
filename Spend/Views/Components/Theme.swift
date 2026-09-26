@@ -251,6 +251,32 @@ extension View {
     func secondaryGlass() -> some View {
         buttonStyle(.glass).controlSize(.large)
     }
+
+    /// `GoogleButtonLabel` draws Google's own capsule (branding guidelines:
+    /// white / near-black fill, a 1pt hairline border). Apply this, not
+    /// `.primaryGlass()`, or the glass style wraps it in a second, darker
+    /// capsule around Google's own. Only a press dim on top, so it still
+    /// reads as one tap target next to Sign in with Apple.
+    func googleButton() -> some View {
+        buttonStyle(.google)
+    }
+}
+
+/// The press feedback for `GoogleButtonLabel`: Google's asset already draws
+/// the shape and the border, so this adds nothing but a dim, the way a
+/// system control would.
+struct GoogleButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == GoogleButtonStyle {
+    static var google: GoogleButtonStyle { GoogleButtonStyle() }
 }
 
 /// List section heading in the setup style: bold, normal case, ink colour
