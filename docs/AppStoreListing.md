@@ -18,13 +18,13 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## Promotional text (170)
 
-Pay with Apple Pay and Sortd writes it down. No bank login, no account, nothing leaves your iPhone.
+Pay with Apple Pay. Sortd writes it down. No bank login, no account. Purchases stay on your iPhone.
 
 ## Description (4000)
 
 Tap to pay. Sortd writes it down.
 
-Sortd logs your Apple Pay purchases by itself: the shop, the amount and the card, a few seconds after you pay. No typing, no bank login, no account. Everything stays on your iPhone.
+Sortd logs your Apple Pay purchases by itself: the shop, the amount and the card, a few seconds after you pay. No typing, no bank login, no account. Purchases stay on your iPhone.
 
 LOGGED FOR YOU
 • Apple Pay taps log themselves through one Shortcuts automation. Setup shows a picture for every step and takes about three minutes.
@@ -50,7 +50,7 @@ EVEN MORE
 
 PRIVATE BY DESIGN
 • No bank passwords, ever. Sortd only keeps the last 4 digits of a card.
-• Your purchases are stored on your iPhone. We never see them, so we can't sell them or lose them.
+• Your purchases are stored on your iPhone. We never see them, so we can't sell them.
 • No ads, and no tracking across other apps. Sortd can send usage counts (never amounts) and crash reports to help fix bugs. Turn it off in Settings › Privacy.
 • Your setup answers and notifications stay on your iPhone too. Apple Intelligence runs on the device.
 • Face ID lock, save a backup file, export everything as a spreadsheet, or delete it all in one tap.
