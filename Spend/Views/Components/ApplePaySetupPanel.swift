@@ -24,6 +24,9 @@ struct ApplePaySetupPanel: View {
     /// so the page itself stays short (router feel check, 26 Sep 2026).
     @State private var showingRawTap = false
 
+    @State private var healthCheck: ApplePayHealthCheck.State?
+    @State private var healthCheckStartedAt: Date?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             statusCard
@@ -32,8 +35,68 @@ struct ApplePaySetupPanel: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.orange)
             }
+            healthCheckSection
             steps
             timeoutNote
+        }
+    }
+
+    // MARK: - Check the Shortcut (spec 2026-09-26, failsafe #11)
+
+    private var healthCheckSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                runHealthCheck()
+            } label: {
+                Label("Check the Shortcut", systemImage: "checkmark.shield")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.regular)
+            if let text = healthCheckText {
+                Text(text)
+                    .font(.footnote)
+                    .foregroundStyle(healthCheck == .timedOut ? .secondary : Color.up)
+                    .fixedSize(horizontal: false, vertical: true)
+                if healthCheck == .timedOut {
+                    Link("Learn more", destination: ApplePayStatus.learnMoreURL)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.brand)
+                }
+            }
+        }
+    }
+
+    private var healthCheckText: String? {
+        switch healthCheck {
+        case nil: return nil
+        case .waiting: return "Checking… run the automation from Shortcuts."
+        case .reached(let date): return "Shortcut reached Sortd · \(date.formatted(date: .omitted, time: .shortened))"
+        case .timedOut: return "Nothing arrived. Check the automation is on and set to Run Immediately."
+        }
+    }
+
+    private func runHealthCheck() {
+        guard let url = ApplePayHealthCheck.runURL else { return }
+        let now = Date.now
+        healthCheckStartedAt = now
+        healthCheck = .waiting
+        openURL(url)
+        Task { await pollHealthCheck() }
+    }
+
+    /// Polls every second until the check resolves. Nothing runs unless a
+    /// check is actually in progress (`healthCheckStartedAt` set by
+    /// `runHealthCheck`); `ApplePayHealthCheck.resolve` itself is pure and
+    /// tested with no sleeps at all.
+    private func pollHealthCheck() async {
+        guard let startedAt = healthCheckStartedAt else { return }
+        while !Task.isCancelled {
+            let state = ApplePayHealthCheck.resolve(startedAt: startedAt, lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, now: .now)
+            healthCheck = state
+            if state != .waiting { return }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 

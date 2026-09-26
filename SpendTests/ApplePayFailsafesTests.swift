@@ -201,6 +201,50 @@ struct WalletTapCardOnlyFallbackTests {
     }
 }
 
+/// "Check the Shortcut" (spec 2026-09-26, failsafe #11).
+struct ApplePayHealthCheckTests {
+    private let started = Date(timeIntervalSince1970: 1_790_000_000)
+
+    @Test func waitingBeforeAnythingArrivesOrTheTimeout() {
+        let state = ApplePayHealthCheck.resolve(startedAt: started, lastReachedAt: nil, now: started.addingTimeInterval(5))
+        #expect(state == .waiting)
+    }
+
+    @Test func reachedWhenAnArrivalIsAtOrAfterTheStart() {
+        let reachedAt = started.addingTimeInterval(3)
+        let state = ApplePayHealthCheck.resolve(startedAt: started, lastReachedAt: reachedAt, now: started.addingTimeInterval(5))
+        #expect(state == .reached(reachedAt))
+    }
+
+    /// An arrival from before the check started (a stale flag from an
+    /// earlier run) does not count as this check succeeding.
+    @Test func anArrivalFromBeforeTheCheckStartedDoesNotCount() {
+        let staleReach = started.addingTimeInterval(-60)
+        let state = ApplePayHealthCheck.resolve(startedAt: started, lastReachedAt: staleReach, now: started.addingTimeInterval(5))
+        #expect(state == .waiting)
+    }
+
+    @Test func timesOutAfter20Seconds() {
+        let state = ApplePayHealthCheck.resolve(startedAt: started, lastReachedAt: nil, now: started.addingTimeInterval(20))
+        #expect(state == .timedOut)
+    }
+
+    @Test func payloadParsesToTheKnownTestFields() {
+        let parts = WalletTapText.parse(ApplePayHealthCheck.payloadText)
+        #expect(parts.merchant == ApplePayHealthCheck.merchant)
+        #expect(parts.amount == "A$0.01")
+        #expect(parts.card == "Test Card")
+    }
+
+    @Test func runURLNamesTheShortcutAndCarriesThePayload() throws {
+        let url = try #require(ApplePayHealthCheck.runURL)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(components.scheme == "shortcuts")
+        #expect(components.queryItems?.first { $0.name == "name" }?.value == ApplePayHealthCheck.shortcutName)
+        #expect(components.queryItems?.first { $0.name == "text" }?.value == ApplePayHealthCheck.payloadText)
+    }
+}
+
 /// "Needs a check": the note-marker convention (spec 2026-09-26, no schema
 /// migration for this first pass) plus `ApplePayStatus`'s aggregate count.
 @MainActor
