@@ -8,8 +8,10 @@ import Foundation
 /// Turning iCloud backup off asks "Delete the iCloud copy too?". Someone who
 /// chose Keep It and later chose Delete All Data still had that copy in
 /// iCloud, because Delete All only deleted it when the switch was on. Now the
-/// copy goes whenever this iPhone has one: the switch is on, it backed up or
-/// restored before (`lastBackup`), or an earlier delete is still pending.
+/// copy goes whenever this iPhone may have written one: the switch is on, it
+/// backed up before (`backedUpFromThisPhone`), or an earlier delete is still
+/// pending. A copy this iPhone only restored from is another iPhone's live
+/// backup and stays.
 @MainActor
 struct CloudBackupResetTests {
 
@@ -41,21 +43,41 @@ struct CloudBackupResetTests {
     // MARK: The decision
 
     @Test func deletesWhenTheSwitchIsOn() {
-        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: true, lastBackup: nil, deletePending: false))
+        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: true, backedUpHere: false, deletePending: false))
     }
 
     @Test func deletesAKeptCopyWithTheSwitchOff() {
-        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: false, lastBackup: .now, deletePending: false))
+        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: false, backedUpHere: true, deletePending: false))
     }
 
     @Test func deletesWhenAnEarlierDeleteIsStillPending() {
-        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: false, lastBackup: nil, deletePending: true))
+        #expect(CloudBackup.deletesCloudCopyOnReset(switchOn: false, backedUpHere: false, deletePending: true))
     }
 
-    /// Never backed up or restored on this iPhone: there is no copy of its
-    /// own to delete, and another iPhone's backup is left alone.
-    @Test func leavesICloudAloneWhenThisIPhoneNeverUsedIt() {
-        #expect(!CloudBackup.deletesCloudCopyOnReset(switchOn: false, lastBackup: nil, deletePending: false))
+    /// Never backed up from this iPhone: there is no copy of its own to
+    /// delete, and another iPhone's backup is left alone.
+    @Test func leavesICloudAloneWhenThisIPhoneNeverBackedUp() {
+        #expect(!CloudBackup.deletesCloudCopyOnReset(switchOn: false, backedUpHere: false, deletePending: false))
+    }
+
+    /// Restoring on a second iPhone doesn't make the old iPhone's live
+    /// backup this one's to delete.
+    @Test func aRestoreAloneDoesNotMakeTheCopyThisIPhones() async throws {
+        let cloudStore = FakeCloudBackupStore()
+        let keys = FakeBackupKeyStore()
+        let oldPhoneContext = try store()
+        try logOne(oldPhoneContext)
+        let oldPhone = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        oldPhone.isEnabled = true
+        try await oldPhone.backUpNow(from: oldPhoneContext)
+        #expect(oldPhone.backedUpFromThisPhone)
+
+        let newPhone = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: fixedClock)
+        let added = try await newPhone.restore(into: try store(), mode: .merge)
+        #expect(added == 1)
+        #expect(newPhone.lastBackup != nil)
+        #expect(newPhone.backedUpFromThisPhone == false)
+        #expect(!newPhone.deletesCloudCopyOnReset)
     }
 
     // MARK: Keep It, then Delete All Data
@@ -111,7 +133,7 @@ struct CloudBackupResetTests {
     @Test func aCopyThatIsAlreadyGoneCountsAsDeleted() async throws {
         let cloudStore = FakeCloudBackupStore()
         let defaults = scratch()
-        defaults.set(Date(timeIntervalSince1970: 1_790_000_000), forKey: CloudBackup.lastKey)
+        defaults.set(true, forKey: CloudBackup.backedUpHereKey)
         let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: defaults, clock: fixedClock)
         #expect(cloud.isEnabled == false)
         #expect(cloudStore.saved == nil)
@@ -119,7 +141,7 @@ struct CloudBackupResetTests {
         #expect(cloud.deletesCloudCopyOnReset)
         await cloud.deleteCloudCopyAfterReset()
         #expect(cloud.isDeletePending == false)
-        #expect(cloud.lastBackup == nil)
+        #expect(cloud.backedUpFromThisPhone == false)
     }
 
     @Test func aFreshInstallHasNothingToDelete() {
