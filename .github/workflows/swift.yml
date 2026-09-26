@@ -3,15 +3,15 @@
 
 name: Swift
 
-# macOS runners cost 10x minutes against the 2,000-minute monthly quota, so:
+# macOS runners cost 10x minutes against the 3,000-minute monthly quota (GitHub Pro via Education), so:
 # docs-only changes skip CI, and a new push to a branch cancels its stale run.
 on:
   push:
     branches: [ "main" ]
-    paths-ignore: [ "worker/**", "docs/**", "**/*.md", "Brand/**", "site/**", "claude-project/**", ".claude/**", "media/**" ]
+    paths-ignore: [ "worker/**", "docs/**", "**/*.md", "Brand/**", "site/**", "launch/**", "claude-project/**", ".claude/**", "media/**" ]
   pull_request:
     branches: [ "main" ]
-    paths-ignore: [ "worker/**", "docs/**", "**/*.md", "Brand/**", "site/**", "claude-project/**", ".claude/**", "media/**" ]
+    paths-ignore: [ "worker/**", "docs/**", "**/*.md", "Brand/**", "site/**", "launch/**", "claude-project/**", ".claude/**", "media/**" ]
 
 concurrency:
   group: swift-${{ github.head_ref || github.ref }}
