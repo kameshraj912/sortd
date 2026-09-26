@@ -5,6 +5,11 @@ import Combine
 /// BudgetSheet: a big editable number, quick chips, Save and Remove.
 struct CategoryLimitSheet: View {
     let category: SpendCategory
+    /// Told the new limit (nil when removed) the instant Save or Remove
+    /// runs, so the screen that opened this sheet can show it right away
+    /// instead of waiting on a `UserDefaults.didChangeNotification` that
+    /// fires for every setting in the app, not just this one.
+    var onChange: (Double?) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var current: Double = 0
     @State private var text = ""
@@ -15,6 +20,16 @@ struct CategoryLimitSheet: View {
 
     private var value: Double {
         (AmountParser.parse(text)?.amount.double) ?? 0
+    }
+
+    /// What Save does: parse what's typed, persist it, and hand back the
+    /// exact value that just went into the store. Reading `value` back out
+    /// of `CategoryBudgets` here (instead of only computing it from `text`)
+    /// means the caller's copy can never drift from what was actually saved.
+    static func apply(_ text: String, to category: SpendCategory, _ defaults: UserDefaults = .standard) -> Double? {
+        let value = (AmountParser.parse(text)?.amount.double) ?? 0
+        CategoryBudgets.set(value, for: category, defaults)
+        return CategoryBudgets.limit(for: category, defaults)
     }
 
     var body: some View {
@@ -78,7 +93,7 @@ struct CategoryLimitSheet: View {
 
             VStack(spacing: 12) {
                 Button {
-                    CategoryBudgets.set(value, for: category)
+                    onChange(Self.apply(text, to: category))
                     saved += 1
                     dismiss()
                 } label: {
@@ -91,6 +106,7 @@ struct CategoryLimitSheet: View {
                 if current > 0 {
                     Button {
                         CategoryBudgets.remove(category)
+                        onChange(nil)
                         dismiss()
                     } label: {
                         Text("Remove Limit")
