@@ -176,7 +176,7 @@ enum SetupCopy {
         .plan: "Built from your answers. Change any of it in Settings.",
         .cards: "Tap each bank you pay with. Two cards at one bank? Tap twice.",
         .cardDetails: "So receipts land on the right card. Only the last 4.",
-        .applePay: "Three steps, about a minute.",
+        .applePay: "Two steps, about a minute.",
         .email: "From receipts and bank alerts in your Gmail.",
     ]
 

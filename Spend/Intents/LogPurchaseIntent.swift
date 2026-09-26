@@ -41,6 +41,13 @@ struct LogPurchaseIntent: AppIntent {
         let merged: Bool
     }
 
+    /// The merchant name the removed "Send a Test Tap" button wrote
+    /// (`Spend/Views/Components/TapTestButton.swift`, deleted 25 Sep 2026).
+    /// Kept as a constant, not deleted rows: old installs may still have
+    /// test purchases under this name, and they must stay excluded from
+    /// activation, suggestions and the Apple Pay status.
+    nonisolated static let legacyTestMerchant = "Sortd Test"
+
     static let lastTapKey = "lastTapReceived"
 
     /// When Shortcuts last reached Sortd at all — including a ▶ test run that
@@ -54,10 +61,15 @@ struct LogPurchaseIntent: AppIntent {
         UserDefaults.standard.object(forKey: lastTapAtKey) != nil
     }
 
+    /// When Shortcuts last reached the app, for the Apple Pay status line.
+    static var lastTapReceivedAt: Date? {
+        UserDefaults.standard.object(forKey: lastTapAtKey) as? Date
+    }
+
     /// A tap counts as the first auto-logged purchase only when it was
-    /// added (not merged) and is not the app's own "Send a Test Tap".
+    /// added (not merged) and is not a legacy "Send a Test Tap" purchase.
     nonisolated static func countsAsActivation(added: Bool, merchant: String) -> Bool {
-        added && merchant != TapTestButton.testMerchant
+        added && merchant != legacyTestMerchant
     }
 
     /// The whole tap-handling logic, callable from tests.
