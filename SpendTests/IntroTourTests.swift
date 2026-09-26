@@ -255,4 +255,23 @@ struct IntroCountdownTests {
         // Paused window counted is 1s→4s (3s), not 3s→4s (1s).
         #expect(countdown.remaining(at: epoch.addingTimeInterval(4), duration: 2.5) == 1.5)
     }
+
+    /// The contract behind the view's `.task(id: step)` restart: whatever
+    /// happened on the step just left (a tap 1s in, in this case) must not
+    /// carry forward — the next step's countdown is a brand new instance,
+    /// started at the moment of the tap, with the full duration ahead of it
+    /// and the segment's fill back at zero. (A real bug had a step's own
+    /// task keep polling after being cancelled by the tap and calling
+    /// `onTimeout()` again on the *next* step using the *old* step's
+    /// deadline — cutting the new step short. That race lives in the view,
+    /// not here, but this pins down what "fresh" has to mean for it.)
+    @Test func newCountdownAfterATapStartsFullRegardlessOfPriorElapsedTime() {
+        let stepOneStart = epoch
+        let tapAt = stepOneStart.addingTimeInterval(1.0) // tapped 1s into step 1
+        let stepTwo = IntroCountdown(startedAt: tapAt)
+        let remaining = stepTwo.remaining(at: tapAt, duration: IntroStep.stepDuration)
+        #expect(remaining == IntroStep.stepDuration)
+        let progress = 1 - remaining / IntroStep.stepDuration
+        #expect(progress == 0)
+    }
 }

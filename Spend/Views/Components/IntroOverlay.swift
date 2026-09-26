@@ -114,8 +114,21 @@ struct IntroOverlay: View {
                 guard !reduceMotion else { return }
                 await playMotion(step)
                 guard autoAdvanceAllowed else { return }
-                while !Task.isCancelled {
+                while true {
                     try? await Task.sleep(for: .milliseconds(100))
+                    // `Task.sleep` throws (silently, via `try?`) the moment
+                    // this task is cancelled — a step change (by tap or by
+                    // timeout) cancels it via `.task(id: step)` — but that
+                    // alone doesn't stop execution: without this check, a
+                    // just-cancelled task fell through to read `countdown`
+                    // (by then already reset for the *new* step) and could
+                    // call `onTimeout()` again on the new step using the old
+                    // step's stale deadline, cutting the new step short.
+                    // Returning the instant cancellation is seen, before
+                    // touching any shared state, is what actually stops it —
+                    // the `while` loop's own condition only gets checked
+                    // again one iteration too late.
+                    if Task.isCancelled { return }
                     guard let countdown else { continue }
                     let remaining = countdown.remaining(at: .now, duration: IntroStep.stepDuration)
                     progress = 1 - remaining / IntroStep.stepDuration
@@ -352,24 +365,31 @@ struct IntroOverlay: View {
                 buttons(step)
             } else {
                 VStack(spacing: 6) {
-                    // The eyebrow and Skip share a row (eyebrow leading,
-                    // Skip trailing); Skip stays a sibling, not folded into
-                    // the combined element below, so it reads as its own
-                    // accessibility button.
+                    // The eyebrow and Skip share a real row — an
+                    // `.overlay` here once sat Skip at the card's own
+                    // vertical centre, not the eyebrow's, landing on top of
+                    // the line whenever it wrapped to two lines. Skip stays
+                    // a sibling of the eyebrow text, not folded into its
+                    // accessibility label, so it reads as its own button;
+                    // the label goes on the eyebrow text itself instead of
+                    // a wrapping `.accessibilityElement(children: .combine)`,
+                    // and the line (already spoken through that label) is
+                    // hidden from the accessibility tree so it isn't spoken twice.
                     HStack(spacing: 8) {
                         Text("\(step.rawValue + 1) of \(IntroTour.steps.count)")
-                            .font(.caption2.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel(step.accessibilityLabel)
                         Spacer(minLength: 8)
+                        cardSkipButton
                     }
                     Text(step.line)
                         .font(.headline)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(Color.ink)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityHidden(true)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(step.accessibilityLabel)
-                .overlay(alignment: .topTrailing) { cardSkipButton }
             }
         }
         .padding(18)
@@ -421,17 +441,22 @@ struct IntroOverlay: View {
     }
 
     /// Motion-allowed mode's Skip: a small secondary button sharing the
-    /// eyebrow's row, top trailing (originally a floating pill top right of
-    /// the whole screen — it sat on top of the settings gear every screen
-    /// already draws there, reading as a broken button). Still a real,
-    /// 44pt-tall accessibility button, just inside the card now.
+    /// eyebrow's own row (originally a floating pill top right of the whole
+    /// screen — it sat on top of the settings gear every screen already
+    /// draws there; then an `.overlay` centred on the whole card instead of
+    /// the eyebrow's row, landing on the line whenever it wrapped). Still a
+    /// real 44pt tap target — the negative vertical padding pulls the
+    /// row's *layout* height back down to roughly the text's own, since the
+    /// 44pt frame alone would otherwise make the eyebrow row, and so the
+    /// whole card, visibly taller.
     private var cardSkipButton: some View {
         Button("Skip", action: onSkip)
             .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(.secondary)
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
+            .padding(.vertical, -12)
     }
 
     private func nextButton(_ step: IntroStep) -> some View {
