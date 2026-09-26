@@ -113,7 +113,9 @@ struct ReceiptScanView: View {
             let text = await ReceiptScanner.recognizeText(in: pages)
             let result = await ReceiptScanner.read(text: text)
             reading = false
-            if text.isEmpty || result.isEmpty {
+            let success = !(text.isEmpty || result.isEmpty)
+            Analytics.shared.track(.receiptScanned, ["success": .bool(success)])
+            if !success {
                 problem = "Couldn't read this receipt. Try again in better light, or type it in."
                 return
             }

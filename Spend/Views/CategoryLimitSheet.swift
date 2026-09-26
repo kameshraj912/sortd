@@ -95,6 +95,7 @@ struct CategoryLimitSheet: View {
                 Button {
                     onChange(Self.apply(text, to: category))
                     saved += 1
+                    Analytics.shared.track(.categoryLimitSet, ["category": .string(category.rawValue)])
                     dismiss()
                 } label: {
                     Text("Save")
