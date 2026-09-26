@@ -6,6 +6,7 @@ import StoreKit
 /// and the App Store / website / legal links.
 struct AboutSettingsView: View {
     @State private var tipping = false
+    private let tipJar = TipJar.shared
     @Environment(\.requestReview) private var requestReview
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—" }
@@ -34,13 +35,17 @@ struct AboutSettingsView: View {
             }
             .listRowBackground(Color.clear)
 
-            Section {
-                Button { tipping = true } label: {
-                    Label("Leave a Tip", systemImage: "heart")
+            // The row waits for the App Store to know the three tips. Until
+            // the products exist there is nothing to buy, so nothing to show.
+            if !tipJar.products.isEmpty {
+                Section {
+                    Button { tipping = true } label: {
+                        Label("Leave a Tip", systemImage: "heart")
+                    }
+                    .accessibilityHint("Opens the tip jar")
                 }
-                .accessibilityHint("Opens the tip jar")
+                .tint(Color.ink)
             }
-            .tint(Color.ink)
 
             Section {
                 Button { requestReview() } label: {
@@ -68,5 +73,6 @@ struct AboutSettingsView: View {
         .contentMargins(.bottom, 24, for: .scrollContent)
         .brandedTitle("About")
         .sheet(isPresented: $tipping) { TipJarView() }
+        .task { await tipJar.load() }
     }
 }
