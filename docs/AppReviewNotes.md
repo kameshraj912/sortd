@@ -66,7 +66,7 @@ Test account: [TEST GMAIL ADDRESS] / [TEST GMAIL PASSWORD]
   salted hash, scrubbed of purchases, merchants, emails and IP, and share one switch in
   Settings › Privacy. Privacy policy: https://sortd.page/privacy
 
-Contact: Kameshraj Gnanaprakasam, [REVIEW CONTACT PHONE, +61 format], support@sortd.page
+Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
 
 ---
 
@@ -74,20 +74,70 @@ Contact: Kameshraj Gnanaprakasam, [REVIEW CONTACT PHONE, +61 format], support@so
 
 - Contact name: Kameshraj Gnanaprakasam (the copyright holder in `docs/AppStoreListing.md`).
 - Contact email: support@sortd.page (the support address on sortd.page and in the app).
+- Contact phone: entered in App Store Connect only. Not kept in the repo, which is public.
 
-## Only Raj can fill
+## Two things that need a phone in hand
 
-- `[REVIEW CONTACT PHONE, +61 format]`: a phone number App Review can call, in international
-  format. Type it straight into App Store Connect; it does not need to be in this file.
-- `[VIDEO LINK]`: the Shortcuts setup video, recorded on a real iPhone (see below).
-- `[TEST GMAIL ADDRESS]` and `[TEST GMAIL PASSWORD]`: a throwaway Google account added as an
-  OAuth test user. The password goes only into App Store Connect, never into this file.
-- Whether to give App Review a demo sign-in account. Sign-in is optional and every screen works
-  without it, so the notes say so instead of supplying one.
+Sign-in needs no demo account: it is optional and every screen works without it, and the
+notes say so.
+
+### 1. The Shortcuts video (`[VIDEO LINK]`)
+
+Screen-record on the iPhone, under 90 seconds, no voice needed. Control Centre › Screen
+Recording. Then AirDrop it to the Mac and upload it as an unlisted YouTube video or an iCloud
+Drive share link, and paste the link into the notes. Shots, in order:
+
+1. Sortd › Settings › Purchase Sources › Apple Pay Logging. Scroll the picture guide once.
+2. Tap Get the Shortcut. Shortcuts opens. Show the automation: Wallet › Sortd "Log Wallet Tap"
+   with the Transaction in its field. Tap ▶ once: Sortd shows "connected".
+3. Stop recording. Buy something small with Apple Pay at a staffed till (a coffee is fine).
+4. Start recording again within a minute: open Sortd › Activity. The purchase is on top with
+   the shop, amount and card. Tap it to show the detail. Stop.
+
+Trim the two clips together in Photos or iMovie. If the till clip is awkward, skip it and
+just show the purchase landing; the reviewer only needs to see the automation and the result.
+
+### 2. The test Gmail account (`[TEST GMAIL ADDRESS]` / `[TEST GMAIL PASSWORD]`)
+
+1. In a private browser window, accounts.google.com › Create account › For personal use. Name
+   "Sortd Review", any free address such as sortd.review.<year>@gmail.com. Google will ask for a
+   phone for verification; the +61 number above works and is not shown to reviewers.
+2. Google Cloud › APIs & Services › OAuth consent screen (Google Auth Platform › Audience) ›
+   Test users › Add: that address. Needed until Google finishes the gmail.readonly review.
+3. From any account, send the three emails below to the new address. They match the parsers
+   (`Spend/Services/EmailParsers.swift`, `BankAlerts.swift`): a delivery, a ride and a bank
+   alert. Change nothing but the dates.
+4. Sign in to Sortd's Connect Gmail with it once yourself to confirm the three land in
+   Activity. Disconnect afterwards.
+5. Type the address and password into App Store Connect › App Review Information › Sign-in
+   required. Never into this file.
+
+Email A. From any address, subject `Your Uber Eats order receipt`:
+
+    Thanks for ordering with Uber Eats.
+    Total  AUD 24.90
+    Order from Grill'd Melbourne Central
+    Paid with Visa ••••4321
+    Date: <today>
+
+Email B. Subject `Your Tuesday morning trip with Uber`:
+
+    Total  AUD 18.60
+    Trip with Uber
+    Payment: Mastercard ••••9876
+    <today>
+
+Email C. Subject `NAB: transaction alert`:
+
+    A purchase of $6.50 was made at WOOLWORTHS 1234 MELBOURNE on <today> using your NAB Visa
+    card ending in 4321.
+
+If any of the three does not appear after a sync, it is a parser gap, not a reason to change
+the email: log it as a finding.
 
 ## Before submitting
 
-- [ ] Notes are about 4016 characters with the placeholders in. Once the real values are in,
+- [ ] Notes are about 3997 characters with the placeholders in. Once the real values are in,
       check it is under 4,000; cut the "Other" list first if not.
 - [ ] Record the Shortcuts setup video on a real iPhone and attach it (or link it above).
 - [ ] Type the real test password only into App Store Connect. Never commit it to this file.
