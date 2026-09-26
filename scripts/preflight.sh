@@ -85,6 +85,11 @@ if grep -q 'SORTD_GMAIL' "$PBX" && [ "$MODE" = "--appstore" ]; then
   say "      (docs/GoogleVerification.md). Before that, only 100 test users can connect."
 fi
 
+# 1d. Session replay is for TestFlight only. An App Store build must not carry the flag.
+if grep -q 'SORTD_REPLAY' "$PBX" && [ "$MODE" = "--appstore" ]; then
+  bad "SORTD_REPLAY is still in the Release build settings. Remove it before an App Store build (replay is TestFlight only)."
+fi
+
 # 2. Build number must be unique per upload; remind, don't guess.
 warn "Build number is $build. Every upload needs a new one."
 
