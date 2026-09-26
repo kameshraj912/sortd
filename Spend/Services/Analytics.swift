@@ -162,6 +162,27 @@ final class Analytics {
     /// Unknown, offline or no key: false.
     static func flag(_ key: String) -> Bool { shared.sink.isFeatureEnabled(key) }
 
+    /// The PostHog host this build talks to (Settings › About's hidden
+    /// developer menu). Recomputed from the same Info.plist key `shared`
+    /// reads, so the two can never drift apart.
+    static var postHogHost: String {
+        let host = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostText = host.contains("://") ? host : PostHogSink.defaultHost
+        return URL(string: hostText)?.host() ?? hostText
+    }
+
+    /// Whether this build was compiled with session replay at all
+    /// (`SORTD_REPLAY`, the beta only). Replay also needs consent
+    /// (`isEnabled`); the developer menu shows both together.
+    static var replayBuildFlagOn: Bool {
+        #if SORTD_REPLAY
+        true
+        #else
+        false
+        #endif
+    }
+
     // MARK: - Instance
 
     private let sink: Sink
