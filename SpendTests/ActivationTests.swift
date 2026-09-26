@@ -80,6 +80,15 @@ struct ActivationTests {
         #expect(Activation.detect(t) == nil)
     }
 
+    /// A refund proves nothing about the person's own spending. A standalone
+    /// refund tap (fresh install, "-A$5.00", no earlier purchase to match)
+    /// becomes its own refunded row and must not trigger the aha.
+    @Test func refundedTapDoesNotActivate() throws {
+        let t = try log("Starbucks", source: .tap)
+        t.refunded = true
+        #expect(Activation.detect(t) == nil)
+    }
+
     // MARK: recordIfFirst -- once only per install
 
     @Test func recordIfFirstReturnsTheSourceOnceThenNilAfter() throws {

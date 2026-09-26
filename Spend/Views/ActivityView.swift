@@ -45,6 +45,11 @@ struct TransactionsScreen: View {
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
     @Namespace private var zoom
+    @State private var router = Router.shared
+    /// True only while the intro's `.move` step is on screen: gates whether
+    /// `pagerHeader` spends a `GeometryReader` reporting its frame for the
+    /// intro's cutout.
+    @Environment(\.introWatchingDayHeader) private var introWatchingDayHeader
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
     /// Asks "Change all N … purchases?" when other purchases share the shop.
@@ -95,6 +100,14 @@ struct TransactionsScreen: View {
         .onChange(of: transactions.count, initial: true) { if fixedCard == nil { TipState.update(from: transactions) } }
         .onChange(of: search) { _, text in
             if !text.trimmingCharacters(in: .whitespaces).isEmpty { TipState.searchUsed() }
+        }
+        // The intro's `.move` step: a real day change alongside its finger
+        // tap, if there's a second day to move to (fresh, empty demo data
+        // has only one). Only this view knows that.
+        .onChange(of: router.pendingIntroDayTap, initial: true) { _, pending in
+            guard pending, fixedCard == nil else { return }
+            router.pendingIntroDayTap = false
+            if days.count > 1 { stepDay(1) }
         }
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
@@ -322,6 +335,14 @@ struct TransactionsScreen: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
+            // A short day (its content shorter than the screen) can leave
+            // this List's scroll offset a hair off zero after a push and
+            // pop of the detail page, which the Liquid Glass tab bar reads
+            // as "scrolled down" and never un-minimises (only Activity uses
+            // a List here; Home's ScrollView never showed this). Pinning
+            // the anchor to the top keeps the offset at a clean zero, so
+            // popping back always reports "at the top" to the tab bar.
+            .defaultScrollAnchor(.top)
             .task(id: dayPage) {
                 #if DEBUG
                 guard Self.startScrolled, let last = all.indices.contains(index) ? all[index].items.last : nil else { return }
@@ -379,6 +400,18 @@ struct TransactionsScreen: View {
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .disabled(position.index + 1 >= position.count)
+        // The intro's `.move` step points its finger at this button's own
+        // frame, not the header row's — the row's measured frame doesn't
+        // line up with the chevron's 44pt square (it hangs out past the
+        // row's own bounds, the `.padding(.horizontal, -14)` below).
+        .background {
+            if introWatchingDayHeader {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: IntroDayHeaderKey.self,
+                                            value: IntroDayFrames(chevron: proxy.frame(in: .global)))
+                }
+            }
+        }
         // At the largest sizes the chevrons get their own row, so the day
         // keeps the full width.
         return Group {
@@ -399,6 +432,19 @@ struct TransactionsScreen: View {
         .buttonStyle(.borderless)
         .font(.footnote.weight(.semibold))
         .textCase(nil)
+        // The intro's `.move` step needs this row's real frame for its
+        // cutout — only measured while it's actually on screen for that
+        // (docs/specs/2026-09-26-app-intro-v2.md), a plain `PreferenceKey`
+        // read at `RootView` via `.overlayPreferenceValue`, since this sits
+        // inside a `List` well below that level.
+        .background {
+            if introWatchingDayHeader {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: IntroDayHeaderKey.self,
+                                            value: IntroDayFrames(header: proxy.frame(in: .global)))
+                }
+            }
+        }
     }
 
     /// The chips as a list row, a section gap under the title and search

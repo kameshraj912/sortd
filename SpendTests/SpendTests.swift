@@ -870,6 +870,18 @@ struct CategoryBudgetTests {
         #expect(CB.all(d).isEmpty)
     }
 
+    /// The category limit sheet: picking the $200 chip and tapping Save
+    /// must leave the store holding 200 for `.bills`, and must hand the
+    /// caller back that same 200 -- not a value computed only from the
+    /// typed text, which could drift from what actually got persisted.
+    @MainActor
+    @Test func categoryLimitSheetSaveReportsExactlyWhatItPersisted() {
+        let d = UserDefaults(suiteName: "CategoryLimitSheetTests-\(UUID().uuidString)")!
+        let reported = CategoryLimitSheet.apply("200", to: .bills, d)
+        #expect(reported == 200)
+        #expect(CB.limit(for: .bills, d) == 200)
+    }
+
     @Test func alertsFireOncePerThreshold() {
         let month = "2026-09"
         var sent: Set<String> = []

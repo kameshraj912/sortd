@@ -1,9 +1,9 @@
 import Foundation
 
-/// The three-step app intro (`docs/specs/2026-09-25-app-intro.md`): shown once,
-/// right after setup closes (`RootView` sees `setupPresented` turn false), and
-/// once for an install that updates past this point. Replayable from
-/// Help › "Show the Intro Again".
+/// The three-step app intro (`docs/specs/2026-09-26-app-intro-v2.md`, option A,
+/// "stories"): shown once, right after setup closes (`RootView` sees
+/// `setupPresented` turn false), and once for an install that updates past
+/// this point. Replayable from Help › "Show the Intro Again".
 ///
 /// Pure: no Views, no UserDefaults reads inside the type itself, so the whole
 /// state machine is tested with no simulator. `RootView` keeps one `IntroTour`
@@ -22,12 +22,12 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         }
     }
 
-    /// The one line under the card. Raj's approved wording (25 Sep 2026).
+    /// The one line under the card. Raj's approved wording (26 Sep 2026).
     var line: String {
         switch self {
-        case .add: "Tap + to add anything Apple Pay missed"
-        case .insights: "See where your money goes in Insights"
-        case .move: "Switch tabs here. Tap the arrows to change the day."
+        case .add: "Tap + to add cash or anything Apple Pay missed"
+        case .insights: "Insights shows where your money goes"
+        case .move: "Tap the arrows to move between days"
         }
     }
 
@@ -37,7 +37,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: "The plus button, bottom right, adds a purchase."
         case .insights: "The Insights tab, in the tab bar."
-        case .move: "The tab bar. On Activity, tap the arrows to change the day."
+        case .move: "The day header, on Activity, with the arrows that change the day."
         }
     }
 
@@ -47,14 +47,14 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
     }
 
     /// The motion this step plays once, before it holds. `.none` under
-    /// Reduce Motion, where a still ring or arrow stands in and the steps
-    /// cross-fade instead of animating.
+    /// Reduce Motion, where a still ring stands in and the steps cross-fade
+    /// instead of animating.
     func motion(reduceMotion: Bool) -> IntroMotion {
         guard !reduceMotion else { return .none }
         switch self {
         case .add: return .tapTwice
         case .insights: return .ringPulse
-        case .move: return .swipe
+        case .move: return .tapOnce
         }
     }
 
@@ -64,14 +64,57 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: 1.5
         case .insights: 1.0
-        case .move: 1.5
+        case .move: 1.0
         }
     }
+
+    /// Every step auto-advances after this long, unless a tap or a hold
+    /// changes that (`IntroCountdown`).
+    static let stepDuration: TimeInterval = 2.5
 }
 
 /// What plays once on a step, before it holds still.
 enum IntroMotion: Equatable, Sendable {
-    case none, tapTwice, ringPulse, swipe
+    case none, tapTwice, ringPulse, tapOnce
+}
+
+/// A step's auto-advance clock: pure `Date` math, no sleeping, no timer —
+/// testable with injected `Date`s. `IntroOverlay` polls `remaining(at:duration:)`
+/// on a short interval and advances the tour once it hits zero; a long press
+/// pauses it, and lifting resumes from where it paused, not from zero.
+struct IntroCountdown: Equatable, Sendable {
+    private var stepStartedAt: Date
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+
+    init(startedAt: Date) {
+        self.stepStartedAt = startedAt
+    }
+
+    /// Seconds left in `duration`, clamped to zero. While paused, time
+    /// stopped accruing at the moment `pause(at:)` was called.
+    func remaining(at now: Date, duration: TimeInterval) -> TimeInterval {
+        let clock = pausedAt ?? now
+        let elapsed = clock.timeIntervalSince(stepStartedAt) - pausedTotal
+        return max(0, duration - elapsed)
+    }
+
+    /// Stops the clock at `now`. Calling it again while already paused does
+    /// nothing (the first pause moment wins).
+    mutating func pause(at now: Date) {
+        guard pausedAt == nil else { return }
+        pausedAt = now
+    }
+
+    /// Restarts the clock from wherever it was paused: the gap between
+    /// `pause(at:)` and `resume(at:)` doesn't count against `duration`.
+    mutating func resume(at now: Date) {
+        guard let pausedAt else { return }
+        pausedTotal += now.timeIntervalSince(pausedAt)
+        self.pausedAt = nil
+    }
+
+    var isPaused: Bool { pausedAt != nil }
 }
 
 /// The step machine, plus the seen/replay flags that decide whether it
@@ -92,6 +135,10 @@ struct IntroTour: Equatable {
     /// Set by `replay()`: `shouldShow` ignores `seen` once, until the tour
     /// ends again (which leaves `seen` exactly as it was: true).
     private(set) var replaying = false
+    /// True unless some step in this run was advanced early (a tap, not a
+    /// timeout). `skip()` always leaves it false. Read at `finished` for the
+    /// `auto` field on `intro_finished`.
+    private(set) var auto = true
 
     init(seen: Bool = false) {
         self.seen = seen
@@ -108,11 +155,25 @@ struct IntroTour: Equatable {
         index = 0
         skipped = false
         finished = false
+        auto = true
     }
 
-    /// Advances to the next step, or ends the tour (not skipped) from the
-    /// last one. Does nothing if the tour isn't running.
+    /// A tap anywhere (or a real Next) advances at once, regardless of how
+    /// much time is left on the step's clock. Counts as "not auto" for the
+    /// `auto` flag Analytics reads at the end.
     mutating func next() {
+        auto = false
+        advance()
+    }
+
+    /// The step's own 2.5s clock ran out with no tap: same step transition
+    /// as `next()`, but doesn't clear `auto` — this is what "every step
+    /// timed out" means.
+    mutating func advanceOnTimeout() {
+        advance()
+    }
+
+    private mutating func advance() {
         guard let index else { return }
         let following = index + 1
         if Self.steps.indices.contains(following) {
@@ -122,8 +183,10 @@ struct IntroTour: Equatable {
         }
     }
 
-    /// Ends the tour at once, from any step, counted as skipped.
+    /// Ends the tour at once, from any step, counted as skipped. Always
+    /// counts as "not auto" — Raj asked, not a timer.
     mutating func skip() {
+        auto = false
         finish(skipped: true)
     }
 
@@ -153,5 +216,14 @@ struct IntroTour: Equatable {
     /// shape): setup done, not already seen, nothing else showing, not locked.
     static func shouldShow(setupDone: Bool, seen: Bool, setupShowing: Bool, locked: Bool) -> Bool {
         setupDone && !seen && !setupShowing && !locked
+    }
+
+    /// Whether the per-step timer should run at all. Never under Reduce
+    /// Motion (a still ring stands in, Next/Skip are the only way to move)
+    /// and never while VoiceOver is running (it would trap a VoiceOver user
+    /// behind a clock they can't stop) — both gates live here, as one pure
+    /// rule, so the View can't accidentally check only one of them.
+    static func autoAdvances(reduceMotion: Bool, voiceOverRunning: Bool) -> Bool {
+        !reduceMotion && !voiceOverRunning
     }
 }

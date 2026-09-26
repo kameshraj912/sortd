@@ -83,7 +83,9 @@ struct AccountSettingsView: View {
             } label: {
                 GoogleButtonLabel(working: working)
             }
-            .primaryGlass()
+            // Google's own capsule already carries the branding; `.primaryGlass()`
+            // used to wrap it in a second, darker glass capsule.
+            .googleButton()
             .disabled(working)
         } header: {
             BoldHeader("Sign In")

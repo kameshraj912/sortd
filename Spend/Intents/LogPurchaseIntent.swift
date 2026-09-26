@@ -121,6 +121,17 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
                                transaction: nil, merged: true)
             }
+            // No whole purchase matches: maybe this refund is only part of a
+            // bigger one (one returned item from a A$59.90 basket).
+            if let reduced = EmailSync.markPartiallyRefunded(amount: p.amount, currency: currency, card: cardID,
+                                                             merchant: name, platform: nil, before: now,
+                                                             lookbackDays: 60, in: context) {
+                try? context.save()
+                await FXService.backfill(in: context)
+                let shop = reduced.merchant.isEmpty ? (name.isEmpty ? "the shop" : name) : reduced.merchant
+                return Outcome(message: "\(Money.format(p.amount, currency)) refund on \(shop) noted",
+                               transaction: reduced, merged: true)
+            }
         }
         let purchase = IncomingPurchase(
             date: now,
@@ -134,15 +145,18 @@ struct LogPurchaseIntent: AppIntent {
 
         let outcome = try TransactionLogger.log(purchase, in: context)
         let t = outcome.transaction
-        // The first purchase the app logged on its own (once per install).
-        // A "Send a Test Tap" purchase is not one.
-        if case .added = outcome, Self.countsAsActivation(added: true, merchant: name) {
-            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
-        }
+        // A standalone refund tap (no earlier purchase to match) becomes its
+        // own row here. It proves nothing about the person's own spending,
+        // so this returns before the activation event below ever sees it.
         if refund, !t.refunded {
             t.refunded = true
             try? context.save()
             return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false)
+        }
+        // The first purchase the app logged on its own (once per install).
+        // A "Send a Test Tap" purchase is not one.
+        if case .added = outcome, Self.countsAsActivation(added: true, merchant: name) {
+            Analytics.shared.trackOnce(.activationFirstAutoPurchase, ["source": .string("tap")])
         }
         await FXService.backfill(in: context)
 
