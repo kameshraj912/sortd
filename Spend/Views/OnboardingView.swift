@@ -48,7 +48,6 @@ struct OnboardingView: View {
     @State private var autoAdvancing = false
     /// "Bring in past spending" / "Restore from iCloud" on the welcome
     /// screen: one plain-text link opens both, instead of a row each.
-    @State private var showingMoreOptions = false
     /// The `.account` step: who just signed in, shown for a moment before
     /// moving on by itself. Nil for the sign-in buttons.
     @State private var accountConfirmed: String?
@@ -167,17 +166,6 @@ struct OnboardingView: View {
         .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
-        // Welcome's "More Options": the two less-common ways in, behind one
-        // plain-text link instead of a row each.
-        .confirmationDialog("More options", isPresented: $showingMoreOptions, titleVisibility: .hidden) {
-            Button("Bring in past spending") { showingImport = true }
-            #if SORTD_ICLOUD
-            if newFlow, transactions.isEmpty, !rerun {
-                Button(restoring ? "Restoring…" : "Restore from iCloud") { restoreFromCloud() }
-                    .disabled(restoring)
-            }
-            #endif
-        }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
             Button("OK", role: .cancel) {}
@@ -394,7 +382,25 @@ struct OnboardingView: View {
                             finish()
                         }
                     }
-                    tertiaryButton("More Options") { showingMoreOptions = true }
+                    // The two less-common ways in, as a menu on the link itself
+                    // so it opens next to it (a dialog on the page anchored
+                    // top-left, Raj, 27 Sep).
+                    Menu {
+                        Button("Bring in past spending", systemImage: "square.and.arrow.down") { showingImport = true }
+                        #if SORTD_ICLOUD
+                        if transactions.isEmpty, !rerun {
+                            Button(restoring ? "Restoring…" : "Restore from iCloud", systemImage: "icloud.and.arrow.down") { restoreFromCloud() }
+                                .disabled(restoring)
+                        }
+                        #endif
+                    } label: {
+                        Text("More Options")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
                     Text("Free. No account needed.")
                         .font(.footnote).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
