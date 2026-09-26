@@ -13,6 +13,8 @@
   var mode = saved() || "system";
   apply(mode);
   root.classList.add("js");
+  // Home page is gated until the beta opens (see "Oops. You found us early." below).
+  if (location.pathname === "/" || /\/index(\.html)?$/.test(location.pathname)) root.classList.add("gate");
 
   document.addEventListener("DOMContentLoaded", function () {
     // Beta sign-up: send without leaving the page, then show "You're on the list".
@@ -23,7 +25,7 @@
       var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
       var show = function (msg, field) {
         err.textContent = msg; err.hidden = !msg;
-        [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { f.removeAttribute("aria-invalid"); });
+        [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
       // Turnstile tokens are single-use: after a failed submit, clear it so the next try gets a fresh one.
@@ -32,10 +34,11 @@
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         if (!ok(email.value.trim())) return show("That's not an email. Even your spam folder would reject\u00a0it.", email);
-        if (!form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
-        if (!form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
-        if (!form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
-        if (gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail\u00a0address.", gmail);
+        // The home page waitlist only asks for an email; the /beta form asks the rest.
+        if (form.elements.name && !form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
+        if (form.elements.country && !form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
+        if (form.querySelector('input[name="applepay"]') && !form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
+        if (gmail && gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail\u00a0address.", gmail);
         show(""); submit.disabled = true; submit.textContent = "Sending…";
         fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
           .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
@@ -43,7 +46,8 @@
             if (res.ok) {
               ["beta-intro", "beta-alt"].forEach(function (id) { var n = document.getElementById(id); if (n) n.hidden = true; });
               document.getElementById("beta-done-email").textContent = email.value.trim();
-              form.hidden = true; done.hidden = false; window.scrollTo(0, 0);
+              form.hidden = true; done.hidden = false;
+              if (!form.hasAttribute("data-stay")) window.scrollTo(0, 0);
               var h = done.querySelector(".as-h1"); h.setAttribute("tabindex", "-1"); h.focus();
             }
             else { show(res.error || "That didn't go through. Please try\u00a0again."); resetCaptcha(); }
@@ -52,6 +56,24 @@
           .then(function () { submit.disabled = false; submit.textContent = "Join the beta"; });
       });
     }
+
+    // "Oops. You found us early." The home page is a gate until the beta opens:
+    // the card covers the site completely and can't be closed. Privacy, terms and
+    // support stay reachable from the card (Google's Gmail review checks them).
+    var early = document.getElementById("early");
+    if (early && early.showModal) {
+      try { early.showModal(); } catch (e) {}
+      early.addEventListener("cancel", function (e) { e.preventDefault(); });
+    }
+
+    // Share after signing up: the phone's share sheet, or copy the link.
+    document.querySelectorAll("[data-share]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var data = { title: "Sortd", text: "Found an app that logs your Apple Pay taps by itself. Free beta soon:", url: "https://sortd.page" };
+        if (navigator.share) { navigator.share(data).catch(function () {}); return; }
+        try { navigator.clipboard.writeText(data.url); b.textContent = "Link copied"; } catch (e) {}
+      });
+    });
 
     // Theme button cycles System → Light → Dark.
     var btn = document.querySelector(".theme-btn");
@@ -171,6 +193,22 @@
       }
     }, { passive: true });
 
+    // Countdown to the TestFlight beta. Change the date here and nowhere else.
+    // If the date passes before the beta is really open, it says so instead of "0 days".
+    var BETA_OPENS = new Date("2026-10-09T09:00:00+11:00"); // 9 am Melbourne
+    var counters = document.querySelectorAll("[data-countdown]");
+    function plural(n, word) { return n + "\u00a0" + word + (n === 1 ? "" : "s"); }
+    function tick() {
+      var left = BETA_OPENS - Date.now(), text;
+      var d = Math.floor(left / 864e5), h = Math.floor(left / 36e5) % 24, m = Math.floor(left / 6e4) % 60;
+      if (left <= 0) text = "any day now. (We said that last time\u00a0too.)";
+      else if (d > 0) text = "in " + plural(d, "day") + " and " + plural(h, "hour") + ".";
+      else if (h > 0) text = "in " + plural(h, "hour") + " and " + plural(m, "minute") + ".";
+      else text = "in " + plural(Math.max(m, 1), "minute") + ". Refreshing won't make it\u00a0faster.";
+      counters.forEach(function (el) { el.textContent = text; });
+    }
+    if (counters.length) { tick(); setInterval(tick, 30000); }
+
     // Scroll-in for sections marked .reveal.
     //
     // These start at opacity 0, so a missed reveal isn't a missing
@@ -185,10 +223,10 @@
     var items = document.querySelectorAll(".reveal");
     if (!("IntersectionObserver" in window)) { items.forEach(function (el) { el.classList.add("in"); }); return; }
 
-    function show(el) { el.classList.add("in"); }
+    function reveal(el) { el.classList.add("in"); }
 
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) { if (e.isIntersecting) { show(e.target); io.unobserve(e.target); } });
+      entries.forEach(function (e) { if (e.isIntersecting) { reveal(e.target); io.unobserve(e.target); } });
     }, { rootMargin: "0px 0px -8% 0px", threshold: 0 });
     items.forEach(function (el) { io.observe(el); });
 
@@ -199,7 +237,7 @@
       var left = 0;
       items.forEach(function (el) {
         if (el.classList.contains("in")) return;
-        if (el.getBoundingClientRect().top < limit) { show(el); io.unobserve(el); } else { left++; }
+        if (el.getBoundingClientRect().top < limit) { reveal(el); io.unobserve(el); } else { left++; }
       });
       if (!left) { window.removeEventListener("scroll", onScroll); }
     }

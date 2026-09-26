@@ -17,8 +17,8 @@
 <meta property="og:url" content="https://sortd.page/support">
 <meta property="og:image" content="https://sortd.page/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="style.css?v=24">
-<script src="site.js?v=25"></script>
+<link rel="stylesheet" href="style.css?v=35">
+<script src="site.js?v=34"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -44,7 +44,7 @@
   <p>Answers to common questions. If yours isn't here, email <a href="mailto:support@sortd.page">support@sortd.page</a>.</p>
 
   <h2 id="apple-pay">How do I log Apple Pay taps automatically?</h2>
-  <p>You set up one automation in Apple's Shortcuts app. It takes about two minutes, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Purchase Sources › Apple Pay Logging.</p>
+  <p>You set up one automation in Apple's Shortcuts app. It takes about a minute, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Purchase Sources › Apple Pay Logging.</p>
   <h3>The quick way</h3>
   <ol>
     <li><a href="/apple-pay.shortcut"><strong>Get the ready-made shortcut</strong></a> on your iPhone, then tap the download, then <strong>Add Shortcut</strong>. It already knows which part of the tap is the amount, the shop and the card.</li>
@@ -106,18 +106,38 @@
 
   <h2 id="check-in">How do I change my check-in or setup answers?</h2>
   <ul>
-    <li><strong>Check-in:</strong> Settings › Bills &amp; Reminders › Check-in. Pick morning, evening, Sunday, or Off. It's free, and it never shows amounts.</li>
+    <li><strong>Check-in:</strong> Settings › Bills &amp; Reminders › Check-in. Pick Each morning, Each evening, Sunday recap, or Only when it matters (no regular check-ins). It never shows amounts.</li>
     <li><strong>Setup answers:</strong> Settings › Help &amp; Feedback › Run Setup Again. Your purchases and cards stay as they are.</li>
   </ul>
   <p>If the check-in never arrives, notifications may be off for Sortd. Turn them on in your iPhone's Settings › Notifications › Sortd.</p>
 
   <h2>How do I delete my data?</h2>
   <ul>
-    <li><strong>Everything:</strong> Settings › Backup &amp; Data › Delete All Data. This removes every purchase, card, budget, setting and setup answer from your iPhone, turns off your check-in and reminders, and disconnects Gmail. It can't be undone.</li>
+    <li><strong>Everything:</strong> Settings › Backup &amp; Data › Delete All Data. This removes every purchase, card, budget, setting and setup answer from your iPhone, turns off your check-in and reminders, and disconnects Gmail. If iCloud backup is on, the iCloud copy goes too, and if you're signed in, you're signed out. It can't be undone.</li>
     <li><strong>One Gmail account:</strong> Settings › Purchase Sources, find the account under Email Receipts, then tap Disconnect. You can also delete the purchases only that account added.</li>
     <li><strong>A copy first:</strong> Settings › Backup &amp; Data › Save a Backup, or Export as Spreadsheet.</li>
   </ul>
-  <p>Your data is only on your iPhone, so we can't delete it for you, and we can't restore it after you delete it.</p>
+  <p>Your purchases are only on your iPhone (and in your own iCloud, if you turned on iCloud backup), so we can't delete them for you, and we can't restore them after you delete them.</p>
+
+  <h2 id="icloud">How do I back up to iCloud, or move to a new iPhone?</h2>
+  <ul>
+    <li><strong>Turn it on:</strong> Settings › Backup &amp; Data › Back up to iCloud. Sortd encrypts your purchases on your iPhone first, and keeps them up to date by itself. Tap Back Up Now to save straight away.</li>
+    <li><strong>On a new iPhone:</strong> sign in to the same Apple Account with iCloud Keychain on, open Sortd, and tap Restore from iCloud. Choose Add What's Missing or Replace Everything.</li>
+    <li><strong>Turn it off:</strong> switch it off and choose whether to delete the iCloud copy or keep it.</li>
+  </ul>
+
+  <h2 id="account">Do I need an account?</h2>
+  <p>No. Every feature works without one. If you want, Settings › Account lets you sign in with Apple or Google. It helps us find you if you ask for help. Your purchases stay on your iPhone either way, and signing in with Google doesn't give Sortd your Gmail.</p>
+  <ul>
+    <li><strong>Sign out:</strong> Settings › Account › Sign Out. Your purchases stay.</li>
+    <li><strong>Delete your account:</strong> Settings › Account › Delete Account. Sortd asks Apple or Google to cancel the sign-in and deletes your usage record. Choose Delete Account and All Data to wipe the app too.</li>
+  </ul>
+
+  <h2 id="usage">How do I turn off usage data?</h2>
+  <p>Settings › Privacy &amp; Security › Privacy › Share usage data. Sortd counts which features get used and sends crash reports so we can fix them. It never sends amounts, shops, card digits or email. The one switch turns off both. See the <a href="privacy#usage">privacy policy</a> for exactly what's sent.</p>
+
+  <h2 id="free">Is Sortd really free?</h2>
+  <p>Yes. Every feature is free, for everyone. No subscription, no trial, no ads. If you paid for something in the app and want a refund, ask Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</p>
 
   <h2>Contact</h2>
   <p>Email <a href="mailto:support@sortd.page">support@sortd.page</a>. Please say which iPhone and iOS version you have. Don't send screenshots showing full card numbers or bank details.</p>
