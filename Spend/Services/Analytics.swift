@@ -384,13 +384,18 @@ protocol PostHogClient: AnyObject {
     func optOut()
 }
 
-/// The real thing. Session replay off, element autocapture off until the
+/// The real thing. Session replay on only in a `SORTD_REPLAY` build (the
+/// beta), off for the App Store release. Element autocapture off until the
 /// audit in the spec passes, screen views sent by hand (`Analytics.screen`)
 /// so only named screens are counted.
 ///
 /// With sharing off at launch the SDK is not set up at all: set up, even
 /// opted out, it still fetches its remote config and feature flags. It is
 /// set up the first time sharing goes on.
+///
+/// Replay and consent: `PostHogSDK.optOut()` uninstalls the replay
+/// integration (and `optIn()` reinstalls it), so `Analytics.isEnabled =
+/// false` already stops recording; nothing extra is needed here.
 final class PostHogSink: Analytics.Sink {
     static let defaultHost = "https://eu.i.posthog.com"
 
@@ -483,7 +488,20 @@ final class LivePostHogClient: PostHogClient {
     func setup(apiKey: String, host: URL) {
         // `init(apiKey:host:)` is deprecated in 3.82; same thing, new name.
         let config = PostHogConfig(projectToken: apiKey, host: host.absoluteString)
+        // Session replay: beta only (SORTD_REPLAY), off for the App Store
+        // release. Screenshot mode, not wireframes, since this is SwiftUI;
+        // text, images and sandboxed pickers are masked wholesale, and the
+        // few money/shop views left get an explicit `.postHogMask()`.
+        #if SORTD_REPLAY
+        config.sessionReplay = true
+        config.sessionReplayConfig.screenshotMode = true
+        config.sessionReplayConfig.maskAllTextInputs = true
+        config.sessionReplayConfig.maskAllImages = true
+        config.sessionReplayConfig.maskAllSandboxedViews = true
+        config.sessionReplayConfig.throttleDelay = 1
+        #else
         config.sessionReplay = false
+        #endif
         config.captureApplicationLifecycleEvents = true
         config.captureScreenViews = false
         config.captureElementInteractions = false

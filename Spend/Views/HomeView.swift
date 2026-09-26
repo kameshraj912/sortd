@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import PostHog
 
 /// Home, after Raj's reference: month picker and a big centred total,
 /// a budget card with a colour-split bar (one colour per category), the two
@@ -296,6 +297,7 @@ struct HomeView: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .padding(.top, 6)
+                .postHogMask()
                 .accessibilityLabel("Spent \(Money.spoken(monthItems.audTotal, Money.home))")
                 .accessibilityValue(refreshing ? "Updating" : "")
                 .opacity(refreshing ? 0.5 : 1)
