@@ -148,8 +148,7 @@ struct BugHuntDataTests {
     /// Known bug: `Deduper.match` (Spend/Services/Deduper.swift:38-43) reads
     /// only `source`, not `seenIn`, after `TransactionLogger.merge`
     /// (Spend/Services/SpendStore.swift:135-139) raises the row's source.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a tap the day after a tap-plus-email at the same shop merges into yesterday's purchase"))
+    @Test
     func aTapTheNextDayIsANewPurchaseEvenAfterAnEmailMergedIn() throws {
         let ctx = try store()
         let monday = date("2026-09-14")
