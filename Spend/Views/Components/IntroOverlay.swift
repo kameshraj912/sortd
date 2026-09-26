@@ -1,20 +1,59 @@
 import SwiftUI
 import UIKit
 
-/// The dimmed, three-step overlay (`docs/specs/2026-09-25-app-intro.md`,
-/// option A): the real screen behind it, a cutout that keeps the control the
-/// step is about at full brightness, a card just above the tab bar with a
-/// pointer toward it, and Next / Done / Skip. `RootView` drives the selected
-/// tab from `tour.step`, so the highlighted control is real.
+/// The three-step app intro (`docs/specs/2026-09-26-app-intro-v2.md`, option A,
+/// "stories"): the real screen behind it, a cutout that keeps the control the
+/// step is about at full brightness, and either
+/// - **motion allowed** (Reduce Motion off, VoiceOver off): three thin
+///   progress segments at the top, a card with a small "N of 3" eyebrow and
+///   the line (no buttons), real per-step motion (a finger tapping, or the
+///   tab bar's own ring), auto-advance after `IntroStep.stepDuration`, a tap
+///   anywhere advances early, a finger held down pauses the clock, and Skip
+///   sits top right; or
+/// - **Reduce Motion, or VoiceOver running** (kept exactly as first built,
+///   the spec's own fallback): a still ring, the old "Step N of 3" heading,
+///   cross-fading steps, and real Next/Done + Skip buttons in the card —
+///   nothing times out.
+///
+/// `RootView` drives the selected tab from `tour.step`, so the highlighted
+/// control is real, and threads the day header's measured frame in from
+/// `ActivityView` via `IntroDayHeaderKey` for the `.move` step.
 struct IntroOverlay: View {
     @Binding var tour: IntroTour
+    /// The day header's frame (chevrons + day title), measured by
+    /// `ActivityView.pagerHeader` and read at `RootView` via
+    /// `.overlayPreferenceValue(IntroDayHeaderKey.self)`. Nil until
+    /// `ActivityView` has laid out at least once on step `.move`, or if it
+    /// never can be (see `IntroDayHeaderKey`'s doc) — either way this falls
+    /// back to the whole tab bar band, same as `.add`/`.insights` do today.
+    let dayHeaderFrame: CGRect?
+    /// A tap anywhere, or the classic-mode Next/Done button.
     let onNext: () -> Void
+    /// The step's own clock ran out with nobody tapping.
+    let onTimeout: () -> Void
     let onSkip: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverRunning
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var probe = TabBarLayout()
     @State private var pulse = false
+    @State private var fingerOpacity: Double = 0
+    @State private var fingerScale: CGFloat = 1
+    @State private var countdown: IntroCountdown?
+    /// 0...1: how far through the current step's `stepDuration` the poll
+    /// loop has gotten, driving the progress segment's fill. Frozen while
+    /// `countdown?.isPaused` is true (a held finger).
+    @State private var progress: Double = 0
+    @State private var isPressing = false
+    @State private var pressStartedAt: Date?
+
+    /// Whether the step times out on its own: never under Reduce Motion or
+    /// with VoiceOver running (`IntroTour.autoAdvances`, the one place both
+    /// gates live so neither can be forgotten separately).
+    private var autoAdvanceAllowed: Bool {
+        IntroTour.autoAdvances(reduceMotion: reduceMotion, voiceOverRunning: voiceOverRunning)
+    }
 
     var body: some View {
         if let step = tour.step {
@@ -36,24 +75,29 @@ struct IntroOverlay: View {
                 let origin = proxy.frame(in: .global).origin
                 let bounds = CGRect(origin: .zero, size: proxy.size)
                 let target = Self.clamp(
-                    Self.targetFrame(for: step, probe: probe, screen: proxy.size, safeBottom: proxy.safeAreaInsets.bottom)
+                    Self.targetFrame(for: step, probe: probe, dayHeaderFrame: dayHeaderFrame,
+                                      screen: proxy.size, safeBottom: proxy.safeAreaInsets.bottom)
                         .offsetBy(dx: -origin.x, dy: -origin.y),
                     to: bounds)
                 let pointerX = Self.clampedPointerOffset(target: target, screenWidth: proxy.size.width)
+                let approximate = probe.foundNothing && (step != .move || dayHeaderFrame == nil)
+                let showButtons = !autoAdvanceAllowed
 
-                ZStack(alignment: .bottom) {
+                ZStack(alignment: .top) {
                     dim(cutout: target)
-                    highlight(target, approximate: probe.foundNothing)
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        card(step, pointerOffsetX: pointerX)
+                    highlight(target, approximate: approximate)
+                    finger(at: fingerAnchor(for: step, target: target))
+                    cardLayer(for: step, target: target, pointerOffsetX: pointerX,
+                              bounds: bounds, safeBottom: proxy.safeAreaInsets.bottom, showButtons: showButtons)
+                    if !showButtons {
+                        progressBar(current: step, safeTop: proxy.safeAreaInsets.top)
+                        HStack {
+                            Spacer(minLength: 0)
+                            topRightSkip
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, proxy.safeAreaInsets.top + 30)
                     }
-                    .padding(.horizontal, 20)
-                    // The card's bottom edge lands 16pt above the target,
-                    // whatever step it is — every target here is in or next
-                    // to the tab bar, so the card is always bottom-anchored,
-                    // never at the top of the screen.
-                    .padding(.bottom, max(proxy.safeAreaInsets.bottom + 8, bounds.height - target.minY + 16))
                 }
                 .frame(width: bounds.width, height: bounds.height)
                 .id(step)
@@ -64,14 +108,89 @@ struct IntroOverlay: View {
             .accessibilityElement(children: .contain)
             .task(id: step) {
                 pulse = false
+                fingerOpacity = 0
+                progress = 0
+                countdown = IntroCountdown(startedAt: .now)
                 guard !reduceMotion else { return }
-                try? await Task.sleep(for: .milliseconds(50))
-                // Once out, once back, per the spec ("each animation runs
-                // once... then holds") — not a repeating pulse.
-                withAnimation(.easeInOut(duration: step.motionDuration / 2)) { pulse = true }
-                try? await Task.sleep(for: .seconds(step.motionDuration / 2))
-                withAnimation(.easeInOut(duration: step.motionDuration / 2)) { pulse = false }
+                await playMotion(step)
+                guard autoAdvanceAllowed else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard let countdown else { continue }
+                    let remaining = countdown.remaining(at: .now, duration: IntroStep.stepDuration)
+                    progress = 1 - remaining / IntroStep.stepDuration
+                    if remaining <= 0 {
+                        onTimeout()
+                        return
+                    }
+                }
             }
+        }
+    }
+
+    // MARK: Motion
+
+    /// Plays once, before the step holds until it's tapped or times out.
+    /// `.none` under Reduce Motion — this is only ever called once that's
+    /// already been checked.
+    private func playMotion(_ step: IntroStep) async {
+        switch step.motion(reduceMotion: false) {
+        case .none:
+            break
+        case .ringPulse:
+            try? await Task.sleep(for: .milliseconds(50))
+            withAnimation(.easeInOut(duration: step.motionDuration / 2)) { pulse = true }
+            try? await Task.sleep(for: .seconds(step.motionDuration / 2))
+            withAnimation(.easeInOut(duration: step.motionDuration / 2)) { pulse = false }
+        case .tapTwice:
+            fingerOpacity = 1
+            await tap()
+            try? await Task.sleep(for: .milliseconds(250))
+            await tap()
+            try? await Task.sleep(for: .milliseconds(250))
+            withAnimation(.easeOut(duration: 0.25)) { fingerOpacity = 0 }
+        case .tapOnce:
+            fingerOpacity = 1
+            await tap()
+            try? await Task.sleep(for: .milliseconds(350))
+            withAnimation(.easeOut(duration: 0.25)) { fingerOpacity = 0 }
+        }
+    }
+
+    /// One press-and-release of the simulated finger.
+    private func tap() async {
+        withAnimation(.easeOut(duration: 0.12)) { fingerScale = 0.7 }
+        try? await Task.sleep(for: .milliseconds(120))
+        withAnimation(.easeOut(duration: 0.12)) { fingerScale = 1 }
+        try? await Task.sleep(for: .milliseconds(120))
+    }
+
+    /// Where the simulated finger lands: the + circle's centre for `.add`,
+    /// the day header's trailing ("Older Day") chevron for `.move`. `.insights`
+    /// has no finger — the ring pulse alone is its motion, on the tab the app
+    /// really selects.
+    private func fingerAnchor(for step: IntroStep, target: CGRect) -> CGPoint {
+        guard target != .zero else { return .zero }
+        switch step {
+        case .add: return CGPoint(x: target.midX, y: target.midY)
+        case .move: return CGPoint(x: target.maxX - 22, y: target.midY)
+        case .insights: return .zero
+        }
+    }
+
+    @ViewBuilder
+    private func finger(at point: CGPoint) -> some View {
+        if point != .zero, fingerOpacity > 0 {
+            Circle()
+                .fill(.white.opacity(0.92))
+                .overlay(Circle().strokeBorder(.white, lineWidth: 1))
+                .frame(width: 30, height: 30)
+                .scaleEffect(fingerScale)
+                .shadow(color: .black.opacity(0.3), radius: 4)
+                .opacity(fingerOpacity)
+                .position(point)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
     }
 
@@ -82,6 +201,12 @@ struct IntroOverlay: View {
     /// instead of dimming along with the rest of the screen. The whole
     /// layer stays tappable, cutout included, so "tap anywhere advances"
     /// still holds over the hole.
+    ///
+    /// One `DragGesture(minimumDistance: 0)` does both jobs the spec asks
+    /// for — a quick tap advances at once, a held finger pauses the clock
+    /// and lifting resumes it — rather than stacking a separate
+    /// `.onTapGesture` and `.onLongPressGesture` on the same view, which
+    /// race for the same touch.
     private func dim(cutout: CGRect) -> some View {
         ZStack {
             Color.black.opacity(0.55)
@@ -94,7 +219,23 @@ struct IntroOverlay: View {
         }
         .compositingGroup()
         .contentShape(Rectangle())
-        .onTapGesture { onNext() }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isPressing else { return }
+                    isPressing = true
+                    pressStartedAt = .now
+                    if autoAdvanceAllowed { countdown?.pause(at: .now) }
+                }
+                .onEnded { _ in
+                    let heldFor = pressStartedAt.map { Date.now.timeIntervalSince($0) } ?? 0
+                    isPressing = false
+                    if autoAdvanceAllowed { countdown?.resume(at: .now) }
+                    // A quick tap advances; a hold just paused/resumed the
+                    // clock and shouldn't also skip ahead on release.
+                    if heldFor < 0.35 { onNext() }
+                }
+        )
     }
 
     private func cutoutRadius(_ frame: CGRect) -> CGFloat { min(frame.width, frame.height) / 2 }
@@ -125,37 +266,115 @@ struct IntroOverlay: View {
         }
     }
 
+    // MARK: Progress bar (motion-allowed mode only)
+
+    /// Three thin segments, Stories-style: full for a step already passed,
+    /// empty for one not reached, and filling from `progress` for the one
+    /// on screen now. Replaces the card's old "Step N of 3" heading.
+    private func progressBar(current: IntroStep, safeTop: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            ForEach(IntroTour.steps, id: \.self) { s in
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(.white.opacity(0.35))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(.white)
+                                .frame(width: proxy.size.width * fraction(for: s, current: current))
+                        }
+                }
+                .frame(height: 3)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, safeTop + 8)
+        .accessibilityHidden(true)
+    }
+
+    private func fraction(for step: IntroStep, current: IntroStep) -> Double {
+        if step.rawValue < current.rawValue { return 1 }
+        if step.rawValue > current.rawValue { return 0 }
+        return progress
+    }
+
+    private var topRightSkip: some View {
+        Button("Skip", action: onSkip)
+            .buttonStyle(.plain)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(.black.opacity(0.35), in: Capsule())
+            .contentShape(Rectangle())
+    }
+
     // MARK: Card
 
-    private func card(_ step: IntroStep, pointerOffsetX: CGFloat) -> some View {
+    /// Where the card sits: bottom-anchored, just above the target, for
+    /// `.add`/`.insights` (both live in or next to the tab bar, near the
+    /// bottom edge); hanging just under the target for `.move` (the day
+    /// header sits near the top, under the nav bar) — and for the whole-bar
+    /// fallback too, since that target is back at the bottom.
+    private func cardLayer(for step: IntroStep, target: CGRect, pointerOffsetX: CGFloat,
+                            bounds: CGRect, safeBottom: CGFloat, showButtons: Bool) -> some View {
+        let hangsBelow = target != .zero && target.midY < bounds.height / 2
+        return Group {
+            if hangsBelow {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: max(0, target.maxY + 16))
+                    card(step, pointerOffsetX: pointerOffsetX, pointerEdge: .top, showButtons: showButtons)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    card(step, pointerOffsetX: pointerOffsetX, pointerEdge: .bottom, showButtons: showButtons)
+                }
+                .padding(.bottom, max(safeBottom + 8, bounds.height - target.minY + 16))
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func card(_ step: IntroStep, pointerOffsetX: CGFloat, pointerEdge: Edge, showButtons: Bool) -> some View {
         VStack(spacing: 14) {
             VStack(spacing: 6) {
-                Text("Step \(step.rawValue + 1) of \(IntroTour.steps.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if showButtons {
+                    Text("Step \(step.rawValue + 1) of \(IntroTour.steps.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(step.rawValue + 1) of \(IntroTour.steps.count)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 Text(step.line)
                     .font(.headline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.ink)
             }
             // One element with the full "Step N of 3. <target>. <line>."
-            // label; Skip and Next stay their own reachable buttons below.
+            // label; Skip and Next stay their own reachable buttons below,
+            // when they're on screen at all.
             .accessibilityElement(children: .combine)
             .accessibilityLabel(step.accessibilityLabel)
-            buttons(step)
+            if showButtons {
+                buttons(step)
+            }
         }
         .padding(18)
         .background(.regularMaterial, in: .rect(cornerRadius: 22, style: .continuous))
         .frame(maxWidth: 360)
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: pointerEdge == .bottom ? .bottom : .top) {
             // A solid fill, not `.regularMaterial`: a blurred material on a
             // shape this small rendered as a soft round blob rather than a
             // crisp triangle.
             Triangle()
                 .fill(Color(.systemBackground).opacity(0.9))
                 .frame(width: 16, height: 8)
-                .offset(x: pointerOffsetX, y: 7)
+                .rotationEffect(pointerEdge == .bottom ? .zero : .degrees(180))
+                .offset(x: pointerOffsetX, y: pointerEdge == .bottom ? 7 : -7)
                 .accessibilityHidden(true)
         }
     }
@@ -164,7 +383,9 @@ struct IntroOverlay: View {
     /// prominent button on the trailing edge — both at least 44pt tall.
     /// At accessibility text sizes they stack full-width instead (a
     /// `.glassProminent` capsule with no minimum width wrapped "Next" to
-    /// "Nex/t" side by side).
+    /// "Nex/t" side by side). Only shown in classic mode (Reduce Motion, or
+    /// VoiceOver running) — the motion-allowed mode has no Next button and
+    /// Skip moves to the top right of the screen instead.
     @ViewBuilder
     private func buttons(_ step: IntroStep) -> some View {
         if typeSize.isAccessibilitySize {
@@ -202,9 +423,11 @@ struct IntroOverlay: View {
     // MARK: Target frame
 
     /// Where to draw the cutout: the probe's live UIKit frame when it found
-    /// one, else a computed slot over the whole tab bar band (the spec's
-    /// fallback when the exact control can't be measured).
-    static func targetFrame(for step: IntroStep, probe: TabBarLayout, screen: CGSize, safeBottom: CGFloat) -> CGRect {
+    /// one, the day header's measured frame for `.move`, else a computed
+    /// slot over the whole tab bar band (the spec's fallback when the exact
+    /// control can't be measured).
+    static func targetFrame(for step: IntroStep, probe: TabBarLayout, dayHeaderFrame: CGRect?,
+                             screen: CGSize, safeBottom: CGFloat) -> CGRect {
         switch step {
         case .add:
             return probe.addCircle ?? probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
@@ -218,7 +441,7 @@ struct IntroOverlay: View {
             }
             return probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
         case .move:
-            return probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
+            return dayHeaderFrame ?? probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
         }
     }
 
@@ -255,7 +478,8 @@ struct IntroOverlay: View {
     }
 }
 
-/// A small downward-pointing triangle, for the card's pointer.
+/// A small downward-pointing triangle, for the card's pointer (rotated 180°
+/// for a card that hangs under its target instead of sitting above it).
 private struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -392,5 +616,33 @@ struct TabBarProbe: UIViewRepresentable {
             }
             for sub in view.subviews { collectButtons(sub, into: &frames) }
         }
+    }
+}
+
+// MARK: - Day header measurement (step `.move`)
+
+/// The day header's frame (chevrons + day title), reported by
+/// `ActivityView.pagerHeader` up to whichever ancestor reads
+/// `.overlayPreferenceValue(IntroDayHeaderKey.self)` — `RootView`, at the
+/// same level `IntroOverlay` is placed, since `ActivityView`'s own `List` +
+/// `ScrollViewReader` sits well below that.
+struct IntroDayHeaderKey: PreferenceKey {
+    static var defaultValue: CGRect?
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
+private struct IntroWatchingDayHeaderKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True only while the intro's `.move` step is on screen: gates whether
+    /// `ActivityView`'s day header spends a `GeometryReader` measuring
+    /// itself for `IntroDayHeaderKey` — free the rest of the time.
+    var introWatchingDayHeader: Bool {
+        get { self[IntroWatchingDayHeaderKey.self] }
+        set { self[IntroWatchingDayHeaderKey.self] = newValue }
     }
 }

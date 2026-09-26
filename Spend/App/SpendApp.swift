@@ -256,6 +256,10 @@ struct RootView: View {
             }
         }
             .tint(Color.brand)
+            // Cheap the rest of the time: `ActivityView`'s day header only
+            // spends a `GeometryReader` measuring itself for the intro's
+            // `.move` cutout while this is true.
+            .environment(\.introWatchingDayHeader, intro.step == .move)
             .tabBarMinimizeBehavior(.onScrollDown)
             .modifier(RootSearch(enabled: layout.rootSearch, query: $searchQuery))
             .overlay(alignment: .bottomTrailing) {
@@ -363,18 +367,34 @@ struct RootView: View {
             if let step = new.step {
                 if tab != step.tab { tab = step.tab }
                 if old.step == nil { Analytics.shared.track(.introShown) }
+                // The `.move` step's motion is a real day change: only
+                // `ActivityView` knows whether a second day of data exists,
+                // so it decides whether `stepDay(1)` actually runs.
+                if step == .move, old.step != .move { router.pendingIntroDayTap = true }
             }
             if new.finished, !old.finished {
+                // Done or Skip both end back on Home — the tour's own
+                // `.tab` already says `.home` once it isn't running, but
+                // nothing above sets this view's real `tab` back to it.
+                tab = .home
                 Analytics.shared.track(.introFinished, ["skipped": .bool(new.skipped),
-                                                         "step": .int((old.step ?? .move).rawValue)])
+                                                         "step": .int((old.step ?? .move).rawValue),
+                                                         "auto": .bool(new.auto)])
             }
         }
         // Everything behind the intro is unreachable while it's up; the
         // overlay itself carries its own accessibility elements.
         .accessibilityHidden(introShowing)
-        .overlay {
+        // The day header's frame comes from `ActivityView.pagerHeader`,
+        // well below this in a `List` + `ScrollViewReader` — read here via
+        // `.overlayPreferenceValue` rather than `.overlay`, the only way it
+        // reaches this level.
+        .overlayPreferenceValue(IntroDayHeaderKey.self) { dayHeaderFrame in
             if introShowing {
-                IntroOverlay(tour: $intro, onNext: { intro.next() }, onSkip: { intro.skip() })
+                IntroOverlay(tour: $intro, dayHeaderFrame: dayHeaderFrame,
+                             onNext: { intro.next() },
+                             onTimeout: { intro.advanceOnTimeout() },
+                             onSkip: { intro.skip() })
             }
         }
         .task(id: scenePhase) {
@@ -442,7 +462,17 @@ extension RootView {
             return
         }
         guard intro.shouldShow(setupDone: onboarded, setupShowing: setupPresented, locked: lock.isLocked) else { return }
-        intro.start()
+        // Begins 0.6s after Home settles, and only once the setup sheet is
+        // fully gone (the eligibility check above already passed once) —
+        // something else, like the add sheet, can still open in that
+        // window, so every guard is re-read after the sleep, not just
+        // before it.
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard intro.step == nil, !showingAdd, !router.showingSettings else { return }
+            guard intro.shouldShow(setupDone: onboarded, setupShowing: setupPresented, locked: lock.isLocked) else { return }
+            intro.start()
+        }
     }
 
     /// The tab bar's selection. The + slot is an action, not a place: picking
