@@ -53,6 +53,25 @@ final class Analytics {
         /// Sign-in (sub-spec 4): `provider` is apple or google, never the email.
         case signedIn = "signed_in"
         case signedOut = "signed_out"
+        /// The beta's extra intent events (docs/specs/2026-09-25-free-app-overhaul-2-analytics.md).
+        /// Never amounts, merchants, emails or notes.
+        case searchUsed = "search_used"
+        case receiptScanned = "receipt_scanned"
+        case statementImported = "statement_imported"
+        case budgetSet = "budget_set"
+        /// `category` is the `SpendCategory` name only, never the limit amount.
+        case categoryLimitSet = "category_limit_set"
+        case insightsRangeChanged = "insights_range_changed"
+        case dayStepped = "day_stepped"
+        case purchaseEdited = "purchase_edited"
+        /// `from` and `to` are `SpendCategory` names.
+        case categoryChanged = "category_changed"
+        case cardAdded = "card_added"
+        case appLockTurnedOn = "app_lock_turned_on"
+        case helpOpened = "help_opened"
+        /// The hidden developer menu (Settings › About, 7 taps): a forced
+        /// event so Raj can see one arrive in PostHog on demand.
+        case developerTestEvent = "developer_test_event"
     }
 
     /// Where events go. `PostHogSink` in the app, `NoopSink` with no key,
@@ -154,6 +173,10 @@ final class Analytics {
 
     /// Privacy guard trail, for tests: "event.key" per property dropped.
     private(set) var violations: [String] = []
+
+    /// `trackOncePerSession`'s memory: in-memory only, so it starts empty
+    /// every launch (there is no other notion of "session" here).
+    private var sessionFired: Set<Event> = []
 
     /// The identified id (the salted hash) while signed in, else nil. Read
     /// by `CrashReporting` from Sentry's own thread, so it sits behind a
@@ -286,6 +309,16 @@ final class Analytics {
         var all = properties
         all["hours_bucket"] = .string(bucket)
         track(event, all)
+    }
+
+    /// Like `track`, but only the first time this event is asked for since
+    /// launch (`searchUsed`: "first character typed, once per session").
+    /// Off: nothing is sent and nothing is marked fired, so it can still
+    /// fire once consent comes back on.
+    func trackOncePerSession(_ event: Event, _ properties: [String: AnalyticsValue] = [:]) {
+        guard enabled, !sessionFired.contains(event) else { return }
+        sessionFired.insert(event)
+        track(event, properties)
     }
 
     /// Identifies as sha256(accountSalt + provider + subject): the same id

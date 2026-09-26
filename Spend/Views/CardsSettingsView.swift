@@ -235,6 +235,7 @@ struct CardEditor: View {
         }
         info.walletWords = list
         CardBook.shared.upsert(info)
+        if original == nil { Analytics.shared.track(.cardAdded) }
         dismiss()
     }
 }

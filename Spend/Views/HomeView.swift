@@ -967,6 +967,7 @@ struct SpendChart: View {
             ForEach(Range.allCases) { r in
                 Button(r.rawValue) {
                     TipState.chipsUsed()
+                    if r != range { Analytics.shared.track(.insightsRangeChanged, ["range": .string(r.rawValue)]) }
                     withAnimation(.snappy) { range = r; selected = nil }
                 }
                 .chip(selected: r == range)
