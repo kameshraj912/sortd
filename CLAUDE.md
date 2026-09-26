@@ -87,6 +87,7 @@ consumable tips that unlock nothing. StoreKit 2 stays in the app only for that.
 
 ## Rules for this codebase
 - Every source goes through `TransactionLogger.log(_:in:)`. It categorises and de-duplicates. Never insert a `Transaction` directly (only `DemoData` and `Backup.restore` do; restore puts back rows the logger already checked).
+- The SwiftData store stays `cloudKitDatabase: .none`. With the iCloud entitlement, the default would mirror the store to CloudKit and crash at launch on the unique keys. Backup is `CloudBackup`'s own record.
 - Enums are stored as raw strings (`cardRaw`, `categoryRaw`, `sourceRaw`) so SwiftData predicates work.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
