@@ -26,6 +26,12 @@ struct ApplePaySetupPanel: View {
 
     @State private var healthCheck: ApplePayHealthCheck.State?
     @State private var healthCheckStartedAt: Date?
+    /// `ApplePayNudge.lastShown()`/`markShown()` store a real `Date` in
+    /// `UserDefaults` (matching `LogPurchaseIntent`'s own keys) — a plain
+    /// `@State`, refreshed on appear, reads the same way rather than
+    /// mismatching it against `@AppStorage`'s own numeric representation.
+    @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
+    @State private var nudgeDismissed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -38,6 +44,33 @@ struct ApplePaySetupPanel: View {
             healthCheckSection
             steps
             timeoutNote
+            nudgeLine
+        }
+    }
+
+    // MARK: - 14-day nudge (spec 2026-09-26, failsafes #1/#3)
+
+    private var nudgeLine: some View {
+        let everReached = LogPurchaseIntent.shortcutHasReachedApp
+        let due = !nudgeDismissed && ApplePayNudge.shouldShow(setupEverReached: everReached,
+                                                              lastActivityAt: LogPurchaseIntent.lastTapReceivedAt,
+                                                              lastShownAt: nudgeLastShownAt)
+        return Group {
+            if due {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(ApplePayNudge.line)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button("Dismiss") {
+                        nudgeLastShownAt = ApplePayNudge.markShown()
+                        nudgeDismissed = true
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+                .onAppear { if nudgeLastShownAt == nil { nudgeLastShownAt = ApplePayNudge.markShown() } }
+            }
         }
     }
 

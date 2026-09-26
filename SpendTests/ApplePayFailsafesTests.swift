@@ -201,6 +201,47 @@ struct WalletTapCardOnlyFallbackTests {
     }
 }
 
+/// The 14-day "no tap since setup" nudge (spec 2026-09-26, failsafes #1/#3).
+struct ApplePayNudgeTests {
+    private let day: TimeInterval = 24 * 3600
+
+    @Test func neverSetUpNeverShows() {
+        #expect(!ApplePayNudge.shouldShow(setupEverReached: false, lastActivityAt: .distantPast, lastShownAt: nil))
+    }
+
+    @Test func setUpButNoActivityAtAllNeverShows() {
+        #expect(!ApplePayNudge.shouldShow(setupEverReached: true, lastActivityAt: nil, lastShownAt: nil))
+    }
+
+    @Test func lessThan14DaysNeverShows() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let last = now.addingTimeInterval(-13 * day)
+        #expect(!ApplePayNudge.shouldShow(setupEverReached: true, lastActivityAt: last, lastShownAt: nil, now: now))
+    }
+
+    @Test func exactly14DaysWithNoPriorShowingIsDue() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let last = now.addingTimeInterval(-14 * day)
+        #expect(ApplePayNudge.shouldShow(setupEverReached: true, lastActivityAt: last, lastShownAt: nil, now: now))
+    }
+
+    /// Shown yesterday, still silent: does not fire again the very next day.
+    @Test func shownRecentlyDoesNotFireAgainImmediately() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let last = now.addingTimeInterval(-20 * day)
+        let shown = now.addingTimeInterval(-1 * day)
+        #expect(!ApplePayNudge.shouldShow(setupEverReached: true, lastActivityAt: last, lastShownAt: shown, now: now))
+    }
+
+    /// Shown 14 days ago, still silent since: due again.
+    @Test func dueAgainAfterAnother14DaysOfSilence() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let last = now.addingTimeInterval(-40 * day)
+        let shown = now.addingTimeInterval(-14 * day)
+        #expect(ApplePayNudge.shouldShow(setupEverReached: true, lastActivityAt: last, lastShownAt: shown, now: now))
+    }
+}
+
 /// "Check the Shortcut" (spec 2026-09-26, failsafe #11).
 struct ApplePayHealthCheckTests {
     private let started = Date(timeIntervalSince1970: 1_790_000_000)
