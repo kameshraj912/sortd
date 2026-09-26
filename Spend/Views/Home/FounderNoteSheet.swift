@@ -122,7 +122,9 @@ struct FounderNoteSheet: View {
                 .padding(.bottom, 8)
                 .background(.thinMaterial)
         }
-        .presentationDetents([.medium, .large])
+        // Tall enough that the whole note and the signature sit above the buttons
+        // on a Pro Max; smaller phones scroll the last line (feel check, 27 Sep).
+        .presentationDetents([.fraction(0.85), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.page)
         .onAppear {
