@@ -33,12 +33,37 @@ enum ApplePayStatus: Equatable {
             t.seenIn.contains(.tap)
                 && t.merchant != LogPurchaseIntent.legacyTestMerchant
                 && t.rawMerchant != LogPurchaseIntent.legacyTestMerchant
+                && t.merchant != ApplePayHealthCheck.merchant
+                && t.rawMerchant != ApplePayHealthCheck.merchant
         }
     }
 
     /// True once any real shop tap has been seen.
     static func hasRealTap(in transactions: [Transaction]) -> Bool {
         !realTaps(in: transactions).isEmpty
+    }
+
+    /// How many taps landed with too little to log cleanly — a blank
+    /// amount, a blank shop, or a card with neither (spec 2026-09-26,
+    /// failsafes #2/#10) — and still need a look. Excludes the legacy test
+    /// button's rows and the "Check the Shortcut" health check's own rows:
+    /// neither is a real tap, and DemoData's untouched sample rows never
+    /// carry a real tap's note in the first place.
+    static func needsCheckCount(in transactions: [Transaction]) -> Int {
+        transactions.count { t in
+            t.needsCheck
+                && t.note != DemoData.marker
+                && t.merchant != LogPurchaseIntent.legacyTestMerchant && t.rawMerchant != LogPurchaseIntent.legacyTestMerchant
+                && t.merchant != ApplePayHealthCheck.merchant && t.rawMerchant != ApplePayHealthCheck.merchant
+        }
+    }
+
+    /// "1 tap needs a check" / "3 taps need a check", or nil when there's
+    /// nothing to flag. A separate line from the status card's own headline,
+    /// which stays about the connection, not about individual rows.
+    static func needsCheckLine(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return count == 1 ? "1 tap needs a check" : "\(count) taps need a check"
     }
 
     /// `lastReachedAt` is `LogPurchaseIntent.lastTapAtKey`: when Shortcuts
