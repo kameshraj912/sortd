@@ -45,6 +45,11 @@ struct TransactionsScreen: View {
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
     @Namespace private var zoom
+    @State private var router = Router.shared
+    /// True only while the intro's `.move` step is on screen: gates whether
+    /// `pagerHeader` spends a `GeometryReader` reporting its frame for the
+    /// intro's cutout.
+    @Environment(\.introWatchingDayHeader) private var introWatchingDayHeader
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
     /// Asks "Change all N … purchases?" when other purchases share the shop.
@@ -95,6 +100,14 @@ struct TransactionsScreen: View {
         .onChange(of: transactions.count, initial: true) { if fixedCard == nil { TipState.update(from: transactions) } }
         .onChange(of: search) { _, text in
             if !text.trimmingCharacters(in: .whitespaces).isEmpty { TipState.searchUsed() }
+        }
+        // The intro's `.move` step: a real day change alongside its finger
+        // tap, if there's a second day to move to (fresh, empty demo data
+        // has only one). Only this view knows that.
+        .onChange(of: router.pendingIntroDayTap, initial: true) { _, pending in
+            guard pending, fixedCard == nil else { return }
+            router.pendingIntroDayTap = false
+            if days.count > 1 { stepDay(1) }
         }
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
@@ -407,6 +420,18 @@ struct TransactionsScreen: View {
         .buttonStyle(.borderless)
         .font(.footnote.weight(.semibold))
         .textCase(nil)
+        // The intro's `.move` step needs this row's real frame for its
+        // cutout — only measured while it's actually on screen for that
+        // (docs/specs/2026-09-26-app-intro-v2.md), a plain `PreferenceKey`
+        // read at `RootView` via `.overlayPreferenceValue`, since this sits
+        // inside a `List` well below that level.
+        .background {
+            if introWatchingDayHeader {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: IntroDayHeaderKey.self, value: proxy.frame(in: .global))
+                }
+            }
+        }
     }
 
     /// The chips as a list row, a section gap under the title and search
