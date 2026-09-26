@@ -53,6 +53,10 @@ final class Analytics {
         /// Sign-in (sub-spec 4): `provider` is apple or google, never the email.
         case signedIn = "signed_in"
         case signedOut = "signed_out"
+        /// The founder's note (`FounderNoteSheet`): `moment` is `aha` (the
+        /// first automatic purchase) or `about` (replayed from Settings).
+        case founderNoteSeen = "founder_note_seen"
+        case founderNoteReplyTapped = "founder_note_reply_tapped"
     }
 
     /// Where events go. `PostHogSink` in the app, `NoopSink` with no key,
