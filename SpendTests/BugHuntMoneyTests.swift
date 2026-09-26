@@ -32,9 +32,12 @@ struct BugHuntMoneyTests {
     ///
     /// Known bug: `BankAlerts.read` (Spend/Services/BankAlerts.swift:124) checks `refundWords` with
     /// `contains($0, text)` — no word boundary, no restriction to the sentence about the money.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-01: bank alert refund words matched inside merchant names and footers"))
-    func aPurchaseAtAnRSLClubIsNotARefund() throws {
+    @Test func aPurchaseAtAnRSLClubIsNotARefund() throws {
+        // The AUD total below needs AUD as the home currency; the host locale
+        // (en_SG on Raj's Mac) would otherwise make it SGD.
+        let previousHome = UserDefaults.standard.string(forKey: Money.homeKey)
+        UserDefaults.standard.set("AUD", forKey: Money.homeKey)
+        defer { UserDefaults.standard.set(previousHome, forKey: Money.homeKey) }
         let rsl = BankAlerts.read(subject: "Purchase alert",
                                   body: "You spent A$45.00 at RETURNED SERVICES LEAGUE CLUB on 26/09 using your card ending 1234.",
                                   bank: nab)
