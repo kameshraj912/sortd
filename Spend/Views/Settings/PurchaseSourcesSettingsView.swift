@@ -15,7 +15,17 @@ struct PurchaseSourcesSettingsView: View {
                 } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Apple Pay Logging")
+                            HStack(spacing: 6) {
+                                Text("Apple Pay Logging")
+                                if needsCheckCount > 0 {
+                                    Text("\(needsCheckCount)")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(Color.onBrand)
+                                        .padding(.horizontal, 6).padding(.vertical, 1)
+                                        .background(.orange, in: .capsule)
+                                        .accessibilityHidden(true)
+                                }
+                            }
                             Text(lastTapText)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -23,6 +33,9 @@ struct PurchaseSourcesSettingsView: View {
                     } icon: {
                         Image(systemName: "wave.3.right")
                     }
+                    .accessibilityLabel(needsCheckCount > 0
+                        ? "Apple Pay Logging, \(ApplePayStatus.needsCheckLine(count: needsCheckCount) ?? ""). \(lastTapText)"
+                        : "Apple Pay Logging. \(lastTapText)")
                 }
             } header: {
                 BoldHeader("Apple Pay")
@@ -40,6 +53,8 @@ struct PurchaseSourcesSettingsView: View {
     private var status: ApplePayStatus {
         ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
     }
+
+    private var needsCheckCount: Int { ApplePayStatus.needsCheckCount(in: transactions) }
 
     private var lastTapText: String {
         switch status {

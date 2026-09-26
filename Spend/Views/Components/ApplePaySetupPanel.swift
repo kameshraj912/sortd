@@ -12,6 +12,10 @@ import SwiftUI
 /// `docs/site-copy-moved.md`.
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
+    /// How many logged taps still need a look (spec 2026-09-26, failsafes
+    /// #2/#10) — `ApplePayStatus.needsCheckCount`, computed by the caller
+    /// (it already has the `@Query`).
+    var needsCheckCount: Int = 0
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
@@ -23,6 +27,11 @@ struct ApplePaySetupPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             statusCard
+            if let line = ApplePayStatus.needsCheckLine(count: needsCheckCount) {
+                Label(line, systemImage: "exclamationmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
             steps
             timeoutNote
         }
