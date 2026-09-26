@@ -12,9 +12,10 @@ import AuthenticationServices
 // always compile, so the tests (fakes only) run everywhere.
 #if SORTD_SIGNIN
 
-/// Optional sign-in with Apple or Google. Sortd has no account server: the
+/// Optional sign-in with Apple or Google. Sortd keeps no account database: the
 /// sign-in is an identity for support and for the usage record, kept in
-/// this iPhone's Keychain. Purchases stay on the phone either way.
+/// this iPhone's Keychain. The account Worker (`worker/`) only revokes and
+/// deletes, and stores nothing. Purchases stay on the phone either way.
 struct AccountSettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
@@ -87,7 +88,7 @@ struct AccountSettingsView: View {
         } header: {
             BoldHeader("Sign In")
         } footer: {
-            Text("Signing in is optional. It gives Sortd a way to know you if you ask for help. Your purchases stay on this iPhone either way. Sortd has no account server.")
+            Text("Signing in is optional. It gives Sortd a way to know you if you ask for help. Your purchases stay on this iPhone either way. Sortd never sees your password.")
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)

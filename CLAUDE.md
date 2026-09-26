@@ -1,8 +1,9 @@
 # Sortd — iPhone spending tracker (repo folder is `Spend`)
 
 Logs Apple Pay taps, reads receipts from Gmail and the camera, and shows where the
-money goes. Multi-currency (AUD, SGD and others) with on-device FX. No server: everything
-stays on the phone.
+money goes. Multi-currency (AUD, SGD and others) with on-device FX. Purchases stay on the
+phone. What leaves it: opt-out usage counts and crash reports (off by default in the EU/UK),
+the optional iCloud copy, and the account Worker (`worker/`) that only deletes accounts.
 
 **Status (20 Sep 2026):** heading for TestFlight. Paid Apple Developer enrolment is the
 open blocker — nothing can be uploaded until it clears. Site is live at sortd.page.
