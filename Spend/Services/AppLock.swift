@@ -13,6 +13,10 @@ final class AppLock {
     private(set) var authenticating = false
     /// When the app last stopped being active. Nil until it has been.
     private var lastActive: Date?
+    /// When the app last went to `.background` (not `.inactive`, which also
+    /// happens transiently on the way back and must not count). Nil while
+    /// the app has not backgrounded since launch or since it last unlocked.
+    private var backgroundedAt: Date?
 
     init() {
         let defaults = UserDefaults.standard
@@ -33,17 +37,31 @@ final class AppLock {
     func sceneChanged(to phase: ScenePhase, enabled: Bool, onboarded: Bool, now: Date = .now) {
         guard onboarded, enabled else {
             isLocked = false
-            if phase != .active { lastActive = now }
+            if phase == .background { backgroundedAt = now }
+            else if phase == .active { lastActive = now }
             return
         }
         switch phase {
         case .active:
-            // The Face ID sheet itself makes the app briefly inactive.
-            if !authenticating, !isLocked, Self.shouldLock(lastActive: lastActive, now: now, enabled: enabled) {
-                isLocked = true
+            // The Face ID sheet itself makes the app briefly inactive, not
+            // backgrounded, so `backgroundedAt` is untouched by it.
+            if !authenticating, !isLocked {
+                let awayStart = backgroundedAt ?? lastActive
+                if Self.shouldLock(lastActive: awayStart, now: now, enabled: enabled) {
+                    isLocked = true
+                }
             }
+            backgroundedAt = nil
+            if !isLocked { lastActive = now }
+        case .background:
+            backgroundedAt = now
         default:
-            if !isLocked, !authenticating { lastActive = now }
+            // `.inactive` on the way back from the background (and on the
+            // way out) is a transient step — App Switcher, an interruption,
+            // the Face ID sheet itself. Treating it as real use resets the
+            // idle clock and the app never locks again after the first
+            // unlock, so it must change nothing here.
+            break
         }
     }
 
