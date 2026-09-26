@@ -115,7 +115,7 @@ struct OnboardingView: View {
                     : .asymmetric(
                         insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
                         removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
-            if typeSize.isAccessibilitySize, step != .building, step != .account { bottomBar }
+            if typeSize.isAccessibilitySize, step != .building { bottomBar }
             }
         }
         .scrollPosition($scroll)
@@ -128,7 +128,7 @@ struct OnboardingView: View {
         // Bars (not plain insets) so the page blurs softly under them as it
         // scrolls, instead of text running into the buttons.
         .safeAreaBar(edge: .top, spacing: 0) { topBar }
-        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, step != .account, !typeSize.isAccessibilitySize { bottomBar } }
+        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
         .onAppear {
             if budgetBefore == nil { budgetBefore = budget }
             // Once per run of setup (a re-run from Settings counts as a run).
@@ -395,6 +395,22 @@ struct OnboardingView: View {
                         }
                     }
                     tertiaryButton("More Options") { showingMoreOptions = true }
+                    Text("Free. No account needed.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, -2)
+                case .account:
+                    // Same spot as Continue on every other step (Raj, 27 Sep).
+                    // Once signed in, the page shows the confirmation and the
+                    // bar empties for the moment before it moves on.
+                    if accountConfirmed == nil {
+                        SignInButtons(onSignedIn: accountSignedIn) { accountError = $0 }
+                        tertiaryButton("Continue as guest", action: continueAsGuest)
+                        Text("You can sign in later in Settings › Account.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, -2)
+                    }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
                     // New flow: the chores wait in the Finish Setup card on Home.
@@ -690,7 +706,6 @@ struct OnboardingView: View {
             }
             VStack(alignment: .leading, spacing: 18) {
                 feature("wave.3.right", "Apple Pay logs itself", "Pay as usual. It shows up in a second.", Color.brandPalette[0])
-                feature("creditcard", "Every card, every currency", "Converted at the day's rate.", Color.brandPalette[1])
                 feature("arrow.triangle.2.circlepath", "Bills before they hit", "Know what's due before it's charged.", Color.brandPalette[2])
                 feature("lock", SetupCopy.welcomePrivacy.title, SetupCopy.welcomePrivacy.detail, Color.brandPalette[3])
             }
@@ -725,15 +740,6 @@ struct OnboardingView: View {
                 .setupCard()
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
-            } else {
-                VStack(spacing: 10) {
-                    SignInButtons(onSignedIn: accountSignedIn) { accountError = $0 }
-                    tertiaryButton("Continue as guest", action: continueAsGuest)
-                    Text("You can sign in later in Settings › Account.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
             }
         }
         .feedback(.confirm, trigger: accountConfirmed)

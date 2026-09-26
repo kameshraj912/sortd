@@ -37,7 +37,13 @@ struct SignInButtons: View {
             }
             // Apple's button: black on light, white on dark, at least 44 pt.
             .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
-            .frame(maxWidth: .infinity, minHeight: 50)
+            // A fixed height: with only a minimum, the button fills whatever
+            // container it is in (it swallowed the whole page in the bottom bar).
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            // Apple's button lets the corner radius follow the app's UI
+            // (HIG, "Using the system-provided buttons"): a capsule here.
+            .clipShape(.capsule)
             .disabled(working)
 
             Button {
