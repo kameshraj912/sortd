@@ -1,0 +1,25 @@
+SORTD INSTAGRAM PROFILE KIT
+
+NAME (searchable, keep it):   Sortd · Spending tracker
+USERNAME:                     sortd.money
+CATEGORY:                     App Page   (Edit profile > Category > turn "Display category label" OFF)
+PROFILE PICTURE:              "Sortd IG profile picture - FINAL.png" (already set)
+
+BIO (paste as 3 lines, bold letters are Unicode; keep the Name field plain):
+𝗰𝗮𝗻'𝘁 𝘀𝗮𝘆 𝘄𝗵𝗮𝘁 𝗶𝘁 𝗶𝘀 𝘆𝗲𝘁 🤫
+free iPhone app · no ads · no bank login
+𝗴𝗲𝘁 𝗶𝗻 𝗲𝗮𝗿𝗹𝘆 ↓
+
+LINKS (Edit profile > Links):
+1. soon.sortd.page   title: join the beta   (keep first)
+2. sortd.page        title: website
+
+HIGHLIGHTS (covers in this folder):
+- Vote  -> the 4 icon-vote stories
+- Beta  -> "soon." story + how to join
+- FAQ   -> is it free? (yes) · bank login? (never) · iPhone only? (yes, iOS 26+)
+
+GRID: get to 3 posts (carousel + seamless carousel + your filmed reel). Pin the reel.
+POST CAPTION:  something's coming 🤫 link in bio 👀
+SONG: "Money Can't Buy You Happiness" (original audio, @eresdigna), or "Espresso" (Sabrina Carpenter) on a Creator account.
+FINISH: Instagram's "4 of 6 steps" checklist.
