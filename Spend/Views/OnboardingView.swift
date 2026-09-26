@@ -735,7 +735,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 14) {
                 feature("person.crop.circle.badge.checkmark", "Help that knows you", "Ask a question and Sortd knows which install is yours.", Color.brandPalette[0])
                 feature("icloud", "Your iCloud copy, tied to you", "Restore on a new iPhone with one tap.", Color.brandPalette[2])
-                feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Sortd has no account server.", Color.brandPalette[3])
+                feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Signing in doesn't change that.", Color.brandPalette[3])
             }
             .setupCard()
             if let accountConfirmed {
