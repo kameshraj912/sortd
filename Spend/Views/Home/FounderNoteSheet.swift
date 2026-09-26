@@ -159,7 +159,7 @@ struct FounderNoteSheet: View {
 
     private var signature: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("— Kameshraj")
+            Text("— Kameshraj and the Sortd team")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.ink)
             Text("Made in Melbourne and Singapore")
