@@ -68,6 +68,12 @@ extension Color {
         light: UIColor(red: 0.086, green: 0.086, blue: 0.102, alpha: 1),
         dark: UIColor(white: 0.30, alpha: 1))
 
+    /// Fixed white, for text over a colour that doesn't itself flip with the
+    /// system appearance (a credit card face, a small count badge on a
+    /// brand-palette chip): unlike `onBrand`, this never turns black in
+    /// Dark Mode.
+    nonisolated static let onColorBadge = Color.white
+
     /// Sortd's logo colours (the four sorted bars), in order. Used sparingly
     /// as accents on the black-and-white UI.
     nonisolated static let brandPalette: [Color] = [

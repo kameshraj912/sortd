@@ -25,8 +25,6 @@ struct OnboardingView: View {
     // What they tell us about themselves. Kept on this iPhone.
     @AppStorage(SetupProfile.goalsKey) private var goalsRaw = ""
     @AppStorage(SetupProfile.paymentKey) private var paymentRaw = ""
-    @AppStorage(SetupProfile.feelingKey) private var feelingRaw = ""
-    @AppStorage(SetupProfile.abroadKey) private var abroadRaw = ""
     @AppStorage(SetupProfile.checkInKey) private var checkInRaw = SetupProfile.CheckIn.sunday.rawValue
     @AppStorage(SetupProfile.billsKey) private var billIntent = false
     @AppStorage(SetupProfile.rerunKey) private var rerun = false
@@ -44,6 +42,22 @@ struct OnboardingView: View {
     @State private var stepChangedAt = Date.distantPast
     /// finish() has run: ignore every tap after that.
     @State private var finished = false
+    /// The payment question just picked an answer and is about to advance by
+    /// itself: Continue, Back and Skip are all ignored until it does, so a
+    /// second tap can't advance twice and skip a question.
+    @State private var autoAdvancing = false
+    /// "Bring in past spending" / "Restore from iCloud" on the welcome
+    /// screen: one plain-text link opens both, instead of a row each.
+    @State private var showingMoreOptions = false
+    /// The `.account` step: who just signed in, shown for a moment before
+    /// moving on by itself. Nil for the sign-in buttons.
+    @State private var accountConfirmed: String?
+    /// The `.account` step: a sign-in failure, in the same words
+    /// AccountSettingsView shows. A cancel never sets this.
+    @State private var accountError: String?
+    /// The `.account` step's way through, for `setup_step_completed`'s
+    /// `choice` property: apple, google or guest. Cleared once sent.
+    @State private var accountChoice: String?
     /// Each new step opens at the top, title in view.
     @State private var scroll = ScrollPosition(edge: .top)
     /// The budget before setup started, so un-ticking "Spend less" undoes
@@ -101,7 +115,7 @@ struct OnboardingView: View {
                     : .asymmetric(
                         insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
                         removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
-            if typeSize.isAccessibilitySize, step != .building { bottomBar }
+            if typeSize.isAccessibilitySize, step != .building, step != .account { bottomBar }
             }
         }
         .scrollPosition($scroll)
@@ -113,7 +127,7 @@ struct OnboardingView: View {
         // Bars (not plain insets) so the page blurs softly under them as it
         // scrolls, instead of text running into the buttons.
         .safeAreaBar(edge: .top, spacing: 0) { topBar }
-        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
+        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, step != .account, !typeSize.isAccessibilitySize { bottomBar } }
         .onAppear {
             if budgetBefore == nil { budgetBefore = budget }
             // Once per run of setup (a re-run from Settings counts as a run).
@@ -135,10 +149,34 @@ struct OnboardingView: View {
             }
             .animation(.easeInOut(duration: 0.6), value: step)
         }
-        .sheet(item: $editing) { CardEditor(original: $0) }
+        // The `.cards` step's disclosure: nickname and debit/credit for one
+        // card, no digits (those stay in Settings › Cards, sub-spec free-app
+        // overhaul UX pass).
+        .sheet(item: $editing) { info in
+            NavigationStack {
+                ScrollView { CardDetailForm(info: info).padding(20) }
+                    .background(Color.page)
+                    .navigationTitle(rowTitle(info))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = nil } }
+                    }
+            }
+        }
         .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
         .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
+        // Welcome's "More Options": the two less-common ways in, behind one
+        // plain-text link instead of a row each.
+        .confirmationDialog("More options", isPresented: $showingMoreOptions, titleVisibility: .hidden) {
+            Button("Bring in past spending") { showingImport = true }
+            #if SORTD_ICLOUD
+            if newFlow, transactions.isEmpty, !rerun {
+                Button(restoring ? "Restoring…" : "Restore from iCloud") { restoreFromCloud() }
+                    .disabled(restoring)
+            }
+            #endif
+        }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
             Button("OK", role: .cancel) {}
@@ -165,9 +203,10 @@ struct OnboardingView: View {
         }
     }
 
-    /// True just after a step change, and for good once setup has finished.
+    /// True just after a step change, for good once setup has finished, and
+    /// while the payment question is auto-advancing after a pick.
     private var tapsLocked: Bool {
-        finished || Date.now.timeIntervalSince(stepChangedAt) < 0.4
+        finished || autoAdvancing || Date.now.timeIntervalSince(stepChangedAt) < 0.4
     }
 
     /// The check-in that will actually be saved: skipped or never answered
@@ -202,10 +241,9 @@ struct OnboardingView: View {
     private var goals: Set<SetupProfile.Goal> { SetupProfile.goals(goalsRaw) }
     private var payment: SetupProfile.Payment? { SetupProfile.Payment(rawValue: paymentRaw) }
     private var checkIn: SetupProfile.CheckIn { SetupProfile.CheckIn(rawValue: checkInRaw) ?? .sunday }
-    private var abroad: SetupProfile.Abroad? { SetupProfile.Abroad(rawValue: abroadRaw) }
     private var flow: SetupFlow {
         SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty,
-                  gmailFeature: Features.gmail)
+                  gmailFeature: Features.gmail, signInFeature: Features.signIn)
     }
     private var wantsGmail: Bool { flow.wantsGmail }
     /// Tap-through setup (sub-spec 6): Continue everywhere, no permission
@@ -219,10 +257,9 @@ struct OnboardingView: View {
         Binding(get: { goals }, set: { goalsRaw = SetupProfile.raw($0) })
     }
     private var paymentBinding: Binding<SetupProfile.Payment?> {
-        Binding(get: { payment }, set: { paymentRaw = $0?.rawValue ?? "" })
-    }
-    private var feelingBinding: Binding<SetupProfile.Feeling?> {
-        Binding(get: { SetupProfile.Feeling(rawValue: feelingRaw) }, set: { feelingRaw = $0?.rawValue ?? "" })
+        // A pick starts the auto-advance: lock the buttons until `go(_:)`
+        // clears it, so a fast second tap can't advance twice.
+        Binding(get: { payment }, set: { paymentRaw = $0?.rawValue ?? ""; if $0 != nil { autoAdvancing = true } })
     }
     private var checkInBinding: Binding<SetupProfile.CheckIn> {
         Binding(get: { checkIn }, set: { checkInRaw = $0.rawValue })
@@ -348,23 +385,15 @@ struct OnboardingView: View {
                 switch step {
                 case .welcome:
                     primaryButton(primaryTitle, action: primaryAction)
-                    secondaryButton("Bring In Past Spending") { showingImport = true }
-                    #if SORTD_ICLOUD
-                    // A new iPhone: put the iCloud copy back before answering
-                    // anything. Only the new flow offers it (sub-spec 6).
-                    if newFlow, transactions.isEmpty, !rerun {
-                        secondaryButton(restoring ? "Restoring…" : "Restore from iCloud") { restoreFromCloud() }
-                            .disabled(restoring)
-                    }
-                    #endif
                     // Not when setup is run again: sample data would mix into
                     // real purchases, and its Clear forces a full setup.
                     if transactions.isEmpty, !rerun {
-                        tertiaryButton("Look around with sample data") {
+                        secondaryButton("Look Around With Sample Data") {
                             DemoData.load(in: context)
                             finish()
                         }
                     }
+                    tertiaryButton("More Options") { showingMoreOptions = true }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
                     // New flow: the chores wait in the Finish Setup card on Home.
@@ -409,11 +438,9 @@ struct OnboardingView: View {
         switch step {
         case .welcome: return "Get Started"
         case .payment where payment == nil: return "Skip This One"
-        case .feeling where feelingRaw.isEmpty: return "Skip This One"
         case .checkIn: return asksNotifications ? "Turn On Notifications" : "Continue"
         case .plan: return book.active.isEmpty ? "Add My First Card" : "Continue Setup"
         case .cards where book.active.isEmpty: return "Add Cards Later"
-        case .cardDetails where !detailsComplete: return "Add Digits Later"
         case .applePay where !tapConnected && !shortcutReached:
             return last ? "Do This Later and Start" : "I'll Do This Later"
         case .email where gmail.isEmpty: return "I'll Do This Later"
@@ -449,13 +476,12 @@ struct OnboardingView: View {
         go(1)
     }
 
-    /// A question left as it was: no goal, no payment, no feeling, no limit.
-    /// Currency and check-in always hold a default, so they never count.
+    /// A question left as it was: no goal, no payment, no limit. Currency
+    /// and check-in always hold a default, so they never count.
     private func untouched(_ s: Step) -> Bool {
         switch s {
         case .goals: goals.isEmpty
         case .payment: payment == nil
-        case .feeling: feelingRaw.isEmpty
         case .budget: budget == 0
         default: false
         }
@@ -463,6 +489,7 @@ struct OnboardingView: View {
 
     private func go(_ delta: Int) {
         guard !finished else { return }
+        autoAdvancing = false
         budgetFocused = false
         forward = delta > 0
         guard let next = neighbour(of: step, delta) else {
@@ -477,8 +504,12 @@ struct OnboardingView: View {
     /// an answer. Where people stop is what the funnel is for.
     private func stepDone(_ s: Step, skipped: Bool = false) {
         stepsSeen += 1
-        Analytics.shared.track(.setupStepCompleted, ["step": .string(String(describing: s)),
-                                                     "index": .int(s.rawValue), "skipped": .bool(skipped)])
+        var props: [String: Analytics.AnalyticsValue] = ["step": .string(String(describing: s)),
+                                                          "index": .int(s.rawValue), "skipped": .bool(skipped)]
+        // The `.account` step's own way through: apple, google or guest.
+        if s == .account, let choice = accountChoice { props["choice"] = .string(choice) }
+        accountChoice = nil
+        Analytics.shared.track(.setupStepCompleted, props)
     }
 
     /// Converts the saved budget (and category limits) to the new home
@@ -574,10 +605,10 @@ struct OnboardingView: View {
     private var page: some View {
         switch step {
         case .welcome: welcome
+        case .account: accountPage
         case .goals: GoalsPage(counter: counter(.goals), goals: goalsBinding)
         case .payment: PaymentPage(counter: counter(.payment), payment: paymentBinding) { if step == .payment { go(1) } }
         case .currency: currency
-        case .feeling: FeelingPage(counter: counter(.feeling), feeling: feelingBinding)
         case .budget: budgetPage
         // New flow: no bill toggle here; it would need the permission this
         // flow no longer asks for. Settings › Bills & reminders asks then.
@@ -586,7 +617,6 @@ struct OnboardingView: View {
         case .building: BuildingPage(lines: buildingLines) { if step == .building { go(1) } }
         case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
-        case .cardDetails: cardDetails
         case .applePay: applePay
         case .email: emailPage
         }
@@ -596,7 +626,7 @@ struct OnboardingView: View {
 
     private var buildingLines: [String] {
         var lines = ["Showing totals in \(home)"
-                     + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", other currencies converted each day" : "")]
+                     + (goals.contains(.countries) ? ", other currencies converted each day" : "")]
         if goals.contains(.spendLess), effectiveBudget > 0 {
             lines.append("Setting a \(Money.format(Decimal(effectiveBudget), home, cents: false)) monthly limit, with what's left each day")
         } else if goals.contains(.bills) {
@@ -613,7 +643,7 @@ struct OnboardingView: View {
 
     private var planSettings: [(String, String)] {
         var chips = [(Self.currencySymbol(home), "Totals in \(home)"
-                      + (abroad == .often || abroad == .sometimes || goals.contains(.countries) ? ", others converted daily" : ""))]
+                      + (goals.contains(.countries) ? ", others converted daily" : ""))]
         if effectiveBudget > 0 { chips.append(("gauge.with.dots.needle.33percent", Money.format(Decimal(effectiveBudget), home, cents: false) + " monthly limit")) }
         chips.append((checkInLine.symbol, checkInLine.text))
         if billIntent { chips.append(("bell.badge", "Bill heads-ups")) }
@@ -660,11 +690,67 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 18) {
                 feature("wave.3.right", "Apple Pay logs itself", "Pay as usual. It shows up in a second.", Color.brandPalette[0])
                 feature("creditcard", "Every card, every currency", "Converted at the day's rate.", Color.brandPalette[1])
-                feature("arrow.triangle.2.circlepath", "Bills, seen coming", "Know what's due before it's charged.", Color.brandPalette[2])
+                feature("arrow.triangle.2.circlepath", "Bills before they hit", "Know what's due before it's charged.", Color.brandPalette[2])
                 feature("lock", SetupCopy.welcomePrivacy.title, SetupCopy.welcomePrivacy.detail, Color.brandPalette[3])
             }
             .setupCard(padding: 20)
         }
+    }
+
+    /// Optional sign-in (sub-spec 4): the only steps through are Apple,
+    /// Google, or guest, so there's no "Continue" to disable by accident
+    /// (`bottomBar` leaves this step out).
+    private var accountPage: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Keep it yours.").font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                BrandBar(width: 14, height: 3)
+                Text("Sign in so Sortd can know you if you ask for help, and so your iCloud copy is tied to you. Your purchases stay on this iPhone either way. Sortd has no account server.")
+                    .font(.body).foregroundStyle(.secondary)
+            }
+            if let accountConfirmed {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Color.up)
+                    Text("Signed in as \(accountConfirmed)").font(.body.weight(.medium)).foregroundStyle(Color.ink)
+                }
+                .setupCard()
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            } else {
+                VStack(spacing: 10) {
+                    SignInButtons(onSignedIn: accountSignedIn) { accountError = $0 }
+                    tertiaryButton("Continue as guest", action: continueAsGuest)
+                    Text("You can sign in later in Settings › Account.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+        }
+        .feedback(.confirm, trigger: accountConfirmed)
+        .alert("Sign-in didn't work", isPresented: Binding(get: { accountError != nil }, set: { if !$0 { accountError = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(accountError ?? "")
+        }
+    }
+
+    /// Apple or Google succeeded: a brief haptic, "Signed in as …" for a
+    /// moment, then the same forward move as any other step.
+    private func accountSignedIn(_ account: Account) {
+        guard step == .account else { return }
+        accountChoice = account.provider == .apple ? "apple" : "google"
+        withAnimation(.snappy) { accountConfirmed = account.email ?? account.provider.name }
+        Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            guard step == .account else { return }
+            go(1)
+        }
+    }
+
+    private func continueAsGuest() {
+        accountChoice = "guest"
+        go(1)
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String, _ tint: Color) -> some View {
@@ -702,34 +788,13 @@ struct OnboardingView: View {
                         Text("Other currencies").font(.body).foregroundStyle(Color.ink)
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 16)
                     .frame(minHeight: 56)
                     .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                 }
             }
-
-            Text("Do you spend in other currencies?")
-                .font(.headline)
-                .padding(.top, 24)
-            // Three across while the words fit; one under another at
-            // accessibility sizes, so "Often" never breaks into "Of-ten"
-            // (UI pass, 25 Sep).
-            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
-                ForEach(SetupProfile.Abroad.allCases) { a in
-                    Button { withAnimation(.snappy) { abroadRaw = a.rawValue } } label: {
-                        Text(a.title)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .chip(selected: abroad == a)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(abroad == a ? .isSelected : [])
-                }
-            }
-            .padding(.top, 8)
-            .feedback(.select, trigger: abroadRaw)
 
             if let ratePreview {
                 HStack(spacing: 12) {
@@ -814,11 +879,11 @@ struct OnboardingView: View {
             header("Your cards", SetupCopy.line(.cards))
             countryPicker.padding(.bottom, 14)
             bankGrid(bankCountry)
-            // Below the grid, so adding a card never moves the buttons.
+            // Below the grid, so adding a card never moves the buttons. One
+            // job here: pick the banks. A card's own details (nickname,
+            // debit/credit) are a tap away on its chip, never shown twice.
             if !book.active.isEmpty {
-                Text("Added (\(book.active.count))").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    .padding(.top, 24).padding(.bottom, 8)
-                pickedCards
+                pickedCards.padding(.top, 20)
             }
         }
         .onAppear {
@@ -827,46 +892,37 @@ struct OnboardingView: View {
         }
     }
 
-    /// Cards added so far: one row each, with where it's from.
+    /// Cards added so far, as plain removable chips. Tap the name to open
+    /// its nickname and debit/credit; tap the X to remove it.
     private var pickedCards: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(book.active.enumerated()), id: \.element.id) { i, info in
-                if i > 0 { Divider().padding(.leading, 60) }
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.brandPalette[i % 4].gradient)
-                        .frame(width: 34, height: 22)
-                        .overlay(alignment: .bottomTrailing) {
-                            Text(CardInfo.flag(for: info.country)).font(.system(size: 10)).padding(2)
-                        }
-                        .accessibilityHidden(true)
-                    // Whole words at every size: a one-line limit showed
-                    // "Everyda…" at the largest text (UI pass, 25 Sep).
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(info.name).font(.subheadline.weight(.semibold))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(countryName(info.country) + " · " + info.currency)
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+        FlowLayout(spacing: 8) {
+            ForEach(book.active) { info in
+                HStack(spacing: 6) {
+                    Button { editing = info } label: {
+                        Text(rowTitle(info)).font(.subheadline.weight(.medium)).foregroundStyle(Color.ink)
+                            .frame(minHeight: 44)
+                            .contentShape(.rect)
                     }
-                    Spacer(minLength: 4)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(rowTitle(info)), \(info.isCredit ? "credit" : "debit")")
+                    .accessibilityHint("Edit nickname and type")
                     Button {
                         let id = info.id
                         let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
                         withAnimation(.snappy) { book.remove(info, hasPurchases: used) }
                     } label: {
-                        Image(systemName: "minus.circle.fill").font(.title3)
+                        Image(systemName: "xmark.circle.fill").font(.footnote)
                             .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Remove \(info.name)")
+                    .frame(width: 44, height: 44).contentShape(.rect)
+                    .accessibilityLabel("Remove \(rowTitle(info))")
                 }
                 .padding(.leading, 14).padding(.trailing, 4)
-                .frame(minHeight: 54)
+                .frame(minHeight: 44)
+                .background(Color.card, in: .capsule)
             }
         }
-        .surface(radius: 16)
     }
 
     /// One country at a time, so the list stays short. "" = works anywhere.
@@ -880,10 +936,10 @@ struct OnboardingView: View {
                             Text(c.isEmpty ? "🌐" : CardInfo.flag(for: c))
                             Text(c.isEmpty ? "Anywhere" : countryName(c)).font(.subheadline.weight(.medium))
                             if picked > 0 {
-                                Text("\(picked)").font(.caption2.weight(.bold))
+                                Text("\(picked)").font(.caption2.weight(.bold)).monospacedDigit()
                                     .padding(.horizontal, 5).padding(.vertical, 1)
                                     .background(Color.brandPalette[0], in: .capsule)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.onColorBadge)
                             }
                         }
                         .chip(selected: bankCountry == c)
@@ -985,55 +1041,13 @@ struct OnboardingView: View {
         myCountries + otherCountries + [""]
     }
 
-    /// "Add digits for 2 more cards" — says how many are left, since the
-    /// missing one may be further down the list.
-    private var missingDigitsText: String {
-        let n = book.active.filter { !Self.digitsComplete($0, in: book.active) }.count
-        return n == 1 ? "Add digits for 1 more card" : "Add digits for \(n) more cards"
-    }
-
-    /// Every card has its card-number digits: that's how bank emails and
-    /// receipts find it.
-    private var detailsComplete: Bool {
-        book.active.allSatisfy { Self.digitsComplete($0, in: book.active) }
-    }
-
-    /// Two cards from one bank look the same to Apple Pay except for the
-    /// Apple Pay number, so then it's needed too.
-    static func needsApplePayDigits(_ info: CardInfo, in cards: [CardInfo]) -> Bool {
-        !info.bank.isEmpty && cards.filter { $0.bank == info.bank }.count > 1
-    }
-
-    static func digitsComplete(_ info: CardInfo, in cards: [CardInfo]) -> Bool {
-        !info.last4.isEmpty && (!needsApplePayDigits(info, in: cards) || !(info.applePayLast4 ?? []).isEmpty)
-    }
-
-    private var cardDetails: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header("Last 4 digits", SetupCopy.line(.cardDetails))
-            VStack(spacing: 16) {
-                ForEach(book.active) { info in
-                    CardDetailForm(info: info, needsPay: Self.needsApplePayDigits(info, in: book.active))
-                }
-            }
-        }
-    }
-
-    /// Bank name, or the user's own name for the card once renamed.
+    /// Bank name, or the user's own name for the card once renamed. The
+    /// last-4 digits (card number and Apple Pay number) that used to be a
+    /// separate `.cardDetails` step now live only in Settings › Cards: a
+    /// new user shouldn't have to leave the app to find them (UX pass).
     private func rowTitle(_ info: CardInfo) -> String {
         let generated = info.name.hasPrefix(info.bank) && !info.bank.isEmpty
         return generated ? BankPreset.short(info.bank) + numberSuffix(info) : info.name
-    }
-
-    /// Two cards from one bank can only be told apart on receipts by their
-    /// last 4 digits.
-    private func needsDigits(_ info: CardInfo) -> Bool {
-        info.allLast4.isEmpty && book.active.filter { $0.bank == info.bank && !info.bank.isEmpty }.count > 1
-    }
-
-    private func rowDetail(_ info: CardInfo) -> String {
-        if !info.allLast4.isEmpty { return info.allLast4.map { "•• \($0)" }.joined(separator: " · ") }
-        return needsDigits(info) ? "Add last 4 digits" : "Tap to rename"
     }
 
     /// " 2" for the second debit (or credit) card from the same bank.
@@ -1080,57 +1094,6 @@ struct OnboardingView: View {
         }
     }
 
-    /// What the finished Shortcuts action looks like, so people can check theirs.
-    private var actionMock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image("BrandIcon").resizable().frame(width: 20, height: 20)
-                    .clipShape(.rect(cornerRadius: 5, style: .continuous))
-                Text("Log Wallet Tap").font(.footnote.weight(.semibold))
-            }
-            // Same wording as the real action in Shortcuts.
-            FlowLayout(spacing: 4) {
-                Text("Log").font(.footnote)
-                token("Amount")
-                Text("at").font(.footnote)
-                token("Merchant")
-                Text("in Sortd").font(.footnote)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.page, in: .rect(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Log Amount at Merchant in Sortd")
-    }
-
-    /// A Shortcuts variable token (blue, like in the Shortcuts app).
-    private func token(_ text: String) -> some View {
-        Text(text)
-            .lineLimit(1)
-            .fixedSize()
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color(red: 0.2, green: 0.47, blue: 0.96), in: .rect(cornerRadius: 5))
-    }
-
-    private func miniStep(_ n: Int, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(n)")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(Color.onBrand)
-                .frame(width: 26, height: 26)
-                .background(Color.ink, in: .circle)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
 
     private var emailPage: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1163,6 +1126,7 @@ struct OnboardingView: View {
                     ForEach(gmail) { a in
                         HStack(spacing: 12) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.up)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(a.email).lineLimit(1)
                                 Text(a.lastResult ?? "Connected").font(.caption).foregroundStyle(.secondary)
@@ -1324,28 +1288,24 @@ struct CardTypeBadge: View {
             .font(.caption2.weight(.bold))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .foregroundStyle(isCredit ? Color.white : Color.ink)
+            .foregroundStyle(isCredit ? Color.onColorBadge : Color.ink)
             .background(isCredit ? Color.creditFill : .clear, in: .capsule)
             .overlay(Capsule().strokeBorder(isCredit ? .clear : Color.secondary.opacity(0.5), lineWidth: 1))
     }
 }
 
-/// One card's details during setup: a small card preview, then name,
-/// type, and the two sets of last-4 digits. Saves as you type.
+/// One card's details during setup: a small card preview, its nickname and
+/// debit/credit. Saves as you type. The last-4 digits (card number, Apple
+/// Pay number) used to live here too; a new user shouldn't have to leave
+/// the app to find them, so they moved to Settings › Cards (UX pass).
 struct CardDetailForm: View {
     let info: CardInfo
     @State private var name: String
     @State private var isCredit: Bool
-    @State private var digits: String
-    @State private var payDigits: String
-    @State private var showHelp = false
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// Sizes that grow with the text size, so large text isn't clipped.
+    /// Grows with the text size, so large text isn't clipped.
     @ScaledMetric(relativeTo: .footnote) private var previewWidth: CGFloat = 92
     @ScaledMetric(relativeTo: .footnote) private var previewHeight: CGFloat = 58
-    @ScaledMetric(relativeTo: .body) private var digitsWidth: CGFloat = 90
-
-    var needsPay = false
 
     /// Side by side normally; stacked at the accessibility text sizes.
     private var rowLayout: AnyLayout {
@@ -1354,72 +1314,41 @@ struct CardDetailForm: View {
             : AnyLayout(HStackLayout(spacing: 14))
     }
 
-    init(info: CardInfo, needsPay: Bool = false) {
-        self.needsPay = needsPay
+    init(info: CardInfo) {
         self.info = info
         _name = State(initialValue: info.name)
         _isCredit = State(initialValue: info.isCredit)
-        _digits = State(initialValue: info.last4.first ?? "")
-        _payDigits = State(initialValue: info.applePayLast4?.first ?? "")
     }
 
-    private var missing: Bool { CardEditor.fours(digits).isEmpty }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            rowLayout {
-                preview
-                VStack(alignment: .leading, spacing: 8) {
-                    // Looks like a field so people know they can call it
-                    // something they'll recognise ("Groceries card").
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Nickname").font(.footnote).foregroundStyle(.secondary)
-                        HStack(spacing: 6) {
-                            TextField("e.g. Groceries card", text: $name)
-                                .font(.headline)
-                                .submitLabel(.done)
-                            Image(systemName: "pencil")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(Color.page, in: .rect(cornerRadius: 9, style: .continuous))
+        rowLayout {
+            preview
+            VStack(alignment: .leading, spacing: 8) {
+                // Looks like a field so people know they can call it
+                // something they'll recognise ("Groceries card").
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Nickname").font(.footnote).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        TextField("e.g. Groceries card", text: $name)
+                            .font(.headline)
+                            .submitLabel(.done)
+                        Image(systemName: "pencil")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                     }
-                    Picker("Type", selection: $isCredit) {
-                        Text("Debit").tag(false)
-                        Text("Credit").tag(true)
-                    }
-                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.page, in: .rect(cornerRadius: 9, style: .continuous))
                 }
-            }
-            .padding(14)
-
-            Divider().padding(.leading, 14)
-            digitRow("Card number", text: $digits, required: true)
-            Divider().padding(.leading, 14)
-            digitRow("Apple Pay number", text: $payDigits, required: needsPay)
-
-            Button {
-                withAnimation(.snappy) { showHelp.toggle() }
-            } label: {
-                Label(showHelp ? "Hide" : "Where do I find these?", systemImage: "questionmark.circle")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            if showHelp {
-                Text("Card number: the last 4 digits printed on your card or in your bank app. Apple Pay number: Wallet › this card › ••• › Card Details › Device Account Number. Apple Pay pays with that number, so receipts for Apple Pay purchases often show it instead.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-                    .transition(.opacity)
+                Picker("Type", selection: $isCredit) {
+                    Text("Debit").tag(false)
+                    Text("Credit").tag(true)
+                }
+                .pickerStyle(.segmented)
             }
         }
+        .padding(14)
         .surface(radius: 18)
         .onChange(of: name) { save() }
         .onChange(of: isCredit) { _, credit in
@@ -1431,11 +1360,10 @@ struct CardDetailForm: View {
             }
             save()
         }
-        .onChange(of: digits) { save() }
-        .onChange(of: payDigits) { save() }
     }
 
     /// Credit cards are dark, debit cards light: the same rule everywhere.
+    /// Any digits already on the card (added later, in Settings) still show.
     private var preview: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(BankPreset.short(info.bank.isEmpty ? name : info.bank))
@@ -1443,12 +1371,12 @@ struct CardDetailForm: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
-            Text(missing ? "•• ····" : "•• \(CardEditor.fours(digits)[0])")
+            Text(info.last4.first.map { "•• \($0)" } ?? "•• ····")
                 .font(.footnote.weight(.semibold))
                 .monospacedDigit()
                 .opacity(0.8)
         }
-        .foregroundStyle(isCredit ? Color.white : Color.ink)
+        .foregroundStyle(isCredit ? Color.onColorBadge : Color.ink)
         .padding(8)
         .frame(width: previewWidth, height: previewHeight, alignment: .leading)
         .background(isCredit ? Color.creditFill : Color.page, in: .rect(cornerRadius: 9, style: .continuous))
@@ -1458,57 +1386,12 @@ struct CardDetailForm: View {
         .accessibilityHidden(true)
     }
 
-    private func digitRow(_ title: String, text: Binding<String>, required: Bool) -> some View {
-        let stacked = typeSize.isAccessibilitySize
-        return (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout())) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                Text(hint(title, required: required))
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(warns(title, required: required) && text.wrappedValue.count < 4 ? Color.orange : Color.secondary)
-            }
-            if !stacked { Spacer() }
-            TextField("Last 4", text: text)
-                .keyboardType(.numberPad)
-                .onChange(of: text.wrappedValue) { _, new in
-                    let clean = String(new.filter(\.isNumber).prefix(4))
-                    if clean != new { text.wrappedValue = clean }
-                }
-                .multilineTextAlignment(stacked ? .leading : .trailing)
-                .font(.body.monospacedDigit())
-                .frame(width: stacked ? nil : digitsWidth)
-                .frame(maxWidth: stacked ? .infinity : nil, alignment: .leading)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, stacked ? 8 : 0)
-        .frame(minHeight: 52)
-    }
-
-    /// The line under a digits field. The new flow lets Continue skip this
-    /// step, so the card number is a plain hint there, not "Required" in
-    /// orange (UI pass, 25 Sep). The old flow keeps its wording until the
-    /// flag goes. The Apple Pay number is the same in both.
-    private func hint(_ title: String, required: Bool) -> String {
-        if title == "Apple Pay number" { return required ? "Required — tells same-bank cards apart" : "Recommended" }
-        if SetupFlow.usesNewFlow { return "Optional: last 4 digits help match taps" }
-        return required ? "Required" : "Recommended"
-    }
-
-    /// Orange while the digits are missing: only where the line says "Required".
-    private func warns(_ title: String, required: Bool) -> Bool {
-        required && (title == "Apple Pay number" || !SetupFlow.usesNewFlow)
-    }
-
     private func save() {
         var c = info
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         c.name = trimmed.isEmpty ? info.name : trimmed
         c.shortName = c.name
         c.isCredit = isCredit
-        c.last4 = CardEditor.fours(digits)
-        let pay = CardEditor.fours(payDigits)
-        c.applePayLast4 = pay.isEmpty ? nil : pay
         // Nicknames are for the user; Wallet matching keeps the bank's words.
         let bankWords = Set(BankPreset.match(info.bank)?.words ?? [])
         c.walletWords.removeAll { $0 == info.name.lowercased() && !bankWords.contains($0) }
