@@ -130,7 +130,9 @@ nonisolated enum WalletTapText {
     /// number, or a number with cents. "Cafe 21" and "Zone 3" are not money.
     static func money(in s: String) -> String? {
         let sign = #"(?:-|−)?"#
-        let marker = #"(?:[A-Z]{0,2}\$|€|£|¥|₹|RM|Rs\.?|[A-Z]{3})"#
+        // "CN¥" before the bare "¥" alternative, so yuan keep their "CN" and
+        // aren't cut down to a yen sign.
+        let marker = #"(?:[A-Z]{0,2}\$|CN¥|€|£|¥|₹|฿|₱|₩|RM|Rs\.?|[A-Z]{3})"#
         // Grouped thousands ("1,234.50", "1.234,50") or a plain run of digits
         // ("1234.50" — the old pattern stopped at 3 digits and read A$123).
         let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+|\d+)(?:[.,]\d{2})?"#

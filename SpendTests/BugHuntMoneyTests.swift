@@ -67,11 +67,7 @@ struct BugHuntMoneyTests {
     /// in `AmountParser.markers`, so "฿350" is 350 with no currency and is
     /// booked in the home currency (A$350 for a ฿350 dinner, about A$15).
     /// "CN¥88" is worse: the "¥" is read as yen, so yuan become yen.
-    ///
-    /// Known bug: `AmountParser.markers` (Spend/Services/Parsing.swift:12-24) and
-    /// `WalletTapText.money` marker (Spend/Intents/LogWalletTapIntent.swift:133) know ¥ but not ฿ ₱ ₩ ₫ or CN¥.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-02: ฿ ₱ ₩ ₫ and CN¥ are dropped or read as yen"))
+    @Test
     func bahtPesoWonAndYuanSignsNameTheirCurrency() async throws {
         #expect(AmountParser.parse("฿350")?.currency == "THB", "฿350 has no currency")
         #expect(AmountParser.parse("₱250")?.currency == "PHP", "₱250 has no currency")
