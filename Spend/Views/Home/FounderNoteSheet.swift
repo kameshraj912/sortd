@@ -4,7 +4,7 @@ import UIKit
 /// The founder's note (a letter from Raj, final copy "D"): shown once, at
 /// the aha moment straight after the first automatically logged purchase's
 /// celebration (`ActivationCard`) has played, and any time after that from
-/// Settings › About › "Read the note from Kameshraj".
+/// Settings › About › "A Note from the Founder".
 enum FounderNote {
     /// Where the note was opened from, for `Analytics.Event.founderNoteSeen`.
     enum Moment: String { case aha, about }
@@ -56,7 +56,7 @@ struct FounderAvatar: View {
 }
 
 /// Raj's letter, read once at the aha moment and any time after from
-/// Settings › About. Dismiss keeps going with the app; "Tell Kameshraj"
+/// Settings › About. Dismiss keeps going with the app; "Tell Kamesh"
 /// opens the same feedback email path as Settings › Help & Feedback.
 struct FounderNoteSheet: View {
     let moment: FounderNote.Moment
@@ -66,16 +66,16 @@ struct FounderNoteSheet: View {
     @State private var showingAddress = false
 
     private let paragraphs: [String] = [
-        "Thank you for using Sortd. That tap you just made logged itself. That's the whole idea.",
-        "I made Sortd with two rules:",
+        "Thank you for trusting Sortd. That tap you just made was logged by itself. That's how tracking your money should be.",
+        "I wanted a clear picture of my money, with two rules:",
     ]
 
     private let bullets: [String] = [
-        "No typing. Pay as usual and it's written down.",
-        "No bank login, no account. Your purchases stay on this iPhone.",
+        "No typing. Pay as usual and Sortd writes it down.",
+        "No bank logins, no accounts. Your purchases stay on your iPhone.",
     ]
 
-    private let closing = "I hope it gives you the same clear picture it gave me. If anything feels off, or you have an idea, tell me. I read every message."
+    private let closing = "I hope Sortd does exactly what you need. If it doesn't, tell me. I read every message."
 
     var body: some View {
         ScrollView {
@@ -145,10 +145,10 @@ struct FounderNoteSheet: View {
         HStack(spacing: 12) {
             FounderAvatar()
             VStack(alignment: .leading, spacing: 2) {
-                Text("It worked.")
+                Text("From the founder")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(Color.ink)
-                Text("A note from Kameshraj")
+                Text("Kamesh Raj, Sortd")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -159,7 +159,7 @@ struct FounderNoteSheet: View {
 
     private var signature: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("— Kameshraj and the Sortd team")
+            Text("— Kamesh Raj & the Sortd team")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.ink)
             Text("Made in Melbourne and Singapore")
@@ -186,13 +186,13 @@ struct FounderNoteSheet: View {
                 }
                 dismiss()
             } label: {
-                Text("Tell Kameshraj")
+                Text("Tell Kamesh")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(Color.ink)
             }
             .secondaryGlass()
-            .accessibilityLabel("Tell Kameshraj")
+            .accessibilityLabel("Tell Kamesh")
             .accessibilityHint("Opens an email to send feedback")
         }
         .padding(.top, 4)

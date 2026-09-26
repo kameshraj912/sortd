@@ -50,7 +50,7 @@ struct AboutSettingsView: View {
 
             Section {
                 Button { showingFounderNote = true } label: {
-                    Label("Read the Note from Kameshraj", systemImage: "envelope.open")
+                    Label("A Note from the Founder", systemImage: "envelope.open")
                 }
                 Button { requestReview() } label: {
                     Label("Rate on the App Store", systemImage: "star")

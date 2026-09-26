@@ -315,6 +315,10 @@ struct TransactionsScreen: View {
         let index = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
         return ScrollViewReader { proxy in
             List {
+                // The same small title and brand bar as Home and Insights, so
+                // the three tabs line up (Raj, 27 Sep; the large system title
+                // sat higher and bigger than the other two).
+                ListPageTitle(title: fixedCard?.name ?? "Activity")
                 // Its own section, margins zeroed: an inset-grouped List
                 // otherwise clips the row to the section's card, cutting the
                 // chips off short of the real screen edge.
@@ -528,9 +532,9 @@ struct TransactionsScreen: View {
         }
     }
 
-    /// The day pager is on: the bar shows the large "Activity" title with
-    /// the search field under it, like Messages or WhatsApp.
-    private var largeTitle: Bool { Self.dayPages && fixedCard == nil && !transactions.isEmpty }
+    /// The page draws its own title everywhere now (see `dayPager`); the
+    /// large system title is kept as an option but off.
+    private var largeTitle: Bool { false }
 
     /// `position` (the pager only) adds "· 2 of 14" after the day.
     private func dayHeader(_ day: (date: Date, items: [Transaction]),
