@@ -20,7 +20,15 @@ enum AmountParser {
         ("INR", "INR"), ("₹", "INR"), ("RS.", "INR"),
         ("EUR", "EUR"), ("€", "EUR"),
         ("GBP", "GBP"), ("£", "GBP"),
+        ("THB", "THB"), ("฿", "THB"),
+        ("PHP", "PHP"), ("₱", "PHP"),
+        ("KRW", "KRW"), ("₩", "KRW"),
+        // "CN¥"/"RMB" before the bare ¥ rule, so yuan aren't read as yen.
+        ("CNY", "CNY"), ("CN¥", "CNY"), ("RMB", "CNY"),
         ("JPY", "JPY"), ("¥", "JPY"),
+        // ₫ (VND) is left out: Frankfurter/ECB has no VND rate, so a ₫
+        // transaction would never get an `audValue` and would sit stuck
+        // unconverted forever. Money.supported isn't extended either.
     ]
 
     private static let isoCodes = Set(Locale.commonISOCurrencyCodes)

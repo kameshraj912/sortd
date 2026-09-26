@@ -98,11 +98,17 @@ nonisolated enum BankAlerts {
         "salary", "payroll",
     ]
 
-    /// Words that mean the money came back.
+    /// Words that mean the money came back. Matched whole-word only, and
+    /// only in text that can describe the transaction — never a merchant's
+    /// own name, never a footer below it. See `isRefund`.
     private static let refundWords = [
-        "refund", "reversed", "reversal", "credited to", "credit to your",
-        "returned", "chargeback", "cancelled transaction",
+        "refund", "reversed", "reversal", "returned", "chargeback", "cancelled transaction",
     ]
+
+    /// Wording that means a refund in one email and a rewards-points footer
+    /// in the next ("Reward points will be credited to your account"), so it
+    /// only counts alongside the amount or an explicit refund word.
+    private static let conditionalRefundWords = ["credited to", "credit to your"]
 
     static func read(subject: String, body: String, bank: Bank) -> Reading? {
         let text = tidy(subject + "\n" + body)
@@ -121,7 +127,61 @@ nonisolated enum BankAlerts {
                        amount: money.amount,
                        currency: money.currency ?? bank.currency,
                        last4: last4(in: text),
-                       isRefund: refundWords.contains { contains($0, text) })
+                       isRefund: isRefund(subject: subject, body: body, amount: money.amount, merchant: merchant))
+    }
+
+    /// Whether the alert is money coming back, not going out.
+    ///
+    /// A refund word only counts where it can actually describe the
+    /// transaction: the subject line whole, and the sentence(s) of the body
+    /// up to and including the one that states the amount — a marketing
+    /// footer or a rewards-points line further down never counts. The
+    /// merchant's own name (an "at"/"to"/"from" clause, e.g. "RETURNED
+    /// SERVICES LEAGUE CLUB") is stripped out of that region first, so a
+    /// shop's name is never read as a refund word. "Credited to your
+    /// account" reads both ways — a real refund, or reward points — so it
+    /// only counts alongside the amount or an explicit "refund"/"reversal".
+    private static func isRefund(subject: String, body: String, amount: String, merchant: String) -> Bool {
+        func wordMatch(_ word: String, _ hay: String) -> Bool {
+            contains(#"\b(?:"# + word + #")\b"#, hay)
+        }
+
+        if refundWords.contains(where: { wordMatch($0, subject) }) { return true }
+        if conditionalRefundWords.contains(where: { wordMatch($0, subject) }),
+           wordMatch("refund", subject) || wordMatch("reversal", subject) || wordMatch("reversed", subject) {
+            return true
+        }
+
+        var region = ""
+        for sentence in sentences(tidy(body)) {
+            region += sentence + " "
+            if sentence.contains(amount) { break }
+        }
+        if !merchant.isEmpty {
+            region = region.replacingOccurrences(of: merchant, with: " ")
+        }
+
+        if refundWords.contains(where: { wordMatch($0, region) }) { return true }
+        if conditionalRefundWords.contains(where: { wordMatch($0, region) }) {
+            return region.contains(amount) || contains(#"\b(?:refund|reversal|reversed)\b"#, region)
+        }
+        return false
+    }
+
+    /// Splits on sentence-ending periods and line breaks, but never inside a
+    /// decimal amount: "45.00" stays one piece, not "45" and "00".
+    private static func sentences(_ text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"[.\n]+(?!\d)"#) else { return [text] }
+        let ns = text as NSString
+        var result: [String] = []
+        var last = 0
+        regex.enumerateMatches(in: text, range: NSRange(location: 0, length: ns.length)) { m, _, _ in
+            guard let r = m?.range else { return }
+            result.append(ns.substring(with: NSRange(location: last, length: r.location - last)))
+            last = r.location + r.length
+        }
+        result.append(ns.substring(from: last))
+        return result
     }
 
     // MARK: - The pieces
