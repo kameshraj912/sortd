@@ -34,6 +34,19 @@ struct ApplePayStatusTests {
         #expect(status == .tapLogged(date: tapped, merchant: "Seven Seeds", amount: Decimal(string: "4.50")!, currency: "AUD"))
     }
 
+    /// A tap that came in with a blank shop is kept and flagged, and the card
+    /// says so instead of showing a green tick over "A$0.00 at Unknown merchant".
+    @Test func aFlaggedLatestTapNeedsACheck() {
+        let good = tap("Seven Seeds", at: tapped.addingTimeInterval(-3600))
+        let flagged = tap("Unknown merchant", amount: 0, at: tapped, note: Transaction.needsCheckTag + "shop missing")
+        let status = ApplePayStatus.resolve(lastReachedAt: reached, taps: [good, flagged])
+        #expect(status == .tapNeedsCheck(date: tapped))
+        #expect(status.isConnected)
+        #expect(status.isFlagged)
+        #expect(status.title.hasPrefix("Last tap arrived"))
+        #expect(!status.accessibilityLabel.isEmpty)
+    }
+
     /// A restored backup: the tap is in the store but the flag never got set
     /// on this install. The tap alone is enough.
     @Test func aRealTapCountsWithNoReachedFlag() {

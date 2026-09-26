@@ -60,6 +60,8 @@ struct PurchaseSourcesSettingsView: View {
         switch status {
         case .tapLogged(let date, let merchant, _, _):
             return "Last tap \(date.formatted(.relative(presentation: .named))) · \(merchant)"
+        case .tapNeedsCheck(let date):
+            return "Last tap \(date.formatted(.relative(presentation: .named))) · needs a check"
         // Set up but nothing bought yet. "No taps yet" on its own reads as
         // "this isn't working".
         case .shortcutReached:
