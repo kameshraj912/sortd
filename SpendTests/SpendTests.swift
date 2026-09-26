@@ -1086,9 +1086,26 @@ struct ApplePayTapTests {
         #expect(LogPurchaseIntent.shortcutHasReachedApp)
     }
 
-    @Test func cardOnlyRunSavesNothing() async throws {
+    /// Known bug U6: a card with no shop and no amount used to be dropped as
+    /// if it were a ▶ test run. It's a real automation run — Sortd keeps it,
+    /// tagged "needs a check" (spec 2026-09-26, failsafe #10), rather than
+    /// either silently losing it or saving the card name as a shop.
+    @Test func cardOnlyRunIsSavedAndFlaggedNeedsCheck() async throws {
         let (ctx, book) = try setup()
         let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.needsCheck)
+        #expect(t.card == book.active.first?.card)
+        #expect(r.message.contains("card"))
+    }
+
+    /// A true bare ▶ run — nothing at all, not even a card — is still never
+    /// saved.
+    @Test func trueEmptyRunSavesNothing() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: nil, in: ctx, book: book)
         #expect(r.transaction == nil)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
         #expect(r.message.contains("connected"))
@@ -1098,7 +1115,21 @@ struct ApplePayTapTests {
         let (ctx, book) = try setup(cards: [nab])
         let r = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
         #expect(r.transaction?.needsReview == true)
+        #expect(r.transaction?.needsCheck == true)
         #expect(r.message.contains("amount missing"))
+    }
+
+    /// A tap with an amount but no shop (spec 2026-09-26, failsafe #2) is
+    /// saved, not silently skipped — `needsReview` alone wouldn't catch this
+    /// (the amount is fine), so it needs its own flag.
+    @Test func missingShopIsSavedAndFlagged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "A$4.50", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.needsReview == false, "the amount did arrive")
+        #expect(t.needsCheck)
+        #expect(r.message.contains("shop missing"))
     }
 
     @Test func sameTapTwiceIsLoggedOnce() async throws {

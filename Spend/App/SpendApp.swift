@@ -122,6 +122,14 @@ struct SpendApp: App {
                                                         now: Calendar.current.date(bySettingHour: 8, minute: 12, second: 0, of: .now) ?? .now)
             }
         }
+        // Screenshots: SPEND_NEEDS_CHECK=1 seeds one card-only Wallet tap
+        // (spec 2026-09-26, failsafe #10) so the "needs a check" row and the
+        // Apple Pay page's count both show right away.
+        if env["SPEND_NEEDS_CHECK"] == "1" {
+            Task {
+                _ = try? await LogWalletTapIntent.handle("NAB Visa Debit", in: SpendStore.container.mainContext, book: .shared)
+            }
+        }
         #endif
         // No tips in the first-launch session; after the demo flag, which
         // marks setup done.
@@ -421,6 +429,10 @@ struct RootView: View {
             // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()
             Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
+            // A tap Sortd couldn't save last time (spec 2026-09-26, failsafe
+            // #8/#9): replay it now, at launch and every time the app comes
+            // back to the foreground, not just once.
+            await TapQueue.replay(in: context)
             await FXService.ensureConverted(in: context)
             #if DEBUG
             await GmailSync.syncAll(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")

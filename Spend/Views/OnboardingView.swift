@@ -1075,7 +1075,7 @@ struct OnboardingView: View {
     private var applePay: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Log Apple Pay by itself", SetupCopy.line(.applePay))
-            ApplePaySetupPanel(status: applePayStatus)
+            ApplePaySetupPanel(status: applePayStatus, needsCheckCount: ApplePayStatus.needsCheckCount(in: transactions))
                 .padding(.top, 10)
         }
     }
