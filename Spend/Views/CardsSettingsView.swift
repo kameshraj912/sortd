@@ -126,6 +126,17 @@ struct CardEditor: View {
          "JPY": "JP", "HKD": "HK", "CNY": "CN", "KRW": "KR", "THB": "TH", "PHP": "PH", "CAD": "CA", "EUR": "DE"][currency]
     }
 
+    /// The money a card from `country` is billed in, when the app supports
+    /// it: picking Hong Kong makes the card HKD, the euro countries EUR. A
+    /// country whose money the app cannot hold (Vietnam, the UAE) returns
+    /// nil and the currency stays as it was.
+    static func currency(for country: String) -> String? {
+        let code = ["AU": "AUD", "SG": "SGD", "MY": "MYR", "NZ": "NZD", "US": "USD", "GB": "GBP", "IN": "INR",
+                    "ID": "IDR", "JP": "JPY", "HK": "HKD", "CN": "CNY", "KR": "KRW", "TH": "THB", "PH": "PHP",
+                    "VN": "VND", "CA": "CAD", "IE": "EUR", "DE": "EUR", "FR": "EUR", "NL": "EUR", "AE": "AED"][country]
+        return code.flatMap { currencies.contains($0) ? $0 : nil }
+    }
+
     private var parsedDigits: [String] { Self.fours(digits) }
     private var parsedPayDigits: [String] { Self.fours(payDigits) }
 
@@ -160,6 +171,11 @@ struct CardEditor: View {
                             Text("\(CardInfo.flag(for: code))  \(Locale.current.localizedString(forRegionCode: code) ?? code)")
                                 .tag(code)
                         }
+                    }
+                    // A card from Hong Kong is billed in HKD: the country sets
+                    // the currency, and the currency can still be changed after.
+                    .onChange(of: draft.country) { _, new in
+                        if let c = Self.currency(for: new), c != draft.currency { draft.currency = c }
                     }
                 } footer: {
                     Text("The currency the card is billed in. Purchases abroad are still converted at that day's rate.")

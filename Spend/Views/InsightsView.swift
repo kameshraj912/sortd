@@ -220,7 +220,9 @@ struct CategoryDetailView: View {
         .background(Color.page)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $editingLimit) { CategoryLimitSheet(category: category) }
+        .sheet(isPresented: $editingLimit) {
+            CategoryLimitSheet(category: category) { limit = $0 }
+        }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.limit(for: category)
             if now != limit { limit = now }

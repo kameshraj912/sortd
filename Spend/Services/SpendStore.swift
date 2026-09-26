@@ -33,7 +33,11 @@ enum SpendStore {
         #else
         let inMemory = false
         #endif
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
+        // `.none`: with the iCloud entitlement present, SwiftData would
+        // otherwise mirror the whole store to CloudKit on its own and refuse
+        // to open it (unique keys on FXRate, ImportedRecord and MerchantRule
+        // are not allowed there). Backup is CloudBackup's own encrypted record.
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self, configurations: [config])
         } catch {
@@ -91,7 +95,7 @@ enum TransactionLogger {
         let pool = nearby.map {
             Deduper.Candidate(date: $0.date, merchant: $0.rawMerchant, amount: $0.amount,
                               currency: $0.currencyCode, card: $0.card, source: $0.source,
-                              platform: $0.platform)
+                              platform: $0.platform, seenIn: $0.seenIn)
         }
 
         if let i = Deduper.match(candidate, in: pool) {

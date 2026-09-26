@@ -11,6 +11,11 @@ enum Deduper {
         var card: Card
         var source: TxnSource
         var platform: String? = nil
+        /// Every source that has ever contributed to this row (a merge keeps
+        /// adding to this list even after `source` is raised to a more
+        /// trusted one). Empty means "only ever seen in `source`" — the
+        /// common case for a purchase that has not merged with anything yet.
+        var seenIn: [TxnSource] = []
     }
 
     static let window: TimeInterval = 2 * 24 * 3600
@@ -33,14 +38,21 @@ enum Deduper {
             // vs a DoorDash email for "Chennai Biryani House") is a strong match.
             let samePlatform = platformKey(old) != nil && platformKey(old) == platformKey(new)
             let nameScore = samePlatform ? 0.95 : similarity(old.merchant, new.merchant)
+            // A merge can raise `old.source` past `new.source` (a tap row
+            // that later absorbed a bank email is now an email row), but the
+            // row was still, at some point, a tap: `seenIn` remembers every
+            // source that ever touched it, not just the current, most
+            // trusted one.
+            let everSeenIn = old.seenIn.isEmpty ? [old.source] : old.seenIn
+            let sameSourceSeenBefore = everSeenIn.contains(new.source)
             // Same source twice is only a duplicate if the names clearly agree
             // (two $5 coffees at two cafes on one day are two purchases).
-            let needed = old.source == new.source ? 0.8 : 0.3
+            let needed = sameSourceSeenBefore ? 0.8 : 0.3
             guard nameScore >= needed else { continue }
             // Same source, same shop, same amount on different days is two
             // purchases (a coffee on Monday and Tuesday); only near-identical
             // times are a re-send.
-            if old.source == new.source, abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
+            if sameSourceSeenBefore, abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
 
             let timeScore = 1 - abs(old.date.timeIntervalSince(new.date)) / window
             let score = nameScore + timeScore

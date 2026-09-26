@@ -695,10 +695,27 @@ final class AppleIdentityProvider: NSObject, IdentityProvider, ASAuthorizationCo
                                   authorizationCode: credential.authorizationCode.map { String(decoding: $0, as: UTF8.self) })
     }
 
-    /// A cancel in Apple's sheet as `AccountError.cancelled`; the rest as is.
+    /// Apple's sheet only ever throws `ASAuthorizationError`, whose
+    /// `localizedDescription` is a domain/code string ("error 1000") no one
+    /// should see. A cancel becomes `AccountError.cancelled` (no alert, see
+    /// `AccountSettingsView.signIn`); everything else becomes one plain
+    /// sentence, chosen by what the code actually means.
     nonisolated static func error(from error: Error) -> Error {
-        if let e = error as? ASAuthorizationError, e.code == .canceled { return AccountError.cancelled }
-        return error
+        guard let e = error as? ASAuthorizationError else { return error }
+        switch e.code {
+        case .canceled:
+            return AccountError.cancelled
+        case .unknown:
+            // Error 1000: usually no Apple ID on the device/simulator, or the
+            // capability isn't on the App ID yet.
+            return AccountError.rejected("Sign in with Apple isn't available on this iPhone right now. Check that you're signed in to iCloud in Settings, then try again.")
+        case .notHandled, .failed, .invalidResponse:
+            return AccountError.rejected("Apple couldn't finish the sign-in. Try again in a moment.")
+        case .notInteractive:
+            return AccountError.rejected("Sign in needs the screen. Try again.")
+        default:
+            return AccountError.rejected("Sign in with Apple didn't work. Try again.")
+        }
     }
 
     nonisolated func authorizationController(controller: ASAuthorizationController,
@@ -719,8 +736,37 @@ final class GoogleIdentityProvider: IdentityProvider {
     func signIn() async throws -> Account {
         do {
             return try await GoogleAuth().signInForIdentity()
-        } catch GoogleAuth.AuthError.cancelled {
-            throw AccountError.cancelled
+        } catch {
+            throw Self.error(from: error)
+        }
+    }
+
+    /// `GoogleAuth.AuthError` already reads as plain sentences (see its
+    /// `errorDescription`), except a cancel (no alert) and a raw `URLError`
+    /// from the token exchange, which this turns into words too: a network
+    /// problem, or, for anything unrecognised, one generic sentence rather
+    /// than an NSURLErrorDomain/code string.
+    nonisolated static func error(from error: Error) -> Error {
+        switch error {
+        case GoogleAuth.AuthError.cancelled:
+            return AccountError.cancelled
+        case let e as GoogleAuth.AuthError:
+            return e
+        case let e as URLError where isOffline(e):
+            return AccountError.rejected("You're offline. Connect to the internet and try again.")
+        default:
+            return AccountError.rejected("Sign in with Google didn't work. Try again.")
+        }
+    }
+
+    /// Network trouble reaching Google, not something Google itself said no to.
+    nonisolated static func isOffline(_ error: URLError) -> Bool {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .timedOut, .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
         }
     }
 }
