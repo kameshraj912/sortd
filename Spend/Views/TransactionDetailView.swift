@@ -256,6 +256,7 @@ struct TransactionDetailView: View {
         if amountText != loadedAmountText, let amount = Self.committedAmount(from: amountText),
            amount != transaction.amount {
             transaction.amount = amount
+            Analytics.shared.track(.purchaseEdited, ["field": .string("amount")])
         }
         if !amountFocused {
             amountText = Self.amountText(transaction.amount, currency: transaction.currencyCode)
@@ -271,6 +272,7 @@ struct TransactionDetailView: View {
             let name = MerchantName.clean(merchantText)
             if !name.isEmpty, name != transaction.merchant {
                 transaction.merchant = name
+                Analytics.shared.track(.purchaseEdited, ["field": .string("shop")])
             }
         }
         if !merchantFocused {
@@ -281,7 +283,9 @@ struct TransactionDetailView: View {
 
     /// Moves the shop and, when others moved too, offers Undo for a while.
     private func recategorise(to category: SpendCategory) {
+        let from = transaction.category
         guard let change = try? TransactionLogger.recategorise(transaction, to: category, in: context) else { return }
+        Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(category.rawValue)])
         PendingRecategorise.shared.stage(change)
         if let text = change.toastText {
             AccessibilityNotification.Announcement("\(text). Undo available.").post()
