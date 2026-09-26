@@ -385,13 +385,14 @@ struct RootView: View {
         // Everything behind the intro is unreachable while it's up; the
         // overlay itself carries its own accessibility elements.
         .accessibilityHidden(introShowing)
-        // The day header's frame comes from `ActivityView.pagerHeader`,
-        // well below this in a `List` + `ScrollViewReader` — read here via
-        // `.overlayPreferenceValue` rather than `.overlay`, the only way it
-        // reaches this level.
-        .overlayPreferenceValue(IntroDayHeaderKey.self) { dayHeaderFrame in
+        // The day header's frame, and the "Older Day" chevron's own,
+        // separately — both come from `ActivityView.pagerHeader`, well
+        // below this in a `List` + `ScrollViewReader` — read here via
+        // `.overlayPreferenceValue` rather than `.overlay`, the only way
+        // either reaches this level.
+        .overlayPreferenceValue(IntroDayHeaderKey.self) { dayFrames in
             if introShowing {
-                IntroOverlay(tour: $intro, dayHeaderFrame: dayHeaderFrame,
+                IntroOverlay(tour: $intro, dayHeaderFrame: dayFrames.header, dayChevronFrame: dayFrames.chevron,
                              onNext: { intro.next() },
                              onTimeout: { intro.advanceOnTimeout() },
                              onSkip: { intro.skip() })

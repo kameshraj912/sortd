@@ -400,6 +400,18 @@ struct TransactionsScreen: View {
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .disabled(position.index + 1 >= position.count)
+        // The intro's `.move` step points its finger at this button's own
+        // frame, not the header row's — the row's measured frame doesn't
+        // line up with the chevron's 44pt square (it hangs out past the
+        // row's own bounds, the `.padding(.horizontal, -14)` below).
+        .background {
+            if introWatchingDayHeader {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: IntroDayHeaderKey.self,
+                                            value: IntroDayFrames(chevron: proxy.frame(in: .global)))
+                }
+            }
+        }
         // At the largest sizes the chevrons get their own row, so the day
         // keeps the full width.
         return Group {
@@ -428,7 +440,8 @@ struct TransactionsScreen: View {
         .background {
             if introWatchingDayHeader {
                 GeometryReader { proxy in
-                    Color.clear.preference(key: IntroDayHeaderKey.self, value: proxy.frame(in: .global))
+                    Color.clear.preference(key: IntroDayHeaderKey.self,
+                                            value: IntroDayFrames(header: proxy.frame(in: .global)))
                 }
             }
         }

@@ -6,10 +6,10 @@ import UIKit
 /// step is about at full brightness, and either
 /// - **motion allowed** (Reduce Motion off, VoiceOver off): three thin
 ///   progress segments at the top, a card with a small "N of 3" eyebrow and
-///   the line (no buttons), real per-step motion (a finger tapping, or the
-///   tab bar's own ring), auto-advance after `IntroStep.stepDuration`, a tap
-///   anywhere advances early, a finger held down pauses the clock, and Skip
-///   sits top right; or
+///   a secondary Skip button sharing that row (no Next), the line below,
+///   real per-step motion (a finger tapping, or the tab bar's own ring),
+///   auto-advance after `IntroStep.stepDuration`, a tap anywhere advances
+///   early, a finger held down pauses the clock; or
 /// - **Reduce Motion, or VoiceOver running** (kept exactly as first built,
 ///   the spec's own fallback): a still ring, the old "Step N of 3" heading,
 ///   cross-fading steps, and real Next/Done + Skip buttons in the card —
@@ -27,6 +27,12 @@ struct IntroOverlay: View {
     /// never can be (see `IntroDayHeaderKey`'s doc) — either way this falls
     /// back to the whole tab bar band, same as `.add`/`.insights` do today.
     let dayHeaderFrame: CGRect?
+    /// The "Older Day" chevron button's own frame (a 44pt square that hangs
+    /// out past the header row's measured frame — `pagerHeader`'s negative
+    /// horizontal padding), measured the same way as `dayHeaderFrame`. Only
+    /// used to place the finger for `.move`; the cutout still uses the
+    /// whole header.
+    let dayChevronFrame: CGRect?
     /// A tap anywhere, or the classic-mode Next/Done button.
     let onNext: () -> Void
     /// The step's own clock ran out with nobody tapping.
@@ -86,17 +92,11 @@ struct IntroOverlay: View {
                 ZStack(alignment: .top) {
                     dim(cutout: target)
                     highlight(target, approximate: approximate)
-                    finger(at: fingerAnchor(for: step, target: target))
+                    finger(at: fingerAnchor(for: step, target: target, chevron: dayChevronFrame))
                     cardLayer(for: step, target: target, pointerOffsetX: pointerX,
                               bounds: bounds, safeBottom: proxy.safeAreaInsets.bottom, showButtons: showButtons)
                     if !showButtons {
                         progressBar(current: step, safeTop: proxy.safeAreaInsets.top)
-                        HStack {
-                            Spacer(minLength: 0)
-                            topRightSkip
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.top, proxy.safeAreaInsets.top + 30)
                     }
                 }
                 .frame(width: bounds.width, height: bounds.height)
@@ -166,14 +166,22 @@ struct IntroOverlay: View {
     }
 
     /// Where the simulated finger lands: the + circle's centre for `.add`,
-    /// the day header's trailing ("Older Day") chevron for `.move`. `.insights`
+    /// the "Older Day" chevron button's own centre for `.move` — its measured
+    /// frame when `ActivityView` reported one, else a guess inset from the
+    /// header's trailing edge (the chevron's 44pt square hangs out past the
+    /// header row's own frame, `pagerHeader`'s negative horizontal padding —
+    /// close enough only when the real measurement isn't there). `.insights`
     /// has no finger — the ring pulse alone is its motion, on the tab the app
     /// really selects.
-    private func fingerAnchor(for step: IntroStep, target: CGRect) -> CGPoint {
-        guard target != .zero else { return .zero }
+    private func fingerAnchor(for step: IntroStep, target: CGRect, chevron: CGRect?) -> CGPoint {
         switch step {
-        case .add: return CGPoint(x: target.midX, y: target.midY)
-        case .move: return CGPoint(x: target.maxX - 22, y: target.midY)
+        case .add:
+            guard target != .zero else { return .zero }
+            return CGPoint(x: target.midX, y: target.midY)
+        case .move:
+            if let chevron, chevron != .zero { return CGPoint(x: chevron.midX, y: chevron.midY) }
+            guard target != .zero else { return .zero }
+            return CGPoint(x: target.maxX - 8, y: target.midY)
         case .insights: return .zero
         }
     }
@@ -297,17 +305,6 @@ struct IntroOverlay: View {
         return progress
     }
 
-    private var topRightSkip: some View {
-        Button("Skip", action: onSkip)
-            .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .background(.black.opacity(0.35), in: Capsule())
-            .contentShape(Rectangle())
-    }
-
     // MARK: Card
 
     /// Where the card sits: bottom-anchored, just above the target, for
@@ -338,28 +335,41 @@ struct IntroOverlay: View {
 
     private func card(_ step: IntroStep, pointerOffsetX: CGFloat, pointerEdge: Edge, showButtons: Bool) -> some View {
         VStack(spacing: 14) {
-            VStack(spacing: 6) {
-                if showButtons {
+            if showButtons {
+                VStack(spacing: 6) {
                     Text("Step \(step.rawValue + 1) of \(IntroTour.steps.count)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                } else {
-                    Text("\(step.rawValue + 1) of \(IntroTour.steps.count)")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    Text(step.line)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.ink)
                 }
-                Text(step.line)
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Color.ink)
-            }
-            // One element with the full "Step N of 3. <target>. <line>."
-            // label; Skip and Next stay their own reachable buttons below,
-            // when they're on screen at all.
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(step.accessibilityLabel)
-            if showButtons {
+                // One element with the full "Step N of 3. <target>. <line>."
+                // label; Skip and Next stay their own reachable buttons below.
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(step.accessibilityLabel)
                 buttons(step)
+            } else {
+                VStack(spacing: 6) {
+                    // The eyebrow and Skip share a row (eyebrow leading,
+                    // Skip trailing); Skip stays a sibling, not folded into
+                    // the combined element below, so it reads as its own
+                    // accessibility button.
+                    HStack(spacing: 8) {
+                        Text("\(step.rawValue + 1) of \(IntroTour.steps.count)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                    }
+                    Text(step.line)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.ink)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(step.accessibilityLabel)
+                .overlay(alignment: .topTrailing) { cardSkipButton }
             }
         }
         .padding(18)
@@ -384,8 +394,8 @@ struct IntroOverlay: View {
     /// At accessibility text sizes they stack full-width instead (a
     /// `.glassProminent` capsule with no minimum width wrapped "Next" to
     /// "Nex/t" side by side). Only shown in classic mode (Reduce Motion, or
-    /// VoiceOver running) — the motion-allowed mode has no Next button and
-    /// Skip moves to the top right of the screen instead.
+    /// VoiceOver running) — the motion-allowed mode has no Next button;
+    /// Skip there is `cardSkipButton`, in the eyebrow's row instead.
     @ViewBuilder
     private func buttons(_ step: IntroStep) -> some View {
         if typeSize.isAccessibilitySize {
@@ -407,6 +417,20 @@ struct IntroOverlay: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .frame(minHeight: 44)
+            .contentShape(Rectangle())
+    }
+
+    /// Motion-allowed mode's Skip: a small secondary button sharing the
+    /// eyebrow's row, top trailing (originally a floating pill top right of
+    /// the whole screen — it sat on top of the settings gear every screen
+    /// already draws there, reading as a broken button). Still a real,
+    /// 44pt-tall accessibility button, just inside the card now.
+    private var cardSkipButton: some View {
+        Button("Skip", action: onSkip)
+            .buttonStyle(.plain)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
     }
 
@@ -621,15 +645,28 @@ struct TabBarProbe: UIViewRepresentable {
 
 // MARK: - Day header measurement (step `.move`)
 
-/// The day header's frame (chevrons + day title), reported by
-/// `ActivityView.pagerHeader` up to whichever ancestor reads
+/// Reported by `ActivityView.pagerHeader` up to whichever ancestor reads
 /// `.overlayPreferenceValue(IntroDayHeaderKey.self)` — `RootView`, at the
 /// same level `IntroOverlay` is placed, since `ActivityView`'s own `List` +
 /// `ScrollViewReader` sits well below that.
+///
+/// Both frames `pagerHeader` reports, in one value: the whole row (for the
+/// cutout) and the "Older Day" chevron button's own 44pt square separately
+/// (for the finger) — its measured frame doesn't line up with the header
+/// row's, since the chevrons hang out past it (`pagerHeader`'s negative
+/// horizontal padding). Two `.preference` calls from different descendants
+/// of the same `pagerHeader` each set one field; `reduce` merges them.
+struct IntroDayFrames: Equatable {
+    var header: CGRect? = nil
+    var chevron: CGRect? = nil
+}
+
 struct IntroDayHeaderKey: PreferenceKey {
-    static var defaultValue: CGRect?
-    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
-        if let next = nextValue() { value = next }
+    static var defaultValue = IntroDayFrames()
+    static func reduce(value: inout IntroDayFrames, nextValue: () -> IntroDayFrames) {
+        let next = nextValue()
+        if let header = next.header { value.header = header }
+        if let chevron = next.chevron { value.chevron = chevron }
     }
 }
 
