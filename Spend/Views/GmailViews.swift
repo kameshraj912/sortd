@@ -28,6 +28,21 @@ struct GmailSection: View {
             Button { showingConnect = true } label: {
                 Label(accounts.isEmpty ? "Connect Gmail" : "Connect Another Gmail", systemImage: "plus")
             }
+            // Modifiers on a Section apply to every row inside it, so a
+            // .sheet or .confirmationDialog attached to the Section itself
+            // opens once per row: SwiftUI's second and third presentation
+            // attempts fail and tear down the parent (Settings) sheet with
+            // it. Anchored here, on this one row, which always exists
+            // whether or not there are any accounts yet.
+            .onChange(of: status.phase) { accounts = GmailSync.accounts }
+            .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) { ConnectGmailSheet() }
+            .confirmationDialog("Disconnect \(disconnecting?.email ?? "")?", isPresented: Binding(
+                get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
+                Button("Disconnect") { disconnect(deleting: false) }
+                Button("Disconnect and Delete Purchases", role: .destructive) { disconnect(deleting: true) }
+            } message: {
+                Text("Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way.")
+            }
             if !accounts.isEmpty {
                 Button {
                     GmailSync.startSync(in: context)
@@ -51,16 +66,6 @@ struct GmailSection: View {
             BoldHeader("Email Receipts")
         } footer: {
             Text("Finds receipts and bank alerts in your Gmail and reads them on this iPhone.")
-        }
-        // Accounts and "Synced …" lines change as a connect or sync moves on.
-        .onChange(of: status.phase) { accounts = GmailSync.accounts }
-        .sheet(isPresented: $showingConnect, onDismiss: { accounts = GmailSync.accounts }) { ConnectGmailSheet() }
-        .confirmationDialog("Disconnect \(disconnecting?.email ?? "")?", isPresented: Binding(
-            get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
-            Button("Disconnect") { disconnect(deleting: false) }
-            Button("Disconnect and Delete Purchases", role: .destructive) { disconnect(deleting: true) }
-        } message: {
-            Text("Sortd stops reading this Gmail and Google cancels its access. Purchases also logged by Apple Pay are kept either way.")
         }
     }
 
