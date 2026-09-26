@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy Policy – Sortd Money</title>
-<meta name="description" content="How Sortd Money handles your data: everything stays on your iPhone, no account, no tracking, read-only Gmail.">
+<meta name="description" content="How Sortd Money handles your data: your spending stays on your iPhone, usage counts never include amounts, no ads, read-only Gmail.">
 <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/png" href="img/favicon.png">
@@ -13,12 +13,12 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sortd Money">
 <meta property="og:title" content="Privacy Policy – Sortd Money">
-<meta property="og:description" content="How Sortd Money handles your data: everything stays on your iPhone, no account, no tracking, read-only Gmail.">
+<meta property="og:description" content="How Sortd Money handles your data: your spending stays on your iPhone, usage counts never include amounts, no ads, read-only Gmail.">
 <meta property="og:url" content="https://sortd.page/privacy">
 <meta property="og:image" content="https://sortd.page/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="style.css?v=24">
-<script src="site.js?v=25"></script>
+<link rel="stylesheet" href="style.css?v=35">
+<script src="site.js?v=34"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -41,16 +41,19 @@
 <main id="main" class="doc">
   <h1>Privacy Policy</h1>
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-  <p class="muted">Last updated: 23 September 2026</p>
+  <p class="muted">Last updated: 26 September 2026</p>
   <p>This policy explains what the Sortd iPhone app ("Sortd") does with your information. "We", "us" and "Sortd" mean the makers of Sortd. You can reach us at <a href="mailto:support@sortd.page">support@sortd.page</a>.</p>
 
   <h2>In short</h2>
   <div class="group" style="margin-bottom:10px">
-    <div class="cell"><b>Where your data is kept</b><span>On your iPhone</span></div>
-    <div class="cell"><b>Sortd account or server</b><span>None</span></div>
+    <div class="cell"><b>Your spending</b><span>On your iPhone. In your own iCloud too, if you turn on <a href="#icloud">iCloud backup</a></span></div>
+    <div class="cell"><b>Usage data</b><span><a href="#usage">Counts what you use, never what you spend</a>. You can turn it off</span></div>
+    <div class="cell"><b>Crash reports</b><span><a href="#usage">Yes, same switch</a></span></div>
+    <div class="cell"><b>Screen recordings</b><span><a href="#recordings">Beta (TestFlight) only</a>, with amounts and names covered</span></div>
+    <div class="cell"><b>Sortd account</b><span><a href="#account">Optional</a>. Holds no purchases</span></div>
     <div class="cell"><b>Data protection</b><span><a href="#security">Encrypted on your iPhone</a></span></div>
-    <div class="cell"><b>Analytics, ads, tracking</b><span>None</span></div>
-    <div class="cell"><b>Data sold or shared</b><span>Never</span></div>
+    <div class="cell"><b>Ads, tracking</b><span>None</span></div>
+    <div class="cell"><b>Data sold</b><span>Never</span></div>
     <div class="cell"><b>Gmail</b><span>Optional, read-only</span></div>
     <div class="cell"><b>Apple Intelligence</b><span>Runs on your iPhone only</span></div>
     <div class="cell"><b>Notifications</b><span>Made on your iPhone, no push server</span></div>
@@ -58,7 +61,7 @@
   <p class="muted" style="font-size:15px">The rest of this page explains each of these in full.</p>
 
   <h2>What Sortd stores, and where</h2>
-  <p>Everything Sortd stores is kept on your iPhone, inside the app's own storage:</p>
+  <p>Your spending data is kept on your iPhone, inside the app's own storage:</p>
   <ul>
     <li><strong>Purchases</strong> — merchant, amount, currency, date, category, card, and any note you add. These are kept in an on-device database (Apple's&nbsp;SwiftData).</li>
     <li><strong>Cards</strong> — the name you give each card and its last 4 digits. Sortd never asks for or stores full card numbers, and never asks for bank logins or passwords.</li>
@@ -68,32 +71,33 @@
     <li><strong>Exchange rates</strong> — daily rates Sortd has downloaded, so it doesn't fetch them again.</li>
     <li><strong>Connected Gmail addresses</strong> — the address and when it last synced, if you connect Gmail.</li>
   </ul>
-  <p>We don't run a server, so none of this is sent to us. If you back up your iPhone to iCloud or a computer, Sortd's data is included in that backup like other app data, under Apple's terms.</p>
+  <p>None of this is sent to us. If you turn on <a href="#icloud">iCloud backup</a>, an encrypted copy goes to your own iCloud, where we can't read it. If you back up your iPhone to iCloud or a computer, Sortd's data is included in that backup like other app data, under Apple's terms.</p>
+  <p>What does leave your iPhone is small: <a href="#usage">usage data and crash reports</a>, which never include amounts, shops or card digits, and, only if you sign in, what's described under <a href="#account">Signing in</a>.</p>
 
   <h2 id="security">How we protect your data</h2>
   <p>Some of what Sortd handles is sensitive: your purchases, and, if you connect it, your Gmail. This is how it is kept safe.</p>
   <ul>
-    <li><strong>Kept on your iPhone only:</strong> Sortd has no server and no Sortd account. Your purchases, cards, settings and Gmail data never reach us or any other company, so we hold no copy for anyone to leak. A backup or spreadsheet file only exists if you choose to share one, and Sortd deletes its own copy afterwards.</li>
+    <li><strong>Your spending stays on your iPhone:</strong> your purchases, cards, settings and Gmail data never reach us, so we hold no copy for anyone to leak. The only other place they can go is your own iCloud, encrypted, if you turn on iCloud backup. A backup or spreadsheet file only exists if you choose to share one, and Sortd deletes its own copy afterwards.</li>
     <li><strong>Encrypted on your iPhone:</strong> Sortd's storage is protected by iOS Data Protection. It is encrypted, and after your iPhone restarts it can't be read until you unlock the phone with your passcode or Face&nbsp;ID. Other apps can't read it.</li>
     <li><strong>Google sign-in key in the Keychain:</strong> the Google refresh token is stored in the iPhone Keychain, which iOS encrypts. It is set to stay on this iPhone only: it is not synced to iCloud Keychain and does not move to another device. Short-lived access keys are kept only in memory and are never written to storage.</li>
     <li><strong>Secure sign-in:</strong> you sign in to Google in Apple's secure sign-in window, using OAuth&nbsp;2.0 with PKCE. Sortd never sees your Google password, and no secret key is built into the app.</li>
-    <li><strong>Encrypted in transit:</strong> every connection Sortd makes, to Google and to frankfurter.dev, uses HTTPS (TLS). Sortd makes no unencrypted connections.</li>
+    <li><strong>Encrypted in transit:</strong> every connection Sortd makes (see <a href="#services">Services Sortd talks to</a>) uses HTTPS (TLS). Sortd makes no unencrypted connections.</li>
     <li><strong>Least access:</strong> Sortd asks Google only for read-only Gmail access. It can't send, change or delete email. It searches only for receipts and bank alerts.</li>
     <li><strong>Emails are not stored:</strong> an email's text is held in memory only while Sortd reads the purchase from it, then discarded. Sortd keeps the purchase details and the email's ID, not the email.</li>
-    <li><strong>No people, no third parties:</strong> no one at Sortd can see your data, because it never leaves your iPhone. Sortd has no analytics, ads, crash-reporting or tracking tools, and does not share or sell data.</li>
+    <li><strong>No one reads your spending:</strong> no one at Sortd can see your purchases, because they never leave your iPhone. Sortd has no ads and doesn't track you across other apps or websites. It does not sell data. The only outside services that get anything from the app are an analytics provider and a crash-reporting service, and neither gets your spending.</li>
     <li><strong>Removing access:</strong> Disconnect and Delete All Data ask Google to cancel Sortd's access and delete the key from the Keychain. You can also remove Sortd at any time in your Google Account's security settings.</li>
   </ul>
   <p>If you find a security problem in Sortd, please email <a href="mailto:support@sortd.page">support@sortd.page</a>. We will look into it and fix it as fast as we can.</p>
 
   <h2>Logging Apple Pay taps</h2>
-  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the transaction (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. Sortd keeps a copy of the last tap it received, on your iPhone, so you can check the setup. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
+  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the transaction (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. Sortd keeps a copy of the last tap it received, on your iPhone, so you can check the setup. Usage data notes only that a tap was logged, never its shop, amount or card. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
   <p><strong>Card digits:</strong> you can give Sortd the last 4 digits of each card and of its Apple Pay number (the&nbsp;Device Account Number). Sortd uses them only to match purchases to the right card. They stay on your iPhone. Sortd never asks for or stores a full card number.</p>
 
   <h2 id="setup">Setup questions</h2>
   <p>When you first set up Sortd, it asks a few short questions: what you want from it, how you usually pay, how you feel about your spending, when you'd like a check-in, and how often you spend abroad. You can skip them.</p>
   <ul>
-    <li><strong>Where they're kept:</strong> on your iPhone only, in Sortd's own storage. They are never sent to us or anyone else, and they aren't put in backup files.</li>
-    <li><strong>What they're used for:</strong> choosing which setup steps to show you, which Sortd&nbsp;Pro features to show first, and when your check-in comes. Nothing else.</li>
+    <li><strong>Where they're kept:</strong> on your iPhone only, in Sortd's own storage. Your answers are never sent to us or anyone else, and they aren't put in backup files. Usage data notes only which setup step you reached and whether you skipped it, not what you answered.</li>
+    <li><strong>What they're used for:</strong> choosing which setup steps to show you, which features to show first, and when your check-in comes. Nothing else.</li>
     <li><strong>Changing them:</strong> Settings › Help &amp; Feedback › Run Setup Again. You can change just the check-in time in Settings › Bills &amp; Reminders. Running setup again keeps your purchases and cards.</li>
     <li><strong>Deleting them:</strong> Delete All Data, or deleting the app, removes them.</li>
   </ul>
@@ -113,7 +117,7 @@
   <ul>
     <li><strong>What Sortd asks Google for:</strong> read-only Gmail access (<code>gmail.readonly</code>), plus your email address so Sortd can show which account is connected. Sortd cannot send, delete, move or change your email.</li>
     <li><strong>What it reads:</strong> Sortd searches only for receipts and bank alerts (for&nbsp;example, emails Gmail files under Purchases, or with subjects like "receipt", "invoice" or "order confirmation"). The first sync looks back 120 days. Other email is not opened.</li>
-    <li><strong>Where it reads them:</strong> on your iPhone. Emails go straight from Google's Gmail API to your iPhone. Nothing is sent anywhere else, and no copy is kept on any server.</li>
+    <li><strong>Where it reads them:</strong> on your iPhone. Emails go straight from Google's Gmail API to your iPhone. Nothing from your email is sent anywhere else, and no copy is kept on any server. Usage data notes only that Gmail was connected or synced, how many accounts are connected, and a short error code if a sync failed (like "offline").</li>
     <li><strong>What it keeps:</strong> the purchase details it finds (merchant, amount, currency, date, and the card's last 4 digits if the email shows them) and each email's ID, so it doesn't read the same email twice. It does not keep a copy of the emails.</li>
     <li><strong>On-device Apple Intelligence:</strong> on iPhones that have Apple Intelligence turned on, Sortd may use Apple's on-device model to read the text of a receipt from a sender it doesn't have a built-in rule for. This runs on your iPhone.</li>
     <li><strong>Your Google sign-in key:</strong> the key that lets Sortd keep reading your receipts (a&nbsp;Google refresh token) is kept in the iPhone Keychain, not in the app's files. Short-lived access keys are only kept in memory while the app runs.</li>
@@ -129,9 +133,9 @@
   <h2 id="notifications">Notifications</h2>
   <p>Sortd only sends notifications if you allow them when iOS asks. All of them are scheduled by the app on your iPhone. Sortd doesn't use a push server, so no notification comes from us or passes through us.</p>
   <ul>
-    <li><strong>Check-in (free):</strong> if you pick one during setup, Sortd sends a short repeating note each morning, each evening, or on Sunday evening, inviting you to take a look. It is written ahead of time, so it never contains amounts, shops or cards. Change or turn it off in Settings › Bills &amp; Reminders › Check-in.</li>
-    <li><strong>Bill reminders (Sortd&nbsp;Pro):</strong> if you turn them on, Sortd reminds you at 9&nbsp;am the day before a repeat payment is expected. These show the shop, the amount and the card's name.</li>
-    <li><strong>Category limit alerts (Sortd&nbsp;Pro):</strong> if bill reminders are on and you have set category limits, Sortd tells you when a category nears or passes its limit, with the amounts.</li>
+    <li><strong>Check-in:</strong> if you pick one during setup, Sortd sends a short repeating note each morning, each evening, or on Sunday evening, inviting you to take a look. It is written ahead of time, so it never contains amounts, shops or cards. Change or turn it off in Settings › Bills &amp; Reminders › Check-in.</li>
+    <li><strong>Bill reminders:</strong> if you turn them on, Sortd reminds you at 9&nbsp;am the day before a repeat payment is expected. These show the shop, the amount and the card's name.</li>
+    <li><strong>Category limit alerts:</strong> if bill reminders are on and you have set category limits, Sortd tells you when a category nears or passes its limit, with the amounts.</li>
   </ul>
   <p>Notifications with amounts can appear on your Lock Screen. To hide their contents there, go to your iPhone's Settings › Notifications › Sortd › Show Previews. You can turn any of them off in Sortd or in your iPhone's Settings at any time.</p>
 
@@ -143,27 +147,80 @@
   <p>If you turn on the lock in Settings › Privacy &amp; Security, iOS checks your Face&nbsp;ID, Touch&nbsp;ID or passcode. Sortd only learns whether the check passed. It never sees your face data, fingerprint or passcode.</p>
 
   <h2>Backups and spreadsheets</h2>
-  <p>In Settings › Backup &amp; Data you can save a backup file (your purchases, cards and some settings) or export your purchases as a spreadsheet (CSV). Sortd only makes these when you tap, and hands them to Apple's share sheet. You choose where they go, for example Files, iCloud Drive or AirDrop. Sortd doesn't upload them anywhere.</p>
+  <p>In Settings › Backup &amp; Data you can save a backup file (your purchases, cards and some settings) or export your purchases as a spreadsheet (CSV). Sortd only makes these when you tap, and hands them to Apple's share sheet. You choose where they go, for example Files, iCloud Drive or AirDrop. Sortd doesn't upload these files anywhere. (iCloud backup, below, is separate.)</p>
   <p>These files are not locked with a password, so anyone who has the file can read it. Keep them somewhere safe. Sortd deletes its own temporary copy afterwards.</p>
 
-  <h2>Buying Sortd Pro</h2>
-  <p>Sortd&nbsp;Pro is bought through Apple's App Store. Apple handles the payment. Sortd never sees your card or your Apple Account details. On your iPhone, Sortd only checks with the App Store whether you have Pro.</p>
-
-  <h2>Services Sortd talks to</h2>
-  <p>Sortd only connects to:</p>
+  <h2 id="icloud">iCloud backup (optional)</h2>
+  <p>iCloud backup is off until you turn it on in Settings › Backup &amp; Data › Back up to iCloud.</p>
   <ul>
-    <li>Google (sign-in and the Gmail API) — only if you connect Gmail.</li>
-    <li>frankfurter.dev — for exchange rates, as described above.</li>
-    <li>Apple's App Store — to show prices and check your Sortd&nbsp;Pro purchase.</li>
+    <li><strong>What it saves:</strong> the same things as a backup file: your purchases (including which Gmail address each one came from), your cards with their last 4 digits, some settings, the categories Sortd has learned, and the IDs of emails it has already read. Not your setup answers, and not sample data.</li>
+    <li><strong>Encrypted first:</strong> the backup is encrypted on your iPhone before it leaves. The key is kept in your iCloud Keychain, so only your own devices can open it. We can't read it.</li>
+    <li><strong>Where it goes:</strong> Sortd's private area in your own iCloud account. It counts against your iCloud storage, not ours, and we can't see it.</li>
+    <li><strong>When it runs:</strong> when you turn it on, a few seconds after you make changes (at most once every 10 minutes), when you leave the app, or when you tap Back Up Now. There is one copy, and each backup replaces it.</li>
+    <li><strong>Restoring:</strong> on a new iPhone, tap Restore from iCloud. You choose to add what's missing or replace everything.</li>
+    <li><strong>Turning it off:</strong> Sortd asks if you want to delete the iCloud copy too, or keep it for a new iPhone. If you kept a copy and want it gone later, you can remove it in your iPhone's Settings › your name › iCloud › Manage Storage.</li>
   </ul>
-  <p>Apple Intelligence, text reading, widgets, notifications and the app lock all run on your iPhone and don't connect to anything. Sortd has no analytics, crash-reporting, advertising or tracking tools built in.</p>
+
+  <h2 id="usage">Usage data and crash reports</h2>
+  <p>To learn which parts of Sortd people use, where setup loses them, and what crashes, Sortd sends a small amount of usage data to an analytics provider, and crash reports to a crash-reporting service. <strong>Neither ever includes your amounts, shops, card digits, notes, email addresses or email content.</strong></p>
+  <ul>
+    <li><strong>What usage data is:</strong> short events with simple counts and yes/no values. For example: setup started, which setup step you reached and whether you skipped it, a purchase was added by hand or deleted, an Apple Pay tap was logged, Gmail synced (or failed, with a short error code), which tab you opened, a tip was left (small, medium or large), and when the app opens and closes. The analytics tool adds basic details like your iPhone model, iOS version, app version and language.</li>
+    <li><strong>A safety net:</strong> before anything is sent, the app drops any value that looks like an amount of money or an email address.</li>
+    <li><strong>What crash reports are:</strong> when Sortd crashes, a report with the technical details of the crash (which part of the code failed), your iPhone model, iOS version and app version. Error messages are removed before sending. No screenshots, no screen contents, no record of what you tapped. The service also counts app sessions, so we know how often Sortd runs without crashing.</li>
+    <li><strong>Who you are to them:</strong> a random ID made for this install of Sortd. If you <a href="#account">sign in</a>, a scrambled one-way code made from your account replaces it, so your usage stays together across phones. It is never your name or email.</li>
+    <li><strong>What it's not used for:</strong> no ads, not sold, and not used to track you across other companies' apps or websites.</li>
+    <li><strong>Your internet address:</strong> like any online service, these two can see your device's internet address when Sortd connects. We've set both not to store it.</li>
+    <li><strong>Where it's kept:</strong> both services store data in the United States. See <a href="#retention">how long we keep it</a>.</li>
+    <li><strong>In the EU, EEA, UK and Switzerland:</strong> the switch starts off. Nothing is sent until you turn it on.</li>
+    <li><strong>Turning it off:</strong> everywhere else, usage data and crash reports are on when you first open Sortd. Turn them off any time in Settings › Privacy &amp; Security › Privacy › Share usage data. That one switch stops both straight away, and beta <a href="#recordings">screen recordings</a> too. The switch keeps your choice even after Delete All Data.</li>
+    <li><strong>Deleting it:</strong> if you signed in, Settings › Account › Delete Account deletes your usage record. If you never signed in, your usage data isn't linked to your name or email, so there's no way for us to tell which record is yours.</li>
+  </ul>
+
+  <h2 id="recordings">Screen recordings (beta only)</h2>
+  <p>While Sortd is in its TestFlight beta, the beta app can also record what happens on screen, so we can see where testers get stuck, not just that they did. It goes to the same analytics provider as usage data.</p>
+  <ul>
+    <li><strong>What's covered up:</strong> before a recording leaves your iPhone, Sortd covers up anything you type, photos and images, amounts, shop names and email addresses with solid boxes.</li>
+    <li><strong>Beta only:</strong> recordings are built into the TestFlight beta only. The App Store version of Sortd doesn't record your screen.</li>
+    <li><strong>Turning it off:</strong> the same Share usage data switch stops recordings straight away. In the EU, EEA, UK and Switzerland it starts off.</li>
+    <li><strong>How long:</strong> recordings are deleted after 30 days.</li>
+  </ul>
+
+  <h2 id="account">Signing in (optional)</h2>
+  <p>You can use every part of Sortd without an account. If you want one, Settings › Account lets you sign in with Apple or with Google. It gives Sortd a way to know you if you ask for help, and keeps your usage data together if you change phones. Your purchases stay on your iPhone either way.</p>
+  <ul>
+    <li><strong>What Sortd asks for:</strong> with Apple, your email address (Apple lets you hide it). With Google, your basic Google identity and email address. Signing in with Google does not give Sortd access to your Gmail. That only happens if you connect Gmail separately.</li>
+    <li><strong>What's kept on your iPhone:</strong> which service you used, your account ID with that service, and your email address, in the iPhone Keychain. It stays on this iPhone and doesn't sync.</li>
+    <li><strong>Our small account server:</strong> it does only two jobs: cancelling a Sign in with Apple when you delete your account, and deleting your usage record. It stores nothing. It uses an Apple check to make sure requests come from the real Sortd app, and briefly counts requests to stop abuse. No spending data is ever sent to it.</li>
+    <li><strong>Sign Out:</strong> Sortd forgets who you are on this iPhone. Your purchases stay.</li>
+    <li><strong>Delete Account:</strong> Sortd asks Apple or Google to cancel the sign-in, deletes your usage record, and forgets you on this iPhone. Choose Delete Account and All Data to also delete everything on your iPhone. Crash reports linked to you are deleted when their time limit runs out.</li>
+    <li><strong>Stopping it from Apple's side:</strong> on your iPhone, go to Settings › your name › Sign in with Apple › Sortd › Stop Using.</li>
+  </ul>
+
+  <h2 id="purchases">Paying for anything in the app</h2>
+  <p>Every feature in Sortd is free. If you ever pay for something optional in the app, you pay through Apple's App Store. Apple handles the payment, and Sortd never sees your card or your Apple Account details.</p>
+
+  <h2 id="services">Who else is involved</h2>
+  <p>Sortd connects only to these, and only for the reason given:</p>
+  <ul>
+    <li><strong>Google:</strong> the Gmail API, if you connect Gmail, and Google sign-in, if you use it.</li>
+    <li><strong>Apple:</strong> the App Store, Sign in with Apple, and iCloud if you turn on iCloud backup.</li>
+    <li><strong>An exchange-rate service</strong> (frankfurter.dev), as described above.</li>
+    <li><strong>An analytics provider</strong> in the United States, for usage data (and beta screen recordings), unless you turn it off.</li>
+    <li><strong>A crash-reporting service</strong> in the United States, for crash reports, unless you turn it off.</li>
+    <li><strong>Our small account server</strong>, only when you delete your account.</li>
+  </ul>
+  <p>The analytics provider and the crash-reporting service work for us under written agreements. They may only use what they get to provide their service to us, and must protect it at least as well as we do. If you'd like their names, email us and we'll tell you.</p>
+  <p>Apple Intelligence, text reading, widgets, notifications and the app lock all run on your iPhone and don't connect to anything. Sortd has no advertising tools and doesn't track you across other apps or websites.</p>
+
+  <h2 id="transfers">Where your information goes</h2>
+  <p>We're based in Australia and Singapore. Usage data, crash reports and beta screen recordings are stored in the United States. When we look at them, or when information moves between countries that don't have the same privacy laws, we rely on safeguards the law recognises, such as the European Commission's standard contractual clauses. Ask us for details.</p>
 
   <h2 id="email">If you email us</h2>
   <p>Sortd itself never sends email. If you write to <a href="mailto:support@sortd.page">support@sortd.page</a>, we get whatever you put in your email, and your email address. Settings › Help &amp; Feedback › Send Feedback opens your own Mail app with your app version, iOS version and iPhone model filled in. You see the email before you send it, and nothing is sent unless you send it.</p>
   <p>Email to that address is passed on by Cloudflare, the company that runs this website, to our inbox, which is run by Google. We use it only to reply to you. Ask us and we'll delete it.</p>
 
   <h2 id="retention">How long Sortd keeps data</h2>
-  <p>Everything below is kept on your iPhone only. We hold no copy, so there is nothing for us to keep or delete on our side.</p>
+  <p>Almost everything in this list is kept on your iPhone only (and in your own iCloud, encrypted, if you turn on iCloud backup). We hold no copy of it, so there's nothing for us to keep or delete on our side. The exceptions are usage data and crash reports, which are kept by the services described <a href="#usage">above</a>.</p>
   <ul>
     <li><strong>Email text:</strong> not kept. It is held in memory only while Sortd reads the purchase from it, then discarded straight away.</li>
     <li><strong>Refunds waiting for a match:</strong> if a refund email arrives before Sortd has found its purchase, Sortd keeps the refund's details (shop, amount, currency, date and card's last 4 digits, not the email) for up to 30 days so it can match it later. The next sync after 30 days drops them.</li>
@@ -171,30 +228,54 @@
     <li><strong>Google sign-in key:</strong> kept in the Keychain until you disconnect Gmail or use Delete All Data. Sortd then asks Google to cancel it and deletes it. If you are offline, Sortd tries again the next time you open the app.</li>
     <li><strong>Exchange rates, cards, settings and your setup answers:</strong> kept until you change them, use Delete All Data, or delete the app.</li>
     <li><strong>Scheduled notifications:</strong> kept until you turn them off, use Delete All Data, or delete the app.</li>
+    <li><strong>Your sign-in:</strong> kept in the Keychain until you sign out, delete your account, or use Delete All Data.</li>
+    <li><strong>Usage data:</strong> kept for up to 12 months, then deleted. Deleted sooner if you delete your account.</li>
+    <li><strong>Crash reports:</strong> kept for 30 days, then deleted.</li>
+    <li><strong>Beta screen recordings:</strong> kept for 30 days, then deleted.</li>
+    <li><strong>The iCloud backup:</strong> kept in your iCloud until you delete it, as described <a href="#icloud">above</a>.</li>
     <li><strong>Typed lines, receipt photos and imported statements:</strong> not kept. Sortd keeps only the purchases you save.</li>
   </ul>
 
   <h2>Your controls</h2>
   <ul>
     <li><strong>Export:</strong> Settings › Backup &amp; Data › Export as Spreadsheet gives you every purchase as a CSV file.</li>
+    <li><strong>Usage data, crash reports and beta screen recordings:</strong> turn off in Settings › Privacy &amp; Security › Privacy › Share usage data.</li>
+    <li><strong>Your account:</strong> Settings › Account › Sign Out or Delete Account.</li>
     <li><strong>Change your setup answers:</strong> Settings › Help &amp; Feedback › Run Setup Again. The check-in alone: Settings › Bills &amp; Reminders.</li>
-    <li><strong>Delete:</strong> Settings › Backup &amp; Data › Delete All Data removes every purchase, card, budget, setting and setup answer from your iPhone, disconnects any Gmail accounts (and&nbsp;asks Google to cancel access), and removes your check-in and any other scheduled notifications. This can't be undone. Backup or spreadsheet files you saved elsewhere are yours, and you delete those yourself.</li>
+    <li><strong>Delete:</strong> Settings › Backup &amp; Data › Delete All Data removes every purchase, card, budget, setting and setup answer from your iPhone, disconnects any Gmail accounts (and&nbsp;asks Google to cancel access), and removes your check-in and any other scheduled notifications. If iCloud backup is on, it deletes the iCloud copy too. If you're signed in, it signs you out and deletes your usage record. It gives this install a new usage ID, and keeps your choice on the usage-data switch. This can't be undone. Backup or spreadsheet files you saved elsewhere are yours, and you delete those yourself.</li>
     <li><strong>Delete the app:</strong> deleting Sortd from your iPhone removes the data in its storage. If you connected Gmail, disconnect it first (or&nbsp;use Delete All Data), or remove Sortd from your Google Account's security settings, so Google's access is cancelled too.</li>
   </ul>
-  <p>Because we don't hold any of your data, we can't see, change or delete it for you. You are in control of it on your iPhone.</p>
+  <p>Because we never hold your purchases, we can't see, change, restore or delete them for you. You are in control of them on your iPhone.</p>
+
+  <h2 id="rights">Your rights</h2>
+  <p>Wherever you live, you can ask us what information we hold about you, and ask us to correct it, give you a copy, or delete it. You can also object to how we use it, or withdraw your consent. For almost everything, you can do this yourself in the app, as described above. For anything else, email <a href="mailto:support@sortd.page">support@sortd.page</a>. We reply within 30 days. We may ask you to confirm it's you first.</p>
+
+  <h2 id="eu">If you're in the EU or UK</h2>
+  <p>European and UK law asks us to say why we're allowed to use your information:</p>
+  <ul>
+    <li><strong>Running the features you use</strong> (Gmail, sign-in, iCloud backup): to provide the service you asked for.</li>
+    <li><strong>Usage data, crash reports and beta screen recordings:</strong> your consent. The switch starts off, and nothing is sent until you turn it on. Turn it off again any time.</li>
+    <li><strong>Beta sign-ups and emails to us:</strong> your consent, which you can withdraw any time.</li>
+  </ul>
+  <p>Sortd makes no automated decisions about you that have legal or similarly serious effects. You can complain to the data protection authority where you live.</p>
 
   <h2>Children</h2>
-  <p>Sortd is a budgeting tool for adults and isn't aimed at children. It doesn't collect personal information from anyone, children included.</p>
+  <p>Sortd is a budgeting tool for adults. It isn't made for children under 13, or under 16 where local law sets that age. We don't knowingly collect information from children, and if we learn we have, we delete it.</p>
 
   <h2>Changes to this policy</h2>
-  <p>If we change this policy, we'll update this page and the "Last updated" date.</p>
+  <p>If we change this policy, we'll update this page and the "Last updated" date, and list what changed here.</p>
+  <ul>
+    <li><strong>26 September 2026:</strong> usage data and crash reports are now stored in the United States. Added beta-only screen recordings. In the EU, EEA, UK and Switzerland, the usage-data switch now starts off.</li>
+    <li><strong>25 September 2026:</strong> Sortd is now free for everyone. Added usage data and crash reports (with a switch to turn them off), optional sign-in, and optional encrypted iCloud backup.</li>
+    <li><strong>20 September 2026:</strong> first version on sortd.page.</li>
+  </ul>
 
   <h2 id="beta">Beta sign-ups</h2>
-  <p>This is about the sign-up form on this website, not the app.</p>
+  <p>This is about the beta sign-up forms on this website and on soon.sortd.page, not the app.</p>
   <ul>
     <li><strong>What we get:</strong> your email address, first name, country and whether you use Apple Pay, plus your Gmail address if you give it. We also see which country your internet connection seems to come from, which Cloudflare works out for us.</li>
     <li><strong>How it reaches us:</strong> as one email, sent through Cloudflare, the company that runs this website. It isn't saved in a database, on this website or anywhere else.</li>
-    <li><strong>What we use it for:</strong> sending you the TestFlight link when the beta opens. If you gave a Gmail address, we also add it to Google's tester list so Gmail receipts work for you. Nothing else. No newsletters, no marketing.</li>
+    <li><strong>What we use it for:</strong> sending you the TestFlight link when the beta opens. If you signed up on soon.sortd.page, you also agreed to one email when Sortd launches on the App Store, and we keep a note of when you agreed. If you gave a Gmail address, we also add it to Google's tester list so Gmail receipts work for you. Nothing else. No newsletters, no marketing.</li>
     <li><strong>Stopping spam:</strong> to stop bots flooding the form, Cloudflare briefly counts sign-ups from each internet connection. That count isn't kept.</li>
     <li><strong>"I'm human" check:</strong> the form uses Cloudflare Turnstile to tell people from bots. To do that, Cloudflare sees details like your internet address and browser type. It sets no cookies. See <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Cloudflare's Turnstile privacy policy</a>.</li>
     <li><strong>Who else sees it:</strong> no one. We don't share it or sell it.</li>
