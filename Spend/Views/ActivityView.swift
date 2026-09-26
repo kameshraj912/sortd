@@ -322,6 +322,14 @@ struct TransactionsScreen: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
+            // A short day (its content shorter than the screen) can leave
+            // this List's scroll offset a hair off zero after a push and
+            // pop of the detail page, which the Liquid Glass tab bar reads
+            // as "scrolled down" and never un-minimises (only Activity uses
+            // a List here; Home's ScrollView never showed this). Pinning
+            // the anchor to the top keeps the offset at a clean zero, so
+            // popping back always reports "at the top" to the tab bar.
+            .defaultScrollAnchor(.top)
             .task(id: dayPage) {
                 #if DEBUG
                 guard Self.startScrolled, let last = all.indices.contains(index) ? all[index].items.last : nil else { return }
