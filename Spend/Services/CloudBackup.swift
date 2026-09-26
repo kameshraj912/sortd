@@ -80,6 +80,10 @@ final class CloudBackup {
     nonisolated static let lastKey = "cloudBackupLast"
     /// Delete All Data could not reach iCloud: delete the copy at the next launch.
     nonisolated static let deletePendingKey = "cloudBackupDeletePending"
+    /// This iPhone wrote the iCloud copy (a backup, not only a restore), so
+    /// Delete All Data deletes it even with the switch off. Cleared when the
+    /// copy is deleted.
+    nonisolated static let backedUpHereKey = "cloudBackupFromThisPhone"
     /// Automatic backups run at most this often.
     nonisolated static let minimumGap: TimeInterval = 10 * 60
     /// A save on the store waits this long for more saves before backing up.
@@ -110,6 +114,8 @@ final class CloudBackup {
     }
     private(set) var status: Status = .idle
     var isDeletePending: Bool { defaults.bool(forKey: Self.deletePendingKey) }
+    /// See `backedUpHereKey`.
+    var backedUpFromThisPhone: Bool { defaults.bool(forKey: Self.backedUpHereKey) }
 
     @ObservationIgnored private let store: CloudBackupStore
     @ObservationIgnored private let keys: BackupKeyStore
@@ -241,6 +247,7 @@ final class CloudBackup {
             }.value
             let now = clock()
             try await store.save(blob, modified: now)
+            defaults.set(true, forKey: Self.backedUpHereKey)
             lastBackup = now
             dirty = false
             status = .idle
@@ -328,6 +335,7 @@ final class CloudBackup {
     func deleteCloudCopy() async throws {
         do {
             try await store.delete()
+            defaults.removeObject(forKey: Self.backedUpHereKey)
             lastBackup = nil
             status = .idle
         } catch {
@@ -336,7 +344,8 @@ final class CloudBackup {
         }
     }
 
-    /// Delete All Data: the switch goes off and the iCloud copy goes too. If
+    /// Delete All Data: the switch goes off and the iCloud copy goes too
+    /// (called when `deletesCloudCopyOnReset`, switch on or not). If
     /// iCloud can't be reached now, the delete is remembered and
     /// `retryPendingDelete` finishes it at the next launch.
     func deleteCloudCopyAfterReset() async {
@@ -345,6 +354,22 @@ final class CloudBackup {
         catchUp?.cancel()
         defaults.set(true, forKey: Self.deletePendingKey)
         await retryPendingDelete()
+    }
+
+    /// Whether Delete All Data must delete the iCloud copy: whenever this
+    /// iPhone may have written one, whatever the switch says. On; or off but
+    /// this iPhone backed up before (a copy kept with "Keep It" when backup
+    /// was turned off); or an earlier delete is still pending. A copy that is
+    /// already gone deletes as a no-op. Only restored here, never backed up:
+    /// that copy is another iPhone's live backup and is left alone.
+    nonisolated static func deletesCloudCopyOnReset(switchOn: Bool, backedUpHere: Bool, deletePending: Bool) -> Bool {
+        switchOn || backedUpHere || deletePending
+    }
+
+    /// Delete All Data, before anything is wiped: whether the iCloud copy
+    /// must go too.
+    var deletesCloudCopyOnReset: Bool {
+        Self.deletesCloudCopyOnReset(switchOn: isEnabled, backedUpHere: backedUpFromThisPhone, deletePending: isDeletePending)
     }
 
     func retryPendingDelete() async {
