@@ -12,6 +12,10 @@ enum ApplePayStatus: Equatable {
     case shortcutReached(Date)
     /// A real shop tap was logged.
     case tapLogged(date: Date, merchant: String, amount: Decimal, currency: String)
+    /// The latest tap arrived but came in with a blank shop or amount, so it
+    /// was kept and flagged (`Transaction.needsCheck`) rather than dropped.
+    /// The connection is fine; the row needs a person.
+    case tapNeedsCheck(date: Date)
 
     /// Where "Learn more" on the timeout line goes.
     static let learnMoreURL = URL(string: "https://sortd.page/support#apple-pay")!
@@ -72,6 +76,7 @@ enum ApplePayStatus: Equatable {
     /// can move the status past "reached".
     static func resolve(lastReachedAt: Date?, taps: [Transaction], now: Date = .now) -> ApplePayStatus {
         if let latest = realTaps(in: taps).max(by: { $0.date < $1.date }) {
+            if latest.needsCheck { return .tapNeedsCheck(date: latest.date) }
             return .tapLogged(date: latest.date, merchant: latest.merchant,
                               amount: latest.amount, currency: latest.currencyCode)
         }
@@ -100,8 +105,14 @@ extension ApplePayStatus {
     var isConnected: Bool {
         switch self {
         case .notConnected: false
-        case .shortcutReached, .tapLogged: true
+        case .shortcutReached, .tapLogged, .tapNeedsCheck: true
         }
+    }
+
+    /// The latest tap needs a person: the card goes amber, not green.
+    var isFlagged: Bool {
+        if case .tapNeedsCheck = self { return true }
+        return false
     }
 
     var symbol: String {
@@ -109,6 +120,7 @@ extension ApplePayStatus {
         case .notConnected: "wave.3.right"
         case .shortcutReached: "link"
         case .tapLogged: "checkmark"
+        case .tapNeedsCheck: "exclamationmark"
         }
     }
 
@@ -126,6 +138,7 @@ extension ApplePayStatus {
         case .notConnected: "Not connected yet"
         case .shortcutReached(let date): "Shortcut reached Sortd · \(Self.when(date))"
         case .tapLogged(let date, _, _, _): "Last tap logged · \(Self.when(date))"
+        case .tapNeedsCheck(let date): "Last tap arrived · \(Self.when(date))"
         }
     }
 
@@ -135,6 +148,7 @@ extension ApplePayStatus {
         case .notConnected: "Get the Shortcut, then turn it on for your cards."
         case .shortcutReached: "Now pay in a shop. The tap shows up here."
         case .tapLogged(_, let merchant, let amount, let currency): "\(Money.format(amount, currency)) at \(merchant)"
+        case .tapNeedsCheck: "The shop or amount was blank. Fix it in Activity."
         }
     }
 
@@ -142,7 +156,7 @@ extension ApplePayStatus {
     /// and the amount in full, not the eye-only short form.
     var accessibilityLabel: String {
         switch self {
-        case .notConnected, .shortcutReached:
+        case .notConnected, .shortcutReached, .tapNeedsCheck:
             "\(title). \(detail)"
         case .tapLogged(_, let merchant, let amount, let currency):
             "Last tap logged. \(Money.spoken(amount, currency)) at \(merchant)"

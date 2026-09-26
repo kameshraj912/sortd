@@ -37,9 +37,19 @@ struct ApplePaySetupPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             statusCard
             if let line = ApplePayStatus.needsCheckLine(count: needsCheckCount) {
-                Label(line, systemImage: "exclamationmark.circle.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.orange)
+                // Opens Activity, where the flagged rows carry a "Needs a
+                // check" badge. During first-run setup there are no taps
+                // yet, so this never shows there.
+                Button {
+                    openURL(URL(string: "sortd://activity")!)
+                } label: {
+                    Label(line, systemImage: "exclamationmark.circle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Activity")
             }
             healthCheckSection
             steps
@@ -141,7 +151,7 @@ struct ApplePaySetupPanel: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(Color.onBrand)
                 .frame(width: 46, height: 46)
-                .background(status.isConnected ? Color.up : Color.brand, in: .circle)
+                .background(status.isFlagged ? Color.orange : status.isConnected ? Color.up : Color.brand, in: .circle)
                 .symbolEffect(.variableColor.iterative, isActive: !status.isConnected)
                 .symbolEffect(.bounce, value: status.isConnected)
                 .contentTransition(.symbolEffect(.replace))
@@ -154,7 +164,7 @@ struct ApplePaySetupPanel: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(status.isConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .background(status.isFlagged ? Color.orange.opacity(0.12) : status.isConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: status)
         .feedback(.confirm, trigger: status)
         .contentShape(.rect)
