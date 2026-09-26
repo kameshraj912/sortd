@@ -121,8 +121,9 @@ struct OnboardingView: View {
         .scrollPosition($scroll)
         .scrollDismissesKeyboard(.interactively)
         .scrollBounceBehavior(.basedOnSize)
-        // Text scrolling under Back / progress / Skip gets a backdrop.
-        .scrollEdgeEffectStyle(.hard, for: .top)
+        // Text scrolling under Back / progress / Skip fades out under the bar,
+        // the way Home and Insights do. `.hard` drew a hairline (Raj, 27 Sep).
+        .scrollEdgeEffectStyle(.soft, for: .top)
         // Glass controls float over the page, and the page scrolls under them.
         // Bars (not plain insets) so the page blurs softly under them as it
         // scrolls, instead of text running into the buttons.
@@ -433,7 +434,7 @@ struct OnboardingView: View {
     private var primaryTitle: String {
         // New flow: one word on every step. Skipping is just continuing,
         // with the defaults (`SetupFlow.defaults`) left in place.
-        if newFlow { return "Continue" }
+        if newFlow { return step == .welcome ? "Get Started" : "Continue" }
         let last = neighbour(of: step, 1) == nil
         switch step {
         case .welcome: return "Get Started"
@@ -705,9 +706,17 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Keep it yours.").font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
                 BrandBar(width: 14, height: 3)
-                Text("Sign in so Sortd can know you if you ask for help, and so your iCloud copy is tied to you. Your purchases stay on this iPhone either way. Sortd has no account server.")
+                Text("Optional. Two taps, no password.")
                     .font(.body).foregroundStyle(.secondary)
             }
+            // What signing in is for, in the same three-row card as Welcome,
+            // so the page carries its weight instead of floating three buttons.
+            VStack(alignment: .leading, spacing: 14) {
+                feature("person.crop.circle.badge.checkmark", "Help that knows you", "Ask a question and Sortd knows which install is yours.", Color.brandPalette[0])
+                feature("icloud", "Your iCloud copy, tied to you", "Restore on a new iPhone with one tap.", Color.brandPalette[2])
+                feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Sortd has no account server.", Color.brandPalette[3])
+            }
+            .setupCard()
             if let accountConfirmed {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Color.up)
