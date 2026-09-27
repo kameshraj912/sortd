@@ -58,8 +58,10 @@ final class AppLock {
         return now.timeIntervalSince(lastActive) > grace
     }
 
-    /// Call on every scene phase change.
-    func sceneChanged(to phase: ScenePhase, enabled: Bool, onboarded: Bool, now: Date = .now) {
+    /// Call on every scene phase change. `grace` is for tests; the app uses
+    /// the stored `RequireAfter` choice.
+    func sceneChanged(to phase: ScenePhase, enabled: Bool, onboarded: Bool, now: Date = .now,
+                      grace: TimeInterval? = nil) {
         guard onboarded, enabled else {
             isLocked = false
             if phase == .background { backgroundedAt = now }
@@ -68,19 +70,26 @@ final class AppLock {
         }
         switch phase {
         case .active:
-            // The Face ID sheet itself makes the app briefly inactive, not
-            // backgrounded, so `backgroundedAt` is untouched by it.
+            // Only a real trip away counts: launch (never active yet) or a
+            // background. Measuring from `lastActive` instead re-locked the
+            // app a few milliseconds after every unlock with "Immediately",
+            // because the Face ID sheet closing also reports .active
+            // (Raj's phone, 28 Sep).
             if !authenticating, !isLocked {
-                let awayStart = backgroundedAt ?? lastActive
-                let grace = TimeInterval(Self.requireAfter.rawValue)
-                if Self.shouldLock(lastActive: awayStart, now: now, enabled: enabled, grace: grace) {
+                let grace = grace ?? TimeInterval(Self.requireAfter.rawValue)
+                if lastActive == nil {
+                    isLocked = true
+                } else if let away = backgroundedAt,
+                          Self.shouldLock(lastActive: away, now: now, enabled: enabled, grace: grace) {
                     isLocked = true
                 }
             }
             backgroundedAt = nil
             if !isLocked { lastActive = now }
         case .background:
-            backgroundedAt = now
+            // The passcode screen can background the app while it is up;
+            // that is the unlock itself, not the person leaving.
+            if !authenticating { backgroundedAt = now }
         default:
             // `.inactive` on the way back from the background (and on the
             // way out) is a transient step — App Switcher, an interruption,
@@ -95,12 +104,33 @@ final class AppLock {
         guard isLocked, !authenticating else { return }
         authenticating = true
         let ok = await Self.authenticate(reason: "Unlock Sortd to see your spending.")
-        authenticating = false
-        if ok {
-            isLocked = false
-            lastActive = .now
-        }
+        completeUnlock(ok: ok)
     }
+
+    /// The end of an unlock attempt. Split out so tests can drive it without
+    /// a Face ID sheet.
+    /// When the last unlock attempt ended, so the lock screen does not ask
+    /// again the moment the Face ID sheet closes.
+    private var lastAttemptEnded: Date?
+
+    /// True for a second after an attempt ends (the sheet's own .active).
+    func justAsked(now: Date = .now) -> Bool {
+        guard let lastAttemptEnded else { return false }
+        return now.timeIntervalSince(lastAttemptEnded) < 1.5
+    }
+
+    func completeUnlock(ok: Bool, now: Date = .now) {
+        authenticating = false
+        lastAttemptEnded = now
+        guard ok else { return }
+        isLocked = false
+        lastActive = now
+        backgroundedAt = nil
+    }
+
+    #if DEBUG
+    func beginUnlockForTesting() { authenticating = true }
+    #endif
 
     /// Face ID or Touch ID, with the device passcode as a fallback.
     static func authenticate(reason: String) async -> Bool {

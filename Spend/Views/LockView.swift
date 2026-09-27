@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Full-screen lock. Asks for Face ID once when shown; the button asks again.
+/// Full-screen lock. Asks for Face ID each time the app comes on screen
+/// locked; after a cancel it waits for the button instead of asking again.
 struct LockView: View {
     let lock: AppLock
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var prompted = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -28,12 +27,22 @@ struct LockView: View {
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.page.ignoresSafeArea())
-        .task(id: scenePhase) {
-            // Prompt only once, and only when the app is on screen.
-            guard scenePhase == .active, !prompted else { return }
-            prompted = true
-            await lock.unlock()
+        // This view lives in its own UIWindow (`CoverWindow`), where SwiftUI's
+        // scenePhase never turned .active, so the automatic prompt never ran
+        // (found on Raj's phone, 28 Sep). Ask UIKit instead.
+        .task {
+            if UIApplication.shared.applicationState == .active { await autoPrompt() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            Task { await autoPrompt() }
+        }
+    }
+
+    /// Closing the Face ID sheet also makes the app active again; asking a
+    /// second time then would trap a person who pressed Cancel in a loop.
+    private func autoPrompt() async {
+        guard lock.isLocked, !lock.authenticating, !lock.justAsked() else { return }
+        await lock.unlock()
     }
 
     /// No biometry enrolled (or none on the device): the system sheet only

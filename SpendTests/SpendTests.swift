@@ -846,6 +846,65 @@ struct AppLockTests {
         #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-901), now: now, enabled: true, grace: grace))
     }
 
+    // The unlock → re-lock loop Raj hit on his phone (28 Sep): with
+    // "Immediately", the .active that follows the Face ID sheet saw a few
+    // milliseconds since the unlock and locked again, every time.
+    @MainActor @Test func unlockingStaysUnlockedWhenTheSheetCloses() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        #expect(lock.isLocked)
+        lock.completeUnlock(ok: true, now: now.addingTimeInterval(3))
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now.addingTimeInterval(3.2), grace: 0)
+        #expect(!lock.isLocked)
+    }
+
+    // The passcode screen can send the app to the background while it is up.
+    @MainActor @Test func aBackgroundDuringTheUnlockSheetDoesNotLockAgain() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        lock.beginUnlockForTesting()
+        lock.sceneChanged(to: .background, enabled: true, onboarded: true, now: now.addingTimeInterval(1), grace: 0)
+        lock.completeUnlock(ok: true, now: now.addingTimeInterval(8))
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now.addingTimeInterval(8.1), grace: 0)
+        #expect(!lock.isLocked)
+    }
+
+    // Glancing at Control Centre or a banner only makes the app inactive.
+    @MainActor @Test func onlyInactiveNeverLocks() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        lock.completeUnlock(ok: true, now: now.addingTimeInterval(1))
+        lock.sceneChanged(to: .inactive, enabled: true, onboarded: true, now: now.addingTimeInterval(20), grace: 0)
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now.addingTimeInterval(25), grace: 0)
+        #expect(!lock.isLocked)
+    }
+
+    // Leaving the app still locks it straight away with "Immediately".
+    @MainActor @Test func goingHomeLocksAgainWithImmediately() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        lock.completeUnlock(ok: true, now: now.addingTimeInterval(1))
+        lock.sceneChanged(to: .background, enabled: true, onboarded: true, now: now.addingTimeInterval(30), grace: 0)
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now.addingTimeInterval(32), grace: 0)
+        #expect(lock.isLocked)
+    }
+
+    // Cancel on the Face ID sheet must not bring the sheet straight back.
+    @MainActor @Test func aCancelledPromptIsNotAskedAgainAtOnce() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        lock.completeUnlock(ok: false, now: now.addingTimeInterval(2))
+        #expect(lock.justAsked(now: now.addingTimeInterval(2.3)))
+        #expect(!lock.justAsked(now: now.addingTimeInterval(10)))
+    }
+
+    @MainActor @Test func aFailedUnlockStaysLocked() {
+        let lock = AppLock()
+        lock.sceneChanged(to: .active, enabled: true, onboarded: true, now: now, grace: 0)
+        lock.completeUnlock(ok: false, now: now.addingTimeInterval(2))
+        #expect(lock.isLocked)
+    }
+
     @Test func requireAfterOneHour() {
         let grace = TimeInterval(AppLock.RequireAfter.oneHour.rawValue)
         #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3599), now: now, enabled: true, grace: grace))
