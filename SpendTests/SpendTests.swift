@@ -1371,9 +1371,12 @@ struct WalletTapEdgeTests {
     }
     @Test func repeatedMissingAmountTapIsKeptOnce() async throws {
         let ctx = try store(), b = book()
-        _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        // One fixed clock for both taps: reading `.now` twice made the gap
+        // depend on how busy the Mac was, and the merge missed under load.
+        let first = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b, now: first)
         let again = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b,
-                                                       now: .now.addingTimeInterval(30))
+                                                       now: first.addingTimeInterval(30))
         #expect(again.merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
@@ -1382,9 +1385,10 @@ struct WalletTapEdgeTests {
         // comparing it with the raw text never matched and the tap was saved twice.
         let ctx = try store(), b = book()
         let shop = "SQ *CAFE BLOSSOM MELBOURNE AU"
-        _ = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        let first = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b, now: first)
         let again = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b,
-                                                       now: .now.addingTimeInterval(30))
+                                                       now: first.addingTimeInterval(30))
         #expect(again.merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
