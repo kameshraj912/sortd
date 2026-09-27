@@ -187,7 +187,9 @@ struct ApplePaySetupPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             miniStep(1, "Add the Sortd shortcut", "Opens Safari, then tap the download and Add Shortcut.")
             Button {
-                openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
+                // The file's name is the shortcut's name once imported, and
+                // "Check the Shortcut" runs it by that name.
+                openURL(URL(string: "https://sortd.page/Log%20Apple%20Pay%20in%20Sortd.shortcut")!)
                 shortcutOpened = true
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
