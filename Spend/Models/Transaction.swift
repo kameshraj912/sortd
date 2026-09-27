@@ -32,6 +32,12 @@ final class Transaction {
     /// The Gmail account an email purchase came from, so disconnecting it
     /// can remove its purchases.
     var sourceAccount: String?
+    /// Last 4 digits a receipt or bank alert carried that matched none of
+    /// Raj's cards, while it waits for "Which card?" (Home) to be answered.
+    /// Non-nil only until then: picking a card clears it on every purchase
+    /// that shares the digits, "Not one of mine" just empties the queue and
+    /// leaves this as is (spec 2026-09-27).
+    var unmatchedLast4: String?
 
     init(date: Date, merchant: String, rawMerchant: String? = nil, amount: Decimal,
          currencyCode: String, card: Card, category: SpendCategory, source: TxnSource,
@@ -114,6 +120,23 @@ final class Transaction {
     /// note away un-flags it — the point where a person has looked and
     /// either fixed it or decided it's fine.
     var needsCheck: Bool { needsReview || note.hasPrefix(Self.needsCheckTag) }
+
+    /// Rows the removed "Send a Test Tap" button left behind
+    /// (`LogPurchaseIntent.legacyTestMerchant`), and the Apple Pay health
+    /// check's own runs (`ApplePayHealthCheck.merchant`). Old installs may
+    /// still have the first kind; the second is made on purpose whenever
+    /// "Check the Shortcut" runs. Neither must ever appear in Activity (any
+    /// day, search or a card's own list), Home's Recent list, Insights,
+    /// budgets or totals — only `ApplePayStatus` still needs to see them
+    /// (it already excludes them itself, `realTaps`), so screens that
+    /// resolve the Apple Pay status query `Transaction` unfiltered, not
+    /// through this.
+    static var excludingLegacyTest: Predicate<Transaction> {
+        let test = LogPurchaseIntent.legacyTestMerchant
+        let check = ApplePayHealthCheck.merchant
+        return #Predicate<Transaction> { $0.merchant != test && $0.rawMerchant != test
+            && $0.merchant != check && $0.rawMerchant != check }
+    }
 }
 
 extension Collection where Element == Transaction {
