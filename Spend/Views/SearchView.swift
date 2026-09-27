@@ -5,7 +5,10 @@ import SwiftData
 /// and categories this month) so there's always something to tap; once you
 /// type it searches every purchase by merchant, category or note.
 struct SearchView: View {
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows from every
+    // result: `Transaction.excludingLegacyTest` (see `ActivityView`).
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var transactions: [Transaction]
     /// Set when the search field lives on the TabView instead of here.
     var external: Binding<String>? = nil
     @State private var own = ""

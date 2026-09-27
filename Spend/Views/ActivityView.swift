@@ -16,7 +16,10 @@ struct TransactionsScreen: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows everywhere here
+    // (every day page, search and a card's own list): `Transaction.excludingLegacyTest`.
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var transactions: [Transaction]
 
     @State private var search = ""
     @State private var cardFilter: Card?
