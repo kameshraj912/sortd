@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import AuthenticationServices
 
 // Settings › Account ships behind the SORTD_SIGNIN compile flag, off in
 // both configs until the paid developer enrolment clears and the Sign in
@@ -18,7 +17,6 @@ import AuthenticationServices
 /// deletes, and stores nothing. Purchases stay on the phone either way.
 struct AccountSettingsView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.colorScheme) private var scheme
     @State private var store = AccountStore.shared
     @State private var working = false
     @State private var notice: Notice?
@@ -59,34 +57,8 @@ struct AccountSettingsView: View {
 
     private var signedOut: some View {
         Section {
-            SignInWithAppleButton(.signIn) { request in
-                request.requestedScopes = [.email]
-                // Apple's sheet makes the scene inactive: keep the privacy
-                // cover off it (ended in onCompletion, whatever the result).
-                SystemPrompt.shared.begin()
-            } onCompletion: { result in
-                SystemPrompt.shared.end()
-                let resolved: Result<Account, Error> = result
-                    .mapError(AppleIdentityProvider.error(from:))
-                    .flatMap { auth in
-                        AppleIdentityProvider.account(from: auth).map { .success($0) } ?? .failure(AccountError.noIdentity)
-                    }
-                Task { await signIn(ResolvedIdentityProvider(result: resolved)) }
-            }
-            // Apple's button: black on light, white on dark, at least 44 pt.
-            .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .disabled(working)
-
-            Button {
-                Task { await signIn(GoogleIdentityProvider()) }
-            } label: {
-                GoogleButtonLabel(working: working)
-            }
-            // Google's own capsule already carries the branding; `.primaryGlass()`
-            // used to wrap it in a second, darker glass capsule.
-            .googleButton()
-            .disabled(working)
+            SignInButtons(onSignedIn: { _ in },
+                         onError: { notice = Notice(title: "Sign-in didn't work", message: $0) })
         } header: {
             BoldHeader("Sign In")
         } footer: {
@@ -159,18 +131,6 @@ struct AccountSettingsView: View {
     }
 
     // MARK: Actions
-
-    private func signIn(_ provider: IdentityProvider) async {
-        working = true
-        defer { working = false }
-        do {
-            try await store.signIn(with: provider)
-        } catch AccountError.cancelled {
-            // Closed the sheet: nothing to say.
-        } catch {
-            notice = Notice(title: "Sign-in didn't work", message: error.localizedDescription)
-        }
-    }
 
     private func deleteAccount(alsoData: Bool) async {
         // The provider and the Worker are asked before the local wipe, so
