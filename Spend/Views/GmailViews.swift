@@ -212,8 +212,7 @@ struct ConnectGmailSheet: View {
 /// OAuth review checks: the official G (cropped unchanged from Google's
 /// asset pack), light theme white with a #747775 border and #1F1F1F text,
 /// dark theme #131314 with #8E918F and #E3E3E3, 16 / 12 / 16 pt spacing.
-/// Google's guidelines allow a rounded-rectangle shape (not only the full
-/// pill); this uses `GoogleButtonLabel.cornerRadius` so it sits next to Sign
+/// Google's guidelines allow the pill shape; this draws it so it sits next to Sign
 /// in with Apple as a matched pair, same height and corner radius. Draws its
 /// own background and border: apply `.googleButton()`, not `.primaryGlass()`,
 /// or the glass style wraps it in a second, darker capsule.
@@ -222,13 +221,14 @@ struct GoogleButtonLabel: View {
     var working = false
     @Environment(\.colorScheme) private var scheme
 
-    /// Matches `SignInWithAppleButton`'s default corner radius, so the two
-    /// sign-in buttons on the Account screen read as a pair.
-    static let cornerRadius: CGFloat = 12
+    /// A capsule, like every other button in the app and like the Apple button
+    /// next to it (both makers allow it: Google's "pill" shape, Apple's
+    /// configurable corner radius). Three different corners on one page read
+    /// as three different apps (feel check, 27 Sep).
 
     var body: some View {
         let dark = scheme == .dark
-        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        let shape = Capsule()
         HStack(spacing: 12) {
             if working {
                 ProgressView().frame(width: 20, height: 20)

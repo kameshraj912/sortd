@@ -74,7 +74,7 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 
 The names below are the `Analytics.Event` raw values, pinned by `SpendTests/AnalyticsTests.swift` (updated 25 Sep 2026 to match the code; the earlier draft names are gone).
 
-- `setup_started(rerun)`, `setup_step_viewed(step, index)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`
+- `setup_started(rerun)`, `setup_step_viewed(step, index)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`. `step` is the `SetupFlow.Step` case name (`welcome`, `account`, `goals`, …); the optional `.account` step (sub-spec 4, on with `SORTD_SIGNIN`) adds a `choice` property to its own `setup_step_completed`: `apple`, `google` or `guest` — never which provider's sheet failed, just how the person got past the step
 - `activation_first_auto_purchase(source: tap|email, hours_bucket)`: once per install, never on sample data or a test tap
 - `tab_opened(tab)`: the first tab at launch included
 - `purchase_added_manually(category_changed, has_note)`
