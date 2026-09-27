@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Picture-by-picture guide to the Wallet automation in Shortcuts. Each page
-/// is a drawn copy of the real Shortcuts screen (checked on iOS 27.0, Sep
-/// 2026) with the thing to tap ringed, so nothing depends on reading.
+/// Picture-by-picture guide to the ready-made shortcut in Shortcuts. Each
+/// page is a drawn copy of a real Shortcuts screen (checked on iOS 27.0, 27
+/// Sep 2026) with the thing to tap ringed, so nothing depends on reading.
 struct WalletSetupGuide: View {
-    /// Two ways to get there. `quick` is for someone who already tapped
-    /// "Get the Shortcut" — the fields are filled in for them, so all that is
-    /// left is the automation. `byHand` builds the whole thing from nothing.
+    /// Two ways to get there. `quick` matches the ready-made shortcut at
+    /// `sortd.page/apple-pay.shortcut`, which now carries the whole
+    /// automation already built (the Wallet trigger and Sortd's action, both
+    /// filled in) — so its three pages are just the three steps on
+    /// `ApplePaySetupPanel`, drawn. `byHand` builds the whole thing from
+    /// nothing, for anyone the download doesn't work for.
     enum Route { case quick, byHand }
 
     var route: Route = .quick
@@ -23,18 +26,15 @@ struct WalletSetupGuide: View {
         let detail: String
     }
 
-    /// After the ready-made shortcut is installed. Five taps, no fields.
+    /// The three steps on `ApplePaySetupPanel`, drawn — same title and
+    /// detail, so nothing is taught twice.
     static let quickPages: [Page] = [
-        Page(id: 0, title: "Open Shortcuts, then Automation",
-             detail: "Automation is the tab at the bottom. Tap the + on that screen."),
-        Page(id: 1, title: "Pick Wallet",
-             detail: "Type wallet in the search box, then tap Wallet."),
-        Page(id: 2, title: "Tick your cards, then Run Immediately",
-             detail: "Tap each card you pay with. Choose Run Immediately, then Next."),
-        Page(id: 3, title: "Add Run Shortcut",
-             detail: "Search Run Shortcut, tap it, then tap the blue word and pick Log Apple Pay in Sortd."),
-        Page(id: 4, title: "Done. Go back.",
-             detail: "It saves by itself. To check it, open the shortcut and press ▶ once — Sortd will say it's connected. Real purchases only come from tapping your card in a shop."),
+        Page(id: 0, title: "Add the shortcut",
+             detail: "Opens Shortcuts. Tap Add Shortcut."),
+        Page(id: 1, title: "Run it once and tap Allow",
+             detail: "Press ▶ in the shortcut. Sortd says it's connected."),
+        Page(id: 2, title: "Turn the automation on",
+             detail: "Tap › next to “tapped”, then switch on Automation."),
     ]
 
     /// The long way, for anyone who would rather not install a shortcut.
@@ -156,11 +156,9 @@ struct ShortcutsMock: View {
     @ViewBuilder private var content: some View {
         if route == .quick {
             switch step {
-            case 0: automationList
-            case 1: quickTriggerSearch
-            case 2: cardPicker
-            case 3: runShortcutSearch
-            default: quickFinished
+            case 0: addShortcutSheet
+            case 1: allowPrompt
+            default: automationSwitch
             }
         } else {
             switch step {
@@ -174,118 +172,93 @@ struct ShortcutsMock: View {
         }
     }
 
-    // MARK: Quick route (the ready-made shortcut is already installed)
+    // MARK: Quick route (the ready-made shortcut, checked on iOS 27)
 
-    /// Shortcuts › Automation, with the + at the bottom ringed.
-    private var automationList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Automation").font(.title3.weight(.bold))
-            row(icon: "clock.badge.checkmark", iconColor: Self.blue,
-                title: "Every day at 9:00 am", subtitle: nil)
-                .opacity(0.45)
+    /// (a) The Add Shortcut sheet that Safari opens for the download: the
+    /// shortcut's own card, and the blue Add Shortcut button.
+    private var addShortcutSheet: some View {
+        VStack(spacing: 10) {
+            Capsule().fill(Color.secondary.opacity(0.3)).frame(width: 36, height: 5)
+            row(brand: true, title: "Log Apple Pay in Sortd", subtitle: "Shortcut")
             Spacer(minLength: 0)
-            HStack {
-                Spacer()
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 46, height: 46)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
-                    .tapRing(ring, label: nil, circle: true)
-                Spacer()
+            pill("Add Shortcut", filled: true).tapRing(ring, label: nil)
+        }
+    }
+
+    /// (b) The shortcut open in the library, with iOS's own permission
+    /// prompt over it — the one that's lost if the first run isn't done by
+    /// hand. Don't Allow on the left, Allow (ringed) on the right.
+    private var allowPrompt: some View {
+        ZStack {
+            VStack(alignment: .leading, spacing: 10) {
+                trigger
+                card {
+                    Image(systemName: "arrow.triangle.branch").foregroundStyle(Self.blue)
+                    Text("Run").font(.subheadline)
+                    token("Log Apple Pay in Sortd", symbol: "app.badge")
+                }
+                Spacer(minLength: 0)
             }
-        }
-    }
+            .opacity(0.35)
 
-    /// Coming from Automation › +, the trigger list is already open — there
-    /// is no Automation chip to tap first, unlike the by-hand route.
-    private var quickTriggerSearch: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            searchBar { Text("wallet").font(.subheadline) }
-            row(icon: "creditcard.fill", iconColor: Self.blue, title: "Wallet",
-                subtitle: "“When I tap a Wallet Card or Pass”")
-                .tapRing(ring, label: nil)
-            row(icon: "airplane", iconColor: .orange, title: "Airplane Mode", subtitle: nil)
-                .opacity(0.45)
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// Tick the cards, then how often it runs.
-    private var cardPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("When I tap").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            cardRow("Visa Debit", ticked: true).tapRing(ring, label: "1")
-            cardRow("Mastercard", ticked: true)
-            Spacer(minLength: 0)
             VStack(spacing: 0) {
-                pickRow("Run Immediately", chosen: true).tapRing(ring, label: "2")
-                Divider().padding(.leading, 12)
-                pickRow("Run After Confirmation", chosen: false)
+                Text("Allow “Log Apple Pay in Sortd” to run actions from “Sortd”?")
+                    .font(.footnote.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .padding(12)
+                Divider()
+                HStack(spacing: 0) {
+                    Text("Don't Allow").font(.subheadline).frame(maxWidth: .infinity)
+                    Divider().frame(height: 30)
+                    Text("Allow").font(.subheadline.weight(.semibold)).foregroundStyle(Self.blue)
+                        .frame(maxWidth: .infinity)
+                        .tapRing(ring, label: nil)
+                }
+                .padding(.vertical, 10)
             }
+            .frame(maxWidth: 230)
             .background(Color(uiColor: .secondarySystemGroupedBackground),
                         in: .rect(cornerRadius: 14, style: .continuous))
         }
     }
 
-    /// Search for Run Shortcut, then pick Sortd's shortcut inside it.
-    private var runShortcutSearch: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    /// (c) The trigger card expanded: Categories and Merchants left as the
+    /// shortcut ships them, Automation switched on (ringed).
+    private var automationSwitch: some View {
+        VStack(alignment: .leading, spacing: 0) {
             trigger
-            card {
-                Image(systemName: "arrow.triangle.branch").foregroundStyle(Self.blue)
-                Text("Run").font(.subheadline)
-                token("Log Apple Pay in Sortd", symbol: "app.badge")
+            VStack(spacing: 0) {
+                pickRow("Categories", value: "Food & Drink and 5 more")
+                Divider().padding(.leading, 12)
+                pickRow("Merchants", value: "Any Merchant")
+                Divider().padding(.leading, 12)
+                HStack {
+                    Text("Automation").font(.subheadline)
+                    Spacer(minLength: 0)
+                    Capsule().fill(Self.blue).frame(width: 44, height: 26)
+                        .overlay(alignment: .trailing) {
+                            Circle().fill(.white).padding(2)
+                        }
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .tapRing(ring, label: nil)
             }
-            .tapRing(ring, label: "2")
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: .rect(cornerRadius: 14, style: .continuous))
             Spacer(minLength: 0)
-            searchBar { Text("Run Shortcut").font(.subheadline) }
-                .tapRing(ring, label: "1")
         }
     }
 
-    /// What a finished quick-route automation looks like.
-    private var quickFinished: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "chevron.left")
-                    .font(.footnote.weight(.semibold))
-                    .frame(width: 34, height: 34)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
-                    .tapRing(ring, label: nil, circle: true)
-                Spacer()
-            }
-            trigger
-            card {
-                Image(systemName: "arrow.triangle.branch").foregroundStyle(Self.blue)
-                Text("Run").font(.subheadline)
-                token("Log Apple Pay in Sortd", symbol: "app.badge")
-            }
-            Spacer(minLength: 0)
-            Label("Ready. Pay with Apple Pay to log.", systemImage: "checkmark.circle.fill")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.up)
-        }
-    }
-
-    private func cardRow(_ name: String, ticked: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "creditcard.fill").foregroundStyle(Self.blue)
-            Text(name).font(.subheadline.weight(.medium))
-            Spacer(minLength: 0)
-            Image(systemName: ticked ? "checkmark" : "")
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(Self.blue)
-        }
-        .lineLimit(1)
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: .rect(cornerRadius: 14, style: .continuous))
-    }
-
-    private func pickRow(_ title: String, chosen: Bool) -> some View {
+    /// A settings row: a label on the left, its value on the right, and an
+    /// optional checkmark for the by-hand route's own choices.
+    private func pickRow(_ title: String, value: String? = nil, chosen: Bool = false) -> some View {
         HStack(spacing: 10) {
             Text(title).font(.subheadline)
             Spacer(minLength: 0)
+            if let value {
+                Text(value).font(.subheadline).foregroundStyle(.secondary)
+            }
             if chosen {
                 Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Self.blue)
             }
@@ -485,11 +458,14 @@ struct ShortcutsMock: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
     }
 
-    private func pill(_ text: String) -> some View {
+    /// `filled` draws the blue, white-text button shape (Add Shortcut);
+    /// plain stays the grey chip (Edit).
+    private func pill(_ text: String, filled: Bool = false) -> some View {
         Text(text)
             .font(.footnote.weight(.medium))
+            .foregroundStyle(filled ? .white : .primary)
             .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .capsule)
+            .background(filled ? Self.blue : Color(uiColor: .secondarySystemGroupedBackground), in: .capsule)
     }
 
     private func tile(_ color: Color) -> some View {
