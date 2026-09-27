@@ -26,7 +26,11 @@ enum SpendMigrationPlan: SchemaMigrationPlan {
 /// One container shared by the app UI and the App Intent, so a purchase
 /// logged from Shortcuts shows up straight away.
 enum SpendStore {
-    static let container: ModelContainer = {
+    /// Builds a fresh container pointed at the real store. Throws instead
+    /// of crashing, so callers can decide what "can't open" means for them
+    /// (the app's own launch below still treats it as fatal; an App Intent
+    /// does not — see `containerForIntent`).
+    static func open() throws -> ModelContainer {
         let schema = Schema(versionedSchema: SchemaV1.self)
         #if DEBUG
         let inMemory = ProcessInfo.processInfo.environment["SPEND_IN_MEMORY"] == "1"
@@ -38,12 +42,34 @@ enum SpendStore {
         // to open it (unique keys on FXRate, ImportedRecord and MerchantRule
         // are not allowed there). Backup is CloudBackup's own encrypted record.
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none)
+        return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self, configurations: [config])
+    }
+
+    static let container: ModelContainer = {
         do {
-            return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self, configurations: [config])
+            return try open()
         } catch {
             fatalError("Could not open the Spend database: \(error)")
         }
     }()
+
+    /// For an App Intent only: never crashes the process. A dry run
+    /// (`open()`) checks the store still opens cleanly first; only then is
+    /// the real, shared `container` touched, so a genuine failure here
+    /// never risks `container`'s own `fatalError` (spec 2026-09-26, Apple
+    /// Pay failsafes #8 — "disk full, corrupt file, failed migration").
+    /// On failure the caller queues the raw tap instead of losing it
+    /// (`TapQueue`); the app's own launch keeps the crashing path above — a
+    /// phone that can't open its own database needs to say so loudly, not
+    /// run headless with an intent silently queuing forever.
+    static func containerForIntent() -> Result<ModelContainer, Error> {
+        do {
+            _ = try open()
+            return .success(container)
+        } catch {
+            return .failure(error)
+        }
+    }
 }
 
 /// Input from any source, before it becomes a `Transaction`.

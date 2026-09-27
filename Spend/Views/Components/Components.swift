@@ -1,4 +1,5 @@
 import SwiftUI
+import PostHog
 
 enum Money {
     nonisolated static let homeKey = "homeCurrency"
@@ -117,6 +118,7 @@ struct TransactionRow: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(big ? 3 : 1)
+                    .postHogMask()
                 Text(showCategory ? "\(transaction.category.name) · \(transaction.paidWithLabel)" : transaction.paidWithLabel)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -130,12 +132,20 @@ struct TransactionRow: View {
                     Label("Add amount", systemImage: "exclamationmark.circle.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.orange)
+                } else if transaction.needsCheck {
+                    // A blank shop or a card-only tap: the amount is fine
+                    // (so "Add amount" would be wrong), but something else
+                    // is missing (spec 2026-09-26, failsafes #2/#10).
+                    Label("Needs a check", systemImage: "exclamationmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.orange)
                 } else {
                     Text("-" + Money.format(transaction.amount, transaction.currencyCode))
                         .font(.body)
                         .foregroundStyle(transaction.refunded ? .secondary : .primary)
                         .strikethrough(transaction.refunded)
                         .monospacedDigit()
+                        .postHogMask()
                 }
                 Text(trailingDetail)
                     .font(.caption)
@@ -167,7 +177,9 @@ struct TransactionRow: View {
     private var accessibilityText: String {
         var parts = [
             transaction.merchant,
-            transaction.needsReview ? "amount missing" : Money.spoken(transaction.amount, transaction.currencyCode),
+            transaction.needsReview ? "amount missing"
+                : transaction.needsCheck ? "needs a check"
+                : Money.spoken(transaction.amount, transaction.currencyCode),
             transaction.category.name,
             transaction.paidWithLabel,
         ]

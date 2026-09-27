@@ -51,3 +51,6 @@ largest text size in Settings › Accessibility.
 
 Gmail is still under Google review, so Connect Gmail works only for the address you gave us
 when you signed up, and Google shows an "unverified app" screen first. Both are expected.
+
+Sessions are recorded during the beta (Settings › Privacy has the switch), with text fields
+like the amount, shop and note masked before anything leaves your phone.

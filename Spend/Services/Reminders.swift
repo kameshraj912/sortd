@@ -194,4 +194,32 @@ enum Reminders {
             try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
     }
+
+    // MARK: Apple Pay tap queue (spec 2026-09-26, failsafe #9)
+
+    private static let tapQueuedID = "tap-queued"
+
+    /// "A tap couldn't be saved. Open Sortd to finish it." One quiet
+    /// notification for the whole queue, not one per item: a fixed
+    /// identifier means a second queued tap just refreshes the same pending
+    /// alert instead of piling up. Respects the existing notification
+    /// permission and never asks — only the aha card and Settings do that.
+    static func notifyTapQueued() async {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "A tap couldn't be saved"
+        content.body = "Open Sortd to finish it."
+        content.sound = .default
+        try? await center.add(UNNotificationRequest(identifier: tapQueuedID, content: content, trigger: nil))
+    }
+
+    /// Clears the "a tap couldn't be saved" alert once the queue is empty
+    /// again — a successful replay at launch or in the foreground.
+    static func clearTapQueuedNotice() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [tapQueuedID])
+        center.removeDeliveredNotifications(withIdentifiers: [tapQueuedID])
+    }
 }

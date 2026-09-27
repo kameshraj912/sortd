@@ -102,27 +102,29 @@ struct BugHuntUITests {
         #expect(shown.amount > 0, "the widget writes \(shown.amount) \(shown.currency) for an AED 19 bill")
     }
 
-    // MARK: - 3. A text tap that is only a card name becomes a purchase
+    // MARK: - 3. A text tap that is only a card name becomes a purchase (fixed)
 
-    /// The one-field Wallet action given just "NAB Visa Debit" (the Card
-    /// variable wired into the Transaction field, or a ▶ run that only had a
-    /// card) saves a purchase called "Nab Visa Debit" with amount 0, marks it
-    /// as a real tap (`seenIn` has `.tap`, so the Apple Pay page says
-    /// "Last tap logged · $0.00 at Nab Visa Debit") and fires the
-    /// activation event. The three-field action treats the same input as
-    /// "Sortd is connected (it did send the card: NAB Visa Debit)" and saves
-    /// nothing.
+    /// Fixed by spec 2026-09-26 ("Apple Pay logging — failsafes", failsafe
+    /// #10): the one-field Wallet action given just "NAB Visa Debit" used to
+    /// save a purchase called "Nab Visa Debit" with amount 0, marking it as
+    /// a real tap and firing the activation event — reading as a real
+    /// purchase, not a mis-wired automation. It no longer does either of
+    /// that, but it also isn't dropped like the three-field action's bare ▶
+    /// case: the tap is kept, with no shop name, tagged "needs a check", so
+    /// a genuinely mis-wired automation still shows up somewhere instead of
+    /// vanishing silently.
     ///
-    /// `LogWalletTapIntent.handle` (Spend/Intents/LogWalletTapIntent.swift:55-57)
-    /// promotes any leftover text to the merchant before the test-run check
-    /// in `LogPurchaseIntent.handle` (LogPurchaseIntent.swift:94) can run.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-ui-03", "Wallet text that is only a card name is saved as a purchase"))
-    func aTextTapThatIsOnlyACardNameIsNotAPurchase() async throws {
+    /// `LogWalletTapIntent.resolvedFields` (Spend/Intents/LogWalletTapIntent.swift)
+    /// now refuses to promote text to the merchant when that text
+    /// `looksLikeCard` — `WalletTapText.parse` had already put it in `card`.
+    @Test
+    func aTextTapThatIsOnlyACardNameIsFlaggedNotSavedAsAShop() async throws {
         let ctx = try store()
         let out = try await LogWalletTapIntent.handle("NAB Visa Debit", in: ctx, book: book(), now: start)
-        #expect(out.transaction == nil, "saved '\(out.transaction?.merchant ?? "")' amount \(out.transaction?.amount ?? 0)")
-        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).isEmpty)
+        let t = try #require(out.transaction, "the tap must still be kept, not dropped")
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.needsCheck)
+        #expect(t.amount == 0)
     }
 
     // MARK: - 4. Widget reload time across a daylight-saving change

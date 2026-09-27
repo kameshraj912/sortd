@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import PostHog
 
 /// Home, after Raj's reference: month picker and a big centred total,
 /// a budget card with a colour-split bar (one colour per category), the two
@@ -68,6 +69,7 @@ struct HomeView: View {
                                 // then the one notification ask.
                                 ActivationCard()
                                 FinishSetupCard()
+                                ApplePayNudgeCard()
                             }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
@@ -342,6 +344,7 @@ struct HomeView: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .padding(.top, 6)
+                .postHogMask()
                 .accessibilityLabel("Spent \(Money.spoken(monthItems.audTotal, Money.home))")
                 .accessibilityValue(refreshing ? "Updating" : "")
                 .opacity(refreshing ? 0.5 : 1)
@@ -1011,6 +1014,7 @@ struct SpendChart: View {
             ForEach(Range.allCases) { r in
                 Button(r.rawValue) {
                     TipState.chipsUsed()
+                    if r != range { Analytics.shared.track(.insightsRangeChanged, ["range": .string(r.rawValue)]) }
                     withAnimation(.snappy) { range = r; selected = nil }
                 }
                 .chip(selected: r == range)

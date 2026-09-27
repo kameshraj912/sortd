@@ -53,6 +53,25 @@ final class Analytics {
         /// Sign-in (sub-spec 4): `provider` is apple or google, never the email.
         case signedIn = "signed_in"
         case signedOut = "signed_out"
+        /// The beta's extra intent events (docs/specs/2026-09-25-free-app-overhaul-2-analytics.md).
+        /// Never amounts, merchants, emails or notes.
+        case searchUsed = "search_used"
+        case receiptScanned = "receipt_scanned"
+        case statementImported = "statement_imported"
+        case budgetSet = "budget_set"
+        /// `category` is the `SpendCategory` name only, never the limit amount.
+        case categoryLimitSet = "category_limit_set"
+        case insightsRangeChanged = "insights_range_changed"
+        case dayStepped = "day_stepped"
+        case purchaseEdited = "purchase_edited"
+        /// `from` and `to` are `SpendCategory` names.
+        case categoryChanged = "category_changed"
+        case cardAdded = "card_added"
+        case appLockTurnedOn = "app_lock_turned_on"
+        case helpOpened = "help_opened"
+        /// The hidden developer menu (Settings › About, 7 taps): a forced
+        /// event so Raj can see one arrive in PostHog on demand.
+        case developerTestEvent = "developer_test_event"
         /// The founder's note (`FounderNoteSheet`): `moment` is `aha` (the
         /// first automatic purchase) or `about` (replayed from Settings).
         case founderNoteSeen = "founder_note_seen"
@@ -147,6 +166,27 @@ final class Analytics {
     /// Unknown, offline or no key: false.
     static func flag(_ key: String) -> Bool { shared.sink.isFeatureEnabled(key) }
 
+    /// The PostHog host this build talks to (Settings › About's hidden
+    /// developer menu). Recomputed from the same Info.plist key `shared`
+    /// reads, so the two can never drift apart.
+    static var postHogHost: String {
+        let host = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostText = host.contains("://") ? host : PostHogSink.defaultHost
+        return URL(string: hostText)?.host() ?? hostText
+    }
+
+    /// Whether this build was compiled with session replay at all
+    /// (`SORTD_REPLAY`, the beta only). Replay also needs consent
+    /// (`isEnabled`); the developer menu shows both together.
+    static var replayBuildFlagOn: Bool {
+        #if SORTD_REPLAY
+        true
+        #else
+        false
+        #endif
+    }
+
     // MARK: - Instance
 
     private let sink: Sink
@@ -158,6 +198,10 @@ final class Analytics {
 
     /// Privacy guard trail, for tests: "event.key" per property dropped.
     private(set) var violations: [String] = []
+
+    /// `trackOncePerSession`'s memory: in-memory only, so it starts empty
+    /// every launch (there is no other notion of "session" here).
+    private var sessionFired: Set<Event> = []
 
     /// The identified id (the salted hash) while signed in, else nil. Read
     /// by `CrashReporting` from Sentry's own thread, so it sits behind a
@@ -292,6 +336,16 @@ final class Analytics {
         track(event, all)
     }
 
+    /// Like `track`, but only the first time this event is asked for since
+    /// launch (`searchUsed`: "first character typed, once per session").
+    /// Off: nothing is sent and nothing is marked fired, so it can still
+    /// fire once consent comes back on.
+    func trackOncePerSession(_ event: Event, _ properties: [String: AnalyticsValue] = [:]) {
+        guard enabled, !sessionFired.contains(event) else { return }
+        sessionFired.insert(event)
+        track(event, properties)
+    }
+
     /// Identifies as sha256(accountSalt + provider + subject): the same id
     /// on every phone and after a reinstall.
     func signedIn(provider: String, subject: String) {
@@ -388,13 +442,18 @@ protocol PostHogClient: AnyObject {
     func optOut()
 }
 
-/// The real thing. Session replay off, element autocapture off until the
+/// The real thing. Session replay on only in a `SORTD_REPLAY` build (the
+/// beta), off for the App Store release. Element autocapture off until the
 /// audit in the spec passes, screen views sent by hand (`Analytics.screen`)
 /// so only named screens are counted.
 ///
 /// With sharing off at launch the SDK is not set up at all: set up, even
 /// opted out, it still fetches its remote config and feature flags. It is
 /// set up the first time sharing goes on.
+///
+/// Replay and consent: `PostHogSDK.optOut()` uninstalls the replay
+/// integration (and `optIn()` reinstalls it), so `Analytics.isEnabled =
+/// false` already stops recording; nothing extra is needed here.
 final class PostHogSink: Analytics.Sink {
     static let defaultHost = "https://eu.i.posthog.com"
 
@@ -487,7 +546,20 @@ final class LivePostHogClient: PostHogClient {
     func setup(apiKey: String, host: URL) {
         // `init(apiKey:host:)` is deprecated in 3.82; same thing, new name.
         let config = PostHogConfig(projectToken: apiKey, host: host.absoluteString)
+        // Session replay: beta only (SORTD_REPLAY), off for the App Store
+        // release. Screenshot mode, not wireframes, since this is SwiftUI;
+        // text, images and sandboxed pickers are masked wholesale, and the
+        // few money/shop views left get an explicit `.postHogMask()`.
+        #if SORTD_REPLAY
+        config.sessionReplay = true
+        config.sessionReplayConfig.screenshotMode = true
+        config.sessionReplayConfig.maskAllTextInputs = true
+        config.sessionReplayConfig.maskAllImages = true
+        config.sessionReplayConfig.maskAllSandboxedViews = true
+        config.sessionReplayConfig.throttleDelay = 1
+        #else
         config.sessionReplay = false
+        #endif
         config.captureApplicationLifecycleEvents = true
         config.captureScreenViews = false
         config.captureElementInteractions = false

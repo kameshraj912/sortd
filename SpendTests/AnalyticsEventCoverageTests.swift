@@ -45,4 +45,21 @@ struct AnalyticsEventCoverageTests {
         }
         #expect(missing.isEmpty, "Events never called under Spend/ (outside Analytics.swift): \(missing.joined(separator: ", "))")
     }
+
+    /// Every event's raw value (snake_case) must appear in the analytics
+    /// spec's events table, so a new case can't be added without a line
+    /// describing what it means and where it fires.
+    @Test func everyAnalyticsEventIsDocumentedInTheSpec() throws {
+        let specPath = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // SpendTests/
+            .deletingLastPathComponent() // worktree root
+            .appendingPathComponent("docs/specs/2026-09-25-free-app-overhaul-2-analytics.md")
+        let text = try String(contentsOf: specPath, encoding: .utf8)
+
+        var missing: [String] = []
+        for event in Analytics.Event.allCases where !text.contains(event.rawValue) {
+            missing.append(event.rawValue)
+        }
+        #expect(missing.isEmpty, "Events missing from the spec's events table (\(specPath.lastPathComponent)): \(missing.joined(separator: ", "))")
+    }
 }
