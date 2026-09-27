@@ -192,10 +192,13 @@ struct ShortcutsMock: View {
         ZStack {
             VStack(alignment: .leading, spacing: 10) {
                 trigger
+                // Sortd's own action, as the imported shortcut shows it
+                // (there is no Run Shortcut step any more).
                 card {
-                    Image(systemName: "arrow.triangle.branch").foregroundStyle(Self.blue)
-                    Text("Run").font(.subheadline)
-                    token("Log Apple Pay in Sortd", symbol: "app.badge")
+                    Text("Log").font(.subheadline)
+                    token("Amount", symbol: "square.stack.3d.down.right")
+                    Text("at").font(.subheadline)
+                    token("Merchant", symbol: "square.stack.3d.down.right")
                 }
                 Spacer(minLength: 0)
             }
