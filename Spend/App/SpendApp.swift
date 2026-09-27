@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 import TipKit
 import UserNotifications
+#if DEBUG
+import OSLog
+#endif
 
 @main
 struct SpendApp: App {
@@ -128,6 +131,41 @@ struct SpendApp: App {
         if env["SPEND_NEEDS_CHECK"] == "1" {
             Task {
                 _ = try? await LogWalletTapIntent.handle("NAB Visa Debit", in: SpendStore.container.mainContext, book: .shared)
+            }
+        }
+        // Replay hook (spec 2026-09-26, "Apple Pay logging — failsafes";
+        // applepay-slice2 part 1): any of SPEND_TAP_TEXT/_MERCHANT/_AMOUNT/
+        // _CARD fires one call through `LogWalletTapIntent.performAndLog`
+        // — the exact path Shortcuts uses, store-can't-open fallback to
+        // `TapQueue` included — after SPEND_TAP_DELAY seconds (default 1).
+        // Missing fields go in as "", same as Shortcuts sends an unset
+        // parameter. SPEND_TAP_REPEAT=<n> fires it n times, SPEND_TAP_GAP
+        // seconds apart (default 2), to imitate two automation triggers
+        // firing for the one tap (failsafe #14). Works the same way from
+        // `xcrun devicectl device process launch --environment-variables`
+        // on a real phone: both read `ProcessInfo.processInfo.environment`.
+        let tapKeys = ["SPEND_TAP_TEXT", "SPEND_TAP_MERCHANT", "SPEND_TAP_AMOUNT", "SPEND_TAP_CARD"]
+        if tapKeys.contains(where: { env[$0] != nil }) {
+            let text = env["SPEND_TAP_TEXT"] ?? ""
+            let merchant = env["SPEND_TAP_MERCHANT"] ?? ""
+            let amount = env["SPEND_TAP_AMOUNT"] ?? ""
+            let card = env["SPEND_TAP_CARD"] ?? ""
+            let delay = env["SPEND_TAP_DELAY"].flatMap(Double.init) ?? 1
+            let repeatCount = max(1, env["SPEND_TAP_REPEAT"].flatMap(Int.init) ?? 1)
+            let gap = env["SPEND_TAP_GAP"].flatMap(Double.init) ?? 2
+            let replayLog = Logger(subsystem: "page.sortd", category: "tap-replay")
+            Task {
+                for i in 0..<repeatCount {
+                    try? await Task.sleep(for: .seconds(i == 0 ? delay : gap))
+                    let r = await LogWalletTapIntent.performAndLog(transaction: text, amount: amount, merchant: merchant, card: card)
+                    replayLog.log("""
+                        call \(i + 1)/\(repeatCount): text="\(text, privacy: .public)" \
+                        merchant="\(merchant, privacy: .public)" amount="\(amount, privacy: .public)" \
+                        card="\(card, privacy: .public)" -> transaction=\(r.transaction != nil, privacy: .public) \
+                        merged=\(r.merged, privacy: .public) saveFailed=\(r.saveFailed, privacy: .public) \
+                        dialog="\(r.message, privacy: .public)"
+                        """)
+                }
             }
         }
         #endif

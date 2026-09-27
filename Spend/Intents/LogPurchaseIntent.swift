@@ -88,13 +88,15 @@ struct LogPurchaseIntent: AppIntent {
                        in context: ModelContext, book: CardBook, now: Date = .now,
                        debugForceSaveFailure: Bool = false) async throws -> Outcome {
         // Shortcuts sometimes hands intents an empty merchant or amount
-        // (developer.apple.com/forums/thread/797233). Never drop a real tap:
-        // save it with amount 0 and flag it so it can be filled in.
-        let parsed = AmountParser.parse(amount ?? "")
-        let name = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        // Nothing at all came in: a test run (the ▶ button in Shortcuts),
-        // not a Wallet tap. Don't save an empty purchase.
-        let cardName = (card ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // (developer.apple.com/forums/thread/797233), or — a blank
+        // Notification-trigger run, failsafe #13 — a magic variable's own
+        // placeholder name ("Merchant", "(null)") where a real value should
+        // be. Neither counts as real text: `TapField.normalize` treats both
+        // as blank, so a placeholder can never masquerade as a shop.
+        let amountText = TapField.normalize(amount)
+        let parsed = amountText.isEmpty ? nil : AmountParser.parse(amountText)
+        let name = TapField.normalize(merchant)
+        let cardName = TapField.normalize(card)
         // Keep exactly what arrived, for checking the setup (Settings shows it).
         let seen = "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
         UserDefaults.standard.set("\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", forKey: lastTapKey)
@@ -107,13 +109,13 @@ struct LogPurchaseIntent: AppIntent {
         // card name as if it were the shop. It's kept below, tagged "needs
         // a check", instead of either extreme.
         if name.isEmpty, parsed == nil, cardName.isEmpty {
-            return Outcome(message: "Sortd is connected. Test runs don't include a purchase — pay with Apple Pay in a shop to log one.",
+            return Outcome(message: "Sortd is connected. Pay in a shop to log a purchase.",
                            transaction: nil, merged: false)
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let missingShop = name.isEmpty
         let refund = AmountParser.isNegative(amount ?? "")
-        let cardID = book.matchOrCreate(card)
+        let cardID = book.matchOrCreate(cardName.isEmpty ? nil : card)
 
         // #8 (spec 2026-09-26): never let a throw from here on — a fetch or
         // a save failing (disk full, corrupt file, failed migration) —
@@ -127,16 +129,25 @@ struct LogPurchaseIntent: AppIntent {
             // shared mutable state, so parallel tests can't race on it
             // (spec 2026-09-26, failsafe #8; see `ThrowSafetyTests`).
             if debugForceSaveFailure { throw CocoaError(.fileWriteUnknown) }
-            // A second tap with no amount at the same shop within 2 minutes is
-            // the same purchase (the Deduper can't match on a missing amount).
-            if missingAmount {
-                let since = now.addingTimeInterval(-120)
-                let shop = name.isEmpty ? "Unknown merchant" : name
-                let recent = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))
-                // `merchant` is the cleaned name ("SQ *CAFE X" → "Cafe X"); the
-                // tap's own text is kept in `rawMerchant`, so compare that.
-                if let same = recent.first(where: { $0.amount == 0 && $0.rawMerchant == shop && $0.card == cardID }) {
-                    return Outcome(message: "That purchase at \(shop) is already in Sortd — open it to add the amount", transaction: same, merged: true)
+            // Failsafe #14 (spec 2026-09-26): both automation triggers can
+            // fire for one in-store tap — Transaction with real data,
+            // Notification blank or a second copy of the same data. Ahead
+            // of the general Deduper below (which needs `amount > 0` and
+            // uses a much wider window built for a different job, S6's
+            // same-source repeat): fold a same-card companion arriving
+            // close in time into the one already logged, instead of
+            // letting it become its own row. When nothing matches, the
+            // same-card taps this already looked at and rejected are
+            // excluded from the general Deduper too — otherwise its own
+            // much wider (10-minute) same-source window could still merge
+            // two real, distinct purchases minutes apart ("two coffees")
+            // that this narrower, purpose-built check correctly kept apart.
+            var excludeFromLog: Set<UUID> = []
+            if !refund {
+                switch try Self.mergeTapCompanion(name: name, missingAmount: missingAmount, missingShop: missingShop,
+                                                  parsed: parsed, cardID: cardID, seen: seen, now: now, in: context) {
+                case .merged(let outcome): return outcome
+                case .notMerged(let excluding): excludeFromLog = excluding
                 }
             }
             // A refund tap: mark the purchase it belongs to as refunded, so the
@@ -184,7 +195,7 @@ struct LogPurchaseIntent: AppIntent {
                 note: note
             )
 
-            let outcome = try TransactionLogger.log(purchase, in: context)
+            let outcome = try TransactionLogger.log(purchase, in: context, excluding: excludeFromLog)
             let t = outcome.transaction
             // A standalone refund tap (no earlier purchase to match) becomes its
             // own row here. It proves nothing about the person's own spending,
@@ -221,6 +232,105 @@ struct LogPurchaseIntent: AppIntent {
             let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now)
             return Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
         }
+    }
+
+    /// Failsafe #14: matches and folds a same-card companion tap into one
+    /// already logged. `.merged` when a match was found, already filled in
+    /// and saved; `.notMerged` when nothing here applies — its `excluding`
+    /// set is every same-card tap this already looked at and rejected, so
+    /// the general Deduper that runs next (a much wider window, meant for a
+    /// different job — S6's same-source repeat) can't re-open the question
+    /// with a looser rule and merge two purchases this already kept apart.
+    ///
+    /// Matching is symmetric: either side can be the one missing a field
+    /// (a blank companion can land before *or* after the real tap), so
+    /// "blank" and "matches" are checked both ways —
+    /// (a) both sides are full: only an exact match, and only within a
+    ///     tight 60s window — two real purchases at the same shop for the
+    ///     same amount minutes apart ("two coffees") must still become two
+    ///     rows, so the same trigger firing twice needs a much closer
+    ///     coincidence to tell apart from that.
+    /// (b)/(c) at least one side is missing its amount and/or its shop: a
+    ///     3-minute window, and every field present on either side must
+    ///     agree with the other (a blank field never disagrees with
+    ///     anything) — covers a blank companion arriving before or after
+    ///     the real tap, and a companion that only got one field right.
+    @MainActor
+    static func mergeTapCompanion(name: String, missingAmount: Bool, missingShop: Bool,
+                                  parsed: AmountParser.Result?, cardID: Card, seen: String,
+                                  now: Date, in context: ModelContext) throws -> CompanionResult {
+        let companionWindow: TimeInterval = 3 * 60
+        let identicalWindow: TimeInterval = 60
+        let widest = max(companionWindow, identicalWindow)
+        let from = now.addingTimeInterval(-widest)
+        let to = now.addingTimeInterval(widest)
+        let nearby = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= to }))
+            .filter { $0.card == cardID && $0.seenIn.contains(.tap) }
+            .sorted { abs($0.date.timeIntervalSince(now)) < abs($1.date.timeIntervalSince(now)) }
+
+        func matches(_ t: Transaction) -> Bool {
+            let dt = abs(t.date.timeIntervalSince(now))
+            let existingMissingAmount = t.amount == 0
+            let existingMissingShop = t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
+            // A blank field on either side never disagrees; two present
+            // fields must actually agree.
+            let amountsAgree = missingAmount || existingMissingAmount || parsed?.amount == t.amount
+            let merchantsAgree = missingShop || existingMissingShop
+                || MerchantName.clean(t.rawMerchant) == MerchantName.clean(name)
+            guard amountsAgree, merchantsAgree else { return false }
+            let bothFull = !missingAmount && !missingShop && !existingMissingAmount && !existingMissingShop
+            return dt <= (bothFull ? identicalWindow : companionWindow)
+        }
+
+        guard let t = nearby.first(where: matches) else {
+            return .notMerged(excluding: Set(nearby.map(\.id)))
+        }
+
+        // Fill whatever the kept row was missing from the newcomer — a
+        // blank first tap followed by a full one ends as one full row.
+        if t.amount == 0, let newAmount = parsed?.amount, newAmount > 0 {
+            t.amount = newAmount
+            t.currencyCode = parsed?.currency ?? t.currencyCode
+            t.audAmount = t.currencyCode == Money.home ? t.amount : nil
+        }
+        if (t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"), !name.isEmpty {
+            t.rawMerchant = name
+            t.merchant = MerchantName.clean(name)
+            if t.category == .other {
+                let learned = try TransactionLogger.learnedRules(in: context)
+                t.category = Categorizer.category(for: name, learned: learned)
+            }
+        }
+        t.markSeen(in: .tap)
+
+        let stillMissingAmount = t.amount == 0
+        let stillMissingShop = t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
+        let message: String
+        if !stillMissingAmount, !stillMissingShop {
+            // Fully resolved: the needs-a-check tag is removed, not left
+            // pointing at a problem that no longer exists.
+            t.note = ""
+            message = "Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant) · \(t.category.name)"
+        } else if stillMissingAmount, stillMissingShop {
+            t.note = "\(Transaction.needsCheckTag)Apple Pay sent only a card (\(seen)). Tap to fix."
+            message = "Tap noted — only got a card, no shop or amount. Add it in Sortd."
+        } else if stillMissingAmount {
+            t.note = "\(Transaction.needsCheckTag)Apple Pay sent no amount (\(seen)). Tap to fix."
+            message = "Tap noted, amount missing. Add it in Sortd."
+        } else {
+            t.note = "\(Transaction.needsCheckTag)Apple Pay sent no shop name (\(seen)). Tap to fix."
+            message = "Tap noted, shop missing. Add it in Sortd."
+        }
+        try context.save()
+        return .merged(Outcome(message: message, transaction: t, merged: true))
+    }
+
+    /// `mergeTapCompanion`'s result: either it already merged and saved, or
+    /// it didn't — carrying the same-card taps it looked at, so the caller
+    /// can keep the general Deduper from re-merging them under a looser rule.
+    enum CompanionResult {
+        case merged(Outcome)
+        case notMerged(excluding: Set<UUID>)
     }
 }
 
