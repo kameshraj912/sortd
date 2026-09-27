@@ -25,6 +25,7 @@ struct DebugScreenHost: View {
             case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()
+            case "privacy-security": PrivacySecuritySettingsView()
             case "backup": BackupDataSettingsView()
             case "help": HelpFeedbackSettingsView()
             case "about": AboutSettingsView()

@@ -13,8 +13,11 @@ struct BugHuntGmailTests {
     // MARK: - App Lock
 
     private func fresh() -> AppLock {
-        // `AppLock()` reads the switch from UserDefaults; start unlocked.
+        // `AppLock()` reads the switch from UserDefaults; start unlocked,
+        // and clear any stored "require after" choice so the default
+        // (immediately) applies, regardless of what a real device has saved.
         UserDefaults.standard.set(false, forKey: AppLock.enabledKey)
+        UserDefaults.standard.removeObject(forKey: AppLock.requireAfterKey)
         return AppLock()
     }
 
