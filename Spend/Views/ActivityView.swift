@@ -16,7 +16,10 @@ struct TransactionsScreen: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows everywhere here
+    // (every day page, search and a card's own list): `Transaction.excludingLegacyTest`.
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var transactions: [Transaction]
 
     @State private var search = ""
     @State private var cardFilter: Card?
@@ -322,6 +325,10 @@ struct TransactionsScreen: View {
         let index = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
         return ScrollViewReader { proxy in
             List {
+                // The same small title and brand bar as Home and Insights, so
+                // the three tabs line up (Raj, 27 Sep; the large system title
+                // sat higher and bigger than the other two).
+                ListPageTitle(title: fixedCard?.name ?? "Activity")
                 // Its own section, margins zeroed: an inset-grouped List
                 // otherwise clips the row to the section's card, cutting the
                 // chips off short of the real screen edge.
@@ -541,9 +548,9 @@ struct TransactionsScreen: View {
         }
     }
 
-    /// The day pager is on: the bar shows the large "Activity" title with
-    /// the search field under it, like Messages or WhatsApp.
-    private var largeTitle: Bool { Self.dayPages && fixedCard == nil && !transactions.isEmpty }
+    /// The page draws its own title everywhere now (see `dayPager`); the
+    /// large system title is kept as an option but off.
+    private var largeTitle: Bool { false }
 
     /// `position` (the pager only) adds "· 2 of 14" after the day.
     private func dayHeader(_ day: (date: Date, items: [Transaction]),
@@ -782,12 +789,14 @@ private struct ActivitySearch: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content
-                // Under the large title, like Messages: it scrolls away with
-                // the list and a pull down brings it back, at every text size.
+                // A search button in the bar that opens into the field
+                // (iOS 26 minimize), so the page title sits where Home's and
+                // Insights' do instead of under a permanent search pill.
                 // The long prompt has no room at accessibility sizes and the
                 // field showed as an empty pill (UI pass finding 8).
-                .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .automatic),
+                .searchable(text: $text, placement: .toolbar,
                             prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
+                .searchToolbarBehavior(.minimize)
                 .searchFocused($focused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()

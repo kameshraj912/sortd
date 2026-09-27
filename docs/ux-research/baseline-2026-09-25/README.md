@@ -131,3 +131,4 @@ they're missing here, not that they're unchanged.
 - theFirstAmountInTheAlertIsThePurchase
 - theWidgetReloadDateIsTheNextMidnightAcrossDaylightSaving
 - zeroDecimalTotalsAreRead
+- blankNotificationTriggerRealRunIsIndistinguishableFromAPreview (Apple Pay hunt 27 Sep: an all-blank iOS 27 Notification run looks like a ▶ test; needs a device spike, spec 2026-09-26 row 13)

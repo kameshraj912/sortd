@@ -1,15 +1,19 @@
 import SwiftUI
 
-/// The Apple Pay Logging panel: the status card, "Get the Shortcut", the
-/// picture guide, and the one line about Apple's own timeout. Used by the
-/// setup step (`OnboardingView.applePay`) and by Settings › Purchase
-/// Sources › Apple Pay Logging (`SetupGuideView`), so the two always agree
-/// (spec 2026-09-25, option A: every state comes from a real event).
+/// The Apple Pay Logging panel: the status card, three numbered steps to
+/// connect the ready-made shortcut, and the picture guide behind a
+/// disclosure. Used by the setup step (`OnboardingView.applePay`) and by
+/// Settings › Purchase Sources › Apple Pay Logging (`SetupGuideView`), so the
+/// two always agree (spec 2026-09-25, option A: every state comes from a
+/// real event).
 ///
-/// One path only: the ready-made shortcut and its one picture guide. There
-/// is no by-hand walkthrough on this page any more (router feel check, 26
-/// Sep 2026, "short and clean") — it moved to the website, see
-/// `docs/site-copy-moved.md`.
+/// Rewritten 27 Sep 2026: the shortcut at `sortd.page/apple-pay.shortcut` now
+/// carries the whole automation (the Wallet trigger and Sortd's action, both
+/// already filled in), so the old "make a Wallet automation by hand, then
+/// add Run Shortcut" route no longer matches what iOS shows and is gone. All
+/// that's left by hand is running the shortcut once (so iOS can ask
+/// permission) and switching its own automation on. The by-hand build stays
+/// as a smaller, collapsed fallback for when the download fails.
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
     /// How many logged taps still need a look (spec 2026-09-26, failsafes
@@ -23,6 +27,9 @@ struct ApplePaySetupPanel: View {
     /// plain text — support staff point people to it. Kept out of the way
     /// so the page itself stays short (router feel check, 26 Sep 2026).
     @State private var showingRawTap = false
+
+    /// Which steps the app can honestly tick off right now.
+    private var ticked: ApplePaySetupSteps.Ticked { ApplePaySetupSteps.ticked(for: status) }
 
     @State private var healthCheck: ApplePayHealthCheck.State?
     @State private var healthCheckStartedAt: Date?
@@ -53,7 +60,7 @@ struct ApplePaySetupPanel: View {
             }
             healthCheckSection
             steps
-            timeoutNote
+            scopeNote
             nudgeLine
         }
     }
@@ -181,11 +188,11 @@ struct ApplePaySetupPanel: View {
         }
     }
 
-    // MARK: - The two steps
+    // MARK: - The three steps
 
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
-            miniStep(1, "Add the Sortd shortcut", "Opens Safari, then tap the download and Add Shortcut.")
+            stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
             Button {
                 openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
                 shortcutOpened = true
@@ -201,12 +208,8 @@ struct ApplePaySetupPanel: View {
 
             Divider()
 
-            miniStep(2, "Turn it on for your cards", "Swipe through the pictures. They show every screen in Shortcuts.")
-            if #available(iOS 27.0, *) {
-                WalletSetupGuide(route: .quick)
-            } else {
-                legacySteps
-            }
+            stepRow(2, ticked.runAndAllow, "Run it once and tap Allow",
+                    "Press ▶ in the shortcut. Sortd says it's connected.")
             Button {
                 if let url = URL(string: "shortcuts://") { openURL(url) }
             } label: {
@@ -217,6 +220,31 @@ struct ApplePaySetupPanel: View {
             }
             .buttonStyle(.glass)
             .controlSize(.large)
+
+            Divider()
+
+            stepRow(3, ticked.turnOnAutomation, "Turn the automation on",
+                    "In the shortcut, tap › next to “tapped”, then switch on Automation.")
+
+            DisclosureGroup("Show me how") {
+                Group {
+                    if #available(iOS 27.0, *) {
+                        WalletSetupGuide(route: .quick)
+                    } else {
+                        legacySteps
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .font(.subheadline.weight(.semibold))
+            .tint(Color.ink)
+
+            DisclosureGroup("Build it by hand instead") {
+                WalletSetupGuide(route: .byHand)
+                    .padding(.top, 8)
+            }
+            .font(.subheadline.weight(.semibold))
+            .tint(Color.ink)
         }
         .setupCard()
     }
@@ -233,19 +261,27 @@ struct ApplePaySetupPanel: View {
     }
 
     static let legacyStepLines = [
-        "Automation, then + · Wallet · tick your cards · Run Immediately.",
-        "Create New Shortcut, search Sortd, add Log Wallet Tap.",
-        "Fill in Amount, Shop and Card from the Shortcut Input.",
+        "Add the shortcut: opens Shortcuts, tap Add Shortcut.",
+        "Run it once. Tap Allow when Shortcuts asks.",
+        "Tap › next to “tapped”, then switch on Automation.",
     ]
 
-    private func miniStep(_ n: Int, _ title: String, _ detail: String) -> some View {
+    /// One numbered step. Ticks itself green once `done` is true — steps 1
+    /// and 3 can't be seen on their own, so `ticked` (`ApplePaySetupSteps`)
+    /// decides which ones light up for the current status.
+    private func stepRow(_ n: Int, _ done: Bool, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text("\(n)")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(Color.onBrand)
-                .frame(width: 26, height: 26)
-                .background(Color.ink, in: .circle)
-                .accessibilityHidden(true)
+            Group {
+                if done {
+                    Image(systemName: "checkmark").font(.subheadline.weight(.bold))
+                } else {
+                    Text("\(n)").font(.subheadline.weight(.bold))
+                }
+            }
+            .foregroundStyle(Color.onBrand)
+            .frame(width: 26, height: 26)
+            .background(done ? Color.up : Color.ink, in: .circle)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
@@ -253,21 +289,19 @@ struct ApplePaySetupPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(n): \(title). \(detail)\(done ? ". Done." : "")")
     }
 
-    // MARK: - Timeout note
+    // MARK: - Scope
 
-    private var timeoutNote: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Sortd sees when a tap arrives, not your automation.")
-            Text("Apple's trigger sometimes misses a tap, most often at vending machines, transport gates and parking.")
-                .fixedSize(horizontal: false, vertical: true)
-            Link("Learn more", destination: ApplePayStatus.learnMoreURL)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.brand)
-        }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
+    /// What the shortcut can and can't see — replaces the longer timeout
+    /// paragraph that used to sit here (router feel check, 27 Sep 2026:
+    /// this screen carried the same steps three times over).
+    private var scopeNote: some View {
+        Text("Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -4,7 +4,10 @@ import SwiftData
 /// Where the money goes: the range chart, a category breakdown with bars,
 /// and the top merchants / biggest purchases / food cards.
 struct InsightsView: View {
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows: `Transaction.excludingLegacyTest`
+    // (see `ActivityView`).
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var transactions: [Transaction]
     @State private var selectedCategory: SpendCategory?
     @State private var limits: [SpendCategory: Double] = [:]
 
@@ -141,7 +144,10 @@ struct InsightsView: View {
 /// Every purchase in one category, newest first, with this month's total.
 struct CategoryDetailView: View {
     let category: SpendCategory
-    @Query(sort: \Transaction.date, order: .reverse) private var all: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows: `Transaction.excludingLegacyTest`
+    // (see `ActivityView`).
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var all: [Transaction]
     @State private var limit: Double?
     @State private var editingLimit = false
 

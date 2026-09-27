@@ -72,6 +72,14 @@ final class Analytics {
         /// The hidden developer menu (Settings › About, 7 taps): a forced
         /// event so Raj can see one arrive in PostHog on demand.
         case developerTestEvent = "developer_test_event"
+        /// The founder's note (`FounderNoteSheet`): `moment` is `aha` (the
+        /// first automatic purchase) or `about` (replayed from Settings).
+        case founderNoteSeen = "founder_note_seen"
+        case founderNoteReplyTapped = "founder_note_reply_tapped"
+        /// "Which card?" (spec 2026-09-27): unmatched digits shown on Home,
+        /// and how they were answered. Never the digits themselves.
+        case cardDigitsPrompted = "card_digits_prompted"
+        case cardDigitsAnswered = "card_digits_answered"
     }
 
     /// Where events go. `PostHogSink` in the app, `NoopSink` with no key,

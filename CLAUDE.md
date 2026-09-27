@@ -95,7 +95,7 @@ stays in the app only for that.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
 - No bank passwords, no screen scraping. Secrets (the Google refresh token) go in the Keychain, never in git.
-- Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`, `SPEND_OLD_SETUP` for the old setup flow, `SPEND_ACTIVITY_LIST` for the old Activity list, `SPEND_TAP_TEXT`/`SPEND_TAP_MERCHANT`/`SPEND_TAP_AMOUNT`/`SPEND_TAP_CARD`/`SPEND_TAP_DELAY`/`SPEND_TAP_REPEAT`/`SPEND_TAP_GAP` for the Apple Pay tap-replay hook) stay inside `#if DEBUG`.
+- Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`, `SPEND_OLD_SETUP` for the old setup flow, `SPEND_ACTIVITY_LIST` for the old Activity list, `SPEND_FOUNDER_NOTE` for the founder's note, `SPEND_TAP_TEXT`/`SPEND_TAP_MERCHANT`/`SPEND_TAP_AMOUNT`/`SPEND_TAP_CARD`/`SPEND_TAP_DELAY`/`SPEND_TAP_REPEAT`/`SPEND_TAP_GAP` for the Apple Pay tap-replay hook) stay inside `#if DEBUG`.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 
 ## Known gaps

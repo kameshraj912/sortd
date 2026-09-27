@@ -6,7 +6,10 @@ import Charts
 /// then its recent purchases.
 struct CardDetailView: View {
     let card: Card
-    @Query(sort: \Transaction.date, order: .reverse) private var all: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows: `Transaction.excludingLegacyTest`
+    // (see `ActivityView`).
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var all: [Transaction]
     /// The month-bar chart grows with Dynamic Type so its month letters keep room.
     @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 64
 
