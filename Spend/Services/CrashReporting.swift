@@ -69,6 +69,13 @@ enum CrashReporting {
         guard !dsn.isEmpty else { log.notice("crash reports off: no DSN (SENTRY_DSN is empty)"); return }
         guard analytics.isEnabled else { log.notice("crash reports off: consent is off"); return }
         guard !SentrySDK.isEnabled else { return }
+        installSDK(analytics: analytics)
+        log.info("crash reports on: Sentry, scrubbed")
+    }
+
+    /// The scrubbed configuration shared by `start()` and the developer
+    /// menu's forced send. No Debug/consent gate here; callers check that.
+    private static func installSDK(analytics: Analytics) {
         SentrySDK.start { options in
             options.dsn = dsn
             options.sendDefaultPii = false
@@ -92,7 +99,29 @@ enum CrashReporting {
                 CrashReporting.scrub(event, userId: analytics.identityHash)
             }
         }
-        log.info("crash reports on: Sentry, scrubbed")
+    }
+
+    /// Settings › About's hidden developer menu, "Send test report to
+    /// Sentry": lets Raj see a report arrive without waiting for a real
+    /// crash or a Release build. Needs the DSN and consent, same as the real
+    /// switch; bypasses only the Debug gate. Starts the SDK if it wasn't
+    /// already running, sends one non-fatal message, and — if this call
+    /// started it — closes it again, so a Debug build ends exactly as it
+    /// began.
+    static func sendTestReport() {
+        guard !dsn.isEmpty else { log.notice("developer test report: no DSN, not sent"); return }
+        guard Analytics.shared.isEnabled else { log.notice("developer test report: consent is off, not sent"); return }
+        let wasRunning = SentrySDK.isEnabled
+        if !wasRunning { installSDK(analytics: Analytics.shared) }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        SentrySDK.capture(message: "Test report from Sortd") { scope in
+            scope.setTag(value: "\(version) (\(build))", key: "app_version")
+        }
+        if !wasRunning {
+            Task.detached(priority: .utility) { SentrySDK.close() }
+        }
+        log.info("developer test report: sent")
     }
 
     /// Context keys Sentry needs to group and show a crash: the device

@@ -23,6 +23,7 @@ struct PrivacySecuritySettingsView: View {
                         Task {
                             if await AppLock.authenticate(reason: "Turn on the lock for Sortd.") {
                                 lockEnabled = true
+                                Analytics.shared.track(.appLockTurnedOn)
                             } else {
                                 // Say so: a toggle that springs back with no word
                                 // reads as broken (feel check, 27 Sep).
