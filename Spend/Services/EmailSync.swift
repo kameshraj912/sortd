@@ -53,7 +53,8 @@ enum EmailSync {
     /// Turns records into purchases. Already-imported ids are skipped, so this
     /// is safe to run on overlapping windows.
     @discardableResult
-    static func importRecords(_ records: [EmailRecord], in context: ModelContext, account: String? = nil) throws -> Summary {
+    static func importRecords(_ records: [EmailRecord], in context: ModelContext, account: String? = nil,
+                              book: CardBook = .shared, defaults: UserDefaults = .standard) throws -> Summary {
         var summary = Summary()
         guard !records.isEmpty || !pendingRefunds.isEmpty else {
             if context.hasChanges { try context.save() }
@@ -79,12 +80,26 @@ enum EmailSync {
             }
             // Raj's own card list decides first (by last 4 digits); the
             // script's CARD_MAP guess is the fallback for older scripts.
-            let card = CardBook.shared.card(last4: r.last4) ?? Card(rawValue: r.card)
+            var card = book.card(last4: r.last4)
+            // Digits that matched nothing: one active card makes them
+            // obviously its own (saved with no prompt); two or more queue
+            // them for "Which card?" on Home, and the purchase stays wherever
+            // the fallback below puts it until that's answered.
+            var unmatchedDigits: String?
+            if card == nil, let last4 = r.last4, !last4.isEmpty {
+                if let settled = book.noteUnmatchedDigits(last4) {
+                    card = settled
+                } else if book.active.count >= 2 {
+                    PendingCardDigits.note(last4, defaults: defaults)
+                    unmatchedDigits = last4
+                }
+            }
+            let resolvedCard = card ?? Card(rawValue: r.card)
 
             if r.kind == "refund" {
                 // No match yet (the purchase may come from the other Gmail
                 // account on a later sync): leave it unmarked so it's retried.
-                guard markRefunded(amount: amount, currency: r.currency, card: card, merchant: r.rawMerchant ?? r.merchant,
+                guard markRefunded(amount: amount, currency: r.currency, card: resolvedCard, merchant: r.rawMerchant ?? r.merchant,
                                    platform: r.platform, before: date, in: context) else {
                     // Keep it for 30 days: its purchase may arrive in a later
                     // batch, sync or Gmail account.
@@ -94,8 +109,9 @@ enum EmailSync {
                 summary.refunds += 1
             } else {
                 var purchase = IncomingPurchase(date: date, merchant: r.merchant, amount: amount,
-                                                currency: r.currency, card: card, source: .email,
+                                                currency: r.currency, card: resolvedCard, source: .email,
                                                 note: r.note ?? "", platform: r.platform)
+                purchase.unmatchedLast4 = unmatchedDigits
                 // Delivery orders: use the shop's category if it has one
                 // (Costco → Groceries), otherwise Food Delivery.
                 if r.platform == "doordash" || r.platform == "uber" {
@@ -135,7 +151,7 @@ enum EmailSync {
         }
         pendingRefunds = stillWaiting
         try context.save()
-        CardBook.shared.adoptLegacy(usedIds: Set(records.map(\.card)))
+        book.adoptLegacy(usedIds: Set(records.map(\.card)))
         return summary
     }
 
