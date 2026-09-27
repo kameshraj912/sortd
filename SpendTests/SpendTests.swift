@@ -811,21 +811,45 @@ struct AppLockTests {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     @Test func locksAfterMoreThanAMinute() {
-        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-61), now: now, enabled: true))
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-61), now: now, enabled: true, grace: 60))
     }
 
     @Test func staysOpenAfterThirtySeconds() {
-        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-30), now: now, enabled: true))
-        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-60), now: now, enabled: true))
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-30), now: now, enabled: true, grace: 60))
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-60), now: now, enabled: true, grace: 60))
     }
 
     @Test func locksOnLaunch() {
-        #expect(AppLock.shouldLock(lastActive: nil, now: now, enabled: true))
+        #expect(AppLock.shouldLock(lastActive: nil, now: now, enabled: true, grace: 60))
     }
 
     @Test func neverLocksWhenOff() {
-        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3600), now: now, enabled: false))
-        #expect(!AppLock.shouldLock(lastActive: nil, now: now, enabled: false))
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3600), now: now, enabled: false, grace: 60))
+        #expect(!AppLock.shouldLock(lastActive: nil, now: now, enabled: false, grace: 60))
+    }
+
+    @Test func requireAfterImmediately() {
+        let grace = TimeInterval(AppLock.RequireAfter.immediately.rawValue)
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-1), now: now, enabled: true, grace: grace))
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-0.001), now: now, enabled: true, grace: grace))
+    }
+
+    @Test func requireAfterOneMinute() {
+        let grace = TimeInterval(AppLock.RequireAfter.oneMinute.rawValue)
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-59), now: now, enabled: true, grace: grace))
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-61), now: now, enabled: true, grace: grace))
+    }
+
+    @Test func requireAfterFifteenMinutes() {
+        let grace = TimeInterval(AppLock.RequireAfter.fifteenMinutes.rawValue)
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-899), now: now, enabled: true, grace: grace))
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-901), now: now, enabled: true, grace: grace))
+    }
+
+    @Test func requireAfterOneHour() {
+        let grace = TimeInterval(AppLock.RequireAfter.oneHour.rawValue)
+        #expect(!AppLock.shouldLock(lastActive: now.addingTimeInterval(-3599), now: now, enabled: true, grace: grace))
+        #expect(AppLock.shouldLock(lastActive: now.addingTimeInterval(-3601), now: now, enabled: true, grace: grace))
     }
 }
 
