@@ -1,6 +1,38 @@
 import AppIntents
 import SwiftData
 
+/// A field counts as blank when it is empty after trimming — including
+/// zero-width and non-breaking whitespace Shortcuts can leave behind when a
+/// magic variable resolves to nothing — or when it is exactly one of
+/// Shortcuts' own placeholder strings for an unfilled variable (spec
+/// 2026-09-26, failsafe #13: a blank Notification-trigger run must never be
+/// read as a real purchase with a garbage merchant name, and must never be
+/// read as a harmless ▶ preview either).
+nonisolated enum TapField {
+    /// Case-insensitive: Shortcuts' own capitalisation is not guaranteed to
+    /// survive every code path that touches this text.
+    private static let placeholders: Set<String> = [
+        "amount", "merchant", "card or pass", "name", "title", "subtitle", "body",
+        "(null)", "nil", "\"\"",
+    ]
+
+    /// Whitespace plus the invisible characters a copy-pasted or
+    /// automation-generated string can carry that `.whitespacesAndNewlines`
+    /// does not already strip.
+    private static let invisible = CharacterSet.whitespacesAndNewlines
+        .union(CharacterSet(charactersIn: "\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}"))
+
+    /// The value with invisible characters trimmed, or "" when it is blank
+    /// by either definition above.
+    static func normalize(_ value: String?) -> String {
+        guard let value else { return "" }
+        let trimmed = value.trimmingCharacters(in: invisible)
+        return placeholders.contains(trimmed.lowercased()) ? "" : trimmed
+    }
+
+    static func isBlank(_ value: String?) -> Bool { normalize(value).isEmpty }
+}
+
 /// One-field version of Log Purchase for the Wallet automation: pick the
 /// Transaction once and Sortd pulls out the amount, shop and card itself.
 /// Shortcuts turns the transaction into text; its exact layout isn't
@@ -38,18 +70,45 @@ struct LogWalletTapIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        // #8 (spec 2026-09-26): never crash the process if the store can't
-        // open — queue the already-resolved fields instead.
+        let r = await Self.performAndLog(transaction: transaction, amount: amount, merchant: merchant, card: card)
+        return .result(dialog: IntentDialog(stringLiteral: r.message))
+    }
+
+    /// Every step `perform()` takes, in one place: the store-can't-open
+    /// fallback (#8, spec 2026-09-26) queues the already-resolved fields
+    /// instead of crashing or throwing; otherwise `handle` runs and the
+    /// widget is refreshed before Shortcuts ends. Never throws — `handle`'s
+    /// own do/catch already turns a save failure into a queued tap, so this
+    /// only guards the type system's own `throws`, keeping the promise that
+    /// Shortcuts never sees a failed action.
+    ///
+    /// Shared with the DEBUG-only tap-replay hook in `SpendApp.swift`'s
+    /// init: a replay run must go through exactly this path, store-failure
+    /// fallback included, not a shortcut through `handle` alone — otherwise
+    /// a replay could look healthy while a real Shortcuts run, hitting a
+    /// closed store, would not be.
+    @MainActor
+    static func performAndLog(transaction: String?, amount: String?, merchant: String?, card: String?,
+                             now: Date = .now) async -> LogPurchaseIntent.Outcome {
         guard case .success(let container) = SpendStore.containerForIntent() else {
             let resolved = Self.resolvedFields(transaction: transaction, amount: amount, merchant: merchant, card: card)
-            let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card)
-            return .result(dialog: IntentDialog(stringLiteral: message))
+            let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card, date: now)
+            return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
         }
-        let r = try await Self.handle(transaction, amount: amount, merchant: merchant, card: card,
-                                      in: container.mainContext, book: .shared)
+        let outcome: LogPurchaseIntent.Outcome
+        do {
+            outcome = try await Self.handle(transaction, amount: amount, merchant: merchant, card: card,
+                                            in: container.mainContext, book: .shared, now: now)
+        } catch {
+            // `handle` never actually throws (its own do/catch queues
+            // instead), but its signature does; a genuine surprise here
+            // still must not reach Shortcuts as a failed action.
+            outcome = LogPurchaseIntent.Outcome(message: "Saved for later. Sortd will finish it when it next opens.",
+                                                transaction: nil, merged: false, saveFailed: true)
+        }
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: container.mainContext)
-        return .result(dialog: IntentDialog(stringLiteral: r.message))
+        return outcome
     }
 
     /// Combines the free-text transaction with any fields set on their own
@@ -65,13 +124,13 @@ struct LogWalletTapIntent: AppIntent {
     nonisolated static func resolvedFields(transaction text: String?, amount: String?, merchant: String?,
                                            card: String?) -> (merchant: String?, amount: String?, card: String?) {
         var parts = WalletTapText.parse(text ?? "")
-        let raw = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = TapField.normalize(text)
         if parts.merchant == nil, parts.amount == nil, !raw.isEmpty, !WalletTapText.looksLikeCard(raw) {
             parts.merchant = String(raw.prefix(60))
         }
         func kept(_ value: String?) -> String? {
-            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (trimmed?.isEmpty ?? true) ? nil : trimmed
+            let normalized = TapField.normalize(value)
+            return normalized.isEmpty ? nil : normalized
         }
         if let amount = kept(amount) { parts.amount = amount }
         if let merchant = kept(merchant) { parts.merchant = merchant }
@@ -113,7 +172,13 @@ nonisolated enum WalletTapText {
         var parts = Parts()
         var rest: [String] = []
         for line in lines {
+            // A whole line that is only a Shortcuts placeholder (an unfilled
+            // Title/Subtitle/Body, spec 2026-09-26 failsafe #13) is not a
+            // shop, a card or an amount — treat it as if the line were
+            // never there, not as text to guess a merchant from.
+            if TapField.isBlank(line) { continue }
             if let (key, value) = keyValue(line) {
+                if TapField.isBlank(value) { continue }
                 switch key {
                 case "amount": parts.amount = value; continue
                 case "merchant": parts.merchant = value; continue
@@ -128,15 +193,45 @@ nonisolated enum WalletTapText {
                 // "Seven Seeds A$4.50 NAB Visa Debit": keep what's around it.
                 let leftover = line.replacingOccurrences(of: money, with: "\n")
                     .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                rest.append(contentsOf: leftover)
+                rest.append(contentsOf: leftover.flatMap(splitIntoCandidates))
             } else {
-                rest.append(line)
+                rest.append(contentsOf: splitIntoCandidates(line))
             }
         }
         // The card is the last line that names a card; the shop is the first other one.
         if parts.card == nil, let i = rest.lastIndex(where: looksLikeCard) { parts.card = rest.remove(at: i) }
         if parts.merchant == nil, let first = rest.first { parts.merchant = first }
         return parts
+    }
+
+    /// Joining words a one-line prose transaction ("A$5.50 at Seven Seeds
+    /// with NAB Visa Debit", a bank app's own alert text) glues a real shop
+    /// name to. Without splitting on these, the whole trailing phrase reads
+    /// as one candidate and — the moment any word in it (like "Visa")
+    /// `looksLikeCard` — the shop name is swallowed whole into the card
+    /// field along with it and lost (ApplePayHunt items 7/8).
+    private static let connectorWords = ["at", "with", "from", "on", "via", "using", "for"]
+
+    /// A bank app's own framing text ("You spent", "You paid…") is never a
+    /// shop name, even once it's on its own with nothing else nearby
+    /// (ApplePayHunt item 2).
+    private static let nonShopPhrases: Set<String> = [
+        "you spent", "you paid", "payment of", "spent", "paid", "transaction of", "purchase of",
+    ]
+
+    /// Splits one leftover fragment into shop/card candidates: cut on any
+    /// connector word at a word boundary (case-insensitive), trim, drop
+    /// empty pieces and known non-shop filler phrases. A fragment with no
+    /// connector word in it and no filler phrase passes through unchanged
+    /// — this must not disturb the existing one-piece-per-line behaviour.
+    private static func splitIntoCandidates(_ text: String) -> [String] {
+        let pattern = "\\b(?:" + connectorWords.joined(separator: "|") + ")\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [text] }
+        let ns = text as NSString
+        let replaced = regex.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "\n")
+        return replaced.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !nonShopPhrases.contains($0.lowercased()) }
     }
 
     private static func keyValue(_ line: String) -> (String, String)? {
