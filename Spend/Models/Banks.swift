@@ -104,9 +104,23 @@ nonisolated struct BankPreset: Identifiable, Hashable, Sendable {
 }
 
 extension CardBook {
+    /// Filler words a masked-digit phrase leaves behind once its digits are
+    /// stripped ("ending 4821", "card ending in 4821") — none of them is a
+    /// card name on its own. Left over alone, they must never become a
+    /// brand-new saved card (ApplePayHunt item 4); a real card word next to
+    /// one of these ("NAB Visa Debit ending 4821") is unaffected, since only
+    /// the *fully* filtered name is checked against this, not each word.
+    private static let maskedDigitFillerWords: Set<String> = [
+        "ending", "card", "no", "no.", "number", "num", "in", "with", "using", "on", "via", "pay", "apple",
+    ]
+
     /// For Apple Pay taps: the matching card, or a new one named after the
     /// card in Wallet, so nobody has to add cards by hand first.
     func matchOrCreate(_ walletName: String?) -> Card {
+        // A blank field — empty, or one of Shortcuts' own placeholder
+        // strings for an unfilled variable (spec 2026-09-26, failsafe #13)
+        // — is not a card name and must never create one.
+        guard !TapField.isBlank(walletName) else { return .other }
         // Saved digits settle it, even if the name says otherwise.
         if let byDigits = card(digitsIn: walletName) { return byDigits }
         var found = match(walletName)
@@ -119,6 +133,12 @@ extension CardBook {
             .filter { word in !word.contains(where: \.isNumber) && !word.allSatisfy { "•·….*-".contains($0) } }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "•·…-*")))
+        // A masked-digit phrase ("ending 4821", "card ending in 4821") with
+        // no real card word left once its digits and filler words are both
+        // gone must match an existing card by digits alone or create
+        // nothing — not save "ending" as if it were the card's own name.
+        let onlyFiller = !name.isEmpty && name.split(separator: " ")
+            .allSatisfy { Self.maskedDigitFillerWords.contains($0.lowercased()) }
         // "CommBank Credit" must not land on the CommBank debit card.
         let lower = name.lowercased()
         if let info = self.info(found), (lower.contains("credit") && !info.isCredit) || (lower.contains("debit") && info.isCredit) {
@@ -141,7 +161,7 @@ extension CardBook {
             ambiguous = true
         }
         if found != .other { return found }
-        guard name.count >= 2 else { return found }
+        guard name.count >= 2, !onlyFiller else { return found }
         let bank = BankPreset.match(name)
         // Two cards could fit: name the new one by its digits so it's easy to tell apart.
         let label = ambiguous ? "\(name) ••\(digits.last ?? "")" : name

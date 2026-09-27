@@ -33,6 +33,12 @@ enum Activation {
         // standalone refund tap (no earlier purchase to match) would
         // otherwise become its own row and wrongly trigger the aha.
         guard !t.refunded else { return nil }
+        // A flagged "needs a check" row (spec 2026-09-26, failsafes #10/#13)
+        // is a tap that arrived with too little to log cleanly — it proves
+        // Sortd is connected, not that the person has real spending to see,
+        // so it must never be the aha and must never spend the one
+        // celebration a real first purchase gets.
+        guard !t.needsCheck else { return nil }
         let seen = t.seenIn
         if seen.contains(.tap) { return .tap }
         if seen.contains(.email) { return .email }
