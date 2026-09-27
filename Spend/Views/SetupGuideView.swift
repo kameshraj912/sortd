@@ -35,7 +35,7 @@ struct SetupGuideView: View {
             .listRowBackground(Color.clear)
 
             Section {
-                ApplePaySetupPanel(status: status)
+                ApplePaySetupPanel(status: status, needsCheckCount: ApplePayStatus.needsCheckCount(in: transactions))
             } footer: {
                 Text(Features.gmail
                      ? "In-app and online Apple Pay comes from your email receipts."

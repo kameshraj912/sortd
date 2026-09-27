@@ -104,6 +104,7 @@ struct SettingsView: View {
     private var sourcesSubtitle: String {
         switch ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions) {
         case .tapLogged(let date, _, _, _): "Last tap \(date.formatted(.relative(presentation: .named)))"
+        case .tapNeedsCheck: "Last tap needs a check"
         case .shortcutReached: "Connected · waiting for a shop tap"
         case .notConnected: "Not set up yet"
         }

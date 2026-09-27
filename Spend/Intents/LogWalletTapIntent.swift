@@ -38,25 +38,37 @@ struct LogWalletTapIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // #8 (spec 2026-09-26): never crash the process if the store can't
+        // open — queue the already-resolved fields instead.
+        guard case .success(let container) = SpendStore.containerForIntent() else {
+            let resolved = Self.resolvedFields(transaction: transaction, amount: amount, merchant: merchant, card: card)
+            let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card)
+            return .result(dialog: IntentDialog(stringLiteral: message))
+        }
         let r = try await Self.handle(transaction, amount: amount, merchant: merchant, card: card,
-                                      in: SpendStore.container.mainContext, book: .shared)
+                                      in: container.mainContext, book: .shared)
         // The app may not be running: update the widget before Shortcuts ends.
-        WidgetBridge.refresh(from: SpendStore.container.mainContext)
+        WidgetBridge.refresh(from: container.mainContext)
         return .result(dialog: IntentDialog(stringLiteral: r.message))
     }
 
-    @MainActor
-    static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
-                       in context: ModelContext, book: CardBook,
-                       now: Date = .now) async throws -> LogPurchaseIntent.Outcome {
+    /// Combines the free-text transaction with any fields set on their own
+    /// (explicit fields win: they came straight from the transaction, not
+    /// from text somebody had to format). Pure, so both `handle` and
+    /// `perform`'s store-failure fallback can reuse it — a tap queued for
+    /// later gets the same resolved fields it would otherwise have logged.
+    ///
+    /// A lone card name in the free text ("Visa Debit ••4821", known bug
+    /// U6) is never accepted as a merchant: `WalletTapText.parse` has
+    /// already put it in `card`, and text that only names a card is not a
+    /// shop even when parsing found nothing else at all.
+    nonisolated static func resolvedFields(transaction text: String?, amount: String?, merchant: String?,
+                                           card: String?) -> (merchant: String?, amount: String?, card: String?) {
         var parts = WalletTapText.parse(text ?? "")
-        // Test runs send nothing; any text at all is a real tap, so never drop it.
         let raw = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if parts.merchant == nil, parts.amount == nil, !raw.isEmpty {
+        if parts.merchant == nil, parts.amount == nil, !raw.isEmpty, !WalletTapText.looksLikeCard(raw) {
             parts.merchant = String(raw.prefix(60))
         }
-        // Fields set on their own win: they came straight from the
-        // transaction, not from text somebody had to format.
         func kept(_ value: String?) -> String? {
             let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
             return (trimmed?.isEmpty ?? true) ? nil : trimmed
@@ -64,11 +76,20 @@ struct LogWalletTapIntent: AppIntent {
         if let amount = kept(amount) { parts.amount = amount }
         if let merchant = kept(merchant) { parts.merchant = merchant }
         if let card = kept(card) { parts.card = card }
-        let result = try await LogPurchaseIntent.handle(merchant: parts.merchant, amount: parts.amount,
-                                                        card: parts.card, in: context, book: book, now: now)
+        return (parts.merchant, parts.amount, parts.card)
+    }
+
+    @MainActor
+    static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
+                       in context: ModelContext, book: CardBook,
+                       now: Date = .now, debugForceSaveFailure: Bool = false) async throws -> LogPurchaseIntent.Outcome {
+        let resolved = resolvedFields(transaction: text, amount: amount, merchant: merchant, card: card)
+        let result = try await LogPurchaseIntent.handle(merchant: resolved.merchant, amount: resolved.amount,
+                                                        card: resolved.card, in: context, book: book, now: now,
+                                                        debugForceSaveFailure: debugForceSaveFailure)
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
         // purchase; a legacy "Send a Test Tap" row is not a real tap).
-        if result.transaction != nil, parts.merchant != LogPurchaseIntent.legacyTestMerchant {
+        if result.transaction != nil, resolved.merchant != LogPurchaseIntent.legacyTestMerchant {
             Analytics.shared.track(.applePayTapLogged, ["merged": .bool(result.merged)])
         }
         return result

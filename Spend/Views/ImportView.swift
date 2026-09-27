@@ -340,6 +340,7 @@ struct ImportView: View {
         guard !busy else { return }
         busy = true
         saving = found.count
+        Analytics.shared.track(.statementImported, ["rows": .int(found.count)])
         Task {
             // Let "Adding N purchases…" reach the screen before the work starts.
             try? await Task.sleep(for: .milliseconds(30))

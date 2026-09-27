@@ -182,6 +182,7 @@ struct BudgetSheet: View {
                 Button {
                     budget = value
                     saved += 1
+                    Analytics.shared.track(.budgetSet)
                     dismiss()
                 } label: {
                     Text("Save")
