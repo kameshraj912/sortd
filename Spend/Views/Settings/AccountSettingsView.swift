@@ -21,6 +21,10 @@ struct AccountSettingsView: View {
     @State private var working = false
     @State private var notice: Notice?
     @State private var confirmingDelete = false
+    /// Second step for "and All Data": it also deletes the iCloud backup,
+    /// which a one-line note at the end of the first alert did not make
+    /// clear (Raj lost his backup this way, 28 Sep).
+    @State private var confirmingDeleteAll = false
 
     struct Notice {
         let title: String
@@ -41,10 +45,18 @@ struct AccountSettingsView: View {
         .brandedTitle("Account")
         .alert("Delete your account?", isPresented: $confirmingDelete) {
             Button("Delete Account", role: .destructive) { Task { await deleteAccount(alsoData: false) } }
-            Button("Delete Account and All Data", role: .destructive) { Task { await deleteAccount(alsoData: true) } }
+            Button("Delete Account and All Data", role: .destructive) { confirmingDeleteAll = true }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(deleteMessage)
+        }
+        .alert("Delete your account and all data?", isPresented: $confirmingDeleteAll) {
+            Button("Delete Everything", role: .destructive) { Task { await deleteAccount(alsoData: true) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(BackupDataSettingsView.deleteAllMessage(
+                gmailConnected: !GmailSync.accounts.isEmpty,
+                deletesCloudCopy: CloudBackup.shared.deletesCloudCopyOnReset))
         }
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("OK") {}
