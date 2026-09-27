@@ -8,7 +8,12 @@ import PostHog
 /// cards, top categories, then a plain dated list of purchases.
 struct HomeView: View {
     @Binding var tab: AppTab
-    @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    // Excludes the removed "Send a Test Tap" button's rows from Recent, the
+    // totals and the cards below: `Transaction.excludingLegacyTest`
+    // (`ActivityView` does the same; `ApplePayStatus` still needs them, and
+    // reads its own unfiltered query in `FinishSetupCard`/`SetupGuideView`).
+    @Query(filter: Transaction.excludingLegacyTest, sort: \Transaction.date, order: .reverse)
+    private var transactions: [Transaction]
     @AppStorage("monthlyBudget") private var budget: Double = 0
     @State private var month: Date = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var showingAdd = false

@@ -114,6 +114,23 @@ final class Transaction {
     /// note away un-flags it — the point where a person has looked and
     /// either fixed it or decided it's fine.
     var needsCheck: Bool { needsReview || note.hasPrefix(Self.needsCheckTag) }
+
+    /// Rows the removed "Send a Test Tap" button left behind
+    /// (`LogPurchaseIntent.legacyTestMerchant`), and the Apple Pay health
+    /// check's own runs (`ApplePayHealthCheck.merchant`). Old installs may
+    /// still have the first kind; the second is made on purpose whenever
+    /// "Check the Shortcut" runs. Neither must ever appear in Activity (any
+    /// day, search or a card's own list), Home's Recent list, Insights,
+    /// budgets or totals — only `ApplePayStatus` still needs to see them
+    /// (it already excludes them itself, `realTaps`), so screens that
+    /// resolve the Apple Pay status query `Transaction` unfiltered, not
+    /// through this.
+    static var excludingLegacyTest: Predicate<Transaction> {
+        let test = LogPurchaseIntent.legacyTestMerchant
+        let check = ApplePayHealthCheck.merchant
+        return #Predicate<Transaction> { $0.merchant != test && $0.rawMerchant != test
+            && $0.merchant != check && $0.rawMerchant != check }
+    }
 }
 
 extension Collection where Element == Transaction {
