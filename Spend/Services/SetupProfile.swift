@@ -7,9 +7,7 @@ import UserNotifications
 enum SetupProfile {
     static let goalsKey = "setup.goals"
     static let paymentKey = "setup.payment"
-    static let feelingKey = "setup.feeling"
     static let checkInKey = "setup.checkIn"
-    static let abroadKey = "setup.abroad"
     static let billsKey = "setup.billReminders"
     static let rerunKey = "setup.rerun"
 
@@ -64,42 +62,6 @@ enum SetupProfile {
             case .online: "shippingbox"
             case .cash: "banknote"
             case .mix: "shuffle"
-            }
-        }
-    }
-
-    enum Abroad: String, CaseIterable, Identifiable, Sendable {
-        case often, sometimes, rarely
-        var id: String { rawValue }
-        var title: String { rawValue.capitalized }
-    }
-
-    enum Feeling: String, CaseIterable, Identifiable, Sendable {
-        case inControl, fine, lost, stressed
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .inControl: "In control"
-            case .fine: "Mostly fine"
-            case .lost: "A bit lost"
-            case .stressed: "Stressed"
-            }
-        }
-        var symbol: String {
-            switch self {
-            case .inControl: "checkmark.seal"
-            case .fine: "hand.thumbsup"
-            case .lost: "cloud.fog"
-            case .stressed: "exclamationmark.triangle"
-            }
-        }
-        /// Said back after they pick, so the question feels heard.
-        var reply: String {
-            switch self {
-            case .inControl: "Nice. Sortd will keep it that way without getting in the way."
-            case .fine: "Good start. Seeing it all in one place usually helps the rest."
-            case .lost: "That's normal. Most people feel better once they can just see it."
-            case .stressed: "Thanks for being honest. No judging here. We'll keep it simple and kind."
             }
         }
     }
