@@ -3,18 +3,14 @@ import Foundation
 import SwiftData
 @testable import Spend
 
-/// The removed "Send a Test Tap" button's rows must never reach Activity
-/// (any day, search or a card's own list), Home's Recent list, Insights,
-/// budgets or totals, though the store still keeps them — `ApplePayStatus`
-/// needs them there to settle old installs' status (`ApplePayStatusTests`).
-/// One shared predicate does the hiding everywhere those screens query from:
-/// `Transaction.excludingLegacyTest`.
-///
-/// The brief for this change names an `ApplePayHealthCheck.merchant`; no
-/// such file or feature exists on this branch (only on the unmerged
-/// `origin/applepay-failsafes`), so the legacy test merchant
-/// (`LogPurchaseIntent.legacyTestMerchant`, "Sortd Test") stands in for it
-/// here — it is the one row of this kind the app can actually produce today.
+/// Neither the removed "Send a Test Tap" button's rows
+/// (`LogPurchaseIntent.legacyTestMerchant`, "Sortd Test") nor "Check the
+/// Shortcut"'s own runs (`ApplePayHealthCheck.merchant`, "Sortd Check") may
+/// ever reach Activity (any day, search or a card's own list), Home's
+/// Recent list, Insights, budgets or totals, though the store still keeps
+/// them — `ApplePayStatus` needs them there to settle status
+/// (`ApplePayStatusTests`). One shared predicate does the hiding everywhere
+/// those screens query from: `Transaction.excludingLegacyTest`.
 @MainActor
 struct HiddenTestRowsTests {
     let context: ModelContext
@@ -63,13 +59,39 @@ struct HiddenTestRowsTests {
         #expect(visible.isEmpty)
     }
 
+    @Test func excludesTheHealthChecksOwnRowsToo() throws {
+        let real = Transaction(date: .now, merchant: "Seven Seeds", amount: Decimal(string: "4.50")!,
+                               currencyCode: "AUD", card: .other, category: .eatingOut, source: .tap)
+        let check = Transaction(date: .now, merchant: ApplePayHealthCheck.merchant, amount: Decimal(string: "0.01")!,
+                                currencyCode: "AUD", card: .other, category: .other, source: .tap)
+        let checkByRaw = Transaction(date: .now, merchant: "Sortd Check Store", rawMerchant: ApplePayHealthCheck.merchant,
+                                    amount: 1, currencyCode: "AUD", card: .other, category: .other, source: .tap)
+        context.insert(real)
+        context.insert(check)
+        context.insert(checkByRaw)
+        try context.save()
+
+        // Unfiltered: every row is really in the store (ApplePayStatus still needs this).
+        #expect(try context.fetch(FetchDescriptor<Transaction>()).count == 3)
+
+        let visible = try context.fetch(FetchDescriptor<Transaction>(predicate: Transaction.excludingLegacyTest))
+        #expect(visible.count == 1)
+        #expect(visible.first?.merchant == "Seven Seeds")
+    }
+
     @Test func statusStillSaysTheShortcutReachedAfterACheck() {
-        // ApplePayStatus reads its own unfiltered query (`FinishSetupCard`,
-        // `SetupGuideView`) and already excludes the test merchant on its
-        // own (`ApplePayStatus.realTaps`), so hiding it from Activity/Home
-        // never changes this; full coverage lives in `ApplePayStatusTests`.
+        // A "Check the Shortcut" run leaves a real row in the store (kept
+        // for `ApplePayStatus`, hidden from every screen above), but it's
+        // not a real tap: `ApplePayStatus.realTaps` excludes it the same
+        // way it excludes the legacy test merchant, so the card still says
+        // "Shortcut reached" from `lastReachedAt`, never "Last tap logged"
+        // for the check's own A$0.01. Full coverage of the rule itself
+        // lives in `ApplePayStatusTests`.
         let reached = Date(timeIntervalSince1970: 1_790_000_000)
-        let status = ApplePayStatus.resolve(lastReachedAt: reached, taps: [])
+        let checkRun = Transaction(date: reached, merchant: ApplePayHealthCheck.merchant,
+                                  amount: Decimal(string: "0.01")!, currencyCode: "AUD",
+                                  card: .other, category: .other, source: .tap)
+        let status = ApplePayStatus.resolve(lastReachedAt: reached, taps: [checkRun])
         #expect(status == .shortcutReached(reached))
         #expect(status.title.hasPrefix("Shortcut reached Sortd"))
     }
