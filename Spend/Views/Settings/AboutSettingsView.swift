@@ -6,6 +6,7 @@ import StoreKit
 /// and the App Store / website / legal links.
 struct AboutSettingsView: View {
     @State private var tipping = false
+    @State private var showingFounderNote = false
     private let tipJar = TipJar.shared
     @Environment(\.requestReview) private var requestReview
     /// Taps on the version line, for the hidden developer menu: 7 within 3
@@ -64,6 +65,9 @@ struct AboutSettingsView: View {
             }
 
             Section {
+                Button { showingFounderNote = true } label: {
+                    Label("A Note from the Founder", systemImage: "envelope.open")
+                }
                 Button { requestReview() } label: {
                     Label("Rate on the App Store", systemImage: "star")
                 }
@@ -89,6 +93,7 @@ struct AboutSettingsView: View {
         .contentMargins(.bottom, 24, for: .scrollContent)
         .brandedTitle("About")
         .sheet(isPresented: $tipping) { TipJarView() }
+        .sheet(isPresented: $showingFounderNote) { FounderNoteSheet(moment: .about) }
         .task { await tipJar.load() }
         .sheet(isPresented: $showingDeveloper) { DeveloperMenuView() }
         // `.undo`'s light weight, reused here for the 7th tap: the map has
