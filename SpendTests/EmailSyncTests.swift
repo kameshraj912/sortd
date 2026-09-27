@@ -14,9 +14,16 @@ struct EmailSyncTests {
     }
 
     func record(_ id: String, kind: String = "purchase", merchant: String, raw: String? = nil, platform: String? = nil,
-                amount: String, currency: String = "AUD", card: String = "other", date: String, note: String? = nil) -> EmailRecord {
+                amount: String, currency: String = "AUD", card: String = "other", last4: String? = nil,
+                date: String, note: String? = nil) -> EmailRecord {
         EmailRecord(id: id, kind: kind, merchant: merchant, rawMerchant: raw ?? merchant, platform: platform,
-                    amount: amount, currency: currency, card: card, date: date, note: note, subscription: nil)
+                    amount: amount, currency: currency, card: card, last4: last4, date: date, note: note, subscription: nil)
+    }
+
+    private func book(_ cards: [CardInfo] = []) -> CardBook {
+        let b = CardBook(defaults: UserDefaults(suiteName: "email-sync-cards-\(UUID().uuidString)")!)
+        cards.forEach(b.upsert)
+        return b
     }
 
     var all: [Transaction] { (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] }
@@ -74,5 +81,51 @@ struct EmailSyncTests {
             record("b", merchant: "El Jannah", platform: "doordash", amount: "31.50", date: "2026-09-13T12:00:00.000Z"),
         ], in: context)
         #expect(all.count == 2)
+    }
+
+    // MARK: Unmatched last-4 → "Which card?" (spec 2026-09-27)
+
+    @Test func oneActiveCardSettlesUnmatchedDigitsWithNoQueue() throws {
+        let b = book([CardInfo(name: "NAB Debit", shortName: "NAB")])
+        let nab = b.cards[0].card
+        let defaults = UserDefaults(suiteName: "pending-\(UUID().uuidString)")!
+        try EmailSync.importRecords([record("a", merchant: "Woolworths", amount: "40.00", last4: "1234",
+                                           date: "2026-09-13T09:00:00.000Z")], in: context, book: b, defaults: defaults)
+        #expect(all.first?.card == nab)
+        #expect(all.first?.unmatchedLast4 == nil)
+        #expect(b.info(nab)?.last4 == ["1234"])
+        #expect(PendingCardDigits.load(from: defaults).isEmpty)   // never touched: settled on its own
+    }
+
+    @Test func twoActiveCardsQueueTheDigitsAndKeepTheOtherCard() throws {
+        let b = book([CardInfo(name: "NAB Debit", shortName: "NAB"), CardInfo(name: "SC Debit", shortName: "SC")])
+        let defaults = UserDefaults(suiteName: "pending-\(UUID().uuidString)")!
+        try EmailSync.importRecords([record("a", merchant: "Woolworths", amount: "40.00", last4: "1234",
+                                           date: "2026-09-13T09:00:00.000Z")], in: context, book: b, defaults: defaults)
+        let t = try #require(all.first)
+        #expect(t.card == .other)                 // the `card: "other"` fallback, unchanged
+        #expect(t.unmatchedLast4 == "1234")
+        #expect(PendingCardDigits.load(from: defaults) == ["1234"])
+        #expect(b.cards.allSatisfy { $0.last4.isEmpty })   // no guessing
+    }
+
+    @Test func noActiveCardsDropTheDigits() throws {
+        let defaults = UserDefaults(suiteName: "pending-\(UUID().uuidString)")!
+        try EmailSync.importRecords([record("a", merchant: "Woolworths", amount: "40.00", last4: "1234",
+                                           date: "2026-09-13T09:00:00.000Z")], in: context, book: book(), defaults: defaults)
+        #expect(all.first?.card == .other)
+        #expect(all.first?.unmatchedLast4 == nil)
+        #expect(PendingCardDigits.load(from: defaults).isEmpty)
+    }
+
+    @Test func digitsAlreadyOnACardNeverQueue() throws {
+        var nab = CardInfo(name: "NAB Debit", shortName: "NAB")
+        nab.last4 = ["1234"]
+        let b = book([nab, CardInfo(name: "SC Debit", shortName: "SC")])
+        try EmailSync.importRecords([record("a", merchant: "Woolworths", amount: "40.00", last4: "1234",
+                                           date: "2026-09-13T09:00:00.000Z")], in: context, book: b,
+                                    defaults: UserDefaults(suiteName: "pending-\(UUID().uuidString)")!)
+        #expect(all.first?.card == b.cards[0].card)
+        #expect(all.first?.unmatchedLast4 == nil)
     }
 }

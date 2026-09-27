@@ -32,6 +32,12 @@ final class Transaction {
     /// The Gmail account an email purchase came from, so disconnecting it
     /// can remove its purchases.
     var sourceAccount: String?
+    /// Last 4 digits a receipt or bank alert carried that matched none of
+    /// Raj's cards, while it waits for "Which card?" (Home) to be answered.
+    /// Non-nil only until then: picking a card clears it on every purchase
+    /// that shares the digits, "Not one of mine" just empties the queue and
+    /// leaves this as is (spec 2026-09-27).
+    var unmatchedLast4: String?
 
     init(date: Date, merchant: String, rawMerchant: String? = nil, amount: Decimal,
          currencyCode: String, card: Card, category: SpendCategory, source: TxnSource,
