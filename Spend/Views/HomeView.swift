@@ -24,6 +24,11 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @AppStorage(OnboardingView.doneKey) private var onboarded = true
     @Environment(\.modelContext) private var context
+    /// Watches the aha card's own flag (`ActivationCard`): the rising edge
+    /// (false → true) is the moment its celebration starts, so the
+    /// founder's note can follow it once the animation has played.
+    @AppStorage(Activation.celebratedKey) private var activationCelebrated = false
+    @State private var showingFounderNote = false
     /// Card in view in the carousel: "all" or a Card rawValue.
     @State private var focused: String? = "all"
     @ScaledMetric(relativeTo: .largeTitle) private var totalSize: CGFloat = 52
@@ -144,12 +149,23 @@ struct HomeView: View {
                 NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
             }
             .sheet(isPresented: $showingBudget) { BudgetSheet(budget: $budget) }
+            .sheet(isPresented: $showingFounderNote) { FounderNoteSheet(moment: .aha) }
             .refreshNote($refreshNote, bottomPadding: 16)
         }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
         }
+        // The founder's note follows the aha celebration by ~1.2s (the
+        // symbol bounce), never on top of setup or another sheet/alert.
+        .onChange(of: activationCelebrated) { was, now in
+            guard now, !was else { return }
+            scheduleFounderNote()
+        }
+        #if DEBUG
+        // Screenshots: SPEND_FOUNDER_NOTE=1 shows the sheet at once.
+        .onAppear { if Self.forceFounderNote { showingFounderNote = true } }
+        #endif
         // Tips: the rules read the purchase figures (visits are counted by
         // RootView, on the tab, so a return from a detail is not one).
         .onChange(of: transactions.count, initial: true) { TipState.update(from: transactions) }
@@ -162,6 +178,36 @@ struct HomeView: View {
     #else
     static let hideDemoBanner = false
     #endif
+
+    /// Debug: SPEND_FOUNDER_NOTE=1 shows the founder's note sheet at once,
+    /// for screenshots (`scripts/sim.sh launch SPEND_DEMO=1 SPEND_FOUNDER_NOTE=1`).
+    #if DEBUG
+    static let forceFounderNote = ProcessInfo.processInfo.environment["SPEND_FOUNDER_NOTE"] == "1"
+    #else
+    static let forceFounderNote = false
+    #endif
+
+    /// Any other sheet, alert or confirmation already on screen: the note
+    /// waits rather than stacking on top of one.
+    private var anotherSheetOrAlertShowing: Bool {
+        showingAdd || showingSetup || showingBudget || confirmingClearDemo || Router.shared.showingSettings
+    }
+
+    /// Waits for the aha card's celebration (`.symbolEffect(.bounce)`, ~1.2s)
+    /// to finish, then shows the founder's note if the pure rule still says
+    /// yes — state can change during the wait, so it is checked twice.
+    private func scheduleFounderNote() {
+        guard FounderNote.shouldShowAtAha(hasFirstAutoPurchase: UserDefaults.standard.bool(forKey: Activation.seenKey),
+                                          seenBefore: FounderNote.hasBeenSeen(), setupDone: onboarded,
+                                          anotherSheetOrAlertShowing: anotherSheetOrAlertShowing) else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard FounderNote.shouldShowAtAha(hasFirstAutoPurchase: UserDefaults.standard.bool(forKey: Activation.seenKey),
+                                              seenBefore: FounderNote.hasBeenSeen(), setupDone: onboarded,
+                                              anotherSheetOrAlertShowing: anotherSheetOrAlertShowing) else { return }
+            showingFounderNote = true
+        }
+    }
 
     private var demoBanner: some View {
         let layout = typeSize.isAccessibilitySize
