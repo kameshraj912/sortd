@@ -74,7 +74,7 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 
 The names below are the `Analytics.Event` raw values, pinned by `SpendTests/AnalyticsTests.swift` (updated 25 Sep 2026 to match the code; the earlier draft names are gone).
 
-- `setup_started(rerun)`, `setup_step_viewed(step, index)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`
+- `setup_started(rerun)`, `setup_step_viewed(step, index)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`. `step` is the `SetupFlow.Step` case name (`welcome`, `account`, `goals`, …); the optional `.account` step (sub-spec 4, on with `SORTD_SIGNIN`) adds a `choice` property to its own `setup_step_completed`: `apple`, `google` or `guest` — never which provider's sheet failed, just how the person got past the step
 - `activation_first_auto_purchase(source: tap|email, hours_bucket)`: once per install, never on sample data or a test tap
 - `tab_opened(tab)`: the first tab at launch included
 - `purchase_added_manually(category_changed, has_note)`
@@ -87,6 +87,7 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `intro_shown`, `intro_finished(skipped, step)`: the three-step app intro (`docs/specs/2026-09-25-app-intro.md`). `intro_shown` once per showing (a fresh install or a Help replay); `intro_finished` once per showing when it ends, `step` is the 0-based step it ended on
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
 - `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
+- `founder_note_seen(moment: aha|about)`: the founder's note (`FounderNoteSheet`), sent each time it is shown — at the aha moment (once ever, right after `ActivationCard`'s celebration) or replayed from Settings › About. `founder_note_reply_tapped`: the "Tell Kameshraj" button, before its mailto opens.
 - `card_digits_prompted`, `card_digits_answered(choice: card|not_mine)`: Home's "Which card?" card (spec 2026-09-27), shown when a receipt or bank alert's last 4 matches none of Raj's cards and two or more are active. `card_digits_prompted` once per digit set shown; `card_digits_answered` when a card is picked or "Not one of mine" is tapped. Never the digits themselves.
 
 ### Beta additions (26 Sep 2026): more intent events, session replay, the developer menu

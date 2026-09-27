@@ -7,7 +7,7 @@ struct AddTransactionView: View {
     @AppStorage("lastCard") private var lastCard: Card = .other
 
     @State private var amountText = ""
-    @State private var currency = LocalCurrency.current()
+    @State private var currency = AddTransactionView.defaultCurrency()
     @State private var merchant = ""
     @State private var category: SpendCategory = .other
     @State private var categoryTouched = false
@@ -407,6 +407,12 @@ struct AddTransactionView: View {
     /// What the amount field accepts: the shared rule, with 6 whole digits
     /// because this sheet saves under 1,000,000 (`parsedAmount`).
     nonisolated static func isTypeable(_ text: String) -> Bool { AmountEntry.isTypeable(text, wholeDigits: 6) }
+
+    /// A new purchase starts in the currency totals are shown in (set during
+    /// setup, changeable in Settings), not the phone's locale/time-zone
+    /// guess: a Melbourne phone with SGD chosen as the main currency should
+    /// still default to SGD here, not AUD (UX pass, fresh-user walkthrough).
+    nonisolated static func defaultCurrency() -> String { Money.home }
 
     private var isValid: Bool {
         // Only the amount is needed; a nameless purchase is saved under its category.

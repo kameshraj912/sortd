@@ -1,13 +1,38 @@
 import SwiftUI
 import LocalAuthentication
 
-/// Face ID / passcode lock. Locks on launch and when you come back after
-/// more than a minute away. Never locks during first-run setup.
+/// Face ID / passcode lock. Locks on launch and when you come back after the
+/// stored `RequireAfter` grace period (immediately, by default). Never locks
+/// during first-run setup.
 @Observable @MainActor
 final class AppLock {
     static let enabledKey = "appLockEnabled"
-    /// Seconds away before the app locks again.
-    nonisolated static let grace: TimeInterval = 60
+    static let requireAfterKey = "appLockRequireAfter"
+
+    /// How long Sortd can sit in the background before it locks again.
+    /// Banks default to `.immediately`; WhatsApp-style options are also here.
+    enum RequireAfter: Int, CaseIterable, Identifiable {
+        case immediately = 0
+        case oneMinute = 60
+        case fifteenMinutes = 900
+        case oneHour = 3600
+
+        var id: Int { rawValue }
+
+        var label: String {
+            switch self {
+            case .immediately: "Immediately"
+            case .oneMinute: "After 1 minute"
+            case .fifteenMinutes: "After 15 minutes"
+            case .oneHour: "After 1 hour"
+            }
+        }
+    }
+
+    /// The stored choice, defaulting to `.immediately` (banks lock at once).
+    static var requireAfter: RequireAfter {
+        RequireAfter(rawValue: UserDefaults.standard.integer(forKey: requireAfterKey)) ?? .immediately
+    }
 
     private(set) var isLocked: Bool
     private(set) var authenticating = false
@@ -27,7 +52,7 @@ final class AppLock {
 
     /// Pure rule: lock when on and the app was never active (launch) or
     /// has been away for more than `grace` seconds.
-    nonisolated static func shouldLock(lastActive: Date?, now: Date, enabled: Bool) -> Bool {
+    nonisolated static func shouldLock(lastActive: Date?, now: Date, enabled: Bool, grace: TimeInterval) -> Bool {
         guard enabled else { return false }
         guard let lastActive else { return true }
         return now.timeIntervalSince(lastActive) > grace
@@ -47,7 +72,8 @@ final class AppLock {
             // backgrounded, so `backgroundedAt` is untouched by it.
             if !authenticating, !isLocked {
                 let awayStart = backgroundedAt ?? lastActive
-                if Self.shouldLock(lastActive: awayStart, now: now, enabled: enabled) {
+                let grace = TimeInterval(Self.requireAfter.rawValue)
+                if Self.shouldLock(lastActive: awayStart, now: now, enabled: enabled, grace: grace) {
                     isLocked = true
                 }
             }
