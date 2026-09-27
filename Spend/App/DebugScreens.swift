@@ -21,6 +21,37 @@ struct DebugScreenHost: View {
             case "add": Color.page.sheet(isPresented: .constant(true)) { AddTransactionView() }
             case "budget": Color.page.sheet(isPresented: .constant(true)) { BudgetSheet(budget: $budget) }
             case "setup": SetupGuideView()
+            case "applepay-panel":
+                // The panel on its own, no hero text above it — lets a
+                // screenshot at AX5 start on the panel instead of scrolling
+                // past `SetupGuideView`'s own headline first.
+                ScrollView {
+                    ApplePaySetupPanel(status: ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions),
+                                       needsCheckCount: ApplePayStatus.needsCheckCount(in: transactions))
+                        .padding()
+                }
+                .background(Color.page)
+            case "wallet-guide":
+                // One page of the picture guide, drawn on its own: the panel
+                // now keeps the guide behind a collapsed disclosure, and the
+                // pager's own scroll position doesn't jump on a cold launch,
+                // so there's no other one-tap way to land on a given page
+                // for a screenshot. SPEND_GUIDE_PAGE picks the page;
+                // SPEND_GUIDE_ROUTE=byhand switches route (see
+                // `WalletSetupGuide`).
+                let route: WalletSetupGuide.Route = ProcessInfo.processInfo.environment["SPEND_GUIDE_ROUTE"] == "byhand" ? .byHand : .quick
+                let pageIndex = Int(ProcessInfo.processInfo.environment["SPEND_GUIDE_PAGE"] ?? "") ?? 0
+                let pages = route == .quick ? WalletSetupGuide.quickPages : WalletSetupGuide.byHandPages
+                if let p = pages.first(where: { $0.id == pageIndex }) {
+                    Color.page.overlay {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ShortcutsMock(step: p.id, route: route).frame(height: 260)
+                            Text(p.title).font(.headline)
+                            Text(p.detail).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .padding()
+                    }
+                }
             case "tip": Color.page.sheet(isPresented: .constant(true)) { TipJarView() }
             case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
