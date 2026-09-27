@@ -97,6 +97,23 @@ final class Transaction {
     var needsRate: Bool { audAmount == nil }
     /// A tap that arrived without an amount.
     var needsReview: Bool { amount == 0 }
+
+    /// Prefixed onto `note` when a tap saved with too little to log
+    /// cleanly — blank amount, blank shop, or (known bug U6) a lone card
+    /// name where Wallet should have sent more (spec 2026-09-26, "Apple
+    /// Pay logging — failsafes"). A marker in the existing free-text
+    /// field, not a new schema column: no migration is needed for this
+    /// first pass (the spec's own open question 4 on whether to promote it
+    /// to a real field later).
+    static let needsCheckTag = "⚑ "
+
+    /// True for a tap that landed with too little to log cleanly.
+    /// `needsReview` (amount missing) already flags one such case on its
+    /// own; this also catches a blank shop or a card-only tap, which still
+    /// have a real amount and so wouldn't trip `needsReview`. Editing the
+    /// note away un-flags it — the point where a person has looked and
+    /// either fixed it or decided it's fine.
+    var needsCheck: Bool { needsReview || note.hasPrefix(Self.needsCheckTag) }
 }
 
 extension Collection where Element == Transaction {

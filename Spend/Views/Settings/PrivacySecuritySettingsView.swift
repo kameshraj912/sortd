@@ -20,6 +20,7 @@ struct PrivacySecuritySettingsView: View {
                         Task {
                             if await AppLock.authenticate(reason: "Turn on the lock for Sortd.") {
                                 lockEnabled = true
+                                Analytics.shared.track(.appLockTurnedOn)
                             }
                         }
                     }

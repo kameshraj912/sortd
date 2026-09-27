@@ -9,9 +9,24 @@ struct AboutSettingsView: View {
     @State private var showingFounderNote = false
     private let tipJar = TipJar.shared
     @Environment(\.requestReview) private var requestReview
+    /// Taps on the version line, for the hidden developer menu: 7 within 3
+    /// seconds. Old taps age out, so a slow 7th tap never counts a stale run.
+    @State private var versionTaps: [Date] = []
+    @State private var devMenuOpens = 0
+    @State private var showingDeveloper = false
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—" }
+
+    /// 7 taps within 3 seconds opens the developer menu (Settings › About).
+    private func registerVersionTap() {
+        let now = Date.now
+        versionTaps = versionTaps.filter { now.timeIntervalSince($0) < 3 } + [now]
+        guard versionTaps.count >= 7 else { return }
+        versionTaps = []
+        devMenuOpens += 1
+        showingDeveloper = true
+    }
 
     var body: some View {
         List {
@@ -26,6 +41,7 @@ struct AboutSettingsView: View {
                     Text("Sortd").font(.title2.weight(.semibold))
                     Text("Version \(version) (\(build))")
                         .font(.footnote).foregroundStyle(.secondary)
+                        .onTapGesture { registerVersionTap() }
                     Text("Tap to pay. Sortd writes it down.")
                         .font(.subheadline).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -79,5 +95,9 @@ struct AboutSettingsView: View {
         .sheet(isPresented: $tipping) { TipJarView() }
         .sheet(isPresented: $showingFounderNote) { FounderNoteSheet(moment: .about) }
         .task { await tipJar.load() }
+        .sheet(isPresented: $showingDeveloper) { DeveloperMenuView() }
+        // `.undo`'s light weight, reused here for the 7th tap: the map has
+        // no case of its own for a hidden Easter egg.
+        .feedback(.undo, trigger: devMenuOpens)
     }
 }

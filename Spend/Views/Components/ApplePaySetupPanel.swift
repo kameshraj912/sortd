@@ -12,6 +12,10 @@ import SwiftUI
 /// `docs/site-copy-moved.md`.
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
+    /// How many logged taps still need a look (spec 2026-09-26, failsafes
+    /// #2/#10) — `ApplePayStatus.needsCheckCount`, computed by the caller
+    /// (it already has the `@Query`).
+    var needsCheckCount: Int = 0
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
@@ -20,11 +24,122 @@ struct ApplePaySetupPanel: View {
     /// so the page itself stays short (router feel check, 26 Sep 2026).
     @State private var showingRawTap = false
 
+    @State private var healthCheck: ApplePayHealthCheck.State?
+    @State private var healthCheckStartedAt: Date?
+    /// `ApplePayNudge.lastShown()`/`markShown()` store a real `Date` in
+    /// `UserDefaults` (matching `LogPurchaseIntent`'s own keys) — a plain
+    /// `@State`, refreshed on appear, reads the same way rather than
+    /// mismatching it against `@AppStorage`'s own numeric representation.
+    @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
+    @State private var nudgeDismissed = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             statusCard
+            if let line = ApplePayStatus.needsCheckLine(count: needsCheckCount) {
+                // Opens Activity, where the flagged rows carry a "Needs a
+                // check" badge. During first-run setup there are no taps
+                // yet, so this never shows there.
+                Button {
+                    openURL(URL(string: "sortd://activity")!)
+                } label: {
+                    Label(line, systemImage: "exclamationmark.circle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Activity")
+            }
+            healthCheckSection
             steps
             timeoutNote
+            nudgeLine
+        }
+    }
+
+    // MARK: - 14-day nudge (spec 2026-09-26, failsafes #1/#3)
+
+    private var nudgeLine: some View {
+        let everReached = LogPurchaseIntent.shortcutHasReachedApp
+        let due = !nudgeDismissed && ApplePayNudge.shouldShow(setupEverReached: everReached,
+                                                              lastActivityAt: LogPurchaseIntent.lastTapReceivedAt,
+                                                              lastShownAt: nudgeLastShownAt)
+        return Group {
+            if due {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(ApplePayNudge.line)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button("Dismiss") {
+                        nudgeLastShownAt = ApplePayNudge.markShown()
+                        nudgeDismissed = true
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+                .onAppear { if nudgeLastShownAt == nil { nudgeLastShownAt = ApplePayNudge.markShown() } }
+            }
+        }
+    }
+
+    // MARK: - Check the Shortcut (spec 2026-09-26, failsafe #11)
+
+    private var healthCheckSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                runHealthCheck()
+            } label: {
+                Label("Check the Shortcut", systemImage: "checkmark.shield")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.regular)
+            if let text = healthCheckText {
+                Text(text)
+                    .font(.footnote)
+                    .foregroundStyle(healthCheck == .timedOut ? .secondary : Color.up)
+                    .fixedSize(horizontal: false, vertical: true)
+                if healthCheck == .timedOut {
+                    Link("Learn more", destination: ApplePayStatus.learnMoreURL)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.brand)
+                }
+            }
+        }
+    }
+
+    private var healthCheckText: String? {
+        switch healthCheck {
+        case nil: return nil
+        case .waiting: return "Checking… run the automation from Shortcuts."
+        case .reached(let date): return "Shortcut reached Sortd · \(date.formatted(date: .omitted, time: .shortened))"
+        case .timedOut: return "Nothing arrived. Check the automation is on and set to Run Immediately."
+        }
+    }
+
+    private func runHealthCheck() {
+        guard let url = ApplePayHealthCheck.runURL else { return }
+        let now = Date.now
+        healthCheckStartedAt = now
+        healthCheck = .waiting
+        openURL(url)
+        Task { await pollHealthCheck() }
+    }
+
+    /// Polls every second until the check resolves. Nothing runs unless a
+    /// check is actually in progress (`healthCheckStartedAt` set by
+    /// `runHealthCheck`); `ApplePayHealthCheck.resolve` itself is pure and
+    /// tested with no sleeps at all.
+    private func pollHealthCheck() async {
+        guard let startedAt = healthCheckStartedAt else { return }
+        while !Task.isCancelled {
+            let state = ApplePayHealthCheck.resolve(startedAt: startedAt, lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, now: .now)
+            healthCheck = state
+            if state != .waiting { return }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 
@@ -36,7 +151,7 @@ struct ApplePaySetupPanel: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(Color.onBrand)
                 .frame(width: 46, height: 46)
-                .background(status.isConnected ? Color.up : Color.brand, in: .circle)
+                .background(status.isFlagged ? Color.orange : status.isConnected ? Color.up : Color.brand, in: .circle)
                 .symbolEffect(.variableColor.iterative, isActive: !status.isConnected)
                 .symbolEffect(.bounce, value: status.isConnected)
                 .contentTransition(.symbolEffect(.replace))
@@ -49,7 +164,7 @@ struct ApplePaySetupPanel: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(status.isConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .background(status.isFlagged ? Color.orange.opacity(0.12) : status.isConnected ? Color.up.opacity(0.12) : Color.card, in: .rect(cornerRadius: 20, style: .continuous))
         .animation(.snappy, value: status)
         .feedback(.confirm, trigger: status)
         .contentShape(.rect)

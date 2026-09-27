@@ -1086,9 +1086,26 @@ struct ApplePayTapTests {
         #expect(LogPurchaseIntent.shortcutHasReachedApp)
     }
 
-    @Test func cardOnlyRunSavesNothing() async throws {
+    /// Known bug U6: a card with no shop and no amount used to be dropped as
+    /// if it were a ▶ test run. It's a real automation run — Sortd keeps it,
+    /// tagged "needs a check" (spec 2026-09-26, failsafe #10), rather than
+    /// either silently losing it or saving the card name as a shop.
+    @Test func cardOnlyRunIsSavedAndFlaggedNeedsCheck() async throws {
         let (ctx, book) = try setup()
         let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.needsCheck)
+        #expect(t.card == book.active.first?.card)
+        #expect(r.message.contains("card"))
+    }
+
+    /// A true bare ▶ run — nothing at all, not even a card — is still never
+    /// saved.
+    @Test func trueEmptyRunSavesNothing() async throws {
+        let (ctx, book) = try setup()
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "", card: nil, in: ctx, book: book)
         #expect(r.transaction == nil)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 0)
         #expect(r.message.contains("connected"))
@@ -1098,7 +1115,21 @@ struct ApplePayTapTests {
         let (ctx, book) = try setup(cards: [nab])
         let r = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: book)
         #expect(r.transaction?.needsReview == true)
+        #expect(r.transaction?.needsCheck == true)
         #expect(r.message.contains("amount missing"))
+    }
+
+    /// A tap with an amount but no shop (spec 2026-09-26, failsafe #2) is
+    /// saved, not silently skipped — `needsReview` alone wouldn't catch this
+    /// (the amount is fine), so it needs its own flag.
+    @Test func missingShopIsSavedAndFlagged() async throws {
+        let (ctx, book) = try setup(cards: [nab])
+        let r = try await LogPurchaseIntent.handle(merchant: "", amount: "A$4.50", card: "NAB Visa Debit", in: ctx, book: book)
+        let t = try #require(r.transaction)
+        #expect(t.merchant == "Unknown merchant")
+        #expect(t.needsReview == false, "the amount did arrive")
+        #expect(t.needsCheck)
+        #expect(r.message.contains("shop missing"))
     }
 
     @Test func sameTapTwiceIsLoggedOnce() async throws {
@@ -1340,9 +1371,12 @@ struct WalletTapEdgeTests {
     }
     @Test func repeatedMissingAmountTapIsKeptOnce() async throws {
         let ctx = try store(), b = book()
-        _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        // One fixed clock for both taps: reading `.now` twice made the gap
+        // depend on how busy the Mac was, and the merge missed under load.
+        let first = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b, now: first)
         let again = try await LogPurchaseIntent.handle(merchant: "Grill'd", amount: "", card: "NAB Visa Debit", in: ctx, book: b,
-                                                       now: .now.addingTimeInterval(30))
+                                                       now: first.addingTimeInterval(30))
         #expect(again.merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
@@ -1351,9 +1385,10 @@ struct WalletTapEdgeTests {
         // comparing it with the raw text never matched and the tap was saved twice.
         let ctx = try store(), b = book()
         let shop = "SQ *CAFE BLOSSOM MELBOURNE AU"
-        _ = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b)
+        let first = Date.now
+        _ = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b, now: first)
         let again = try await LogPurchaseIntent.handle(merchant: shop, amount: "", card: "NAB Visa Debit", in: ctx, book: b,
-                                                       now: .now.addingTimeInterval(30))
+                                                       now: first.addingTimeInterval(30))
         #expect(again.merged)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }

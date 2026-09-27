@@ -74,7 +74,7 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 
 The names below are the `Analytics.Event` raw values, pinned by `SpendTests/AnalyticsTests.swift` (updated 25 Sep 2026 to match the code; the earlier draft names are gone).
 
-- `setup_started(rerun)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`
+- `setup_started(rerun)`, `setup_step_viewed(step, index)`, `setup_step_completed(step, index, skipped)`, `setup_finished(skipped, steps_seen)`
 - `activation_first_auto_purchase(source: tap|email, hours_bucket)`: once per install, never on sample data or a test tap
 - `tab_opened(tab)`: the first tab at launch included
 - `purchase_added_manually(category_changed, has_note)`
@@ -88,6 +88,38 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
 - `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
 - `founder_note_seen(moment: aha|about)`: the founder's note (`FounderNoteSheet`), sent each time it is shown — at the aha moment (once ever, right after `ActivationCard`'s celebration) or replayed from Settings › About. `founder_note_reply_tapped`: the "Tell Kameshraj" button, before its mailto opens.
+
+### Beta additions (26 Sep 2026): more intent events, session replay, the developer menu
+
+Session replay: on only in a `SORTD_REPLAY` build (the beta), off for the App Store release,
+following the same `Analytics.isEnabled` switch (`PostHogSDK.optOut()` uninstalls the replay
+integration, `optIn()` reinstalls it). `screenshotMode` (SwiftUI needs it, not the wireframe
+mode), all text inputs, images and sandboxed views masked by default, and `.postHogMask()` on
+top of that for the big amount on Home, `TransactionRow`'s amount and shop, the transaction
+detail amount/shop/note, and the Gmail account email row. Throttled to about one screenshot a
+second (`sessionReplayConfig.throttleDelay`).
+
+New events, never amounts or merchant/shop names:
+
+- `search_used`: the first character typed into Activity search, once per session (in-memory; a relaunch is a new session)
+- `receipt_scanned(success)`: the camera scan finished, whether or not it read a total
+- `statement_imported(rows)`: a CSV/PDF/screenshot import finished; `rows` is the count found
+- `budget_set`: the monthly budget sheet's Save button, no amount
+- `category_limit_set(category)`: a category's monthly limit sheet's Save button; `category` is the `SpendCategory` name, never the limit
+- `insights_range_changed(range)`: the Home chips, `range` is `1W`, `1M` or `3M`
+- `day_stepped(direction)`: the Activity day pager's chevrons, `direction` is `newer` or `older`
+- `purchase_edited(field)`: the transaction detail screen commits a changed amount or shop name; `field` is `amount` or `shop`, never the value
+- `category_changed(from, to)`: a purchase's category changed after it was logged (Activity swipe/long-press, or the detail screen); both are `SpendCategory` names
+- `card_added`: Settings › Cards' New Card sheet saves a card that did not exist before
+- `app_lock_turned_on`: the Face ID/Touch ID lock is turned on, after the authentication check passes
+- `help_opened`: Settings › Help & Feedback appears
+- `developer_test_event(sent_at)`: the hidden developer menu's "Send test event" (Settings › About, tap the version 7 times in 3 seconds)
+
+The developer menu (`Spend/Views/Settings/DeveloperMenuView.swift`) also has "Send test report
+to Sentry" (a forced, scrubbed non-fatal message, bypassing only the Debug gate) and "Crash
+now" (a real `fatalError`, so the next launch sends a real crash), plus a read-only block:
+analytics on/off, replay on/off, PostHog host, Sentry on/off, version/build, the hashed user id.
+It works in Release too — hidden behind the taps, not a build flag.
 
 ## What Raj does in PostHog
 

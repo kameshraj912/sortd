@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PostHog
 
 /// Settings › Email Receipts: Gmail accounts connected with Google.
 struct GmailSection: View {
@@ -17,6 +18,7 @@ struct GmailSection: View {
                         Image(systemName: "envelope.fill").foregroundStyle(Color.ink)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(account.email).foregroundStyle(Color.ink).lineLimit(1).truncationMode(.middle)
+                                .postHogMask()
                             Text(status(account)).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
                         }
                         Spacer()
