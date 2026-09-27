@@ -7,8 +7,8 @@ struct SetupFlow: Equatable {
     /// Questions first, then what the answers built, then the few chores.
     /// Nothing is asked for before the app has earned it.
     enum Step: Int, CaseIterable, Sendable {
-        case welcome, goals, payment, currency, feeling, budget, checkIn, building, plan
-        case cards, cardDetails, applePay, email
+        case welcome, account, goals, payment, currency, budget, checkIn, building, plan
+        case cards, applePay, email
     }
 
     var goals: Set<SetupProfile.Goal> = []
@@ -16,13 +16,16 @@ struct SetupFlow: Equatable {
     var hasCards = false
     /// The Gmail feature is switched on in this build.
     var gmailFeature = false
+    /// Sign in with Apple / Google is switched on in this build (needs the
+    /// paid developer account's capability; see `Features.signIn`).
+    var signInFeature = false
 
     var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
 
     func isShown(_ s: Step) -> Bool {
         switch s {
+        case .account: signInFeature
         case .budget: goals.contains(.spendLess)
-        case .cardDetails: hasCards
         case .applePay: payment != .cash
         case .email: gmailFeature && wantsGmail
         default: true
@@ -48,7 +51,7 @@ struct SetupFlow: Equatable {
     }
 
     var questionSteps: [Step] {
-        [.goals, .payment, .currency, .feeling, .budget, .checkIn].filter(isShown)
+        [.goals, .payment, .currency, .budget, .checkIn].filter(isShown)
     }
 
     /// "Question 2 of 5". Nil for steps that aren't questions.

@@ -48,6 +48,21 @@ struct AmountEntryTests {
         #expect(!AddTransactionView.isTypeable("1000000"))
     }
 
+    /// UX pass: a new purchase used to default to the phone's locale/time-zone
+    /// guess, so a Melbourne phone with SGD chosen as the main currency still
+    /// opened the add sheet on AUD. It must follow `Money.home` instead.
+    @Test func theAddSheetDefaultsToTheHomeCurrencyNotThePhoneLocale() {
+        let before = UserDefaults.standard.string(forKey: Money.homeKey)
+        defer {
+            if let before { UserDefaults.standard.set(before, forKey: Money.homeKey) }
+            else { UserDefaults.standard.removeObject(forKey: Money.homeKey) }
+        }
+        UserDefaults.standard.set("SGD", forKey: Money.homeKey)
+        #expect(AddTransactionView.defaultCurrency() == "SGD")
+        UserDefaults.standard.set("AUD", forKey: Money.homeKey)
+        #expect(AddTransactionView.defaultCurrency() == "AUD")
+    }
+
     @Test func theDetailFieldsTextIsAlwaysTypeable() {
         // The stored amount, put back into the field, must pass its own
         // rule, or the first keystroke would wipe it (grouping commas did).
