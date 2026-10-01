@@ -79,12 +79,6 @@ if grep -q 'posthog-ios' "$PBX"; then
   fi
 fi
 
-# 1c. Gmail ships in v1, which only works for the public once Google has verified the scope.
-if grep -q 'SORTD_GMAIL' "$PBX" && [ "$MODE" = "--appstore" ]; then
-  warn "Gmail is on. Submit only after Google has verified gmail.readonly"
-  say "      (docs/GoogleVerification.md). Before that, only 100 test users can connect."
-fi
-
 # 1d. Session replay is for TestFlight only. An App Store build must not carry the flag.
 if grep -q 'SORTD_REPLAY' "$PBX" && [ "$MODE" = "--appstore" ]; then
   bad "SORTD_REPLAY is still in the Release build settings. Remove it before an App Store build (replay is TestFlight only)."
