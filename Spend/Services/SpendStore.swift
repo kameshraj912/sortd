@@ -216,8 +216,17 @@ enum TransactionLogger {
     /// that is a bare "DoorDash" / "Uber Eats". Then the shop name (merged in
     /// from the order email) is used, so one DoorDash order doesn't move
     /// every DoorDash order.
+    ///
+    /// A purchase Raj renamed in Purchase Detail no longer shows the name the
+    /// source gave (`merchant` is not `clean(rawMerchant)`). It is then keyed
+    /// on the name he chose, so its rule is learned for that name and does
+    /// not move the rows that still have the old one.
     private static func ruleKey(_ t: Transaction) -> String {
-        Deduper.isBarePlatformName(t.rawMerchant) ? MerchantName.key(t.merchant) : MerchantName.key(t.rawMerchant)
+        if Deduper.isBarePlatformName(t.rawMerchant)
+            || (!t.merchant.isEmpty && MerchantName.clean(t.rawMerchant) != t.merchant) {
+            return MerchantName.key(t.merchant)
+        }
+        return MerchantName.key(t.rawMerchant)
     }
 
     /// Other purchases a new category for `t` would also move: the ones
