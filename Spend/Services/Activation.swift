@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// The aha moment (overhaul sub-spec 6): the first purchase Sortd logged by
-/// itself, from an Apple Pay tap or a Gmail receipt. Sample data and a
+/// itself, from an Apple Pay tap (an old email-sourced row still counts). Sample data and a
 /// legacy "Send a Test Tap" purchase (`LogPurchaseIntent.legacyTestMerchant`,
 /// the test button was removed 25 Sep 2026) never count: they prove nothing
 /// about the person's own spending.

@@ -51,7 +51,7 @@ struct BugHuntUITests {
     ///
     /// `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:116-124)
     /// only matches a refund whose amount equals a whole purchase
-    /// (`EmailSync.markRefunded`, `t.amount == amount`); anything else falls
+    /// (`Refunds.markRefunded`, `t.amount == amount`); anything else falls
     /// through to lines 140-144 and becomes a standalone refunded row.
     @Test
     func aPartialRefundTapLowersTheTotal() async throws {

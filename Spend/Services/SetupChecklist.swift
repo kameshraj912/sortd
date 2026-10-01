@@ -3,7 +3,7 @@ import Foundation
 /// One thing left to set up. Shared by the plan screen at the end of setup
 /// and the "Finish setup" card on Home, so the two always agree.
 struct SetupTask: Identifiable, Equatable, Sendable {
-    enum Kind: String, Sendable { case answers, cards, applePay, widget, gmail }
+    enum Kind: String, Sendable { case answers, cards, applePay, widget }
     let kind: Kind
     let symbol: String
     let title: String
@@ -13,13 +13,13 @@ struct SetupTask: Identifiable, Equatable, Sendable {
 }
 
 /// What's left, worked out from real data (cards added, a tap logged, a
-/// widget on the Home Screen, Gmail connected), never from a guess.
+/// widget on the Home Screen), never from a guess.
 enum SetupChecklist {
     /// "Hide" on the Home card.
     static let hiddenKey = "setup.checklistHidden"
 
     static func tasks(flow: SetupFlow, hasCards: Bool, tapped: Bool,
-                      widgetAdded: Bool, gmailConnected: Bool) -> [SetupTask] {
+                      widgetAdded: Bool) -> [SetupTask] {
         // Starts one step in: answering the questions counts (people finish
         // a list that's already begun more often than a blank one).
         var list = [SetupTask(kind: .answers, symbol: "checklist", title: "Answer a few questions",
@@ -32,10 +32,6 @@ enum SetupChecklist {
         } else {
             list.append(SetupTask(kind: .applePay, symbol: "wave.3.right", title: "Log Apple Pay by itself",
                                   detail: "2 minutes, once", done: tapped))
-        }
-        if flow.gmailFeature, flow.wantsGmail {
-            list.append(SetupTask(kind: .gmail, symbol: "envelope", title: "Catch receipts from Gmail",
-                                  detail: "1 minute", done: gmailConnected))
         }
         return list
     }

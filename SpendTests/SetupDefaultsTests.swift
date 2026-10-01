@@ -13,7 +13,6 @@ import Foundation
 ///             let budget: Double
 ///             let checkIn: SetupProfile.CheckIn   // "checkInWeekday" in the brief maps to .sunday
 ///             let goals: Set<SetupProfile.Goal>
-///             let wantsGmail: Bool
 ///         }
 ///         static func defaults(locale: Locale) -> Defaults
 ///         static func continueEnabled(at step: Step, answers: SetupFlow) -> Bool   // always true
