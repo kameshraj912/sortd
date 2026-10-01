@@ -2,17 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- PostHog analytics; filled from Config.xcconfig / Secrets.xcconfig. Empty key = analytics off. -->
+	<key>ACCOUNT_WORKER_URL</key>
+	<string>$(ACCOUNT_WORKER_URL)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.kameshraj.spend</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sortd</string>
+			</array>
+		</dict>
+	</array>
 	<key>POSTHOG_API_KEY</key>
 	<string>$(POSTHOG_API_KEY)</string>
 	<key>POSTHOG_HOST</key>
 	<string>$(POSTHOG_HOST)</string>
-	<!-- Sentry crash reports; same route. Empty DSN = crash reports off. -->
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
-	<!-- Account revoke Worker (sub-spec 4). Empty = deletes queued on the phone. -->
-	<key>ACCOUNT_WORKER_URL</key>
-	<string>$(ACCOUNT_WORKER_URL)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
