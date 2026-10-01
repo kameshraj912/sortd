@@ -34,7 +34,7 @@ struct FullMoneyCategorisationTests {
     /// Known bug: `TransactionLogger.ruleKey`/`samePlace`/`recategorise` (Spend/Services/SpendStore.swift:219-269)
     /// use `t.rawMerchant`, which a rename in Purchase Detail never updates.
     @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("full-money-03: renaming a purchase's Paid To field learns and groups by the old name, not the new one"))
+          .bug(id: "full-money-03", "renaming a purchase's Paid To field learns and groups by the old name, not the new one"))
     func renamingAPurchaseMovesItsOwnRuleToTheNewName() throws {
         let ctx = try store()
         let renamed = try TransactionLogger.log(
