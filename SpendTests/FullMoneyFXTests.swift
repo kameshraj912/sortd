@@ -33,8 +33,7 @@ struct FullMoneyFXTests {
     /// Known bug: `TransactionDetailView` (Spend/Views/TransactionDetailView.swift:105,150-151) has no
     /// `.onChange(of: transaction.date)`, and `FXService.backfillPass` (Spend/Services/FXService.swift:147)
     /// only ever revisits a transaction whose `audAmount` is nil.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("full-money-02: correcting a purchase's date does not re-rate it, even when the right day's rate is cached"))
+    @Test(.bug(id: "full-money-02", "correcting a purchase's date does not re-rate it, even when the right day's rate is cached"))
     func correctingTheDateReRatesTheAUDValue() async throws {
         let previousHome = UserDefaults.standard.string(forKey: Money.homeKey)
         UserDefaults.standard.set("AUD", forKey: Money.homeKey)
