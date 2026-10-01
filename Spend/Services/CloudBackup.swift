@@ -174,7 +174,7 @@ final class CloudBackup {
     }
 
     /// Waits for the store to go quiet, then backs up if due. Called on
-    /// every save of the main context, so a Gmail sync or a statement import
+    /// every save of the main context, so a statement import
     /// ends in one backup, not one per purchase.
     func scheduleBackup(from context: ModelContext) {
         guard isEnabled else { return }

@@ -142,8 +142,8 @@ struct BugHuntDataTests {
     /// different day = two purchases" rule no longer applies, because the
     /// Monday row now says `email` and the new one says `tap`, so Tuesday's
     /// coffee merges into Monday's and is lost. It only comes back if
-    /// Tuesday's bank email arrives; a missed alert, a disconnected Gmail or
-    /// a lapsed Pro means a dropped purchase.
+    /// Tuesday's bank email arrives; a missed alert or a lapsed Pro
+    /// means a dropped purchase.
     ///
     /// Known bug: `Deduper.match` (Spend/Services/Deduper.swift:38-43) reads
     /// only `source`, not `seenIn`, after `TransactionLogger.merge`

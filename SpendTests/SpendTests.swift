@@ -26,14 +26,6 @@ struct AmountParserTests {
         #expect(r?.currency == currency)
     }
 
-    @Test func appleReceiptsUseTheirOwnCurrency() {
-        // Bug hunt M10: Singapore App Store receipts were saved as AUD.
-        #expect(EmailParsers.appleCurrency("Total S$5.98") == "SGD")
-        #expect(EmailParsers.appleCurrency("Total US$4.99") == "USD")
-        #expect(EmailParsers.appleCurrency("Total A$5.99") == "AUD")
-        #expect(EmailParsers.appleCurrency("Total $5.99") == Money.home)
-    }
-
     @Test func rejectsEmpty() {
         #expect(AmountParser.parse("") == nil)
         #expect(AmountParser.parse(" ") == nil)
@@ -226,10 +218,10 @@ struct CardBookTests {
         #expect(book.cards.map(\.id) == ["nab", "stanchart"])
     }
 
-    @Test func cardsArriveLaterFromEmail() {
+    @Test func cardsArriveLaterFromOldData() {
         let book = fresh()
         book.adoptLegacy(usedIds: [])            // first launch, nothing yet
-        book.adoptLegacy(usedIds: ["scDebit"])   // first Gmail sync
+        book.adoptLegacy(usedIds: ["scDebit"])   // rows from an old install or backup show up
         #expect(book.cards.map(\.id) == ["scDebit"])
     }
 
@@ -472,181 +464,40 @@ struct CSVExportTests {
     }
 }
 
-/// Real-world email layouts for each known sender.
-struct EmailParserTests {
-    private func msg(_ id: String, _ from: String, _ subject: String, _ body: String, _ date: Date = .now) -> EmailParsers.Message {
-        .init(id: id, from: from, subject: subject, body: body, date: date)
-    }
-    private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
-    private func one(_ m: EmailParsers.Message) -> EmailRecord? {
-        let rows = EmailParsers.parse(m)
-        #expect(rows.count == 1)
-        return rows.first
-    }
-    private func date(_ r: EmailRecord?) -> Date? {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return r.flatMap { f.date(from: $0.date) }
-    }
-
-    @Test func stanChartPurchaseInSingaporeTime() {
-        let r = one(msg("a", "alerts.sg@sc.com", "Transaction Alert Debit Card Email Alert",
-                        "Thank you for charging +AUD 24.49 to yr debit card ****2222 on 16-Sep-2611:54 AM at SOME CAFE PTY LTD.\n\nTo modify these alerts",
-                        iso("2026-09-16T04:00:00Z")))
-        #expect(r?.kind == "purchase"); #expect(r?.merchant == "SOME CAFE PTY LTD")
-        #expect(r?.amount == "24.49"); #expect(r?.currency == "AUD"); #expect(r?.last4 == "2222")
-        #expect(date(r) == iso("2026-09-16T03:54:00Z"))
-    }
-
-    @Test func stanChartDeliveryDescriptors() {
-        let dd = one(msg("b", "alerts.sg@sc.com", "s", "Thank you for charging +AUD 31.05 to yr debit card ****2222 on 13-Sep-26 12:07 PM at DD *DOORDASH SOMEWHERE. To modify"))
-        let ue = one(msg("c", "alerts.sg@sc.com", "s", "Thank you for charging +AUD 33.43 to yr credit card ****3333 on 12-Sep-26 08:53 PM at UBER * EATS PENDING. To modify"))
-        #expect(dd?.merchant == "DoorDash"); #expect(dd?.platform == "doordash")
-        #expect(ue?.merchant == "Uber Eats"); #expect(ue?.platform == "uber"); #expect(ue?.last4 == "3333")
-    }
-
-    @Test func stanChartReversalIsRefund() {
-        let r = one(msg("d", "alerts.sg@sc.com", "s", "Transaction of +AUD 17.53 made on your card ****2222 on 11-Sep-26 11:49 AM at DD *DOORDASH SHOP has been reversed. To modify"))
-        #expect(r?.kind == "refund"); #expect(r?.amount == "17.53")
-    }
-
-    @Test func doorDashTotalAndRestaurant() {
-        let r = one(msg("e", "no-reply@doordash.com", "Order Confirmation for Raj from Test Kitchen",
-                        "Paid with Apple Pay\nTest Kitchen\nTotal: $38.15\nSubtotal $35.00\nTotal Charged $38.15"))
-        #expect(r?.merchant == "Test Kitchen"); #expect(r?.amount == "38.15"); #expect(r?.platform == "doordash")
-    }
-
-    @Test func doorDashMarketingIgnored() {
-        #expect(EmailParsers.parse(msg("f", "no-reply@doordash.com", "Craving something different?", "30% off")).isEmpty)
-    }
-
-    @Test func appleInvoice() {
-        let r = one(msg("g", "no_reply@email.apple.com", "Your tax invoice from Apple.",
-                        "Apple Account:\n\nme@example.com\n\nSomeApp:Tasks\n\nAnnual SomeApp Premium (Annual)\n\nRenews 15 September 2027\n\n$79.99\n\nBilling and Payment\n\nVisa •••• 1111\n\n$79.99"))
-        #expect(r?.merchant == "SomeApp"); #expect(r?.amount == "79.99"); #expect(r?.last4 == "1111")
-        #expect(r?.subscription?.period == "yearly"); #expect(r?.subscription?.renews == "15 September 2027")
-    }
-
-    @Test func appleInAppOlderLayout() {
-        let r = one(msg("g2", "no_reply@email.apple.com", "Your tax invoice from Apple.",
-                        "Tax Invoice\nAPPLE ACCOUNT\nme@example.com BILLED TO\nVisa .... 1111\nSomeone\nDATE\n23 May 2026\nApp Store\n\nSome App: Match & More\n3 Boosts\nIn-App Purchase\nReport a Problem\n$39.99\n\nTOTAL $39.99\n\nGet help"))
-        #expect(r?.merchant == "Some App"); #expect(r?.amount == "39.99"); #expect(r?.last4 == "1111")
-    }
-
-    @Test func youTripRowsAndDayBefore() {
-        let rows = EmailParsers.parse(msg("h", "noreply@you.co", "Summary of your recent online purchases & ATM withdrawals",
-            "| based on Singapore Time (UTC+8). |\n| | UBER * EATS PENDING~1 Street~Sydney | AUD 32.76 |\n| Ref. No: SFT-1 | 8:24 AM |\n| | SHOP ONE~X | SGD 5.00 |\n| Ref. No: SFT-2 | 2:10 AM |\n| You may view",
-            iso("2026-06-02T20:42:49Z")))
-        #expect(rows.count == 2)
-        #expect(rows.first?.merchant == "Uber Eats"); #expect(rows.first?.card == "youtrip")
-        #expect(date(rows.first) == iso("2026-06-02T00:24:00Z"))
-        #expect(date(rows.last) == iso("2026-06-02T18:10:00Z"))
-    }
-
-    @Test func youTripBoldHeader() {
-        let rows = EmailParsers.parse(msg("h2", "noreply@you.co", "Summary of your recent online purchases & ATM withdrawals",
-            "The times shown are based on *Singapore Time (UTC+8)*.\n\nUBER * EATS PENDING~1 Street~Sydney~2000 036\nAUD 32.76\nRef. No: SFT-1\n8:24 AM\n\nYou may view",
-            iso("2026-06-02T20:42:49Z")))
-        #expect(rows.count == 1); #expect(rows.first?.amount == "32.76")
-    }
-
-    @Test func youTripHTMLVersionFromGmailAPI() {
-        let rows = EmailParsers.parse(msg("h3", "noreply@you.co", "Summary of your recent online purchases & ATM withdrawals",
-            "Here’s a summary of your online purchases and ATM withdrawals in the last 24 hours. The times shown are based on Singapore Time (UTC+8) . UBER * EATS PENDING~1 Some Street~Sydney~2000 036 AUD 32.76 Ref. No: SFT-1 8:24 AM You may view the full transaction history",
-            iso("2026-06-02T20:42:49Z")))
-        #expect(rows.count == 1); #expect(rows.first?.merchant == "Uber Eats"); #expect(rows.first?.amount == "32.76")
-    }
-
-    @Test func stripeLayouts() {
-        let buy = one(msg("i", "receipts+acct_x@stripe.com", "s", "Receipt from Test Rentals (Test Co Pty Ltd) Receipt #1-2\nAmount paid\nA$68.30\nPayment method\n- 1111"))
-        let back = one(msg("j", "receipts+acct_x@stripe.com", "s", "Refund from Meal Co Receipt #3-4\nRefunded\nA$230.05\nRefunded to\n- 3333"))
-        let inv = one(msg("k", "invoice+statements@mail.anthropic.com", "s", "Receipt from Some AI, PBC S$137.61 Paid September 3, 2026 Payment method - 9999 Receipt #1 Sep 3–Oct 3, 2026 Pro plan Qty 1 S$137.61"))
-        #expect(buy?.kind == "purchase"); #expect(buy?.merchant == "Test Rentals"); #expect(buy?.amount == "68.30"); #expect(buy?.last4 == "1111")
-        #expect(back?.kind == "refund"); #expect(back?.amount == "230.05"); #expect(back?.last4 == "3333")
-        #expect(inv?.merchant == "Some AI"); #expect(inv?.currency == "SGD"); #expect(inv?.last4 == "9999")
-    }
-
-    @Test func stripeInvoiceRefund() {
-        let r = one(msg("l", "invoice+statements@mail.anthropic.com", "Your refund from Some AI",
-                        "Refund from Some AI, PBC S$2.48 Refunded on July 3, 2026 (invoice illustration) Receipt number 1 Refunded to - 3333"))
-        #expect(r?.kind == "refund"); #expect(r?.merchant == "Some AI"); #expect(r?.amount == "2.48"); #expect(r?.currency == "SGD")
-    }
-
-    @Test func unknownSenderIgnored() {
-        #expect(EmailParsers.parse(msg("z", "ads@bank.example", "promo", "S$10 off")).isEmpty)
-    }
-}
-
-/// Receipts from senders Sortd has no special rules for.
+/// Reading the total and card digits from receipt text (the receipt camera).
 struct GenericReceiptTests {
-    private func msg(_ from: String, _ subject: String, _ body: String) -> EmailParsers.Message {
-        .init(id: "g", from: from, subject: subject, body: body, date: .now)
-    }
-
     @Test func supermarketOrder() {
-        let r = GenericReceipts.parse(msg("Fresh Mart <orders@freshmart.example>", "Your order confirmation #4411",
-            "Thanks for shopping. Subtotal $80.10 Delivery $5.00 Order total $85.10 Paid with Visa ending in 4242"))
-        #expect(r?.amount == "85.10"); #expect(r?.last4 == "4242"); #expect(r?.kind == "purchase"); #expect(r?.merchant == "Fresh Mart")
+        let text = "Thanks for shopping. Subtotal $80.10 Delivery $5.00 Order total $85.10 Paid with Visa ending in 4242"
+        #expect(GenericReceipts.total(in: text)?.amount == "85.10")
+        #expect(GenericReceipts.last4(in: text) == "4242")
     }
 
     @Test func airlineGrandTotalBeatsFares() {
-        let r = GenericReceipts.parse(msg("SkyJet <noreply@skyjet.example>", "Your booking receipt from SkyJet",
-            "Base fare AUD 150.00 Taxes AUD 39.00 Grand total AUD 189.00"))
-        #expect(r?.amount == "189.00"); #expect(r?.currency == "AUD"); #expect(r?.merchant == "SkyJet")
+        let r = GenericReceipts.total(in: "Base fare AUD 150.00 Taxes AUD 39.00 Grand total AUD 189.00")
+        #expect(r?.amount == "189.00"); #expect(r?.currency == "AUD")
     }
 
-    @Test func bankAlertWithCardDigits() {
-        let r = GenericReceipts.parse(msg("Example Bank <alerts@examplebank.example>", "Transaction alert",
-            "A purchase of $12.50 was made on your card ending 1234 at CORNER CAFE."))
-        #expect(r?.amount == "12.50"); #expect(r?.last4 == "1234")
+    @Test func cardDigitsAfterAPurchaseLine() {
+        let text = "A purchase of $12.50 was made on your card ending 1234 at CORNER CAFE."
+        #expect(GenericReceipts.total(in: text)?.amount == "12.50")
+        #expect(GenericReceipts.last4(in: text) == "1234")
     }
 
-    @Test func rideReceiptWithThousands() {
-        let r = GenericReceipts.parse(msg("RideCo Receipts <receipts@rideco.example>", "Your trip receipt",
-            "Trip fare S$1,204.30 Total S$1,204.30 Paid with •••• 9876"))
-        #expect(r?.amount == "1204.30"); #expect(r?.currency == "SGD"); #expect(r?.last4 == "9876"); #expect(r?.merchant == "RideCo")
+    @Test func totalWithThousands() {
+        let text = "Trip fare S$1,204.30 Total S$1,204.30 Paid with •••• 9876"
+        let r = GenericReceipts.total(in: text)
+        #expect(r?.amount == "1204.30"); #expect(r?.currency == "SGD")
+        #expect(GenericReceipts.last4(in: text) == "9876")
     }
 
-    @Test func refundIsRefund() {
-        let r = GenericReceipts.parse(msg("Shop <help@shop.example>", "Your refund is on its way",
-            "We have refunded your order. Amount paid back: Total $25.99"))
-        #expect(r?.kind == "refund"); #expect(r?.amount == "25.99")
+    @Test func textWithNoTotalGivesNothing() {
+        #expect(GenericReceipts.total(in: "Your parcel is on the way. Track it here.") == nil)
     }
 
-    @Test func promotionIgnored() {
-        #expect(GenericReceipts.parse(msg("Shop <deals@shop.example>", "50% off everything this weekend",
-            "Total savings $20.00 when you spend $40.00")) == nil)
-    }
-
-    @Test func shippingUpdateWithoutPriceIgnored() {
-        #expect(GenericReceipts.parse(msg("Shop <orders@shop.example>", "Your order has shipped",
-            "Your parcel is on the way. Track it here.")) == nil)
-    }
-
-    @Test func notPurchases() {
-        for subject in ["Shipped: 2 ‘Old Spice…’", "Out for delivery: ‘Case’", "Payment declined: Update your information",
-                        "Your order has been picked up (#76290)", "Subscription renewal: Payment in 30 days",
-                        "Re: Your Nourish'd receipt", "Monthly Statement of Margin Account"] {
-            #expect(GenericReceipts.isNotAPurchase(subject), "\(subject)")
-        }
-        for subject in ["Your receipt from YOI", "Ordered: \"ESR case\"", "Your invoice is available", "Order Confirmation"] {
-            #expect(!GenericReceipts.isNotAPurchase(subject), "\(subject)")
-        }
-    }
-
-    @Test func declinedPaymentIsNotAPurchase() {
-        #expect(GenericReceipts.parse(msg("Shop <orders@shop.example>", "Payment declined: update your card",
-            "We couldn't charge Order total $24.99 to your card ending 1234")) == nil)
-    }
-
-    @Test func aiAmountMustBeInTheEmail() {
+    @Test func aiAmountMustBeInTheText() {
         #expect(GenericReceipts.appears("1204.30", in: "Total S$1,204.30"))
         #expect(GenericReceipts.appears("42.50", in: "Paid $42.50 today"))
         #expect(!GenericReceipts.appears("99.99", in: "Paid $42.50 today"))
-    }
-
-    @Test func knownSendersKeepTheirExactRules() {
-        #expect(EmailParsers.knowsSender("DoorDash <no-reply@doordash.com>"))
-        #expect(!EmailParsers.knowsSender("Fresh Mart <orders@freshmart.example>"))
     }
 }
 

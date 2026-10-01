@@ -158,8 +158,8 @@ final class CardBook {
     }
 
     /// Adds the original cards (NAB, SC…) when purchases point at them but
-    /// the card isn't in the list yet: after the update, or when a Gmail
-    /// script with a CARD_MAP sends them. Never re-adds a card Raj removed
+    /// the card isn't in the list yet: after the update, or when an old
+    /// backup restores them. Never re-adds a card Raj removed
     /// (removed cards stay in the list as archived). New users, whose
     /// purchases use their own card ids, are unaffected.
     func adoptLegacy(usedIds: Set<String>) {
@@ -223,33 +223,6 @@ final class CardBook {
         return scored.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
-    /// A receipt or bank alert's last 4 matched no card (`EmailSync`). One
-    /// active card: they're obviously its digits, so save them and hand
-    /// back that card, no prompt. Two or more, or none: nil — the caller
-    /// queues the digits for "Which card?" when there are 2+
-    /// (`PendingCardDigits`), or drops them when there are none.
-    @discardableResult
-    func noteUnmatchedDigits(_ last4: String) -> Card? {
-        guard active.count == 1, var info = active.first else { return nil }
-        if !info.allLast4.contains(last4) {
-            info.last4.append(last4)
-            upsert(info)
-        }
-        return info.card
-    }
-
-    /// Raj answered "Which card?" with a pick: save the digits on `card`.
-    /// This only ever queues digits from email receipts and bank alerts,
-    /// which carry the card's own last 4 — never the Apple Pay Device
-    /// Account Number, which only ever arrives as a Wallet tap's card name
-    /// and is handled separately by `matchOrCreate`.
-    func assign(_ last4: String, to card: Card) {
-        guard var info = info(card) else { return }
-        guard !info.last4.contains(last4) else { return }
-        info.last4.append(last4)
-        upsert(info)
-    }
-
     private static let genericWords: Set<String> = ["debit", "credit", "card", "visa", "mastercard", "atm", "platinum"]
 
     private func save() {
@@ -262,7 +235,7 @@ final class CardBook {
 
 enum TxnSource: String, CaseIterable, Codable {
     case tap        // Wallet tap automation
-    case email      // Gmail pipeline
+    case email      // Old rows from the removed Gmail pipeline; kept so they still load
     case csv        // statement import
     case bank       // open banking
     case manual

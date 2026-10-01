@@ -157,16 +157,6 @@ enum SetupCopy {
         SetupFlow.usesNewFlow ? "Totals will show in this one. Change it any time." : nil
     }
 
-    /// The email step. With iCloud backup in the build, receipts can leave
-    /// the phone, for the person's own iCloud only: say so.
-    static let emailLine: String = {
-        #if SORTD_ICLOUD
-        "It stays on your phone, and in your iCloud if you turn backup on."
-        #else
-        "Read on your iPhone. Emails are never stored."
-        #endif
-    }()
-
     private static let old: [SetupFlow.Step: String] = [
         .welcome: "Your spending, logged by itself.",
         .goals: "Pick any.",
@@ -175,7 +165,6 @@ enum SetupCopy {
         .plan: "Built from your answers. Change any of it in Settings.",
         .cards: "Tap each bank you pay with. Two cards at one bank? Tap twice.",
         .applePay: "Two steps, about a minute.",
-        .email: "From receipts and bank alerts in your Gmail.",
     ]
 
     private static let new: [SetupFlow.Step: String] = [
@@ -188,12 +177,11 @@ enum SetupCopy {
         .plan: "All set from your answers. The rest can wait.",
         .cards: "Tap each bank you pay with. Fine to skip for now.",
         .applePay: "About a minute, once. Or do it later from Home.",
-        .email: emailLine,
     ]
 
     // MARK: Privacy lines
     //
-    // Purchases, cards and email stay on the iPhone. Usage counts and crash
+    // Purchases and cards stay on the iPhone. Usage counts and crash
     // reports can leave it (Settings › Privacy has the switch), so no line
     // may say "everything" stays or "nothing" leaves. Same plain style as
     // the Privacy screen.
@@ -208,12 +196,10 @@ enum SetupCopy {
     // those tests require (usage counts and crash reports can still leave
     // the phone). This says the same thing without overclaiming.
     static let welcomePrivacy = (title: "No bank login", detail: "Your purchases stay on this iPhone.")
-    /// The Gmail step's on-device point.
-    static let gmailOnDevice = "Read on this iPhone. Emails are never stored."
 
     /// Every setup line that talks about where data goes, for the tests.
     static var privacyLines: [String] {
-        [emailLine, planPrivacy, buildingPrivacy, welcomePrivacy.title, welcomePrivacy.detail, gmailOnDevice]
+        [planPrivacy, buildingPrivacy, welcomePrivacy.title, welcomePrivacy.detail]
     }
 }
 

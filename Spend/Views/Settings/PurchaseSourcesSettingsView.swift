@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Settings › Purchase Sources: Apple Pay auto-logging and Gmail receipts —
-/// the two ways Sortd finds a purchase without you typing it in.
+/// Settings › Purchase Sources: Apple Pay auto-logging, the way Sortd finds a
+/// purchase without you typing it in.
 struct PurchaseSourcesSettingsView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
@@ -42,8 +42,6 @@ struct PurchaseSourcesSettingsView: View {
             } footer: {
                 Text("Logs in-store Apple Pay taps the moment you pay.")
             }
-
-            if Features.gmail { GmailSection() }
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
