@@ -55,12 +55,21 @@ Full design: `docs/AgentPipeline.md`.
 - The account Worker deploys from `worker/` (`cd worker && npx wrangler deploy`), separately from the site. See `worker/README.md`.
 - The launch (hype) site soon.sortd.page deploys from `launch/` (`cd launch && npx wrangler deploy`). Its form posts to sortd.page/api/beta, so deploy `site/` first. See `launch/README.md`.
 
-**6. Finish.**
-- `scripts/worktree-done.sh <task>` removes the worktree, its simulator and its build folder,
-  and deletes the branch once `main` has it. It refuses while there is uncommitted work.
-- `scripts/worktree-audit.sh` shows what every worktree still holds. `scripts/clean.sh --yes`
-  frees disk (each build folder is ~3.5 GB).
-- Don't leave background jobs running. Stop anything you started before you finish.
+**6. Finish: every session ends by freeing its disk.** Each task costs ~4 GB of build
+folder and ~7 GB of simulator. On 2 Oct 2026 leftovers from old sessions filled the Mac
+(275 GB of simulators, 2 GB free). So the last step of every task and every session is
+cleanup, not optional:
+- PR merged, or task abandoned: `scripts/worktree-done.sh <task>`. Removes the worktree,
+  its simulator and its build folder, and deletes the branch once `main` has it. It
+  refuses while there is uncommitted work: commit, or move stray files out, then run it.
+- Branch still waiting on a PR, or Raj says stop for now: `scripts/worktree-park.sh <task>`.
+  Frees the simulator and build folder, keeps the worktree, branch and edits. `test.sh`
+  and `build.sh` make both again on demand.
+- Also delete any extra simulator you made (`SORTD_SIM=<name> scripts/sim.sh delete`), and
+  stop background jobs you started. Never leave a simulator behind that no live task uses.
+- Housekeeping: `scripts/worktree-audit.sh` shows what every worktree still holds;
+  `scripts/clean.sh --yes` removes every build folder and every simulator with no worktree.
+  Run it when free disk is under 50 GB, and before a TestFlight build.
 
 ## Build / test
 - Open: `open Spend.xcodeproj` (Xcode 27, iOS 26+ target, SwiftUI + SwiftData + Swift Charts + App Intents).
