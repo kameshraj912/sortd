@@ -114,7 +114,9 @@ Carried over, still true:
 - **One simulator per worktree**, or sessions fight over it (`scripts/worktree-new.sh` clones one per task automatically).
 - **StoreKit tests are simulator-dependent.** Use the iOS 27 simulator, not iOS 26.x. New this round: they also flake right after a simulator has just booted — if one fails immediately after boot, rerun it alone before assuming it's a real failure.
 - **Apple doc bugs.** `.searchToolbarBehavior(.minimize)`, not `.minimized`; `toolbarMinimizationBehavior(_:for:)`, not `toolbarMinimizeBehavior`.
-- **Disk.** Each `derivedDataPath` is ~3.5 GB; `scripts/clean.sh --yes` frees it.
+- **Disk.** Each task holds ~4 GB of build folder and ~7 GB of simulator. Every session
+  ends with `scripts/worktree-done.sh <task>` (merged) or `scripts/worktree-park.sh <task>`
+  (PR still open); `scripts/clean.sh --yes` sweeps up the rest. Rule: CLAUDE.md "6. Finish".
 
 New from this overhaul:
 
