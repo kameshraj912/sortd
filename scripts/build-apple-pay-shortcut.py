@@ -16,7 +16,8 @@ The file carries two things, the way every working Wallet shortcut does
    from the tap (proven on Raj's phone; unchanged), plus Notification
    Title, Subtitle and Body mapped from the notification trigger's output.
    Sortd reads the notification whenever any of the three has text and
-   then ignores the tap fields.
+   then ignores the tap fields. "Show When Run" is off, so a run never
+   stops on a dialog.
 
     python3 scripts/build-apple-pay-shortcut.py
     python3 scripts/build-apple-pay-shortcut.py --notification-app com.apple.MobileSMS Messages
@@ -98,6 +99,11 @@ log = {
             "TeamIdentifier": "7CLGYQ9P3L",
         },
         "UUID": LOG_UUID,
+        # "Show When Run" off. On (Shortcuts' default) every run shows Sortd's
+        # dialog and waits for Done, and later runs queue behind it. Key and
+        # value read from Shortcuts' own database after switching the toggle
+        # off (2 Oct 2026). Sortd posts its own "Logged" notification instead.
+        "ShowWhenRun": False,
         "amount": input_property("Amount"),
         "merchant": input_property("Merchant"),
         "card": input_property("Card or Pass"),
@@ -176,3 +182,4 @@ print("\nTriggers:")
 pprint.pprint(written["WFWorkflowTriggers"], sort_dicts=False, width=110)
 print("\nAction:")
 pprint.pprint(written["WFWorkflowActions"], sort_dicts=False, width=110)
+print("\nShowWhenRun:", written["WFWorkflowActions"][0]["WFWorkflowActionParameters"].get("ShowWhenRun", "missing"))
