@@ -71,7 +71,13 @@ enum WidgetBridge {
 
         // Same rule as Home's `audTotal`: refunds and transfers (a top-up,
         // money moved between your own accounts) aren't spending.
-        let live = transactions.filter { !$0.refunded && $0.category != .transfers }
+        // The test-tap and "Check the Shortcut" rows are hidden everywhere in
+        // the app (Home, Activity, Insights); the widgets count the same way.
+        let testRows = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
+        let live = transactions.filter {
+            !$0.refunded && $0.category != .transfers
+                && !testRows.contains($0.merchant) && !testRows.contains($0.rawMerchant)
+        }
 
         let startOfDay = calendar.startOfDay(for: now)
         let todayItems = live.filter { calendar.isDate($0.date, inSameDayAs: startOfDay) }

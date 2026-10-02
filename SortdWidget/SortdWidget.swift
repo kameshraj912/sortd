@@ -682,7 +682,9 @@ struct BudgetRingView: View {
                         .lineLimit(1)
                         .foregroundStyle(Sortd.ink)
                         .contentTransition(.numericText())
-                    Text("of \(Sortd.money(budget, s.currency, cents: false))")
+                    // Over budget, "A$40 of A$1,500" read as $40 left (feel check,
+                    // 2 Oct): say "over" so the number can only be read one way.
+                    Text("\(over ? "over" : "of") \(Sortd.money(budget, s.currency, cents: false))")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

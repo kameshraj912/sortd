@@ -216,4 +216,20 @@ struct WidgetRecentTests {
         #expect(back.recent.first?.id == id)
         #expect(back.recent == s.recent)
     }
+
+    /// Home and Insights leave the test-tap and health-check rows out of their
+    /// totals; the widgets must count the same way.
+    @Test func totalsLeaveOutTheTestAndCheckRows() {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let real = Transaction(date: now, merchant: "Seven Seeds", amount: 5, currencyCode: Money.home,
+                               card: .other, category: .eatingOut, source: .tap)
+        let check = Transaction(date: now, merchant: ApplePayHealthCheck.merchant, amount: Decimal(string: "0.01")!,
+                                currencyCode: Money.home, card: .other, category: .other, source: .tap)
+        let test = Transaction(date: now, merchant: LogPurchaseIntent.legacyTestMerchant, amount: 12,
+                               currencyCode: Money.home, card: .other, category: .other, source: .tap)
+        let s = WidgetBridge.build(from: [real, check, test], budget: 100, now: now)
+        #expect(s.todayCount == 1)
+        #expect(s.today == 5)
+        #expect(s.month == 5)
+    }
 }
