@@ -139,12 +139,8 @@ struct AccountSettingsView: View {
     // MARK: Actions
 
     private func deleteAccount(alsoData: Bool) async {
-        // Offline, the provider and the Worker cannot be asked: say so and
-        // change nothing, instead of deleting half.
-        if let message = Connectivity.blockedMessage(isOnline: Connectivity.shared.isOnline) {
-            notice = Notice(title: "Account Not Deleted", message: message)
-            return
-        }
+        // Offline, the store queues the server jobs and `Connectivity.catchUp`
+        // finishes them when the phone is back online.
         // The provider and the Worker are asked before the local wipe, so
         // this can take a moment when the network is slow.
         working = true
