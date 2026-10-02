@@ -56,15 +56,23 @@ Full design: `docs/AgentPipeline.md`.
 - The launch (hype) site soon.sortd.page deploys from `launch/` (`cd launch && npx wrangler deploy`). Its form posts to sortd.page/api/beta, so deploy `site/` first. See `launch/README.md`.
 
 **6. Finish, and clean up at once.** Every task costs about 11.5 GB while it exists
-(4.5 GB build folder + 7 GB simulator). Twenty left behind filled the disk on 2 Oct 2026.
+(4.5 GB build folder + 7 GB simulator). Twenty left behind filled the disk on 2 Oct 2026
+(275 GB of simulators, 2.4 GB free). Cleanup is the last step of every task and every
+session, not optional.
 - The moment a branch is merged, run `scripts/worktree-done.sh <task>`: it removes the
   worktree, its simulator and its build folder, and deletes the merged branch. Do it before
-  starting the next task, not at the end of the day. It refuses while there is uncommitted work.
+  starting the next task, not at the end of the day. It refuses while there is uncommitted
+  work: commit, or move stray files out, then run it.
+- A branch still waiting on a PR, or a task Raj pauses: `scripts/worktree-park.sh <task>`.
+  It frees the simulator and build folder and keeps the worktree, branch and edits;
+  `test.sh` and `build.sh` make both again on demand.
 - A test or research worktree (bug hunt, UI pass, audit) goes as soon as its findings are
   copied out. Anything worth keeping is committed on a branch or saved under `docs/` first.
+- Delete any extra simulator you made (`SORTD_SIM=<name> scripts/sim.sh delete`). Never
+  leave a simulator behind that no live task uses.
 - At most 4 task worktrees exist at once, and at most 2 builds run at once.
   `scripts/worktree-new.sh` refuses past the limit or when under 40 GB is free.
-- Before ending a session: `scripts/worktree-audit.sh`, remove every finished task, then
+- Before ending a session: `scripts/worktree-audit.sh`, finish or park every task, then
   `scripts/clean.sh --yes` (build folders and simulators with no worktree), and say how much
   disk is free. A task that must stay open is named in the hand-off, with why.
 - Don't leave background jobs running. Stop anything you started before you finish.
