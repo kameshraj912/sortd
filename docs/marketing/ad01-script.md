@@ -23,6 +23,6 @@ Captions: small white, lower third inside the safe zone, on every spoken line ex
 Grade: light grain, slight softening, same warmth across Veo clips, so they match.
 
 Posting
-- Caption: "Tap to pay. Sortd writes it down. In beta, link in bio."
+- Caption: "Tap to pay. Sortd writes it down. In beta, link in bio. Consider it Sortd."
 - Instagram will likely add its "AI info" label because the people are AI. The closer owns it.
 - Don't boost it as an app-install ad until Sortd is on the App Store.
