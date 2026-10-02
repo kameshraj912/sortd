@@ -32,8 +32,7 @@ import Foundation
     /// cluster vote and the real, newest charge is thrown away: the bill
     /// shows the old price and, because its predicted date is long past, is
     /// marked lapsed while it is still charging.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a price rise of more than 25% hides the new price and marks a live subscription lapsed"))
+    @Test
     func aBigPriceRiseIsStillTheCurrentBill() throws {
         let found = RecurringDetector.detect([
             charge("2026-06-01", "Netflix", 12.99), charge("2026-07-01", "Netflix", 12.99),

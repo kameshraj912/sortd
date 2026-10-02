@@ -26,8 +26,7 @@ import Foundation
     /// different plans/cards (12.99 and 22.99 — more than 25% apart, so they
     /// can never share a cluster). A person watching either plan expects
     /// both to show as a bill; today only one survives.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("two recurring plans at one merchant collide; the smaller one vanishes"))
+    @Test
     func twoSubscriptionsAtOneShopWithDifferentAmountsAreBothKept() {
         let found = RecurringDetector.detect([
             charge("2026-06-01", "Netflix", 12.99), charge("2026-06-15", "Netflix", 22.99),
@@ -40,5 +39,40 @@ import Foundation
         #expect(found.count == 2, "found \(found.count) Netflix bill(s): \(found.map(\.amount))")
         #expect(found.contains { $0.amount == 12.99 })
         #expect(found.contains { $0.amount == 22.99 })
+    }
+
+    /// Two plans at one shop show the amount in the name and have different
+    /// keys, so cancelling one does not cancel the other.
+    @Test func twoPlansAtOneShopAreNamedByAmountAndKeyedApart() {
+        var list: [RecurringDetector.Charge] = []
+        for m in 1...4 {
+            list.append(charge(String(format: "2026-%02d-01", m + 4), "Netflix", 12.99))
+            list.append(charge(String(format: "2026-%02d-15", m + 4), "Netflix", 22.99))
+        }
+        let found = RecurringDetector.detect(list, now: day("2026-09-19"), calendar: cal)
+        #expect(Set(found.map(\.key)).count == 2)
+        #expect(found.allSatisfy { $0.merchant.contains("$") }, "\(found.map(\.merchant))")
+        #expect(found.map(\.merchant).contains { $0.contains("12.99") })
+    }
+
+    @Test func aSingleBillKeepsItsPlainName() {
+        let found = RecurringDetector.detect([
+            charge("2026-07-01", "Netflix", 12.99), charge("2026-08-01", "Netflix", 12.99),
+            charge("2026-09-01", "Netflix", 12.99),
+        ], now: day("2026-09-19"), calendar: cal)
+        #expect(found.map(\.merchant) == ["Netflix"])
+    }
+
+    /// A single odd charge at another amount, off the rhythm, is not a bill
+    /// and does not change the real one.
+    @Test func aStrayOneOffDoesNotBecomeASecondBill() {
+        let found = RecurringDetector.detect([
+            charge("2026-06-01", "Netflix", 12.99), charge("2026-07-01", "Netflix", 12.99),
+            charge("2026-08-01", "Netflix", 12.99), charge("2026-09-01", "Netflix", 12.99),
+            charge("2026-09-09", "Netflix", 60),
+        ], now: day("2026-09-19"), calendar: cal)
+        #expect(found.count == 1)
+        #expect(found.first?.amount == 12.99)
+        #expect(found.first?.merchant == "Netflix")
     }
 }

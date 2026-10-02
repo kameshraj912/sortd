@@ -104,6 +104,13 @@ struct Recurring: Identifiable, Hashable, Sendable {
     /// phone and other bills.
     var isSubscription: Bool { category == .subscriptions || category == .entertainment }
 
+    func withMerchant(_ name: String) -> Recurring {
+        Recurring(key: key, merchant: name, category: category, card: card, cadence: cadence,
+                  amount: amount, currency: currency, audAmount: audAmount, lastDate: lastDate,
+                  nextDate: nextDate, charges: charges, previousAmount: previousAmount,
+                  status: status, chargedAfterCancel: chargedAfterCancel)
+    }
+
     /// Cost spread over a month, in AUD.
     var monthlyAUD: Double { audAmount.double * Cadence.monthly.days / cadence.days }
 }
@@ -139,77 +146,98 @@ enum RecurringDetector {
             for c in group { byDay[calendar.startOfDay(for: c.date)] = byDay[calendar.startOfDay(for: c.date)] ?? c }
             let all = byDay.values.sorted { $0.date < $1.date }
 
-            // The bill is the biggest group of similar amounts: rent every
-            // fortnight plus a one-off fee is still fortnightly rent.
-            let list = mainCluster(all)
-            guard let last = list.last else { continue }
-
-            // Habits (food, groceries, rides) only count when the price is
-            // identical, 4+ times: a weekly meal-plan box, not a weekly coffee run.
-            if habitCategories.contains(last.category) {
-                let identical = list.count >= 4 && Set(list.map(\.amount)).count == 1
-                if !identical || last.category == .transfers { continue }
+            // One shop can hold more than one bill (two plans on different
+            // amounts). Each run of similar amounts is looked at on its own; a
+            // stray one-off at another amount is not a bill.
+            let clusters = amountClusters(all)
+            let mainIndex = clusters.indices.max { a, b in
+                clusters[a].count != clusters[b].count ? clusters[a].count < clusters[b].count
+                    : clusters[a].last!.date < clusters[b].last!.date
             }
-
-            var cadence: Cadence?
-            var next: Date?
-
-            // 1. A receipt that says when it renews.
-            if let renews = list.compactMap(\.renewsOn).max(),
-               let c = Cadence.from(period: last.billingPeriod) ?? Cadence.from(gap: renews.timeIntervalSince(last.date) / 86400) {
-                cadence = c
-                next = renews
+            var bills: [Recurring] = []
+            for (i, list) in clusters.enumerated() where i == mainIndex || list.count >= 3 {
+                // The biggest cluster keeps the plain key, so choices made
+                // before a second plan appeared still apply to it.
+                let billKey = i == mainIndex ? key : "\(key)|\(list[0].amount)"
+                if ignored.contains(billKey) { continue }
+                if let r = bill(from: list, key: billKey, cancelled: cancelled, now: now, calendar: calendar) { bills.append(r) }
             }
-
-            // 2. Otherwise, a steady rhythm between charges (a skipped month
-            // is fine: a 61-day gap is two monthly cycles).
-            if cadence == nil, list.count >= 2 {
-                let gaps = zip(list, list.dropFirst()).map { $1.date.timeIntervalSince($0.date) / 86400 }
-                // Two charges is enough only for subscriptions and bills; a shop
-                // visited twice a month apart isn't a monthly bill.
-                let billLike = [.subscriptions, .bills, .housing].contains(last.category)
-                if let c = bestCadence(gaps), list.count >= (c == .weekly || !billLike ? 3 : 2) {
-                    cadence = c
-                    next = c.next(after: last.date, calendar: calendar)
-                }
-            }
-
-            guard let cadence, var nextDate = next else { continue }
-
-            // Missed a payment? Roll forward, but if it's missed by more than
-            // half a cycle it has probably stopped.
-            var status: Recurring.Status = .active
-            let overdue = now.timeIntervalSince(nextDate) / 86400
-            if overdue > max(3, cadence.days / 2) {
-                status = .lapsed
-            }
-            // Step from the last real charge each time, so a bill on the 31st
-            // goes 28 Feb → 31 Mar, not 28 Feb → 28 Mar.
-            var step = 1
-            while nextDate < calendar.startOfDay(for: now), status == .active, step < 400 {
-                step += 1
-                nextDate = cadence.advance(last.date, by: step, calendar: calendar)
-            }
-
-            var chargedAfterCancel = false
-            if let cancelledOn = cancelled[key] {
-                if last.date > cancelledOn { chargedAfterCancel = true } else { status = .cancelled }
-            }
-
-            let previous = list.dropLast().last
-            let changed = previous.flatMap { p -> Decimal? in
-                guard p.currency == last.currency, p.amount > 0 else { return nil }
-                let ratio = abs((last.amount - p.amount) / p.amount).double
-                return ratio > 0.01 ? p.amount : nil
-            }
-
-            found.append(Recurring(
-                key: key, merchant: last.merchant, category: last.category, card: last.card,
-                cadence: cadence, amount: last.amount, currency: last.currency, audAmount: last.audAmount,
-                lastDate: last.date, nextDate: nextDate, charges: list.count, previousAmount: changed,
-                status: status, chargedAfterCancel: chargedAfterCancel))
+            // Two or more at one shop: the amount tells them apart.
+            if bills.count > 1 { bills = bills.map { $0.withMerchant("\($0.merchant) · \(Money.format($0.amount, $0.currency))") } }
+            found += bills
         }
         return found.sorted { $0.nextDate < $1.nextDate }
+    }
+
+    /// One bill from one run of similar amounts, or nil if it does not repeat.
+    private static func bill(from list: [Charge], key: String, cancelled: [String: Date],
+                             now: Date, calendar: Calendar) -> Recurring? {
+        guard let last = list.last else { return nil }
+
+        // Habits (food, groceries, rides) only count when the price is
+        // identical, 4+ times: a weekly meal-plan box, not a weekly coffee run.
+        if habitCategories.contains(last.category) {
+            let identical = list.count >= 4 && Set(list.map(\.amount)).count == 1
+            if !identical || last.category == .transfers { return nil }
+        }
+
+        var cadence: Cadence?
+        var next: Date?
+
+        // 1. A receipt that says when it renews.
+        if let renews = list.compactMap(\.renewsOn).max(),
+           let c = Cadence.from(period: last.billingPeriod) ?? Cadence.from(gap: renews.timeIntervalSince(last.date) / 86400) {
+            cadence = c
+            next = renews
+        }
+
+        // 2. Otherwise, a steady rhythm between charges (a skipped month
+        // is fine: a 61-day gap is two monthly cycles).
+        if cadence == nil, list.count >= 2 {
+            let gaps = zip(list, list.dropFirst()).map { $1.date.timeIntervalSince($0.date) / 86400 }
+            // Two charges is enough only for subscriptions and bills; a shop
+            // visited twice a month apart isn't a monthly bill.
+            let billLike = [.subscriptions, .bills, .housing].contains(last.category)
+            if let c = bestCadence(gaps), list.count >= (c == .weekly || !billLike ? 3 : 2) {
+                cadence = c
+                next = c.next(after: last.date, calendar: calendar)
+            }
+        }
+
+        guard let cadence, var nextDate = next else { return nil }
+
+        // Missed a payment? Roll forward, but if it's missed by more than
+        // half a cycle it has probably stopped.
+        var status: Recurring.Status = .active
+        let overdue = now.timeIntervalSince(nextDate) / 86400
+        if overdue > max(3, cadence.days / 2) {
+            status = .lapsed
+        }
+        // Step from the last real charge each time, so a bill on the 31st
+        // goes 28 Feb → 31 Mar, not 28 Feb → 28 Mar.
+        var step = 1
+        while nextDate < calendar.startOfDay(for: now), status == .active, step < 400 {
+            step += 1
+            nextDate = cadence.advance(last.date, by: step, calendar: calendar)
+        }
+
+        var chargedAfterCancel = false
+        if let cancelledOn = cancelled[key] {
+            if last.date > cancelledOn { chargedAfterCancel = true } else { status = .cancelled }
+        }
+
+        let previous = list.dropLast().last
+        let changed = previous.flatMap { p -> Decimal? in
+            guard p.currency == last.currency, p.amount > 0 else { return nil }
+            let ratio = abs((last.amount - p.amount) / p.amount).double
+            return ratio > 0.01 ? p.amount : nil
+        }
+
+        return Recurring(
+            key: key, merchant: last.merchant, category: last.category, card: last.card,
+            cadence: cadence, amount: last.amount, currency: last.currency, audAmount: last.audAmount,
+            lastDate: last.date, nextDate: nextDate, charges: list.count, previousAmount: changed,
+            status: status, chargedAfterCancel: chargedAfterCancel)
     }
 
     /// Within 25% of each other: a price rise, tax or exchange-rate change
@@ -220,9 +248,11 @@ enum RecurringDetector {
         return hi / lo <= 1.25
     }
 
-    /// Largest set of charges with similar amounts, in date order. Ties go
-    /// to the set with the most recent charge.
-    static func mainCluster(_ charges: [Charge]) -> [Charge] {
+    /// Runs of similar amounts, in date order. A run that starts after another
+    /// stopped, on the same rhythm, is the same bill at a new price (a rise of
+    /// any size), so it joins that run. Runs that overlap in time are separate
+    /// bills.
+    static func amountClusters(_ charges: [Charge]) -> [[Charge]] {
         var clusters: [[Charge]] = []
         for c in charges.sorted(by: { $0.date < $1.date }) {
             if let i = clusters.firstIndex(where: { similarAmounts([$0.last!.amount, c.amount]) }) {
@@ -231,9 +261,23 @@ enum RecurringDetector {
                 clusters.append([c])
             }
         }
-        return clusters.max { a, b in
-            a.count != b.count ? a.count < b.count : a.last!.date < b.last!.date
-        } ?? []
+        var merged: [[Charge]] = []
+        for c in clusters {
+            if let i = merged.lastIndex(where: { continues($0, with: c) }) { merged[i] += c } else { merged.append(c) }
+        }
+        return merged
+    }
+
+    /// `new` starts after `old` ended, one to three cycles later.
+    private static func continues(_ old: [Charge], with new: [Charge]) -> Bool {
+        guard old.count >= 2, let last = old.last, let first = new.first, first.date > last.date,
+              old.last!.currency == first.currency else { return false }
+        let gaps = zip(old, old.dropFirst()).map { $1.date.timeIntervalSince($0.date) / 86400 }
+        guard let c = bestCadence(gaps) else { return false }
+        let gap = first.date.timeIntervalSince(last.date) / 86400
+        let tolerance = (c.range.upperBound - c.range.lowerBound) / 2
+        let k = (gap / c.days).rounded()
+        return k >= 1 && k <= 3 && abs(gap - k * c.days) <= tolerance * k
     }
 
     /// The cadence that explains most gaps as 1, 2 or 3 cycles, needing at
