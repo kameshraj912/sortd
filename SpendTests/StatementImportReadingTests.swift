@@ -81,3 +81,49 @@ struct StatementImportReadingTests {
         #expect(StatementImport.rows(fromCSV: csv).count == 1, "\(header)")
     }
 }
+
+// MARK: - Amounts
+
+extension StatementImportReadingTests {
+
+    @Test func aTrueMinusSignAndAnEnDashAreRefundSigns() throws {
+        let minus = try #require(StatementImport.signedAmount("\u{2212}58.30"))
+        #expect(minus.amount == Decimal(string: "-58.30"))
+        let dash = try #require(StatementImport.signedAmount("\u{2013}12.00"))
+        #expect(dash.amount == Decimal(string: "-12.00"))
+    }
+
+    @Test func aTrueMinusInAFreeTextLineIsNotLeftInTheShopName() throws {
+        let rows = StatementImport.rows(fromText: "01/09/2026 WOOLWORTHS \u{2212}58.30")
+        #expect(rows.first?.detail == "WOOLWORTHS")
+        #expect(rows.first?.amount == Decimal(string: "58.30"))
+    }
+
+    @Test func aCurrencyCodeBeforeOrAfterTheAmountIsRead() throws {
+        let a = try #require(StatementImport.signedAmount("AUD -58.30"))
+        #expect(a.amount == Decimal(string: "-58.30") && a.currency == "AUD")
+        let b = try #require(StatementImport.signedAmount("SGD 12.00"))
+        #expect(b.amount == Decimal(string: "12.00") && b.currency == "SGD")
+        let c = try #require(StatementImport.signedAmount("12.00 sgd"))
+        #expect(c.amount == Decimal(string: "12.00") && c.currency == "SGD")
+        let d = try #require(StatementImport.signedAmount("-USD 5.50"))
+        #expect(d.amount == Decimal(string: "-5.50") && d.currency == "USD")
+    }
+
+    @Test func threeLettersThatAreNotACurrencyAreNotAnAmount() {
+        #expect(StatementImport.signedAmount("KFC 12") == nil)
+        #expect(StatementImport.signedAmount("12 MARKET") == nil)
+    }
+
+    @Test func theCurrencyReachesTheRow() {
+        let csv = "Date,Description,Amount\n01/09/2026,HAWKER,SGD -12.00"
+        let rows = StatementImport.rows(fromCSV: csv)
+        #expect(rows.first?.currency == "SGD")
+        #expect(rows.first?.kind == .spend)
+    }
+
+    @Test func aPlusSignedBalanceIsNeverTheShop() throws {
+        let a = try #require(StatementImport.signedAmount("+2451.70"))
+        #expect(a.amount == Decimal(string: "2451.70"))
+    }
+}

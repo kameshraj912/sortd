@@ -200,8 +200,7 @@ struct FullMoneyAUBankCSVTests {
     // MARK: Odd amounts and files
 
     /// A true minus sign (Excel, Numbers and some locales write it): `signedAmount` only knows the ASCII hyphen (Spend/Services/StatementImport.swift:482).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-07", "an amount with a U+2212 minus sign is not read, the row is dropped"))
+    @Test(.bug(id: "full-money-07", "an amount with a U+2212 minus sign is not read, the row is dropped"))
     func unicodeMinusIsARefundSign() {
         let csv = "Date,Description,Amount\n01/09/2026,WOOLWORTHS,\u{2212}58.30"
         let rows = StatementImport.rows(fromCSV: csv)
@@ -209,8 +208,7 @@ struct FullMoneyAUBankCSVTests {
     }
 
     /// A cell with an ISO code in front: `signedAmount` allows only a few symbols, not codes (Spend/Services/StatementImport.swift:482).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-08", "an amount cell written as AUD -58.30 is not read, the row is dropped"))
+    @Test(.bug(id: "full-money-08", "an amount cell written as AUD -58.30 is not read, the row is dropped"))
     func currencyCodeBeforeTheAmountIsRead() {
         let csv = "Date,Description,Amount\n01/09/2026,WOOLWORTHS,AUD -58.30"
         #expect(StatementImport.rows(fromCSV: csv).count == 1, "the row with 'AUD -58.30' was silently dropped")

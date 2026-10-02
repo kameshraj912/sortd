@@ -284,7 +284,7 @@ nonisolated enum StatementImport {
         text.replaceSubrange(range, with: " ")
         let clean = text
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: " -–—|\t"))
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–—\u{2212}|\t"))
         // A line of pure punctuation isn't a merchant.
         guard clean.count >= 2, clean.contains(where: \.isLetter) else { return nil }
         return clean
@@ -458,7 +458,7 @@ nonisolated enum StatementImport {
     /// A line with no sign at all is spending — that is what a statement is
     /// mostly made of.
     static func lastAmount(in line: String) -> Amount? {
-        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
+        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = line as NSString
         let matches = regex.matches(in: line, range: NSRange(location: 0, length: ns.length))
@@ -504,11 +504,16 @@ nonisolated enum StatementImport {
 
     /// A single cell that is only an amount, with its sign.
     static func signedAmount(_ text: String) -> (amount: Decimal, currency: String?)? {
+        // Excel, Numbers and some locales write a true minus (U+2212); some
+        // exports an en dash. Both mean the ASCII hyphen here.
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\u{2212}", with: "-")
+            .replacingOccurrences(of: "\u{2013}", with: "-")
         guard !trimmed.isEmpty else { return nil }
         // Must be money and nothing else, or a description column with a
-        // house number in it would be read as an amount.
-        let pattern = #"^\(?\s*[-+]?\s*(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*-?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?$"#
+        // house number in it would be read as an amount. An ISO code may sit
+        // before or after the number ("AUD -58.30", "12.00 SGD").
+        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = trimmed as NSString
         guard let m = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)) else { return nil }
@@ -517,16 +522,21 @@ nonisolated enum StatementImport {
             let r = m.range(at: i)
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
-        let whole = (group(2) ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group(3).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
+        // Three letters that are not a real currency are words ("KFC 12").
+        let codes = [group(1), group(6)].compactMap { $0?.uppercased() }
+        guard codes.allSatisfy({ isoCurrencyCodes.contains($0) }), codes.count <= 1 else { return nil }
+        let whole = (group(3) ?? "0").replacingOccurrences(of: ",", with: "")
+        let cents = group(4).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
         guard var value = Decimal(string: "\(whole).\(cents)") else { return nil }
 
         let negative = trimmed.contains("-") || (trimmed.hasPrefix("(") && trimmed.hasSuffix(")"))
-        let suffix = group(4)?.uppercased()
+        let suffix = group(5)?.uppercased()
         if negative || suffix == "DR" { value = -value }
         if suffix == "CR" { value = abs(value) }
-        return (value, currency(for: group(1)))
+        return (value, codes.first ?? currency(for: group(2)))
     }
+
+    private static let isoCurrencyCodes = Set(Locale.commonISOCurrencyCodes)
 
     private static func currency(for symbol: String?) -> String? {
         switch symbol?.uppercased() {
