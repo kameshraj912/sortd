@@ -1,21 +1,29 @@
 import WidgetKit
 import SwiftUI
 
-/// Sortd's widgets. Three of them, plus the Lock Screen.
+/// Sortd's widgets. Six on the Home Screen, plus the Lock Screen.
 ///
-/// It started as seven. Apple's guidance is blunt about this — build the
-/// widget that best represents the content rather than one for every idea —
-/// and seven tiles competing for a home screen is worse than three that each
-/// answer a real question:
+/// It started as seven, was cut to three on purpose, and grew to six on
+/// 2 Oct 2026. Apple's guidance is blunt about this: build the widget that
+/// best represents the content rather than one for every idea. The three
+/// that were kept each answer a real question:
 ///
 ///   Spending  — am I okay today, and for the rest of the month?
 ///   Quick Add — log it now, before I forget (the thing that kills trackers)
 ///   Bills     — what's about to charge me?
 ///
-/// Recent purchases and the category breakdown were cut: both are "look
-/// back" screens, and looking back is what opening the app is for. The
-/// category colours survive inside the Spending bar, which is where they
-/// actually help.
+/// Recent purchases and the category breakdown were cut because both are
+/// "look back" screens, and looking back is what opening the app is for.
+/// Raj then approved three more from mockups, and with them reversed the
+/// privacy decision that came with the cut (widgets showed no shop names):
+///
+///   Budget ring   — how much of this month's budget is left?
+///   Today         — today's total, and what I last paid for
+///   Recent        — the last three purchases, each opening its detail
+///
+/// The rule that goes with it: shop names AND amounts are hidden while the
+/// iPhone is locked (`.privacySensitive()`). Amounts still honour Settings ›
+/// "Show Amounts When Locked"; shop names are hidden whatever that says.
 ///
 /// None of them opens the database. They read the small summary file the app
 /// leaves in the App Group container, so a home screen tile can never get in
@@ -39,6 +47,15 @@ struct SortdEntry: TimelineEntry {
         s.perDay = Decimal(string: "45.84")!
         s.dayAllowance = Decimal(50)
         s.hasAnyPurchases = true
+        s.todayCount = 3
+        s.recent = [
+            .init(merchant: "Seven Seeds", amount: Decimal(string: "5.50")!, currency: "AUD",
+                  category: "eatingOut", date: .now.addingTimeInterval(-25 * 60)),
+            .init(merchant: "Woolworths Metro", amount: Decimal(string: "23.10")!, currency: "AUD",
+                  category: "groceries", date: .now.addingTimeInterval(-3 * 3600)),
+            .init(merchant: "myki", amount: Decimal(string: "14.50")!, currency: "AUD",
+                  category: "transport", date: .now.addingTimeInterval(-5 * 3600)),
+        ]
         s.categories = [
             .init(category: "groceries", name: "Groceries", total: Decimal(string: "312.10")!),
             .init(category: "eatingOut", name: "Eating Out", total: Decimal(string: "204.80")!),
@@ -551,6 +568,404 @@ struct SortdBillsWidget: Widget {
     }
 }
 
+// MARK: - Privacy
+
+/// Every shop name and amount goes through one of these two, so the rule
+/// lives in one place.
+///
+/// Shop names: always hidden while the iPhone is locked, whatever Settings ›
+/// "Show Amounts When Locked" says. Amounts: hidden unless that setting is on.
+private extension View {
+    func shopNameIsPrivate() -> some View { privacySensitive() }
+
+    func amountIsPrivate(_ summary: WidgetSummary?) -> some View {
+        privacySensitive(summary?.hidesWhenLocked ?? true)
+    }
+}
+
+/// Which parts VoiceOver must not read right now. The visible text is
+/// redacted while the phone is locked; speaking the same words aloud would
+/// undo that.
+private struct Hiding {
+    var shop: Bool
+    var amounts: Bool
+
+    init(_ reasons: RedactionReasons, _ summary: WidgetSummary?) {
+        let locked = reasons.contains(.privacy)
+        shop = locked
+        amounts = locked && (summary?.hidesWhenLocked ?? true)
+    }
+}
+
+/// A shop name on one line, cut with "…" rather than wrapped. The only place
+/// a shop name is drawn, and it is always private.
+private struct ShopName: View {
+    var name: String
+    var font: Font = .footnote
+
+    var body: some View {
+        Text(name)
+            .font(font)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .foregroundStyle(Sortd.ink)
+            .shopNameIsPrivate()
+    }
+}
+
+/// The category's symbol on a tinted rounded square, as in the app's
+/// Activity list.
+private struct CategoryTile: View {
+    var category: String
+    var side: CGFloat = 28
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Image(systemName: Sortd.symbol(forCategory: category))
+            .font(.system(size: side * 0.42, weight: .semibold))
+            .foregroundStyle(Sortd.color(forCategory: category))
+            .widgetAccentable()
+            .frame(width: side, height: side)
+            .background(Sortd.color(forCategory: category).opacity(scheme == .dark ? 0.22 : 0.14),
+                        in: .rect(cornerRadius: side * 0.3, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 4. Budget ring
+
+struct BudgetRingView: View {
+    var entry: LookEntry
+    @Environment(\.redactionReasons) private var redaction
+
+    var body: some View {
+        if let s = entry.summary {
+            if let budget = s.budget, budget > 0 {
+                ring(s, budget: budget)
+            } else {
+                noBudget(s)
+            }
+        } else {
+            NotReady(line: "Nothing logged", detail: "Open Sortd to get started")
+        }
+    }
+
+    /// Share of the budget still there, 0 to 1. An empty ring and an over
+    /// budget one would look the same, so over budget fills the ring in red.
+    static func share(left: Decimal, budget: Decimal) -> Double {
+        guard budget > 0 else { return 0 }
+        let value = (left as NSDecimalNumber).doubleValue / (budget as NSDecimalNumber).doubleValue
+        return max(0, min(1, value))
+    }
+
+    private func ring(_ s: WidgetSummary, budget: Decimal) -> some View {
+        let left = s.leftThisMonth ?? (budget - s.month)
+        let over = left < 0
+        let hiding = Hiding(redaction, s)
+        return VStack(alignment: .leading, spacing: 6) {
+            Heading(text: over ? "Over budget" : "Left this month")
+                .overBudgetIsPrivate(over, s)
+
+            ZStack {
+                Circle().stroke(Sortd.track, lineWidth: 10)
+                Circle()
+                    .trim(from: 0, to: over ? 1 : Self.share(left: left, budget: budget))
+                    .stroke(over ? Sortd.over : Sortd.brandGreen,
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .widgetAccentable()
+                VStack(spacing: 0) {
+                    Text(Sortd.money(abs(left), s.currency, cents: false))
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                        .foregroundStyle(Sortd.ink)
+                        .contentTransition(.numericText())
+                    Text("of \(Sortd.money(budget, s.currency, cents: false))")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.horizontal, 14)
+            }
+            .amountIsPrivate(s)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(s, budget: budget, left: left, hidden: hiding.amounts))
+    }
+
+    private func noBudget(_ s: WidgetSummary) -> some View {
+        let hiding = Hiding(redaction, s)
+        return VStack(alignment: .leading, spacing: 0) {
+            Heading(text: "This month")
+            Spacer(minLength: 6)
+            Text(Sortd.money(s.month, s.currency))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.45)
+                .lineLimit(1)
+                .foregroundStyle(Sortd.ink)
+                .widgetAccentable()
+                .amountIsPrivate(s)
+            Spacer(minLength: 6)
+            HStack(spacing: 4) {
+                Image(systemName: "target").font(.caption.weight(.semibold))
+                Text("Set a budget").font(.footnote.weight(.semibold)).lineLimit(1)
+            }
+            .foregroundStyle(Sortd.ink)
+            .widgetAccentable()
+            .padding(.horizontal, 10)
+            .frame(minHeight: 30)
+            .background(Sortd.track, in: Capsule())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(hiding.amounts
+            ? "This month. Hidden while your iPhone is locked. No budget set. Tap to set a budget."
+            : "This month, \(Sortd.spoken(s.month, s.currency)) spent. No budget set. Tap to set a budget.")
+    }
+
+    private func label(_ s: WidgetSummary, budget: Decimal, left: Decimal, hidden: Bool) -> String {
+        if hidden { return "Left this month. Hidden while your iPhone is locked." }
+        let of = Sortd.spoken(budget, s.currency, cents: false)
+        if left < 0 {
+            return "Over budget. \(Sortd.spoken(-left, s.currency, cents: false)) over a budget of \(of)."
+        }
+        let percent = Int((Self.share(left: left, budget: budget) * 100).rounded())
+        return "Left this month, \(Sortd.spoken(left, s.currency, cents: false)) of \(of). \(percent) percent of your budget is left."
+    }
+}
+
+private extension View {
+    /// "Over budget" is itself a fact about money, so it is hidden with the
+    /// amounts when the month is over.
+    @ViewBuilder func overBudgetIsPrivate(_ over: Bool, _ s: WidgetSummary) -> some View {
+        if over { amountIsPrivate(s) } else { self }
+    }
+}
+
+struct SortdBudgetRingWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: "SortdBudgetRing",
+                               intent: LookConfiguration.self,
+                               provider: LookProvider()) { entry in
+            Chrome(look: entry.configuration.look) {
+                BudgetRingView(entry: entry)
+            }
+            // No budget yet: the tap goes to where one is set.
+            .widgetURL(entry.summary?.budget ?? 0 > 0 ? SortdLink.home : SortdLink.budget)
+        }
+        .configurationDisplayName("Budget Ring")
+        .description("How much of this month's budget is left, as a ring.")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+// MARK: - 5. Today and the last purchase
+
+struct TodayView: View {
+    var entry: LookEntry
+    @Environment(\.redactionReasons) private var redaction
+
+    var body: some View {
+        if let s = entry.summary, s.hasAnyPurchases {
+            content(s)
+        } else {
+            NotReady(line: "Nothing yet", detail: "Pay with Apple Pay and it shows up here.")
+        }
+    }
+
+    private func content(_ s: WidgetSummary) -> some View {
+        let last = s.recent.first
+        let hiding = Hiding(redaction, s)
+        return VStack(alignment: .leading, spacing: 0) {
+            Heading(text: "Today")
+            Spacer(minLength: 6)
+
+            Text(Sortd.money(s.today, s.currency))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.45)
+                .lineLimit(1)
+                .foregroundStyle(Sortd.ink)
+                .widgetAccentable()
+                .contentTransition(.numericText())
+                .amountIsPrivate(s)
+
+            Spacer(minLength: 8)
+
+            if let last {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 5) {
+                        Image(systemName: Sortd.symbol(forCategory: last.category))
+                            .font(.caption)
+                            .foregroundStyle(Sortd.color(forCategory: last.category))
+                            .widgetAccentable()
+                            .frame(width: 16)
+                        ShopName(name: last.merchant)
+                    }
+                    HStack(spacing: 0) {
+                        Text(Sortd.money(last.amount, last.currency))
+                            .amountIsPrivate(s)
+                        Text(" · \(Sortd.when(last.date, now: entry.date))")
+                    }
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(s, last: last, hiding: hiding))
+    }
+
+    private func label(_ s: WidgetSummary, last: WidgetSummary.Item?, hiding: Hiding) -> String {
+        var parts: [String] = []
+        if hiding.amounts {
+            parts.append("Today. Hidden while your iPhone is locked.")
+        } else {
+            var line = "Today, \(Sortd.spoken(s.today, s.currency))"
+            if s.todayCount > 0 { line += ", \(s.todayCount) \(s.todayCount == 1 ? "purchase" : "purchases")" }
+            parts.append(line + ".")
+        }
+        if let last {
+            let shop = hiding.shop ? "A purchase" : last.merchant
+            let amount = hiding.amounts ? "" : ", \(Sortd.spoken(last.amount, last.currency))"
+            parts.append("Last: \(shop)\(amount), \(Sortd.when(last.date, now: entry.date)).")
+        }
+        return parts.joined(separator: " ")
+    }
+}
+
+struct SortdTodayWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: "SortdToday",
+                               intent: LookConfiguration.self,
+                               provider: LookProvider()) { entry in
+            Chrome(look: entry.configuration.look) {
+                TodayView(entry: entry)
+            }
+            .widgetURL(SortdLink.activity)
+        }
+        .configurationDisplayName("Today")
+        .description("What you've spent today, and the last thing you paid for.")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+// MARK: - 6. Recent
+
+struct RecentView: View {
+    var entry: LookEntry
+    @Environment(\.redactionReasons) private var redaction
+
+    var body: some View {
+        if let s = entry.summary, !s.recent.isEmpty {
+            content(s)
+        } else {
+            NotReady(line: "Nothing yet", detail: "Pay with Apple Pay and it shows up here.")
+        }
+    }
+
+    private func content(_ s: WidgetSummary) -> some View {
+        let hiding = Hiding(redaction, s)
+        return VStack(alignment: .leading, spacing: 6) {
+            Heading(text: "Recent")
+            ForEach(s.recent.prefix(3)) { item in
+                // A Link, so each row opens its own purchase.
+                Link(destination: SortdLink.purchase(item.id)) {
+                    HStack(spacing: 10) {
+                        CategoryTile(category: item.category)
+                        ShopName(name: item.merchant, font: .subheadline)
+                        Spacer(minLength: 8)
+                        Text(Sortd.money(item.amount, item.currency))
+                            .font(.subheadline.monospacedDigit())
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(Sortd.ink)
+                            .amountIsPrivate(s)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(label(item, hiding: hiding))
+                .accessibilityHint("Opens this purchase")
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func label(_ item: WidgetSummary.Item, hiding: Hiding) -> String {
+        let shop = hiding.shop ? "A purchase" : item.merchant
+        guard !hiding.amounts else { return shop }
+        return "\(shop), \(Sortd.spoken(item.amount, item.currency))"
+    }
+}
+
+struct SortdRecentWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: "SortdRecent",
+                               intent: LookConfiguration.self,
+                               provider: LookProvider()) { entry in
+            Chrome(look: entry.configuration.look) {
+                RecentView(entry: entry)
+            }
+            .widgetURL(SortdLink.activity)
+        }
+        .configurationDisplayName("Recent")
+        .description("Your last three purchases. Tap one to open it.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
+// MARK: - Previews
+
+extension LookEntry {
+    /// Sample data with a chosen look, for previews.
+    static func sample(_ look: SortdLook, _ edit: (inout WidgetSummary) -> Void = { _ in }) -> LookEntry {
+        var configuration = LookConfiguration()
+        configuration.look = look
+        var summary = SortdEntry.sample.summary!
+        edit(&summary)
+        return LookEntry(date: .now, summary: summary, configuration: configuration)
+    }
+}
+
+#Preview("Budget ring", as: .systemSmall) {
+    SortdBudgetRingWidget()
+} timeline: {
+    LookEntry.sample(.light)
+    LookEntry.sample(.dark)
+    LookEntry.sample(.light) { $0.leftThisMonth = -40 }
+    LookEntry.sample(.dark) { $0.leftThisMonth = -40 }
+    LookEntry.sample(.light) { $0.budget = nil; $0.leftThisMonth = nil }
+}
+
+#Preview("Today", as: .systemSmall) {
+    SortdTodayWidget()
+} timeline: {
+    LookEntry.sample(.light)
+    LookEntry.sample(.dark)
+    LookEntry.sample(.light) { $0.today = 0; $0.todayCount = 0 }
+    LookEntry.sample(.light) { $0.hasAnyPurchases = false; $0.recent = [] }
+}
+
+#Preview("Recent", as: .systemMedium) {
+    SortdRecentWidget()
+} timeline: {
+    LookEntry.sample(.light)
+    LookEntry.sample(.dark)
+    LookEntry.sample(.light) { $0.recent = Array($0.recent.prefix(2)) }
+    LookEntry.sample(.light) { $0.recent = [] }
+}
+
 // MARK: - Lock Screen
 
 struct LockScreenView: View {
@@ -646,6 +1061,9 @@ struct SortdLockScreenWidget: Widget {
 struct SortdWidgetBundle: WidgetBundle {
     var body: some Widget {
         SortdSpendingWidget()
+        SortdBudgetRingWidget()
+        SortdTodayWidget()
+        SortdRecentWidget()
         SortdQuickAddWidget()
         SortdBillsWidget()
         SortdLockScreenWidget()
