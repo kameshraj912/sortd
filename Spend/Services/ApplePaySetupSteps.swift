@@ -34,6 +34,12 @@ enum ApplePaySetupSteps {
 // MARK: - Online payments (2 Oct 2026)
 
 extension ApplePaySetupSteps {
+    /// Step 2's words. The shortcut runs with "Show When Run" off, so
+    /// nothing appears in Shortcuts after ▶: the person comes back here and
+    /// the step ticks itself from `ApplePayStatus`.
+    static let runStep = (title: "Run it once and tap Allow",
+                          detail: "Press ▶ in the shortcut and tap Allow. Then come back here.")
+
     /// Step 3's words. With iOS 27's Notification trigger the shortcut has
     /// two "When…" lines (the tap and Wallet's notification), each with its
     /// own Automation switch. Before iOS 27 there is only the tap.
