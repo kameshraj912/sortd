@@ -157,7 +157,11 @@ and push only when asked, never force `main`.
 Added here:
 
 - `scripts/worktree-new.sh` and `scripts/worktree-done.sh` do the setup and teardown,
-  so the rules are code.
+  so the rules are code. `scripts/worktree-park.sh` is the teardown for a branch that
+  still waits on a PR: simulator and build folder go, worktree and branch stay.
+- Every session ends with `worktree-done.sh` or `worktree-park.sh` for its task. A task
+  left as is holds ~11 GB; on 2 Oct 2026 the leftovers of old sessions reached 275 GB of
+  simulators and 2 GB free. The rule is in CLAUDE.md "6. Finish".
 - `scripts/hooks/pre-commit` blocks secrets, large files, debug flags outside
   `#if DEBUG`, and Swift that does not parse.
 - `scripts/hooks/pre-push` refuses direct pushes to `main`. Merges go through a PR
