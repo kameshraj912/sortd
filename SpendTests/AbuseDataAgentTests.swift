@@ -144,40 +144,6 @@ struct AbuseDataAgentTests {
         #expect(all.audTotal == 900)
     }
 
-    /// Replace is "my phone died, put it all back". It wipes the purchases
-    /// but leaves every `ImportedRecord` behind, so a Gmail re-sync will
-    /// skip exactly the emails whose purchases Replace just deleted. Those
-    /// purchases are gone with no way back.
-    ///
-    /// Known bug: `Backup.restore` in Replace mode (Spend/Services/Backup.swift) wipes purchases but not `ImportedRecord`, so `EmailSync.importRecords` skips those emails.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-21", "Replace restore keeps ImportedRecord email ids for purchases it deleted, so Gmail never brings them back"))
-    func replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted() throws {
-        let ctx = try store()
-
-        // A purchase that only ever existed because of a Gmail receipt.
-        let record = EmailRecord(id: "gmail-1", kind: "purchase", merchant: "Kmart",
-                                 rawMerchant: "KMART 1147", platform: nil, amount: "42.00",
-                                 currency: "AUD", card: Card.nab.rawValue, last4: nil,
-                                 date: "2026-09-10T03:00:00Z", note: nil, subscription: nil)
-        _ = try EmailSync.importRecords([record], in: ctx, account: "raj@example.com")
-        #expect(count(ctx) == 1)
-
-        // An older backup, made before that email arrived.
-        var snap = Backup.Snapshot()
-        snap.transactions = [row(merchant: "Woolworths", amount: 20, on: "2026-09-01")]
-        let old = try Backup.encode(snap)
-
-        try Backup.restore(old, mode: .replace, into: ctx, defaults: scratch(), cardBook: book())
-        #expect(count(ctx) == 1)   // only the backup's purchase
-
-        // Reconnect Gmail and sync the very same email again.
-        _ = try EmailSync.importRecords([record], in: ctx, account: "raj@example.com")
-
-        let names = try ctx.fetch(FetchDescriptor<Transaction>()).map(\.merchant).sorted()
-        #expect(names == ["Kmart", "Woolworths"])
-    }
-
     /// Anything that isn't a Sortd backup must be refused, whatever the
     /// extension says. `Snapshot` gives every field a default, so a JSON
     /// file with no fields at all can still decode.
@@ -301,42 +267,6 @@ struct AbuseDataAgentTests {
     }
 
     // MARK: - Delete + undo
-
-    /// The undo window keeps the row in the store for six seconds. A Gmail
-    /// receipt that arrives in that window merges into the doomed row, and
-    /// the email is marked imported — so when the delete lands, the receipt
-    /// is lost and no later sync will fetch it again.
-    ///
-    /// Known bug: `EmailSync.importRecords` (Spend/Services/EmailSync.swift) can merge into a row ActivityView is about to delete,
-    /// and marks the email imported, so nothing brings the receipt back.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-23", "a Gmail receipt that merges into a row waiting for undo-delete is lost, and its email id blocks a re-import"))
-    func aReceiptThatMergesIntoAPendingDeleteIsLostForever() throws {
-        let ctx = try store()
-
-        // A tap logged by Wallet. The user swipes it away: ActivityView puts
-        // it in `pendingDeletes` but does not touch the store yet.
-        let tap = try TransactionLogger.log(
-            IncomingPurchase(date: date("2026-09-10"), merchant: "COLES 0231", amount: 31.40,
-                             currency: "AUD", card: .nab, source: .tap), in: ctx).transaction
-        let doomed = [tap]
-
-        // Sync runs while the toast is still up.
-        let record = EmailRecord(id: "gmail-coles", kind: "purchase", merchant: "Coles",
-                                 rawMerchant: "COLES 0231", platform: nil, amount: "31.40",
-                                 currency: "AUD", card: Card.nab.rawValue, last4: nil,
-                                 date: "2026-09-10T02:00:00Z", note: nil, subscription: nil)
-        _ = try EmailSync.importRecords([record], in: ctx, account: "raj@example.com")
-
-        // Six seconds pass: commitDelete().
-        for t in doomed { ctx.delete(t) }
-        try ctx.save()
-
-        // Pull to refresh. The email is already an ImportedRecord.
-        _ = try EmailSync.importRecords([record], in: ctx, account: "raj@example.com")
-
-        #expect(count(ctx) == 1, "the Coles receipt was swallowed by a pending delete")
-    }
 
     /// A replace-restore can land while a delete is still pending. The view
     /// then calls `context.delete` on rows the restore has already removed.
@@ -536,34 +466,6 @@ struct AbuseDataAgentTests {
         }
     }
 
-    /// The same email in one batch twice (an overlapping sync window plus a
-    /// re-list) must not break the save or double the purchase.
-    @Test func theSameEmailTwiceInOneBatchIsHandled() throws {
-        let ctx = try store()
-        let r = EmailRecord(id: "dup-1", kind: "purchase", merchant: "Kmart", rawMerchant: "KMART 1147",
-                            platform: nil, amount: "42.00", currency: "AUD", card: Card.nab.rawValue,
-                            last4: nil, date: "2026-09-10T03:00:00Z", note: nil, subscription: nil)
-
-        let summary = try EmailSync.importRecords([r, r], in: ctx, account: "raj@example.com")
-
-        #expect(count(ctx) == 1)
-        #expect(summary.added == 1)
-        #expect((try? ctx.fetchCount(FetchDescriptor<ImportedRecord>())) == 1)
-    }
-
-    /// The same batch replayed (a sync that ran twice) must add nothing.
-    @Test func theSameBatchSyncedTwiceAddsNothing() throws {
-        let ctx = try store()
-        let r = EmailRecord(id: "replay-1", kind: "purchase", merchant: "Kmart", rawMerchant: "KMART",
-                            platform: nil, amount: "42.00", currency: "AUD", card: Card.nab.rawValue,
-                            last4: nil, date: "2026-09-10T03:00:00Z", note: nil, subscription: nil)
-        _ = try EmailSync.importRecords([r], in: ctx, account: "a@example.com")
-        let second = try EmailSync.importRecords([r], in: ctx, account: "a@example.com")
-
-        #expect(second.added == 0)
-        #expect(count(ctx) == 1)
-    }
-
     /// A refund must zero its purchase, not create a second row and not
     /// zero a second purchase from the same shop.
     @Test func aRefundZerosExactlyOnePurchase() throws {
@@ -571,31 +473,12 @@ struct AbuseDataAgentTests {
         let a = add(ctx, "Uniqlo", 89.90, "2026-09-01", category: .shopping, source: .email)
         let b = add(ctx, "Uniqlo", 89.90, "2026-09-05", category: .shopping, source: .email)
 
-        let refund = EmailRecord(id: "refund-1", kind: "refund", merchant: "Uniqlo", rawMerchant: "UNIQLO",
-                                 platform: nil, amount: "89.90", currency: "AUD", card: Card.nab.rawValue,
-                                 last4: nil, date: "2026-09-08T03:00:00Z", note: nil, subscription: nil)
-        let summary = try EmailSync.importRecords([refund], in: ctx, account: "a@example.com")
+        let found = Refunds.markRefunded(amount: 89.90, currency: "AUD", card: .nab, merchant: "UNIQLO",
+                                         platform: nil, before: date("2026-09-08"), in: ctx)
 
-        #expect(summary.refunds == 1)
+        #expect(found)
         #expect(count(ctx) == 2)
         #expect([a.refunded, b.refunded].filter { $0 }.count == 1)
-    }
-
-    /// The same refund email arriving twice must not mark a second purchase.
-    @Test func theSameRefundTwiceDoesNotZeroTwoPurchases() throws {
-        let ctx = try store()
-        add(ctx, "Uniqlo", 89.90, "2026-09-01", category: .shopping, source: .email)
-        add(ctx, "Uniqlo", 89.90, "2026-09-05", category: .shopping, source: .email)
-
-        let refund = EmailRecord(id: "refund-2", kind: "refund", merchant: "Uniqlo", rawMerchant: "UNIQLO",
-                                 platform: nil, amount: "89.90", currency: "AUD", card: Card.nab.rawValue,
-                                 last4: nil, date: "2026-09-08T03:00:00Z", note: nil, subscription: nil)
-        _ = try EmailSync.importRecords([refund], in: ctx, account: "a@example.com")
-        _ = try EmailSync.importRecords([refund], in: ctx, account: "a@example.com")
-
-        let refunded = try ctx.fetch(FetchDescriptor<Transaction>()).filter(\.refunded)
-        #expect(refunded.count == 1)
-        #expect(refunded.first?.note.components(separatedBy: "Refunded").count == 2)
     }
 
     /// A refunded purchase that the bank charges again (a reversal of the

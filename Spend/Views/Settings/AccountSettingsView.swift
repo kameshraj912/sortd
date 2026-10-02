@@ -55,7 +55,6 @@ struct AccountSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(BackupDataSettingsView.deleteAllMessage(
-                gmailConnected: !GmailSync.accounts.isEmpty,
                 deletesCloudCopy: CloudBackup.shared.deletesCloudCopyOnReset))
         }
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
@@ -127,13 +126,8 @@ struct AccountSettingsView: View {
 
     private var deleteMessage: String {
         guard let account = store.current else { return "" }
-        var text: String
-        if WorkerRevoker.keepsGmail(account, connected: GmailSync.accounts.map(\.email)) {
-            text = "Sortd forgets who you are on this iPhone and deletes your usage record. Gmail stays connected."
-        } else {
-            text = "Sortd forgets who you are on this iPhone, asks \(account.provider.name) to cancel the sign-in and deletes your usage record."
-            if account.provider == .apple { text += " Apple will ask you to sign in once more to confirm." }
-        }
+        var text = "Sortd forgets who you are on this iPhone, asks \(account.provider.name) to cancel the sign-in and deletes your usage record."
+        if account.provider == .apple { text += " Apple will ask you to sign in once more to confirm." }
         #if SORTD_ICLOUD
         text += " Your purchases stay unless you also delete all data, on this iPhone and in iCloud."
         #else

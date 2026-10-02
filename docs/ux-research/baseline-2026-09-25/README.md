@@ -96,7 +96,6 @@ they're missing here, not that they're unchanged.
 - aMinusAfterTheCurrencyIsStillARefund
 - aNegativeAmountInABackupDoesNotSubtractFromTheMonth
 - aPaddedCurrencyCodeStillCountsInTotals
-- aReceiptThatMergesIntoAPendingDeleteIsLostForever
 - aRechargeAfterARefundIsCountedAgain
 - aRefundWithTheMinusAfterTheSymbolIsStillARefund
 - aRowWithNoDateIsNotSilentlyDropped
@@ -108,11 +107,13 @@ they're missing here, not that they're unchanged.
 - currencySignsAreRead
 - duplicateIdsSurviveASecondRestoreAndDoubleTheTotal
 - extraDecimalsAreNotTurnedIntoThousands
-- replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted
 - theAmountBeatsAnyOtherNumberInTheText
 
+Removed 2 Oct 2026 with the Gmail feature (their tests only tested removed code):
+aBankAlertWithNoGmailAuthenticationResultIsNotTrusted, aReceiptThatMergesIntoAPendingDeleteIsLostForever,
+replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlertIsThePurchase.
+
 ## Added 26 Sep 2026 (bug hunt, docs/BugHunt-2026-09-26.md)
-- aBankAlertWithNoGmailAuthenticationResultIsNotTrusted
 - aBillInACurrencyWithNoRateIsNotShownAsZero
 - aCRLFStatementKeepsEveryRow
 - aCreditCardExportKeepsPurchasesAsSpending
@@ -128,7 +129,9 @@ they're missing here, not that they're unchanged.
 - mergeDoesNotReadASingaporeBudgetAsAustralianDollars
 - narrowSpaceAndApostropheThousandsAreRead
 - rupiahDotThousandsAreNotCents
-- theFirstAmountInTheAlertIsThePurchase
 - theWidgetReloadDateIsTheNextMidnightAcrossDaylightSaving
 - zeroDecimalTotalsAreRead
 - blankNotificationTriggerRealRunIsIndistinguishableFromAPreview (Apple Pay hunt 27 Sep: an all-blank iOS 27 Notification run looks like a ▶ test; needs a device spike, spec 2026-09-26 row 13)
+
+## Added 2 Oct 2026 (budgets and bills hunt, FullBudget*Tests)
+- aRaisedLimitCanAlertAgain (product decision: should raising a category limit re-arm its near/over alerts for the month?)
