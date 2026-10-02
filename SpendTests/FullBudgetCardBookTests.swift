@@ -18,8 +18,7 @@ import Foundation
     /// archived) and adding it again with the same last 4: a receipt with
     /// those digits must go to the new, visible card. `card(last4:)` looks
     /// through archived cards too, and finds the old hidden one first.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a removed (archived) card still claims its last 4 ahead of the card added to replace it"))
+    @Test
     func aReplacementCardWithTheSameDigitsGetsTheReceipts() {
         let b = book()
         let old = card("old", "NAB Debit", last4: ["4821"])
