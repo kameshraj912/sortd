@@ -59,6 +59,12 @@ struct SignInButtons: View {
     }
 
     private func signIn(_ provider: IdentityProvider) async {
+        // Google opens a web page: offline that would be a blank error page.
+        if provider is GoogleIdentityProvider,
+           let message = Connectivity.blockedMessage(isOnline: Connectivity.shared.isOnline) {
+            onError(message)
+            return
+        }
         working = true
         defer { working = false }
         do {
@@ -67,7 +73,7 @@ struct SignInButtons: View {
         } catch AccountError.cancelled {
             // Closed the sheet: nothing to say.
         } catch {
-            onError(error.localizedDescription)
+            onError(Connectivity.plainMessage(for: error) ?? error.localizedDescription)
         }
     }
 }

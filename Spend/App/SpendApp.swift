@@ -56,6 +56,9 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
+        // Back online: the pending iCloud backup, FX rates and queued account
+        // deletes each try again (see `RootView`).
+        Connectivity.shared.start()
         #if SORTD_ICLOUD
         CloudBackup.watchSaves()
         #endif
@@ -354,6 +357,11 @@ struct RootView: View {
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
             #endif
+        }
+        // Offline to online: the work that waited for a connection carries on.
+        .onChange(of: Connectivity.shared.isOnline) { old, new in
+            guard Connectivity.isReconnect(from: old, to: new), scenePhase == .active else { return }
+            Task { await Connectivity.catchUp(in: context) }
         }
         // A tap on a widget opens the app at what the widget was showing.
         .onOpenURL { url in

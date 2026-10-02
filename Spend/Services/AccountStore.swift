@@ -311,7 +311,7 @@ final class AccountStore {
         case .cancelled:
             log.notice("account: \(job.kind.rawValue, privacy: .public) job cancelled, dropped")
         default:
-            problems.append(error.localizedDescription)
+            problems.append(Connectivity.plainMessage(for: error) ?? error.localizedDescription)
             log.error("account: \(job.kind.rawValue, privacy: .public) job dropped (\(error.localizedDescription, privacy: .public))")
         }
     }
@@ -736,7 +736,7 @@ final class GoogleIdentityProvider: IdentityProvider {
         case let e as GoogleAuth.AuthError:
             return e
         case let e as URLError where isOffline(e):
-            return AccountError.rejected("You're offline. Connect to the internet and try again.")
+            return AccountError.rejected(Connectivity.offlineMessage)
         default:
             return AccountError.rejected("Sign in with Google didn't work. Try again.")
         }

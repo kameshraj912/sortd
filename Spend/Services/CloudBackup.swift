@@ -88,6 +88,9 @@ final class CloudBackup {
     /// Delete All Data deletes it even with the switch off. Cleared when the
     /// copy is deleted.
     nonisolated static let backedUpHereKey = "cloudBackupFromThisPhone"
+    /// The store changed since the last backup that reached iCloud: the backup
+    /// is behind. Kept on disk so it survives a relaunch while offline.
+    nonisolated static let behindKey = "cloudBackupBehind"
     /// Automatic backups run at most this often.
     nonisolated static let minimumGap: TimeInterval = 10 * 60
     /// A save on the store waits this long for more saves before backing up.
@@ -143,7 +146,12 @@ final class CloudBackup {
     /// every save.
     @ObservationIgnored private var lastAttempt: Date?
     /// The store changed since the last backup, so a catch-up is worth it.
-    @ObservationIgnored private var dirty = false
+    private var dirty: Bool {
+        get { defaults.bool(forKey: Self.behindKey) }
+        set { defaults.set(newValue, forKey: Self.behindKey); behind = newValue }
+    }
+    /// `dirty`, readable by a screen (and redrawn when it changes).
+    private(set) var behind = false
     /// Goes up each time Delete All Data starts. A backup notes it before it
     /// uploads; if it moved by the end, the upload holds wiped data and must
     /// not stay in iCloud.
@@ -162,6 +170,7 @@ final class CloudBackup {
         self.clock = clock
         isEnabled = defaults.bool(forKey: Self.enabledKey)
         lastBackup = defaults.object(forKey: Self.lastKey) as? Date
+        behind = defaults.bool(forKey: Self.behindKey)
     }
 
     // MARK: - Backing up
@@ -258,6 +267,7 @@ final class CloudBackup {
             let snapshot = try Backup.snapshot(in: context, defaults: defaults)
             if automatic, snapshot.transactions.isEmpty {
                 status = .idle
+                dirty = false
                 return
             }
             let key = try await usableKey()
@@ -320,6 +330,25 @@ final class CloudBackup {
         try keys.save(key)
         return key
     }
+
+    /// The phone is back online: try the backup that is behind, now. Skips
+    /// the "tried a moment ago" pause (the last try failed because there was
+    /// no connection), keeps the ten-minute cap after a backup that worked.
+    func resumeAfterReconnect(from context: ModelContext) async {
+        guard isEnabled, dirty else { return }
+        lastAttempt = nil
+        if case .failed = status { status = .idle }
+        await backUpIfDue(from: context)
+    }
+
+    /// What the status line under the switch says. Offline with a backup
+    /// waiting, it says so plainly instead of a failed upload.
+    nonisolated static func statusLine(status: Status, isEnabled: Bool, isBehind: Bool, isOnline: Bool) -> String? {
+        if isEnabled, isBehind, !isOnline, !status.isBusy { return waitingMessage }
+        return status.message
+    }
+
+    nonisolated static let waitingMessage = "Waiting for a connection. Sortd will back up when you're online."
 
     // MARK: - Restoring
 
@@ -466,7 +495,9 @@ final class CloudBackup {
     private func fail(with error: Error, context: ModelContext?) {
         retry?.cancel()
         guard let known = error as? CloudBackupError else {
-            ErrorLog.report(error, where: "CloudBackup.backUp")
+            // No connection is expected, not a fault: the backup is still
+            // behind and `resumeAfterReconnect` carries on.
+            if !Connectivity.isNetworkDown(error) { ErrorLog.report(error, where: "CloudBackup.backUp") }
             status = .failed(error.localizedDescription)
             return
         }

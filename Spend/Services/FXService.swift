@@ -202,6 +202,7 @@ enum FXService {
         if let failure {
             log.error("FX backfill failed: \(failure.localizedDescription)")
             let offline = (failure as? URLError).map { [.notConnectedToInternet, .networkConnectionLost, .timedOut, .dataNotAllowed].contains($0.code) } ?? false
+            if !Connectivity.isNetworkDown(failure) { ErrorLog.report(failure, where: "FXService.backfill") }
             return .failed(offline: offline)
         }
         return converted == 0 ? .nothingToDo : .updated(converted)
