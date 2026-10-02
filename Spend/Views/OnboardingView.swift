@@ -595,8 +595,13 @@ struct OnboardingView: View {
                     return
                 }
                 Task { await FXService.backfill(in: context) }
-                restoreNote = added == 0 ? "Nothing to add. Everything in the backup is already here."
-                    : "\(added) purchase\(added == 1 ? "" : "s") back. Carry on with setup."
+                let badDates = CloudBackup.shared.lastRestoreBadDates
+                if badDates > 0 {
+                    restoreNote = "\(added) purchase\(added == 1 ? "" : "s") back. \(Backup.badDatesNote(badDates)). Carry on with setup."
+                } else {
+                    restoreNote = added == 0 ? "Nothing to add. Everything in the backup is already here."
+                        : "\(added) purchase\(added == 1 ? "" : "s") back. Carry on with setup."
+                }
             } catch {
                 restoreNote = error.localizedDescription
             }

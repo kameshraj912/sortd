@@ -80,6 +80,10 @@ final class CloudBackup {
     nonisolated static let lastKey = "cloudBackupLast"
     /// Delete All Data could not reach iCloud: delete the copy at the next launch.
     nonisolated static let deletePendingKey = "cloudBackupDeletePending"
+    /// When that delete was queued. The retry leaves alone a backup made
+    /// after this moment: it is a new, wanted one, not the copy that Delete
+    /// All Data meant to remove.
+    nonisolated static let deleteQueuedAtKey = "cloudBackupDeleteQueuedAt"
     /// This iPhone wrote the iCloud copy (a backup, not only a restore), so
     /// Delete All Data deletes it even with the switch off. Cleared when the
     /// copy is deleted.
@@ -113,6 +117,9 @@ final class CloudBackup {
         didSet { defaults.set(lastBackup, forKey: Self.lastKey) }
     }
     private(set) var status: Status = .idle
+    /// Rows the last restore left out for a date that can't be right, so the
+    /// restore message can say so.
+    private(set) var lastRestoreBadDates = 0
     var isDeletePending: Bool { defaults.bool(forKey: Self.deletePendingKey) }
     /// See `backedUpHereKey`.
     var backedUpFromThisPhone: Bool { defaults.bool(forKey: Self.backedUpHereKey) }
@@ -137,6 +144,15 @@ final class CloudBackup {
     @ObservationIgnored private var lastAttempt: Date?
     /// The store changed since the last backup, so a catch-up is worth it.
     @ObservationIgnored private var dirty = false
+    /// Goes up each time Delete All Data starts. A backup notes it before it
+    /// uploads; if it moved by the end, the upload holds wiped data and must
+    /// not stay in iCloud.
+    @ObservationIgnored private var resets = 0
+    /// Counts saves seen by `scheduleBackup`. A backup notes it when it takes
+    /// its snapshot; if it moved by the end of the upload, a purchase saved
+    /// mid-upload isn't in this copy, so another backup is scheduled. (The
+    /// save's own scheduled backup found this one busy and gave up.)
+    @ObservationIgnored private var changes = 0
 
     init(store: CloudBackupStore, keys: BackupKeyStore,
          defaults: UserDefaults = .standard, clock: @escaping () -> Date = { Date() }) {
@@ -179,6 +195,7 @@ final class CloudBackup {
     func scheduleBackup(from context: ModelContext) {
         guard isEnabled else { return }
         dirty = true
+        changes += 1
         pending?.cancel()
         pending = Task { [weak self] in
             guard let self else { return }
@@ -232,6 +249,10 @@ final class CloudBackup {
     }
 
     private func backUp(from context: ModelContext, automatic: Bool) async throws {
+        let resetsAtStart = resets
+        // The snapshot below is taken with no wait before it, so every save
+        // counted after this line is missing from it.
+        let changesAtSnapshot = changes
         status = .backingUp
         do {
             let snapshot = try Backup.snapshot(in: context, defaults: defaults)
@@ -245,13 +266,39 @@ final class CloudBackup {
             let blob = try await Task.detached(priority: .utility) {
                 try Self.encrypt(try Backup.encode(snapshot), with: SymmetricKey(data: keyData))
             }.value
+            // Delete All Data started while this was being made: don't upload.
+            guard resets == resetsAtStart else {
+                status = .idle
+                return
+            }
             let now = clock()
             try await store.save(blob, modified: now)
+            // Delete All Data started while this was uploading, and its delete
+            // may already have run: take this copy out again (or leave the
+            // delete pending for the next launch). Nothing here counts as
+            // backed up.
+            guard resets == resetsAtStart else {
+                queuePendingDelete()
+                await retryPendingDelete()
+                status = .idle
+                return
+            }
+            // This upload took the place of the copy an earlier Delete All
+            // Data was still waiting to delete: nothing is left to delete,
+            // and the next launch must not delete this new one.
+            clearPendingDelete()
             defaults.set(true, forKey: Self.backedUpHereKey)
             lastBackup = now
             dirty = false
             status = .idle
+            // Saved while this was uploading: back that up too.
+            if changes != changesAtSnapshot { scheduleBackup(from: context) }
         } catch {
+            // A backup of wiped data failed: nothing to pause or retry.
+            guard resets == resetsAtStart else {
+                status = .idle
+                throw error
+            }
             fail(with: error, context: context)
             throw error
         }
@@ -286,6 +333,7 @@ final class CloudBackup {
     /// say so without a second download.
     func restoreIfPresent(into context: ModelContext, mode: Backup.Mode) async throws -> Int? {
         status = .restoring
+        lastRestoreBadDates = 0
         do {
             guard let record = try await store.fetch() else {
                 status = .idle
@@ -293,6 +341,7 @@ final class CloudBackup {
             }
             let plain = try await decrypted(record.blob)
             let result = try Backup.restore(plain, mode: mode, into: context, defaults: defaults)
+            lastRestoreBadDates = result.badDates
             // This phone now holds what iCloud holds: backups may proceed.
             lastBackup = record.modified
             status = .idle
@@ -349,11 +398,24 @@ final class CloudBackup {
     /// iCloud can't be reached now, the delete is remembered and
     /// `retryPendingDelete` finishes it at the next launch.
     func deleteCloudCopyAfterReset() async {
+        // Any backup already running, even mid-upload, is now stale.
+        resets += 1
         isEnabled = false
         pending?.cancel()
         catchUp?.cancel()
-        defaults.set(true, forKey: Self.deletePendingKey)
+        retry?.cancel()
+        queuePendingDelete()
         await retryPendingDelete()
+    }
+
+    private func queuePendingDelete() {
+        defaults.set(true, forKey: Self.deletePendingKey)
+        defaults.set(clock(), forKey: Self.deleteQueuedAtKey)
+    }
+
+    private func clearPendingDelete() {
+        defaults.removeObject(forKey: Self.deletePendingKey)
+        defaults.removeObject(forKey: Self.deleteQueuedAtKey)
     }
 
     /// Whether Delete All Data must delete the iCloud copy: whenever this
@@ -375,8 +437,24 @@ final class CloudBackup {
     func retryPendingDelete() async {
         guard isDeletePending else { return }
         do {
+            // A copy saved after the delete was queued is a new backup the
+            // person wanted (made from this iPhone or another), not the one
+            // Delete All Data meant to remove: leave it. A delete queued
+            // before this check existed has no time and deletes as before.
+            if let queued = defaults.object(forKey: Self.deleteQueuedAtKey) as? Date {
+                let record: (blob: Data, modified: Date)?
+                do {
+                    record = try await store.fetch()
+                } catch CloudBackupError.corrupt {
+                    record = nil   // unreadable: still delete it
+                }
+                if let record, record.modified > queued {
+                    clearPendingDelete()
+                    return
+                }
+            }
             try await deleteCloudCopy()
-            defaults.removeObject(forKey: Self.deletePendingKey)
+            clearPendingDelete()
         } catch {
             // Still pending; the next launch tries again.
         }
