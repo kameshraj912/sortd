@@ -69,6 +69,23 @@ struct DeveloperMenuView: View {
                 } header: {
                     BoldHeader("Apple Pay Tap Queue")
                 }
+
+                // The last 10 raw lines, newest first: a tap and its Wallet
+                // notification seconds apart both stay visible.
+                Section {
+                    let runs = LogPurchaseIntent.recentRuns()
+                    if runs.isEmpty {
+                        Text("None yet").foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(runs.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                } header: {
+                    BoldHeader("Recent Runs")
+                }
             }
             .navigationTitle("Developer")
             .navigationBarTitleDisplayMode(.inline)
