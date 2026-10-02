@@ -23,11 +23,14 @@ nonisolated enum Backup {
     /// anything about *this* device or a live login stays behind. Gmail
     /// accounts are excluded because their keys live in the Keychain and
     /// would restore as connected-but-broken.
+    /// `AppLock.enabledKey`, spelt out: `AppLock` is main-actor bound.
+    static let appLockKey = "appLockEnabled"
+
     static let settingKeys = [
         "monthlyBudget",
         Money.homeKey,
         "cardStyle",
-        "appLockEnabled",
+        appLockKey,
         CategoryBudgets.key,
         "paymentReminders",
         "recurring.cancelled",
@@ -276,9 +279,13 @@ nonisolated enum Backup {
             if let setting = snapshot.settings[key] {
                 // On merge, don't stomp a setting the user has already chosen here.
                 if mode == .merge, defaults.object(forKey: key) != nil { continue }
+                // A restore never switches App Lock off, whatever the backup
+                // says: once it is on here, the backup can't change it. A
+                // backup may still switch it on, as it always could.
+                if key == appLockKey, defaults.bool(forKey: key) { continue }
                 defaults.set(setting.value, forKey: key)
                 result.settings += 1
-            } else if mode == .replace, key != "appLockEnabled" {
+            } else if mode == .replace, key != appLockKey {
                 // The backup phone never set this, so it had the default. Keep
                 // this phone's value and a budget or limit set here in one
                 // currency would be read in the backup's. The app lock is the

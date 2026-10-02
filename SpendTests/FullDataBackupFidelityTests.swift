@@ -184,19 +184,30 @@ struct FullDataBackupFidelityTests {
     }
 
     /// App Lock: a backup made with the lock OFF, restored with Replace on a
-    /// phone that has it ON, switches the lock off. The code keeps the lock on
-    /// only when the backup has no value at all ("a restore never quietly
-    /// switches it off"), so an explicit `false` is the same surprise by
-    /// another door. Nobody may have decided this: Raj does.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Replace restore from a backup made with App Lock off turns App Lock off on this phone"))
-    func aReplaceRestoreNeverSwitchesAppLockOff() throws {
+    /// phone that has it ON, used to switch the lock off. The code kept the
+    /// lock on only when the backup had no value at all ("a restore never
+    /// quietly switches it off"), so an explicit `false` was the same
+    /// surprise by another door. Now a restore never turns it off.
+    @Test func aReplaceRestoreNeverSwitchesAppLockOff() throws {
         let fromDefaults = scratch()
         fromDefaults.set(false, forKey: "appLockEnabled")
         let data = try Backup.data(in: try store(), defaults: fromDefaults)
 
         let toDefaults = scratch()
         toDefaults.set(true, forKey: "appLockEnabled")
+        try Backup.restore(data, mode: .replace, into: try store(), defaults: toDefaults, cardBook: book())
+        #expect(toDefaults.bool(forKey: "appLockEnabled") == true)
+    }
+
+    /// What was kept: a backup made with the lock ON still turns it on, on
+    /// Replace, for a phone that had it off.
+    @Test func aReplaceRestoreStillSwitchesAppLockOn() throws {
+        let fromDefaults = scratch()
+        fromDefaults.set(true, forKey: "appLockEnabled")
+        let data = try Backup.data(in: try store(), defaults: fromDefaults)
+
+        let toDefaults = scratch()
+        toDefaults.set(false, forKey: "appLockEnabled")
         try Backup.restore(data, mode: .replace, into: try store(), defaults: toDefaults, cardBook: book())
         #expect(toDefaults.bool(forKey: "appLockEnabled") == true)
     }
