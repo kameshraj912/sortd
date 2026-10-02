@@ -1,6 +1,14 @@
 import Foundation
 import SwiftData
 
+/// Which Apple Pay automation trigger ran: the Wallet tap trigger (a till)
+/// or, on iOS 27, Wallet's notification (a till, an app or a website).
+/// Stored on `Transaction.tapOrigins` as these letters.
+nonisolated enum TapTrigger: String, Sendable {
+    case tap = "t"
+    case notification = "n"
+}
+
 @Model
 final class Transaction {
     var id: UUID = UUID()
@@ -38,6 +46,12 @@ final class Transaction {
     /// that shares the digits, "Not one of mine" just empties the queue and
     /// leaves this as is (spec 2026-09-27).
     var unmatchedLast4: String?
+    /// Which Apple Pay automation triggers have reported this purchase:
+    /// "t" for the Wallet tap trigger (a till), "n" for Wallet's
+    /// notification (iOS 27; also apps and websites), "tn" for both. Nil for
+    /// rows that never came from either, and for tap rows logged before
+    /// 2 Oct 2026 (read as "t"). Optional, so SwiftData migrates on its own.
+    var tapOrigins: String?
 
     init(date: Date, merchant: String, rawMerchant: String? = nil, amount: Decimal,
          currencyCode: String, card: Card, category: SpendCategory, source: TxnSource,
@@ -77,6 +91,23 @@ final class Transaction {
     func markSeen(in source: TxnSource) {
         guard !seenIn.contains(source) else { return }
         seenInRaw = (seenIn + [source]).map(\.rawValue).joined(separator: ",")
+    }
+
+    /// The tap trigger has reported this row. A tap row from before
+    /// `tapOrigins` existed counts.
+    var seenByTapTrigger: Bool {
+        if let tapOrigins { return tapOrigins.contains(TapTrigger.tap.rawValue) }
+        return seenIn.contains(.tap)
+    }
+
+    /// Wallet's notification has reported this row.
+    var seenByNotification: Bool { tapOrigins?.contains(TapTrigger.notification.rawValue) == true }
+
+    /// Adds a trigger to `tapOrigins`, always written "t" then "n".
+    func markOrigin(_ trigger: TapTrigger) {
+        let tap = seenByTapTrigger || trigger == .tap
+        let notification = seenByNotification || trigger == .notification
+        tapOrigins = (tap ? TapTrigger.tap.rawValue : "") + (notification ? TapTrigger.notification.rawValue : "")
     }
 
     /// Best available AUD value. Falls back to the raw amount so totals never
