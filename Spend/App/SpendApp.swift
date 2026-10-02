@@ -33,18 +33,6 @@ struct SpendApp: App {
         Appearance.apply(appearance)
     }
 
-    /// Early test builds linked Gmail through a Google Apps Script with a
-    /// secret key. That link is gone; clear its saved key and settings once.
-    private static func removeAppsScriptLink() {
-        let key = "emailAccounts"
-        guard let data = UserDefaults.standard.data(forKey: key) else { return }
-        let list = (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
-        for account in list {
-            if let id = account["id"] as? String { Keychain.delete("email-sync-\(id)") }
-        }
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-
     init() {
         let launch = Perf.begin("launch.init")
         defer { launch.end() }
@@ -71,7 +59,9 @@ struct SpendApp: App {
         #if SORTD_ICLOUD
         CloudBackup.watchSaves()
         #endif
-        Self.removeAppsScriptLink()
+        // Gmail receipts were removed: delete any saved Google token and the
+        // old Gmail settings, once.
+        GmailCleanup.runOnce()
         // Share-sheet copies of the backup or CSV from a past session.
         Exports.clear()
         // Only the card column: this runs before the first frame.
@@ -481,11 +471,6 @@ struct RootView: View {
             // back to the foreground, not just once.
             await TapQueue.replay(in: context)
             await FXService.ensureConverted(in: context)
-            #if DEBUG
-            await GmailSync.syncAll(in: context, force: ProcessInfo.processInfo.environment["SPEND_GMAIL_FORCE"] == "1")
-            #else
-            await GmailSync.syncAll(in: context)
-            #endif
             await FXService.backfill(in: context)
             let all = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             await Reminders.reschedule(all.recurring())

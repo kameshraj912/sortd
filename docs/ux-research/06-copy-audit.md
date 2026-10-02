@@ -1,5 +1,8 @@
 # 06 — Copy audit (Sortd, branch `ux-refresh`)
 
+> **2 Oct 2026:** Gmail was removed from the app. Rows below about Gmail, `GmailViews.swift`, bank alerts
+> and email receipts describe copy that no longer exists.
+
 Date: 23 Sep 2026. Read-only. No Swift file was changed.
 
 **What was checked:** every user-facing string in `Spend/Views/**/*.swift` (except onboarding),

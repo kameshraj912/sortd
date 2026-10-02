@@ -5,7 +5,7 @@ import Security
 /// The backup key as a synchronizable Keychain item, so iCloud Keychain
 /// (end-to-end encrypted by Apple) carries it to the user's next phone.
 ///
-/// Its own service, apart from `Keychain` (the Gmail keys): those are
+/// Its own service, apart from `Keychain`: its items are
 /// this-device-only and `Keychain.deleteAll()` wipes them on Delete All
 /// Data, while this key must survive that (the next backup reuses it, and
 /// another phone may need it).

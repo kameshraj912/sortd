@@ -361,13 +361,13 @@ struct BackupTests {
 
     @Test func emailsAlreadyReadComeAlong() throws {
         let from = try store()
-        from.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))
-        from.insert(ImportedRecord(id: "18c2f0b1-none-v3", account: "me@gmail.com"))
+        from.insert(ImportedRecord(id: "18c2f0a9", account: "me@example.com"))
+        from.insert(ImportedRecord(id: "18c2f0b1-none-v3", account: "me@example.com"))
         try from.save()
         let data = try Backup.data(in: from, defaults: scratch())
 
         let to = try store()
-        to.insert(ImportedRecord(id: "18c2f0a9", account: "me@gmail.com"))   // already here
+        to.insert(ImportedRecord(id: "18c2f0a9", account: "me@example.com"))   // already here
         try to.save()
         try Backup.restore(data, mode: .merge, into: to, defaults: scratch())
         let ids = Set(try to.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
@@ -413,6 +413,56 @@ struct BackupTests {
         let text = String(decoding: data, as: UTF8.self)
         #expect(!text.contains("someone@example.com"))
         #expect(!text.contains("gmailAccounts"))
+    }
+
+    // MARK: A backup made while Gmail still existed (removed 2 Oct 2026)
+
+    /// Old rows that came from email still load, show and back up, and the
+    /// Gmail-era settings in the file are ignored (not put back on the phone).
+    @Test func aGmailEraBackupStillRestoresItsEmailRowsAndIgnoresGmailSettings() throws {
+        var snap = Backup.Snapshot()
+        let rowDate = date("2026-09-10")
+        snap.transactions = [
+            Backup.Snapshot.Row(id: UUID(), date: rowDate, merchant: "Chennai Biryani House", rawMerchant: "DD *DOORDASH",
+                                amount: Decimal(string: "31.05")!, currencyCode: "AUD", homeAmount: Decimal(string: "31.05")!,
+                                card: Card.nab.rawValue, category: SpendCategory.foodDelivery.rawValue,
+                                source: TxnSource.email.rawValue, seenIn: "tap,email", note: "DoorDash", createdAt: rowDate,
+                                platform: "doordash", refunded: false, renewsOn: nil, billingPeriod: nil,
+                                sourceAccount: "someone@example.com"),
+            Backup.Snapshot.Row(id: UUID(), date: rowDate, merchant: "Netflix", rawMerchant: "Netflix",
+                                amount: Decimal(string: "16.99")!, currencyCode: "AUD", homeAmount: Decimal(string: "16.99")!,
+                                card: Card.nab.rawValue, category: SpendCategory.subscriptions.rawValue,
+                                source: TxnSource.email.rawValue, seenIn: "email", note: "", createdAt: rowDate,
+                                platform: nil, refunded: false, renewsOn: date("2026-10-10"), billingPeriod: "monthly",
+                                sourceAccount: nil),
+        ]
+        snap.imported = [.init(id: "18c2f0a9", account: "someone@example.com"), .init(id: "18c2f0b1-v3", account: nil)]
+        snap.settings["gmailAccounts"] = .strings(["someone@example.com"])
+        snap.settings["pendingRefunds"] = .strings(["old"])
+        snap.settings["monthlyBudget"] = .double(1500)
+        let data = try Backup.encode(snap)
+
+        let to = try store()
+        let defaults = scratch()
+        let result = try Backup.restore(data, mode: .replace, into: to, defaults: defaults)
+
+        #expect(result.added == 2)
+        let rows = try to.fetch(FetchDescriptor<Transaction>()).sorted { $0.merchant < $1.merchant }
+        #expect(rows.map(\.source) == [.email, .email])
+        #expect(rows[0].sourceAccount == "someone@example.com")
+        #expect(rows[0].seenIn == [.tap, .email])
+        #expect(rows[1].renewsOn == date("2026-10-10"))
+        #expect(rows[0].source.label == "Email receipt")
+        #expect(Set(try to.fetch(FetchDescriptor<ImportedRecord>()).map(\.id)) == ["18c2f0a9", "18c2f0b1-v3"])
+        // Gmail-era settings are ignored; a normal setting still comes back.
+        #expect(defaults.object(forKey: "gmailAccounts") == nil)
+        #expect(defaults.object(forKey: "pendingRefunds") == nil)
+        #expect(defaults.double(forKey: "monthlyBudget") == 1500)
+
+        // And those rows back up again, unchanged.
+        let again = try Backup.snapshot(in: to, defaults: scratch())
+        #expect(again.transactions.map(\.source) == ["email", "email"])
+        #expect(Set((again.imported ?? []).map(\.id)) == ["18c2f0a9", "18c2f0b1-v3"])
     }
 
     // MARK: Bad input

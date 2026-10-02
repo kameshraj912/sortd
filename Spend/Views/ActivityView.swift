@@ -181,7 +181,7 @@ struct TransactionsScreen: View {
             // Finish a pending delete first, so a receipt from the sync can't
             // merge into a purchase that is about to go.
             commitDelete()
-            // Pull down to fetch new Gmail receipts and exchange rates.
+            // Pull down to refresh exchange rates.
             refreshNote = await RefreshNote.run(in: context)
         }
         .refreshNote($refreshNote, bottomPadding: 16)
@@ -620,14 +620,14 @@ struct TransactionsScreen: View {
     private var isFiltering: Bool { cardFilter != nil || categoryFilter != nil }
 
     private var filtered: [Transaction] {
-        let q = SearchText.fold(search)
+        let matchesSearch = SearchText.matcher(for: search)
         let hidden = Set(pending.items.map(\.persistentModelID))
         return transactions.filter { t in
             !hidden.contains(t.persistentModelID)
             && (fixedCard == nil || t.card == fixedCard)
             && (cardFilter == nil || t.card == cardFilter)
             && (categoryFilter == nil || t.category == categoryFilter)
-            && SearchText.matches(t, folded: q)
+            && matchesSearch(t)
         }
     }
 

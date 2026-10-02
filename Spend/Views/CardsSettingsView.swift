@@ -195,7 +195,7 @@ struct CardEditor: View {
                 } header: {
                     BoldHeader("Last 4 Digits")
                 } footer: {
-                    Text("Bank emails show the card number. Apple Pay receipts often show a different one (Wallet › this card › ••• › Card Details). Add both.")
+                    Text("Receipts show the card number. Apple Pay receipts often show a different one (Wallet › this card › ••• › Card Details). Add both.")
                 }
 
                 Section {

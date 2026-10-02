@@ -37,14 +37,12 @@ final class Transaction {
     /// "monthly" / "yearly". Used to predict upcoming payments.
     var renewsOn: Date?
     var billingPeriod: String?
-    /// The Gmail account an email purchase came from, so disconnecting it
-    /// can remove its purchases.
+    /// The Gmail account an old email purchase came from. Nothing writes it
+    /// any more; the stored field stays so old rows still load and back up.
     var sourceAccount: String?
-    /// Last 4 digits a receipt or bank alert carried that matched none of
-    /// Raj's cards, while it waits for "Which card?" (Home) to be answered.
-    /// Non-nil only until then: picking a card clears it on every purchase
-    /// that shares the digits, "Not one of mine" just empties the queue and
-    /// leaves this as is (spec 2026-09-27).
+    /// Last 4 digits an old email receipt carried that matched none of the
+    /// person's cards. Nothing writes it any more (the "Which card?" prompt
+    /// is gone); the stored field stays so old rows still load.
     var unmatchedLast4: String?
     /// Which Apple Pay automation triggers have reported this purchase:
     /// "t" for the Wallet tap trigger (a till), "n" for Wallet's
@@ -199,12 +197,13 @@ final class MerchantRule {
     var category: SpendCategory { SpendCategory(rawValue: categoryRaw) ?? .other }
 }
 
-/// An email record already imported, so re-syncs never add it twice.
+/// An email record the removed Gmail sync had imported. Nothing writes these
+/// any more; the model stays so old data still loads and backs up.
 @Model
 final class ImportedRecord {
     @Attribute(.unique) var id: String = ""
     var importedAt: Date = Date.now
-    /// Gmail account it came from, so disconnecting can forget it.
+    /// The Gmail account it came from.
     var account: String?
 
     init(id: String, account: String? = nil) {
