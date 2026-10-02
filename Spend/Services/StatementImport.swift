@@ -108,7 +108,8 @@ nonisolated enum StatementImport {
             for (j, cell) in row.enumerated() {
                 let key = cell.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty else { continue }
-                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date"]) {
+                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
+                                                       "time", "timestamp", "settled"]) {
                     found.date = j
                 } else if found.debit == nil, matches(key, ["debit", "withdrawal", "money out", "paid out", "spent"]) {
                     found.debit = j
@@ -116,7 +117,8 @@ nonisolated enum StatementImport {
                     found.credit = j
                 } else if found.balance == nil, matches(key, ["balance"]) {
                     found.balance = j
-                } else if found.amount == nil, matches(key, ["amount", "value", "transaction amount"]) {
+                } else if found.amount == nil, matches(key, ["amount", "value", "total", "transaction amount"]),
+                          !key.contains("round up"), !key.contains("roundup") {
                     found.amount = j
                 } else if found.detail == nil, matches(key, ["description", "details", "narrative", "merchant",
                                                             "particulars", "reference", "transaction", "payee", "name"]) {
@@ -141,9 +143,13 @@ nonisolated enum StatementImport {
         for row in sample {
             for (j, cell) in row.enumerated() where j < width {
                 let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
-                if parseDate(trimmed, order: .dayFirst) != nil { dateHits[j] += 1 }
-                if signedAmount(trimmed) != nil { moneyHits[j] += 1 }
-                if signedAmount(trimmed) == nil, parseDate(trimmed, order: .dayFirst) == nil {
+                // A date column holds only dates. A description that mentions
+                // one ("... Value Date: 30/08/2026") is still text.
+                let isDate = isWholeDate(trimmed)
+                let isMoney = signedAmount(trimmed) != nil
+                if isDate { dateHits[j] += 1 }
+                if isMoney { moneyHits[j] += 1 }
+                if !isMoney, !isDate {
                     textLength[j] += trimmed.count
                 }
             }
@@ -155,7 +161,10 @@ nonisolated enum StatementImport {
         let moneyColumns = moneyHits.enumerated().filter { $0.element > 0 }.map(\.offset)
         out.amount = moneyColumns.first
         if moneyColumns.count > 1 { out.balance = moneyColumns.last }
-        out.detail = textLength.enumerated().max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
+        // The shop is text: never the date, the amount or the balance.
+        let taken = Set([out.date, out.amount, out.balance].compactMap { $0 })
+        out.detail = textLength.enumerated().filter { !taken.contains($0.offset) }
+            .max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
         return out
     }
 
@@ -303,6 +312,20 @@ nonisolated enum StatementImport {
         }
         if monthFirst > dayFirst { return .monthFirst }
         return .dayFirst
+    }
+
+    /// True when the whole cell is a date, with an optional time after it.
+    /// "01/09/2026 12:30" and "2026-09-01T12:34:56+10:00" are dates; a
+    /// description that merely contains one is not.
+    static func isWholeDate(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let (_, range) = firstDate(in: trimmed, order: .dayFirst) else { return false }
+        var rest = trimmed
+        rest.removeSubrange(range)
+        rest = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        if rest.isEmpty { return true }
+        let time = #"^[Tt\s]*[0-9]{1,2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?\s*([AaPp][Mm])?\s*(Z|UTC|GMT|[+-][0-9]{2}(:?[0-9]{2})?)?$"#
+        return rest.range(of: time, options: .regularExpression) != nil
     }
 
     /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 1 Sep 2026,
@@ -484,7 +507,7 @@ nonisolated enum StatementImport {
         guard !trimmed.isEmpty else { return nil }
         // Must be money and nothing else, or a description column with a
         // house number in it would be read as an amount.
-        let pattern = #"^\(?\s*-?\s*(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*-?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?$"#
+        let pattern = #"^\(?\s*[-+]?\s*(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*-?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = trimmed as NSString
         guard let m = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)) else { return nil }

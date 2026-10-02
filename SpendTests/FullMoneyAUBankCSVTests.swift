@@ -57,8 +57,7 @@ struct FullMoneyAUBankCSVTests {
     ///
     /// Known bug: `StatementImport.layout(for:)` (Spend/Services/StatementImport.swift:141-158) counts a cell as a date if
     /// `parseDate` finds a date anywhere inside it, so a description holding a date is not text.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-04", "a headerless CommBank description that contains a date is not used as the shop name"))
+    @Test(.bug(id: "full-money-04", "a headerless CommBank description that contains a date is not used as the shop name"))
     func aDescriptionHoldingADateIsStillTheShopName() {
         let csv = """
         01/09/2026,"-58.30","WOOLWORTHS 3342 RICHMOND VIC AUS Card xx1234 Value Date: 30/08/2026","+2451.70"
@@ -152,8 +151,7 @@ struct FullMoneyAUBankCSVTests {
     }
 
     /// Header words "time" and "total" are not in the date and amount lists, so the layout is guessed from the data and the first number column (Round Up) wins (Spend/Services/StatementImport.swift:111,119). Up export shape is from memory, not a real file.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-09", "a header of Time and Total is not recognised, so the Round Up column is read as the amount"))
+    @Test(.bug(id: "full-money-09", "a header of Time and Total is not recognised, so the Round Up column is read as the amount"))
     func upStyleHeaderWithTimeAndTotalColumns() {
         let csv = """
         Time,Category,Description,Round Up,Total,Currency
