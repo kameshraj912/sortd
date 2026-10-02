@@ -42,7 +42,6 @@ SEE WHERE IT WENT
 • An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it.
 
 EVEN MORE
-• Gmail receipts: deliveries, rides, app stores and bank alerts, read from your inbox on your iPhone. Read-only.
 • Receipt camera: point at a paper receipt and Sortd fills in the shop and total. Read on your iPhone; the photo isn't kept.
 • Insights: this month next to last month, day by day.
 • Subscriptions and bills: every repeat charge found, price rises flagged, and a reminder the day before it charges.
