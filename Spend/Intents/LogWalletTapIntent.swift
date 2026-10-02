@@ -204,6 +204,9 @@ struct LogWalletTapIntent: AppIntent {
         }
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: container.mainContext)
+        // The shortcut runs with "Show When Run" off, so the dialog is not
+        // seen: say "Logged" with a notification, if already allowed.
+        await LoggedNotice.post(for: outcome)
         return outcome
     }
 

@@ -10,6 +10,10 @@ import SwiftData
 /// visitor sees.
 struct SetupGuideView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(LoggedNotice.enabledKey) private var loggedNotice = true
+    /// The switch only shows once notifications are allowed: it never asks.
+    @State private var notificationsAllowed = false
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     private var status: ApplePayStatus {
@@ -40,10 +44,23 @@ struct SetupGuideView: View {
                 Text("Add in-app and online Apple Pay by hand.")
             }
             .listRowBackground(Color.clear)
+
+            if notificationsAllowed {
+                Section {
+                    Toggle(isOn: $loggedNotice) {
+                        Label("Tell me when a purchase is logged", systemImage: "bell.badge")
+                    }
+                } footer: {
+                    Text("A notification after each Apple Pay purchase Sortd logs. Tap it to see Activity.")
+                }
+            }
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Apple Pay Logging")
+        .task(id: scenePhase) {
+            if scenePhase == .active { notificationsAllowed = await LoggedNotice.notificationsAllowed() }
+        }
         .toolbar {
             if isPresentedAsSheet {
                 ToolbarItem(placement: .confirmationAction) {

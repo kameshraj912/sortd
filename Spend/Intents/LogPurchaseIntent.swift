@@ -49,6 +49,9 @@ struct LogPurchaseIntent: AppIntent {
         let transaction: Transaction?
         let merged: Bool
         var saveFailed: Bool = false
+        /// A refund was noted (whole, partial or on its own row). Not a
+        /// purchase, so no "Logged" notice (`LoggedNotice`).
+        var refund: Bool = false
     }
 
     /// The merchant name the removed "Send a Test Tap" button wrote
@@ -199,7 +202,7 @@ struct LogPurchaseIntent: AppIntent {
                                           platform: nil, before: now, lookbackDays: 60, in: context) {
                     try context.save()
                     return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
-                                   transaction: nil, merged: true)
+                                   transaction: nil, merged: true, refund: true)
                 }
                 // No whole purchase matches: maybe this refund is only part of a
                 // bigger one (one returned item from a A$59.90 basket).
@@ -210,7 +213,7 @@ struct LogPurchaseIntent: AppIntent {
                     await FXService.backfill(in: context)
                     let shop = reduced.merchant.isEmpty ? (name.isEmpty ? "the shop" : name) : reduced.merchant
                     return Outcome(message: "\(Money.format(p.amount, currency)) refund on \(shop) noted",
-                                   transaction: reduced, merged: true)
+                                   transaction: reduced, merged: true, refund: true)
                 }
             }
             // "needs a check" (spec item 2/10): a blank amount, a blank shop,
@@ -247,7 +250,7 @@ struct LogPurchaseIntent: AppIntent {
             if refund, !t.refunded {
                 t.refunded = true
                 try context.save()
-                return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false)
+                return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false, refund: true)
             }
             // The first purchase the app logged on its own (once per install).
             // A "Send a Test Tap" purchase is not one.
