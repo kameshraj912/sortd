@@ -18,8 +18,15 @@ struct CategoryLimitSheet: View {
 
     private static let presets: [Double] = [50, 100, 200, 300, 500]
 
-    private var value: Double {
-        (AmountParser.parse(text)?.amount.double) ?? 0
+    private var value: Double { Self.capped(text) }
+
+    /// What was typed, held to the same top limit as the monthly budget
+    /// (a typo like 99999999999 saves the top limit, not a silly number).
+    /// Not a number, or not above zero, is 0.
+    static func capped(_ text: String) -> Double {
+        let v = (AmountParser.parse(text)?.amount.double) ?? 0
+        guard v.isFinite, v > 0 else { return 0 }
+        return min(v, BudgetSheet.maxBudget())
     }
 
     /// What Save does: parse what's typed, persist it, and hand back the
@@ -27,7 +34,7 @@ struct CategoryLimitSheet: View {
     /// of `CategoryBudgets` here (instead of only computing it from `text`)
     /// means the caller's copy can never drift from what was actually saved.
     static func apply(_ text: String, to category: SpendCategory, _ defaults: UserDefaults = .standard) -> Double? {
-        let value = (AmountParser.parse(text)?.amount.double) ?? 0
+        let value = capped(text)
         CategoryBudgets.set(value, for: category, defaults)
         return CategoryBudgets.limit(for: category, defaults)
     }
@@ -59,6 +66,10 @@ struct CategoryLimitSheet: View {
                         .keyboardType(.numberPad)
                         .focused($focused)
                         .fixedSize()
+                        .onChange(of: text) { _, new in
+                            let limited = BudgetSheet.limitInput(new)
+                            if limited != new { text = limited }
+                        }
                         .accessibilityLabel("Monthly limit for \(category.name) in \(Money.home)")
                     Image(systemName: "pencil")
                         .font(.title3.weight(.semibold))
@@ -123,7 +134,7 @@ struct CategoryLimitSheet: View {
         .padding(20)
         .onAppear {
             current = CategoryBudgets.limit(for: category) ?? 0
-            if current > 0 { text = String(Int(current)) }
+            if current > 0 { text = BudgetSheet.text(for: current) }
         }
         .toolbar {
             // The number pad has no Return key; without this there is
