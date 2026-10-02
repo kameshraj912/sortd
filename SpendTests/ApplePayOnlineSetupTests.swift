@@ -44,6 +44,32 @@ struct ApplePayOnlineSetupTests {
         #expect(record.contains("title \u{201C}\u{201D}"))
     }
 
+    // MARK: - Recent runs (the last 10 raw lines)
+
+    @Test func recentRunsKeepTheNewestTenNewestFirst() {
+        var runs: [String] = []
+        for n in 1...12 { runs = LogPurchaseIntent.appending("run \(n)", to: runs) }
+        #expect(runs.count == 10)
+        #expect(runs.first == "run 12")
+        #expect(runs.last == "run 3")
+        #expect(runs == (3...12).reversed().map { "run \($0)" })
+    }
+
+    /// Every reach updates "last tap received" and adds to the buffer.
+    @Test func everyReachUpdatesTheLastTapAndTheBuffer() {
+        let defaults = UserDefaults(suiteName: "online-runs-\(UUID().uuidString)")!
+        #expect(LogPurchaseIntent.recentRuns(defaults).isEmpty)
+        LogPurchaseIntent.recordReach("first", at: now, defaults: defaults)
+        LogPurchaseIntent.recordReach("second", at: now.addingTimeInterval(5), defaults: defaults)
+        #expect(defaults.string(forKey: LogPurchaseIntent.lastTapKey) == "second")
+        #expect(defaults.object(forKey: LogPurchaseIntent.lastTapAtKey) as? Date == now.addingTimeInterval(5))
+        #expect(LogPurchaseIntent.recentRuns(defaults) == ["second", "first"])
+        for n in 3...11 { LogPurchaseIntent.recordReach("run \(n)", at: now, defaults: defaults) }
+        #expect(LogPurchaseIntent.recentRuns(defaults).count == 10)
+        #expect(LogPurchaseIntent.recentRuns(defaults).first == "run 11")
+        #expect(LogPurchaseIntent.recentRuns(defaults).last == "second")
+    }
+
     // MARK: - Setup words
 
     @Test func stepThreeAsksForBothAutomationsOnIOS27() {

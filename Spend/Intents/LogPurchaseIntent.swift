@@ -85,11 +85,27 @@ struct LogPurchaseIntent: AppIntent {
         added && merchant != legacyTestMerchant
     }
 
-    /// Marks that Shortcuts reached Sortd, with the raw fields for Settings.
-    static func recordReach(_ record: String, at now: Date) {
-        UserDefaults.standard.set(record, forKey: lastTapKey)
-        UserDefaults.standard.set(now, forKey: lastTapAtKey)
-        UserDefaults.standard.synchronize()
+    /// The last few raw lines, newest first, for the developer menu's
+    /// "Recent runs" (one line alone hides a run that came seconds before).
+    static let recentRunsKey = "recentTapRuns"
+    nonisolated static let recentRunsCap = 10
+
+    /// `line` first, then the older ones, at most `recentRunsCap`. Pure.
+    nonisolated static func appending(_ line: String, to runs: [String]) -> [String] {
+        Array(([line] + runs).prefix(recentRunsCap))
+    }
+
+    static func recentRuns(_ defaults: UserDefaults = .standard) -> [String] {
+        defaults.stringArray(forKey: recentRunsKey) ?? []
+    }
+
+    /// Marks that Shortcuts reached Sortd, with the raw fields for Settings,
+    /// and adds the line to "Recent runs".
+    static func recordReach(_ record: String, at now: Date, defaults: UserDefaults = .standard) {
+        defaults.set(record, forKey: lastTapKey)
+        defaults.set(now, forKey: lastTapAtKey)
+        defaults.set(appending(record, to: recentRuns(defaults)), forKey: recentRunsKey)
+        defaults.synchronize()
     }
 
     /// The whole tap-handling logic, callable from tests.
