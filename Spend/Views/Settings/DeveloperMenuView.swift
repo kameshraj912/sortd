@@ -56,6 +56,14 @@ struct DeveloperMenuView: View {
                 // last arrived, what's waiting on a retry, what the last retry did.
                 Section {
                     LabeledContent("Last tap received", value: lastTapReceivedText)
+                    // Every field as it arrived, tap fields and Wallet's
+                    // notification both, and which trigger ran.
+                    if let raw = UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) {
+                        Text(raw)
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
                     LabeledContent("Queued taps", value: "\(TapQueue.count)")
                     LabeledContent("Last replay", value: TapQueue.lastReplaySummary)
                 } header: {
@@ -84,6 +92,8 @@ struct DeveloperMenuView: View {
 
     private var lastTapReceivedText: String {
         guard let date = LogPurchaseIntent.lastTapReceivedAt else { return "Never" }
-        return date.formatted(date: .abbreviated, time: .standard)
+        let raw = UserDefaults.standard.string(forKey: LogPurchaseIntent.lastTapKey) ?? ""
+        let kind = raw.contains("notification run") ? " · notification" : raw.contains("tap run") ? " · tap" : ""
+        return date.formatted(date: .abbreviated, time: .standard) + kind
     }
 }

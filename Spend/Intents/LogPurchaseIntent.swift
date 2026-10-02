@@ -82,11 +82,26 @@ struct LogPurchaseIntent: AppIntent {
         added && merchant != legacyTestMerchant
     }
 
+    /// Marks that Shortcuts reached Sortd, with the raw fields for Settings.
+    static func recordReach(_ record: String, at now: Date) {
+        UserDefaults.standard.set(record, forKey: lastTapKey)
+        UserDefaults.standard.set(now, forKey: lastTapAtKey)
+        UserDefaults.standard.synchronize()
+    }
+
     /// The whole tap-handling logic, callable from tests.
+    ///
+    /// `trigger`: `.notification` when the fields were read from Wallet's
+    /// notification (`LogWalletTapIntent`), which changes how it is matched
+    /// to a tap of the same purchase (see `mergeNotification`). `record`
+    /// and `seen` replace the default raw text kept for Settings and for a
+    /// "needs a check" note.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
                        in context: ModelContext, book: CardBook, now: Date = .now,
-                       debugForceSaveFailure: Bool = false) async throws -> Outcome {
+                       debugForceSaveFailure: Bool = false,
+                       trigger: TapTrigger = .tap, record: String? = nil,
+                       seen seenOverride: String? = nil) async throws -> Outcome {
         // Shortcuts sometimes hands intents an empty merchant or amount
         // (developer.apple.com/forums/thread/797233), or — a blank
         // Notification-trigger run, failsafe #13 — a magic variable's own
@@ -98,10 +113,8 @@ struct LogPurchaseIntent: AppIntent {
         let name = TapField.normalize(merchant)
         let cardName = TapField.normalize(card)
         // Keep exactly what arrived, for checking the setup (Settings shows it).
-        let seen = "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
-        UserDefaults.standard.set("\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", forKey: lastTapKey)
-        UserDefaults.standard.set(now, forKey: lastTapAtKey)
-        UserDefaults.standard.synchronize()
+        let seen = seenOverride ?? "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
+        recordReach(record ?? "\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", at: now)
         // Nothing at all came in — not even a card: a bare ▶ run in
         // Shortcuts, not a Wallet tap. Nothing is saved. A card name alone
         // (no amount, no shop) is different: that's a real automation run
@@ -115,7 +128,20 @@ struct LogPurchaseIntent: AppIntent {
         let missingAmount = parsed == nil || parsed!.amount == 0
         let missingShop = name.isEmpty
         let refund = AmountParser.isNegative(amount ?? "")
-        let cardID = book.matchOrCreate(cardName.isEmpty ? nil : card)
+        // A notification names the card in its own words. Match it to a card
+        // the person has, but only make a new card once this is sure to be
+        // its own row: a purchase the tap already logged must not leave a
+        // stray second card behind.
+        var cardID = trigger == .notification
+            ? (cardName.isEmpty ? .other : book.match(card))
+            : book.matchOrCreate(cardName.isEmpty ? nil : card)
+        // No currency in the text: a tap takes where the phone is; a
+        // notification (often an online payment) takes the card's, then home.
+        func fallbackCurrency(_ card: Card) -> String {
+            trigger == .notification ? (book.info(card)?.currency ?? Money.home) : LocalCurrency.current()
+        }
+        let noun = trigger == .tap ? "Tap" : "Payment"
+        let sender = trigger == .tap ? "Apple Pay sent" : "Wallet's notification had"
 
         // #8 (spec 2026-09-26): never let a throw from here on — a fetch or
         // a save failing (disk full, corrupt file, failed migration) —
@@ -144,8 +170,23 @@ struct LogPurchaseIntent: AppIntent {
             // that this narrower, purpose-built check correctly kept apart.
             var excludeFromLog: Set<UUID> = []
             if !refund {
-                switch try Self.mergeTapCompanion(name: name, missingAmount: missingAmount, missingShop: missingShop,
-                                                  parsed: parsed, cardID: cardID, seen: seen, now: now, in: context) {
+                let companion: CompanionResult
+                switch trigger {
+                case .notification:
+                    companion = try Self.mergeNotification(name: name, parsed: parsed, knownCard: cardID,
+                                                           cardText: cardName.isEmpty ? nil : card, book: book,
+                                                           now: now, in: context)
+                case .tap:
+                    // A notification row for this purchase landed first
+                    // (2 Oct 2026): the tap joins it, and its shop and card win.
+                    if let absorbed = try Self.absorbNotificationRow(name: name, parsed: parsed, missingAmount: missingAmount,
+                                                                     cardID: cardID, now: now, in: context) {
+                        return absorbed
+                    }
+                    companion = try Self.mergeTapCompanion(name: name, missingAmount: missingAmount, missingShop: missingShop,
+                                                           parsed: parsed, cardID: cardID, seen: seen, now: now, in: context)
+                }
+                switch companion {
                 case .merged(let outcome): return outcome
                 case .notMerged(let excluding): excludeFromLog = excluding
                 }
@@ -153,7 +194,7 @@ struct LogPurchaseIntent: AppIntent {
             // A refund tap: mark the purchase it belongs to as refunded, so the
             // total goes down. Refunds can take weeks, so look back 60 days.
             if refund, let p = parsed, p.amount > 0 {
-                let currency = p.currency ?? LocalCurrency.current()
+                let currency = p.currency ?? fallbackCurrency(cardID)
                 if EmailSync.markRefunded(amount: p.amount, currency: currency, card: cardID, merchant: name,
                                           platform: nil, before: now, lookbackDays: 60, in: context) {
                     try context.save()
@@ -179,20 +220,23 @@ struct LogPurchaseIntent: AppIntent {
             if missingAmount, missingShop, !cardName.isEmpty {
                 note = "\(Transaction.needsCheckTag)Apple Pay sent only a card (\(seen)). Tap to fix."
             } else if missingAmount {
-                note = "\(Transaction.needsCheckTag)Apple Pay sent no amount (\(seen)). Tap to fix."
+                note = "\(Transaction.needsCheckTag)\(sender) no amount (\(seen)). Tap to fix."
             } else if missingShop {
-                note = "\(Transaction.needsCheckTag)Apple Pay sent no shop name (\(seen)). Tap to fix."
+                note = "\(Transaction.needsCheckTag)\(sender) no shop name (\(seen)). Tap to fix."
             } else {
                 note = refund ? "Refund to your card" : ""
             }
+            // Its own row now, so a card the notification named is kept.
+            if trigger == .notification, cardID == .other, !cardName.isEmpty { cardID = book.matchOrCreate(card) }
             let purchase = IncomingPurchase(
                 date: now,
                 merchant: name.isEmpty ? "Unknown merchant" : name,
                 amount: parsed?.amount ?? 0,
-                currency: parsed?.currency ?? LocalCurrency.current(),
+                currency: parsed?.currency ?? fallbackCurrency(cardID),
                 card: cardID,
                 source: .tap,
-                note: note
+                note: note,
+                tapOrigin: trigger
             )
 
             let outcome = try TransactionLogger.log(purchase, in: context, excluding: excludeFromLog)
@@ -216,10 +260,10 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "Tap noted — only got a card, no shop or amount. Add it in Sortd.", transaction: t, merged: false)
             }
             if missingAmount {
-                return Outcome(message: "Tap noted, amount missing. Add it in Sortd.", transaction: t, merged: false)
+                return Outcome(message: "\(noun) noted, amount missing. Add it in Sortd.", transaction: t, merged: false)
             }
             if missingShop {
-                return Outcome(message: "Tap noted, shop missing. Add it in Sortd.", transaction: t, merged: false)
+                return Outcome(message: "\(noun) noted, shop missing. Add it in Sortd.", transaction: t, merged: false)
             }
             let money = Money.format(t.amount, t.currencyCode)
             switch outcome {
@@ -229,7 +273,7 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "\(money) at \(t.merchant) was already logged", transaction: t, merged: true)
             }
         } catch {
-            let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now)
+            let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now, trigger: trigger)
             return Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
         }
     }
@@ -302,6 +346,7 @@ struct LogPurchaseIntent: AppIntent {
             }
         }
         t.markSeen(in: .tap)
+        t.markOrigin(.tap)
 
         let stillMissingAmount = t.amount == 0
         let stillMissingShop = t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
@@ -331,6 +376,129 @@ struct LogPurchaseIntent: AppIntent {
     enum CompanionResult {
         case merged(Outcome)
         case notMerged(excluding: Set<UUID>)
+    }
+
+    // MARK: - One purchase, two triggers (2 Oct 2026)
+
+    /// How far apart a tap and Wallet's notification for one purchase can
+    /// land and still be matched on amount and card alone.
+    static let triggerPairWindow: TimeInterval = 10 * 60
+
+    private static func lacksShop(_ t: Transaction) -> Bool {
+        t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
+    }
+
+    /// Two names for one shop: either is blank, or they are the same shop
+    /// however spelled ("SQ *SEVEN SEEDS" and "Seven Seeds").
+    private static func shopsAgree(_ t: Transaction, _ name: String) -> Bool {
+        name.isEmpty || lacksShop(t)
+            || Deduper.similarity(t.rawMerchant, name) >= 0.8 || Deduper.similarity(t.merchant, name) >= 0.8
+    }
+
+    /// An unknown card on either side never disagrees; two known cards must match.
+    private static func cardsAgree(_ a: Card, _ b: Card) -> Bool { a == .other || b == .other || a == b }
+
+    private static func setShop(_ t: Transaction, to name: String, recategorise: Bool, in context: ModelContext) throws {
+        t.rawMerchant = name
+        t.merchant = MerchantName.clean(name)
+        let category = Categorizer.category(for: name, learned: try TransactionLogger.learnedRules(in: context))
+        if recategorise ? category != .other : t.category == .other { t.category = category }
+    }
+
+    /// The needs-a-check tag goes once the row has both an amount and a shop.
+    private static func settleNeedsCheck(_ t: Transaction) {
+        if t.amount > 0, !lacksShop(t), t.note.hasPrefix(Transaction.needsCheckTag) { t.note = "" }
+    }
+
+    private static func mergedOutcome(_ t: Transaction, noun: String) -> Outcome {
+        if t.amount == 0 { return Outcome(message: "\(noun) noted, amount missing. Add it in Sortd.", transaction: t, merged: true) }
+        if lacksShop(t) { return Outcome(message: "\(noun) noted, shop missing. Add it in Sortd.", transaction: t, merged: true) }
+        return Outcome(message: "Logged \(Money.format(t.amount, t.currencyCode)) at \(t.merchant) · \(t.category.name)",
+                       transaction: t, merged: true)
+    }
+
+    /// A notification run (it always has an amount). In order:
+    /// 1. the tap of this purchase: the row only the tap trigger has
+    ///    reported that is closest in time (the latest tap, in real use),
+    ///    within 10 minutes either side, same amount, same card when both
+    ///    know it — the shop may be spelled differently;
+    /// 2. a tap that arrived with no amount: within 3 minutes, shops agree;
+    /// 3. the same notification again: a row that has already seen one,
+    ///    within 60 s, same amount, same shop (Wallet posting twice).
+    /// A waiting tap comes first, so two coffees whose notifications both
+    /// arrive after both taps still pair one each.
+    /// The kept row gets the notification's shop, card or amount only where
+    /// it had none. Otherwise `.notMerged`, carrying every tap row nearby so
+    /// the general Deduper (same source, 10 minutes, names alike) cannot
+    /// fold two separate online purchases at one shop into one.
+    @MainActor
+    static func mergeNotification(name: String, parsed: AmountParser.Result?, knownCard: Card, cardText: String?,
+                                  book: CardBook, now: Date, in context: ModelContext) throws -> CompanionResult {
+        guard let parsed, parsed.amount > 0 else { return .notMerged(excluding: []) }
+        let from = now.addingTimeInterval(-triggerPairWindow)
+        let to = now.addingTimeInterval(triggerPairWindow)
+        let taps = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= to }))
+            .filter { $0.seenIn.contains(.tap) && !$0.refunded }
+        let candidates = taps.filter { cardsAgree($0.card, knownCard) }
+        func gap(_ t: Transaction) -> TimeInterval { abs(t.date.timeIntervalSince(now)) }
+        let tapOnly = candidates.filter { $0.seenByTapTrigger && !$0.seenByNotification }
+
+        // Closest first; on a tie, the later row.
+        func closer(_ a: Transaction, _ b: Transaction) -> Bool {
+            gap(a) != gap(b) ? gap(a) < gap(b) : a.date > b.date
+        }
+        let tapRow = tapOnly.filter { $0.amount == parsed.amount }.min(by: closer)
+        let blankTap = tapOnly.filter { $0.amount == 0 && gap($0) <= 3 * 60 && shopsAgree($0, name) }.min(by: closer)
+        let repeatOf = candidates
+            .filter { $0.seenByNotification && gap($0) <= 60 && $0.amount == parsed.amount && shopsAgree($0, name) }
+            .min(by: closer)
+        guard let t = tapRow ?? blankTap ?? repeatOf else {
+            return .notMerged(excluding: Set(taps.map(\.id)))
+        }
+
+        if t.amount == 0 {
+            t.amount = parsed.amount
+            t.currencyCode = parsed.currency ?? t.currencyCode
+            t.audAmount = t.currencyCode == Money.home ? t.amount : nil
+        }
+        if lacksShop(t), !name.isEmpty { try setShop(t, to: name, recategorise: false, in: context) }
+        if t.card == .other, let cardText { t.card = knownCard != .other ? knownCard : book.matchOrCreate(cardText) }
+        t.markOrigin(.notification)
+        settleNeedsCheck(t)
+        try context.save()
+        return .merged(mergedOutcome(t, noun: "Payment"))
+    }
+
+    /// A tap run, ahead of `mergeTapCompanion`: a row only Wallet's
+    /// notification has reported, within 10 minutes, same amount, same card
+    /// when both know it, is this purchase — the tap joins it and the tap's
+    /// shop and card win (the tap names the shop as the till does). A tap
+    /// with no amount only joins one within 3 minutes whose shop agrees.
+    @MainActor
+    static func absorbNotificationRow(name: String, parsed: AmountParser.Result?, missingAmount: Bool,
+                                      cardID: Card, now: Date, in context: ModelContext) throws -> Outcome? {
+        let from = now.addingTimeInterval(-triggerPairWindow)
+        let to = now.addingTimeInterval(triggerPairWindow)
+        let onlyNotification = TapTrigger.notification.rawValue
+        func gap(_ t: Transaction) -> TimeInterval { abs(t.date.timeIntervalSince(now)) }
+        let match = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= to }))
+            .filter { $0.tapOrigins == onlyNotification && !$0.refunded && cardsAgree($0.card, cardID) }
+            .filter { t in
+                missingAmount ? gap(t) <= 3 * 60 && shopsAgree(t, name) : t.amount == parsed?.amount
+            }
+            .min { gap($0) < gap($1) }
+        guard let t = match else { return nil }
+
+        if !name.isEmpty { try setShop(t, to: name, recategorise: true, in: context) }
+        if cardID != .other { t.card = cardID }
+        if !missingAmount, let currency = parsed?.currency, currency != t.currencyCode {
+            t.currencyCode = currency
+            t.audAmount = currency == Money.home ? t.amount : nil
+        }
+        t.markOrigin(.tap)
+        settleNeedsCheck(t)
+        try context.save()
+        return mergedOutcome(t, noun: "Tap")
     }
 }
 
