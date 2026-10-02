@@ -123,19 +123,7 @@ struct WidgetSummaryTests {
         #expect(s.perDay == nil)
     }
 
-    // MARK: Recent
-
-    /// No widget shows recent purchases, so their names and amounts
-    /// aren't copied into the shared App Group file.
-    @Test func recentPurchasesAreNotWrittenForWidgets() throws {
-        let ctx = try store()
-        for day in 1...8 {
-            add(ctx, "Shop \(day)", Decimal(day), at(String(format: "2026-09-%02d", day)))
-        }
-        let all = try ctx.fetch(FetchDescriptor<Transaction>())
-        let s = WidgetBridge.build(from: all, budget: 0, now: at("2026-09-15"), calendar: cal)
-        #expect(s.recent.isEmpty)
-    }
+    // MARK: Recent (see WidgetRecentTests)
 
     @Test func amountsAreHiddenWhenLockedUnlessTurnedOn() {
         var s = WidgetSummary()
