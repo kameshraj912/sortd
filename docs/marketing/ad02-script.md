@@ -34,5 +34,5 @@
 - Output is 48 kHz, 30 fps.
 
 ## Posting
-- **Caption:** "Tap to pay. Sortd writes it down. Free beta, link in bio."
+- **Caption:** "Tap to pay. Sortd writes it down. Free beta, link in bio. Consider it Sortd."
 - Expect Instagram's "AI info" label. The closer jokes about it.

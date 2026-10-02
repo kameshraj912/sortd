@@ -185,7 +185,7 @@ enum SetupCopy {
         .currency: "We picked the one your iPhone uses.",
         .budget: "Leave it empty if you're not sure yet.",
         .checkIn: "One short note. We'll ask about notifications later, not now.",
-        .plan: "All set from your answers. The rest can wait.",
+        .plan: "All set from your answers. Consider it Sortd.",
         .cards: "Tap each bank you pay with. Fine to skip for now.",
         .applePay: "About a minute, once. Or do it later from Home.",
         .email: emailLine,
