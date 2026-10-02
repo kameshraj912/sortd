@@ -71,6 +71,8 @@ nonisolated enum Backup {
             var renewsOn: Date?
             var billingPeriod: String?
             var sourceAccount: String?
+            /// `Transaction.tapOrigins`. Optional: older backups have none.
+            var tapOrigins: String? = nil
         }
 
         struct Imported: Codable {
@@ -144,7 +146,8 @@ nonisolated enum Backup {
                 card: t.cardRaw, category: t.categoryRaw, source: t.sourceRaw,
                 seenIn: t.seenInRaw, note: t.note, createdAt: t.createdAt,
                 platform: t.platform, refunded: t.refunded, renewsOn: t.renewsOn,
-                billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount
+                billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount,
+                tapOrigins: t.tapOrigins
             )
         }
 
@@ -376,6 +379,7 @@ nonisolated enum Backup {
             t.renewsOn = row.renewsOn
             t.billingPeriod = row.billingPeriod
             t.sourceAccount = row.sourceAccount
+            t.tapOrigins = row.tapOrigins
             context.insert(t)
             result.added += 1
         }
