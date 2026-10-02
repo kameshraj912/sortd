@@ -62,7 +62,7 @@ enum AccountError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .cancelled: "Sign-in was cancelled."
-        case .offline: "Sortd couldn't reach the server. It will try again next time you open the app."
+        case .offline: "Sortd couldn't reach the server. It will finish when you're back online."
         case .noIdentity: "Sign-in didn't finish. Please try again."
         case .rejected(let text): text
         case .notSupported: "This device can't prove it is running Sortd, so the server was not asked. " + WorkerRevoker.appleManualSteps
