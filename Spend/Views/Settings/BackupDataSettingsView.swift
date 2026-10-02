@@ -330,8 +330,13 @@ extension BackupDataSettingsView {
                     return
                 }
                 Task { await FXService.backfill(in: context) }
-                restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
-                    : "\(added) purchase\(added == 1 ? "" : "s") added."
+                let badDates = cloud.lastRestoreBadDates
+                if badDates > 0 {
+                    restored = "\(added) purchase\(added == 1 ? "" : "s") added. \(Backup.badDatesNote(badDates))."
+                } else {
+                    restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
+                        : "\(added) purchase\(added == 1 ? "" : "s") added."
+                }
                 AccessibilityNotification.Announcement(restored ?? "").post()
             } catch {
                 cloudFailure = error.localizedDescription

@@ -117,6 +117,9 @@ final class CloudBackup {
         didSet { defaults.set(lastBackup, forKey: Self.lastKey) }
     }
     private(set) var status: Status = .idle
+    /// Rows the last restore left out for a date that can't be right, so the
+    /// restore message can say so.
+    private(set) var lastRestoreBadDates = 0
     var isDeletePending: Bool { defaults.bool(forKey: Self.deletePendingKey) }
     /// See `backedUpHereKey`.
     var backedUpFromThisPhone: Bool { defaults.bool(forKey: Self.backedUpHereKey) }
@@ -330,6 +333,7 @@ final class CloudBackup {
     /// say so without a second download.
     func restoreIfPresent(into context: ModelContext, mode: Backup.Mode) async throws -> Int? {
         status = .restoring
+        lastRestoreBadDates = 0
         do {
             guard let record = try await store.fetch() else {
                 status = .idle
@@ -337,6 +341,7 @@ final class CloudBackup {
             }
             let plain = try await decrypted(record.blob)
             let result = try Backup.restore(plain, mode: mode, into: context, defaults: defaults)
+            lastRestoreBadDates = result.badDates
             // This phone now holds what iCloud holds: backups may proceed.
             lastBackup = record.modified
             status = .idle

@@ -207,6 +207,8 @@ nonisolated enum Backup {
     struct Result {
         var added = 0
         var skipped = 0
+        /// Rows left out because their date can't be real (see `plausible`).
+        var badDates = 0
         var rules = 0
         var cards = 0
         var settings = 0
@@ -214,10 +216,25 @@ nonisolated enum Backup {
         var summary: String {
             var parts = ["\(added) purchase\(added == 1 ? "" : "s") added"]
             if skipped > 0 { parts.append("\(skipped) already here") }
+            if badDates > 0 { parts.append(Backup.badDatesNote(badDates)) }
             if rules > 0 { parts.append("\(rules) category rule\(rules == 1 ? "" : "s")") }
             if cards > 0 { parts.append("\(cards) card\(cards == 1 ? "" : "s")") }
             return parts.joined(separator: " · ")
         }
+    }
+
+    /// 1 Jan 2000, UTC. Nothing Sortd logs is older.
+    static let earliestDate = Date(timeIntervalSince1970: 946_684_800)
+
+    /// Whether a restored purchase's date could be real: from 2000 to a year
+    /// from now (a bill can be dated ahead, never by years).
+    static func plausible(_ date: Date, now: Date = .now) -> Bool {
+        date >= earliestDate && date <= now.addingTimeInterval(366 * 24 * 60 * 60)
+    }
+
+    /// "2 rows skipped (dates that can't be right)", for the restore message.
+    static func badDatesNote(_ count: Int) -> String {
+        "\(count) row\(count == 1 ? "" : "s") skipped (dates that can't be right)"
     }
 
     static func decode(_ data: Data) throws -> Snapshot {
@@ -367,6 +384,9 @@ nonisolated enum Backup {
         let existing: Set<UUID> = mode == .replace ? [] : Set(mine.map(\.id))
         for row in snapshot.transactions {
             guard !existing.contains(row.id) else { result.skipped += 1; continue }
+            // A date no real purchase has (1900, 2200) only comes from a
+            // hand-edited file. It would sit outside every month for ever.
+            guard plausible(row.date) else { result.badDates += 1; continue }
             // " aud " from a hand-edited file matches no rate and would count
             // as zero in every total.
             let currency = row.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
