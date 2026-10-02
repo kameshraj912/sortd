@@ -367,9 +367,12 @@ nonisolated enum Backup {
         let existing: Set<UUID> = mode == .replace ? [] : Set(mine.map(\.id))
         for row in snapshot.transactions {
             guard !existing.contains(row.id) else { result.skipped += 1; continue }
+            // " aud " from a hand-edited file matches no rate and would count
+            // as zero in every total.
+            let currency = row.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             let t = Transaction(
                 date: row.date, merchant: row.merchant, rawMerchant: row.rawMerchant,
-                amount: row.amount, currencyCode: row.currencyCode,
+                amount: row.amount, currencyCode: currency,
                 card: Card(rawValue: row.card),
                 category: SpendCategory(rawValue: row.category) ?? .other,
                 source: TxnSource(rawValue: row.source) ?? .manual,
@@ -379,7 +382,7 @@ nonisolated enum Backup {
             // Converted in another currency: keep it only if it's already in this
             // one; otherwise leave it empty for FXService.backfill to convert.
             t.audAmount = (backupHome ?? homeAfter) == homeAfter ? row.homeAmount
-                : (row.currencyCode == homeAfter ? row.amount : nil)
+                : (currency == homeAfter ? row.amount : nil)
             t.seenInRaw = row.seenIn
             t.createdAt = row.createdAt
             t.platform = row.platform
