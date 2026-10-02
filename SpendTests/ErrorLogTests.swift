@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import Sentry
+import SwiftData
 @testable import Spend
 
 /// `ErrorLog`: the ring buffer of the last 20 failures, and what a non-fatal
@@ -82,5 +83,35 @@ struct ErrorLogTests {
         #expect(scrubbed.tags == nil)
         #expect(scrubbed.extra == nil)
         #expect(scrubbed.breadcrumbs == nil)
+    }
+
+    // MARK: - saveReporting and the shared alert
+
+    private func memoryContext() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema,
+                                           configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        return ModelContext(container)
+    }
+
+    @Test func saveReportingReturnsTrueAndWritesWhenTheSaveWorks() throws {
+        let ctx = try memoryContext()
+        ctx.insert(MerchantRule(key: "coles", category: .groceries))
+        #expect(ctx.saveReporting(where: "test") == true)
+        #expect(!ctx.hasChanges)
+    }
+
+    @Test func statementImportSaveCheckedSaysTheSaveWorked() throws {
+        let ctx = try memoryContext()
+        let rows = StatementImport.rows(fromText: "02/09/2026  PTV MYKI TOP UP  5.30")
+        let result = StatementImport.saveChecked(rows, card: .nab, in: ctx)
+        #expect(result.added == 1)
+        #expect(result.saved == true)
+    }
+
+    @Test func saveFailedAlertCopyIsPlain() {
+        #expect(SaveFailedAlert.title == "Couldn't Save")
+        #expect(SaveFailedAlert.message == "Your change wasn't saved. Try again.")
+        #expect(!SaveFailedAlert.message.contains("!"))
     }
 }

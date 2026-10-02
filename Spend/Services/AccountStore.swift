@@ -298,7 +298,7 @@ final class AccountStore {
 
     private func forgetLocally() {
         current = nil
-        try? keychain.delete()
+        do { try keychain.delete() } catch { ErrorLog.report(error, where: "AccountStore.forgetLocally") }
     }
 
     /// `offline` keeps the job for a retry; a cancel drops it quietly;
