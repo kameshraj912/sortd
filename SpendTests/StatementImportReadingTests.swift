@@ -127,3 +127,59 @@ extension StatementImportReadingTests {
         #expect(a.amount == Decimal(string: "2451.70"))
     }
 }
+
+// MARK: - Rows that could not be read
+
+extension StatementImportReadingTests {
+
+    @Test func unreadableCSVRowsAreCountedNotDropped() {
+        let csv = """
+        Date,Description,Amount
+        01/09/2026,WOOLWORTHS,-58.30
+        not a date,KMART,-24.99
+        02/09/2026,MYSTERY,twelve dollars
+        03/09/2026,,-5.00
+        04/09/2026,SEVEN SEEDS,-5.50
+        """
+        let parsed = StatementImport.parse(csv: csv)
+        #expect(parsed.rows.count == 2)
+        #expect(parsed.skipped == 3)
+        #expect(parsed.rows.count + parsed.skipped == 5)
+    }
+
+    @Test func aCleanFileSkipsNothing() {
+        let csv = "Date,Description,Amount\n01/09/2026,WOOLWORTHS,-58.30\n02/09/2026,KMART,-24.99"
+        let parsed = StatementImport.parse(csv: csv)
+        #expect(parsed.rows.count == 2)
+        #expect(parsed.skipped == 0)
+    }
+
+    @Test func aFileWithNoDateOrAmountColumnCountsEveryRowSkipped() {
+        let parsed = StatementImport.parse(csv: "Name,Colour\nAda,Red\nBo,Blue")
+        #expect(parsed.rows.isEmpty)
+        #expect(parsed.skipped == 3)
+    }
+
+    @Test func aStatementLineWithADateButNoAmountIsCounted() {
+        let text = """
+        STATEMENT OF ACCOUNT
+        01/09/2026 WOOLWORTHS 58.30
+        02/09/2026 OPENING BALANCE CARRIED FORWARD
+        Page 1 of 2
+        """
+        let parsed = StatementImport.parse(text: text)
+        #expect(parsed.rows.count == 1)
+        #expect(parsed.skipped == 1)
+    }
+
+    @Test func theNoteIsPlainAndSingularWhenOne() {
+        #expect(StatementImport.skippedNote(0) == nil)
+        #expect(StatementImport.skippedNote(1) == "1 row couldn't be read.")
+        #expect(StatementImport.skippedNote(3) == "3 rows couldn't be read.")
+    }
+
+    @Test func rowsFromCSVStillReturnsJustTheRows() {
+        let csv = "Date,Description,Amount\n01/09/2026,WOOLWORTHS,-58.30\nbad,KMART,-1.00"
+        #expect(StatementImport.rows(fromCSV: csv).count == 1)
+    }
+}
