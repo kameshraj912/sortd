@@ -65,9 +65,7 @@ struct FullDataResetRaceTests {
     /// "Keep It" and kept using the app — the stale flag has no way to tell
     /// that backup apart from the one it was meant to remove, and the next
     /// launch deletes the brand new one too.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a pending iCloud delete from an earlier offline Delete All Data deletes a fresh, unrelated backup made before the next launch"))
-    func aStalePendingDeleteDoesNotDeleteABackupMadeAfterItWasQueued() async throws {
+    @Test func aStalePendingDeleteDoesNotDeleteABackupMadeAfterItWasQueued() async throws {
         let cloudStore = FakeCloudBackupStore()
         let keys = FakeBackupKeyStore()
         let defaults = scratch()
@@ -97,16 +95,61 @@ struct FullDataResetRaceTests {
         #expect(cloudStore.saved != nil)
         let freshModified = cloudStore.saved?.modified
 
-        // Next launch: the still-pending flag from the *earlier* delete
-        // fires and removes whatever is in iCloud now, with no check that
-        // it's a different backup than the one it was queued to remove.
+        // Next launch: the flag from the *earlier* delete used to fire here
+        // and remove whatever was in iCloud, with no check that it was a
+        // different backup. The fresh backup wrote over the copy that delete
+        // was for, so it cancelled the pending delete.
         let nextLaunch = CloudBackup(store: cloudStore, keys: keys, defaults: defaults, clock: fixedClock)
-        #expect(nextLaunch.isDeletePending == true)
+        #expect(nextLaunch.isDeletePending == false)
         await nextLaunch.retryPendingDelete()
 
         // A user who re-enabled backup and made a new one has every reason
         // to expect it is still there.
         #expect(cloudStore.saved != nil, "the fresh backup made at \(String(describing: freshModified)) must survive a stale pending delete queued before it existed")
+    }
+
+    /// The second guard: a copy written after the delete was queued, but not
+    /// by this iPhone's own backup (another iPhone on the same iCloud, say),
+    /// so nothing here cleared the pending flag. The retry sees the copy is
+    /// newer than the delete and leaves it.
+    @Test func aPendingDeleteLeavesACopyNewerThanTheDelete() async throws {
+        let cloudStore = FakeCloudBackupStore()
+        let defaults = scratch()
+        let ctx = try store()
+        try logOne(ctx)
+        var now = Date(timeIntervalSince1970: 1_790_500_000)
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: defaults, clock: { now })
+        cloud.isEnabled = true
+        try await cloud.backUpNow(from: ctx)
+
+        now = now.addingTimeInterval(60)
+        cloudStore.deleteError = CloudBackupError.notSignedIn
+        await cloud.deleteCloudCopyAfterReset()
+        #expect(cloud.isDeletePending == true)
+
+        // Another iPhone backs up a minute later.
+        let newer = (blob: Data("another iPhone's backup".utf8), modified: now.addingTimeInterval(60))
+        cloudStore.saved = newer
+        cloudStore.deleteError = nil
+
+        let nextLaunch = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: defaults, clock: { now })
+        await nextLaunch.retryPendingDelete()
+        #expect(cloudStore.saved?.blob == newer.blob)
+        #expect(cloudStore.deleteCount == 0)
+        #expect(nextLaunch.isDeletePending == false)
+    }
+
+    /// A delete queued by an older build has no time saved with it: it
+    /// still deletes, as it always did.
+    @Test func aPendingDeleteWithNoQueuedTimeStillDeletes() async throws {
+        let cloudStore = FakeCloudBackupStore()
+        cloudStore.saved = (Data("old copy".utf8), Date(timeIntervalSince1970: 1_790_000_000))
+        let defaults = scratch()
+        defaults.set(true, forKey: CloudBackup.deletePendingKey)
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: defaults, clock: fixedClock)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved == nil)
+        #expect(cloud.isDeletePending == false)
     }
 
     // MARK: - Delete All Data racing an in-flight backup upload
