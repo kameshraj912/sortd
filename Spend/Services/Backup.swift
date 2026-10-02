@@ -71,6 +71,9 @@ nonisolated enum Backup {
             var renewsOn: Date?
             var billingPeriod: String?
             var sourceAccount: String?
+            /// Card digits that matched none of the cards, so "Which card?"
+            /// can find the purchase. Optional: older backups have none.
+            var unmatchedLast4: String? = nil
         }
 
         struct Imported: Codable {
@@ -144,7 +147,8 @@ nonisolated enum Backup {
                 card: t.cardRaw, category: t.categoryRaw, source: t.sourceRaw,
                 seenIn: t.seenInRaw, note: t.note, createdAt: t.createdAt,
                 platform: t.platform, refunded: t.refunded, renewsOn: t.renewsOn,
-                billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount
+                billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount,
+                unmatchedLast4: t.unmatchedLast4
             )
         }
 
@@ -376,6 +380,7 @@ nonisolated enum Backup {
             t.renewsOn = row.renewsOn
             t.billingPeriod = row.billingPeriod
             t.sourceAccount = row.sourceAccount
+            t.unmatchedLast4 = row.unmatchedLast4
             context.insert(t)
             result.added += 1
         }
