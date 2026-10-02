@@ -35,12 +35,16 @@ struct FullDataRoundTripTests {
     /// can never find it to fix in bulk.
     @Test func unmatchedCardDigitsSurviveABackupRoundTrip() throws {
         let from = try store()
+        // Nothing sets these digits any more (Gmail and "Which card?" were
+        // removed on 2 Oct 2026), but rows saved before that still carry them
+        // and a backup must not drop them. So the field is set on the row.
         let p = IncomingPurchase(date: Date(timeIntervalSince1970: 1_790_000_000),
                                  merchant: "Woolworths", amount: 58.30, currency: "AUD",
-                                 card: .other, source: .email, unmatchedLast4: "4821")
+                                 card: .other, source: .email)
         _ = try TransactionLogger.log(p, in: from)
         let before = try from.fetch(FetchDescriptor<Transaction>())
-        #expect(before.first?.unmatchedLast4 == "4821")
+        before.first?.unmatchedLast4 = "4821"
+        try from.save()
 
         let data = try Backup.data(in: from, defaults: scratch())
         let to = try store()
