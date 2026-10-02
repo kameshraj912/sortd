@@ -53,7 +53,7 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 - Lifecycle events: on (default).
 - Screen views: `.postHogScreenView()` on each tab root.
 - The named events below.
-- `captureElementInteractions`: **on only after an audit.** VoiceOver labels speak amounts and merchants (`Money.spoken`), and some text comes from Gmail. Sensitive views get `ph-no-capture`; PostHog documents that tag for replay, and whether it also covers autocapture is **not verified**.
+- `captureElementInteractions`: **on only after an audit.** VoiceOver labels speak amounts and merchants (`Money.spoken`), and some text comes from receipts. Sensitive views get `ph-no-capture`; PostHog documents that tag for replay, and whether it also covers autocapture is **not verified**.
 
 **Session replay: off.**
 
@@ -70,7 +70,7 @@ I did not check which SDKs these apps use. The labels below are summaries of eac
 - One line on the setup privacy card.
 - Lawyer: whether EU users need opt-in.
 
-## Events (never amounts, merchants, emails, card digits, notes or any Gmail content)
+## Events (never amounts, merchants, emails, card digits or notes)
 
 The names below are the `Analytics.Event` raw values, pinned by `SpendTests/AnalyticsTests.swift` (updated 25 Sep 2026 to match the code; the earlier draft names are gone).
 
@@ -80,7 +80,6 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `purchase_added_manually(category_changed, has_note)`
 - `purchase_deleted(count)`, `purchase_undone(count)`
 - `apple_pay_tap_logged(merged)`
-- `gmail_connected(accounts)`, `gmail_sync_finished(ok, forced, error_code)`: no email or purchase counts (Google Limited Use)
 - `backup_completed`, `restore_completed(mode)`
 - `tip_left(size: small|medium|large)`: never the price
 - `tip_shown(id)`, `tip_used(id)`: in-app tips (sub-spec 7). `id` is the tip's `TipCopy` id (`apple_pay`, `swipe`, `search`, `insights`, `month`); shown once per tip per install, used once when the thing the tip was about is done after it was shown
@@ -88,7 +87,6 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
 - `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
 - `founder_note_seen(moment: aha|about)`: the founder's note (`FounderNoteSheet`), sent each time it is shown — at the aha moment (once ever, right after `ActivationCard`'s celebration) or replayed from Settings › About. `founder_note_reply_tapped`: the "Tell Kameshraj" button, before its mailto opens.
-- `card_digits_prompted`, `card_digits_answered(choice: card|not_mine)`: Home's "Which card?" card (spec 2026-09-27), shown when a receipt or bank alert's last 4 matches none of Raj's cards and two or more are active. `card_digits_prompted` once per digit set shown; `card_digits_answered` when a card is picked or "Not one of mine" is tapped. Never the digits themselves.
 
 ### Beta additions (26 Sep 2026): more intent events, session replay, the developer menu
 
@@ -97,7 +95,7 @@ following the same `Analytics.isEnabled` switch (`PostHogSDK.optOut()` uninstall
 integration, `optIn()` reinstalls it). `screenshotMode` (SwiftUI needs it, not the wireframe
 mode), all text inputs, images and sandboxed views masked by default, and `.postHogMask()` on
 top of that for the big amount on Home, `TransactionRow`'s amount and shop, the transaction
-detail amount/shop/note, and the Gmail account email row. Throttled to about one screenshot a
+detail amount/shop/note. Throttled to about one screenshot a
 second (`sessionReplayConfig.throttleDelay`).
 
 New events, never amounts or merchant/shop names:
@@ -131,7 +129,6 @@ It works in Release too — hidden behind the taps, not a build flag.
 
 - **Project key (`phc_…`).** It ships in the app and is write-only. A leaked key can send fake events but cannot read data. Rotate it in project settings and ship an update.
 - **Personal key (`phx_`).** Never in the app or in git.
-- **Gmail.** Google's Limited Use policy means no Gmail content or counts in events or autocapture.
 - **No ATT.** No linking with third-party data for ads, and no data brokers.
 - **Privacy manifest.** Update `PrivacyInfo.xcprivacy` to match the label above. `NSPrivacyTracking` stays false. Check whether the PostHog package ships its own manifest (**not verified**).
 - **Erasure.**

@@ -123,7 +123,7 @@ Three placements, ranked, each backed by something I could actually confirm:
    feature-heavy explainer screens before the person has done anything. [Growth.Design:
    Is HEY Email Worth It?](https://growth.design/case-studies/hey-user-onboarding)
    (read 27 Sep 2026). If Raj wants first-launch anyway (to set expectations before
-   Gmail/camera permissions come up), Version B below is written for that slot
+   the camera permission comes up), Version B below is written for that slot
    specifically, kept as short as the other two for the same reason.
 
 ## Claims used (checked against this worktree, 27 Sep 2026)
@@ -209,6 +209,6 @@ placement the evidence in "Where it lands best" ranks first: the reader just wat
 the one true reason happen on screen, so "I got tired of typing every coffee into a
 spreadsheet" reads as fact, not pitch, and the thank-you lands on something that just
 happened rather than something hoped for. Version B is the one to use instead only if
-Raj wants the note to set expectations before Gmail or camera permissions ever come up
+Raj wants the note to set expectations before the camera permission ever comes up
 — written for first launch specifically, same length, same tone. Version C is the
 fallback if there's only room for a small card, not a full screen, in either spot.
