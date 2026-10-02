@@ -83,10 +83,6 @@ struct IncomingPurchase {
     var category: SpendCategory? = nil
     var note: String = ""
     var platform: String? = nil
-    /// Set when the source's last-4 digits matched no card and two or more
-    /// cards are active: `Transaction.unmatchedLast4` carries it forward so
-    /// "Which card?" can find every purchase to reassign once answered.
-    var unmatchedLast4: String? = nil
 }
 
 enum TransactionLogger {
@@ -147,7 +143,6 @@ enum TransactionLogger {
             note: p.note
         )
         txn.platform = p.platform
-        txn.unmatchedLast4 = p.unmatchedLast4
         context.insert(txn)
         if save { try context.save() }
         return .added(txn)
@@ -170,7 +165,6 @@ enum TransactionLogger {
         }
         if t.card == .other, p.card != .other { t.card = p.card }
         if t.note.isEmpty, !p.note.isEmpty { t.note = p.note }
-        if t.unmatchedLast4 == nil, let digits = p.unmatchedLast4 { t.unmatchedLast4 = digits }
     }
 
     static func learnedRules(in context: ModelContext) throws -> [String: SpendCategory] {

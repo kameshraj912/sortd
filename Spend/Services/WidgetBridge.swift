@@ -12,7 +12,7 @@ import WidgetKit
 enum WidgetBridge {
 
     private static var pending: Task<Void, Never>?
-    /// Bulk imports (a Gmail sync) save every second or so. Each save would
+    /// Bulk imports (a statement) can save every second or so. Each save would
     /// rebuild the summary and reload the widget, which WidgetKit budgets.
     /// While held, saves only mark the widget stale; `release` refreshes once.
     private static var holds = 0

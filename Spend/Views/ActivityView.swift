@@ -194,7 +194,7 @@ struct TransactionsScreen: View {
             // Finish a pending delete first, so a receipt from the sync can't
             // merge into a purchase that is about to go.
             commitDelete()
-            // Pull down to fetch new Gmail receipts and exchange rates.
+            // Pull down to refresh exchange rates.
             refreshNote = await RefreshNote.run(in: context)
         }
         .refreshNote($refreshNote, bottomPadding: 16)

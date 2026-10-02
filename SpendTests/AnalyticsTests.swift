@@ -17,8 +17,6 @@ import Foundation
 //           case purchaseAddedManually = "purchase_added_manually"
 //           case purchaseDeleted = "purchase_deleted"
 //           case purchaseUndone = "purchase_undone"
-//           case gmailConnected = "gmail_connected"
-//           case gmailSyncFinished = "gmail_sync_finished"
 //           case applePayTapLogged = "apple_pay_tap_logged"
 //           case tabOpened = "tab_opened"
 //           case tipLeft = "tip_left"
@@ -187,7 +185,7 @@ struct AnalyticsTests {
 
     @Test func anEmailLookingStringValueIsDroppedEvenUnderASafeKey() {
         let (analytics, sink, _) = makeAnalytics(suite: #function)
-        analytics.track(.gmailConnected, ["contact": .string("raj@example.com"), "provider": .string("google")])
+        analytics.track(.tipLeft, ["contact": .string("raj@example.com"), "provider": .string("google")])
         let sent = sink.captured.last
         #expect(sent?.properties["contact"] == nil)
         #expect(sent?.properties["provider"] as? String == "google")

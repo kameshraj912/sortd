@@ -5,7 +5,7 @@
 	<!-- Sortd does not track users (no ATT, no ad networks, no data brokers).
 	     Usage analytics go to PostHog (Spend/Services/Analytics.swift) and are
 	     linked to a salted per-user hash, so the three types below are
-	     "linked to you". Purchases, merchants, amounts and Gmail content
+	     "linked to you". Purchases, merchants and amounts
 	     never leave the phone. The posthog-ios package ships its own manifest
 	     (UserDefaults CA92.1, SystemBootTime 35F9.1, FileTimestamp C617.1),
 	     which Xcode merges into the privacy report.
