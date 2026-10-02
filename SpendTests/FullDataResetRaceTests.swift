@@ -176,7 +176,10 @@ struct FullDataResetRaceTests {
 
         func fetch() async throws -> (blob: Data, modified: Date)? { saved }
 
+        var failDelete = false
+
         func delete() async throws {
+            if failDelete { throw CloudBackupError.notSignedIn }
             deleteCount += 1
             saved = nil
         }
@@ -196,9 +199,7 @@ struct FullDataResetRaceTests {
     /// upload — built from the data Delete All Data just wiped — finishes
     /// afterwards and puts a purchase back in iCloud that "This can't be
     /// undone" said was gone.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("an in-flight iCloud backup upload finishes after Delete All Data and restores the pre-reset copy"))
-    func deleteAllDataDoesNotUndoABackupThatWasAlreadyUploading() async throws {
+    @Test func deleteAllDataDoesNotUndoABackupThatWasAlreadyUploading() async throws {
         let pausable = PausableCloudBackupStore()
         let keys = FakeBackupKeyStore()
         let defaults = scratch()
@@ -222,5 +223,40 @@ struct FullDataResetRaceTests {
         _ = await backupTask.value
 
         #expect(pausable.saved == nil, "a backup already in flight when Delete All Data ran must not put pre-reset data back in iCloud")
+        #expect(cloud.isEnabled == false)
+        #expect(cloud.isDeletePending == false)
+        #expect(cloud.backedUpFromThisPhone == false)
+        #expect(cloud.lastBackup == nil)
+        #expect(cloud.status == .idle)
+    }
+
+    /// The same race, but the second delete can't reach iCloud: it stays
+    /// pending, and the next launch removes the stale copy.
+    @Test func aStaleUploadThatCantBeDeletedNowIsDeletedAtTheNextLaunch() async throws {
+        let pausable = PausableCloudBackupStore()
+        let keys = FakeBackupKeyStore()
+        let defaults = scratch()
+        let ctx = try store()
+        try logOne(ctx, merchant: "Woolworths")
+        let cloud = CloudBackup(store: pausable, keys: keys, defaults: defaults, clock: fixedClock)
+        cloud.isEnabled = true
+
+        pausable.holdSave = true
+        let backupTask = Task { try? await cloud.backUpNow(from: ctx) }
+        while !pausable.saveStarted { await Task.yield() }
+        await cloud.deleteCloudCopyAfterReset()
+
+        pausable.failDelete = true
+        pausable.release()
+        _ = await backupTask.value
+        #expect(pausable.saved != nil)
+        #expect(cloud.isDeletePending == true)
+        #expect(cloud.backedUpFromThisPhone == false)
+
+        pausable.failDelete = false
+        let nextLaunch = CloudBackup(store: pausable, keys: keys, defaults: defaults, clock: fixedClock)
+        await nextLaunch.retryPendingDelete()
+        #expect(pausable.saved == nil)
+        #expect(nextLaunch.isDeletePending == false)
     }
 }
