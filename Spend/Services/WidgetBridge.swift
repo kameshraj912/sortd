@@ -71,12 +71,18 @@ enum WidgetBridge {
 
         // Same rule as Home's `audTotal`: refunds and transfers (a top-up,
         // money moved between your own accounts) aren't spending.
-        let live = transactions.filter { !$0.refunded && $0.category != .transfers }
+        // The test-tap and "Check the Shortcut" rows are hidden everywhere in
+        // the app (Home, Activity, Insights); the widgets count the same way.
+        let testRows = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
+        let live = transactions.filter {
+            !$0.refunded && $0.category != .transfers
+                && !testRows.contains($0.merchant) && !testRows.contains($0.rawMerchant)
+        }
 
         let startOfDay = calendar.startOfDay(for: now)
-        out.today = live
-            .filter { calendar.isDate($0.date, inSameDayAs: startOfDay) }
-            .audTotal
+        let todayItems = live.filter { calendar.isDate($0.date, inSameDayAs: startOfDay) }
+        out.today = todayItems.audTotal
+        out.todayCount = todayItems.count
 
         let month = calendar.dateInterval(of: .month, for: now)
         let monthItems = live.filter { month?.contains($0.date) ?? false }
@@ -131,10 +137,55 @@ enum WidgetBridge {
             .map { WidgetSummary.Bill(name: $0.merchant, amount: $0.audAmount,
                                       currency: out.currency, due: $0.nextDate) }
 
-        // No recent purchases: no widget shows them, so they aren't written
-        // into the shared file at all.
+        // The last three purchases. History: this was left empty on purpose
+        // (no widget showed purchases, so shop names stayed out of the shared
+        // file). On 2 Oct 2026 Raj approved the Recent and Today widgets and
+        // reversed that: shop names MAY be in widgets. The rule now is that
+        // the widgets hide shop names AND amounts while the iPhone is locked
+        // (`.privacySensitive()`), and shop names are hidden even when
+        // "Show Amounts When Locked" is on. The file itself is still only
+        // readable by Sortd and its widgets, on the phone.
+        out.recent = recentItems(from: transactions, currency: out.currency)
 
         return out
+    }
+}
+
+// MARK: - Recent purchases
+
+extension WidgetBridge {
+    /// How many purchases the Recent widget has room for.
+    static let recentLimit = 3
+
+    /// Newest first. Left out: the rows Activity hides (the old test tap and
+    /// the Apple Pay health check), refunds and transfers (not purchases,
+    /// same rule as the totals), and taps that landed with no shop name or no
+    /// amount, which have nothing sensible to show and read as "Needs a
+    /// check" in the app.
+    ///
+    /// The amount is in the home currency, as Home and Insights total it. A
+    /// purchase still waiting on its exchange rate keeps its own currency.
+    static func recentItems(from transactions: [Transaction], currency home: String) -> [WidgetSummary.Item] {
+        let hidden = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
+        return transactions
+            .filter { t in
+                !t.refunded && t.category != .transfers
+                    && !hidden.contains(t.merchant) && !hidden.contains(t.rawMerchant)
+                    && !t.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && !t.needsReview
+            }
+            .sorted { $0.date > $1.date }
+            .prefix(recentLimit)
+            .map { t in
+                let converted = t.audAmount != nil || t.currencyCode == home
+                return WidgetSummary.Item(
+                    id: t.id,
+                    merchant: t.merchant.trimmingCharacters(in: .whitespacesAndNewlines),
+                    amount: converted ? (t.audAmount ?? t.amount) : t.amount,
+                    currency: converted ? home : t.currencyCode,
+                    category: t.categoryRaw,
+                    date: t.date)
+            }
     }
 }
 
