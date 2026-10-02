@@ -930,7 +930,7 @@ struct SortdRecentWidget: Widget {
 extension LookEntry {
     /// Sample data with a chosen look, for previews.
     static func sample(_ look: SortdLook, _ edit: (inout WidgetSummary) -> Void = { _ in }) -> LookEntry {
-        var configuration = LookConfiguration()
+        let configuration = LookConfiguration()
         configuration.look = look
         var summary = SortdEntry.sample.summary!
         edit(&summary)
