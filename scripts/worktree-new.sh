@@ -15,6 +15,19 @@ main_root="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)";
 dest="$main_root/.claude/worktrees/$task"
 [ -e "$dest" ] && die "$dest already exists"
 
+# Each task costs about 11.5 GB once it has built and run (4.5 GB build folder
+# + 7 GB simulator). Twenty left behind filled the disk to 2.4 GB free
+# (2 Oct 2026). So: no new task while the disk is low or too many are open.
+free_gb=$(df -g / | awk 'NR==2 {print $4}')
+open_sims=$(xcrun simctl list devices available 2>/dev/null | grep -c 'Sortd-' || true)
+min_free="${SORTD_MIN_FREE_GB:-40}"; max_open="${SORTD_MAX_TASKS:-4}"
+if [ "${free_gb:-0}" -lt "$min_free" ]; then
+  die "only ${free_gb} GB free (need $min_free). Run scripts/clean.sh --yes and scripts/worktree-done.sh on finished tasks first."
+fi
+if [ "${open_sims:-0}" -ge "$max_open" ]; then
+  die "$open_sims task simulators already exist (limit $max_open). Finish one first: scripts/worktree-audit.sh, then scripts/worktree-done.sh <task>."
+fi
+
 git -C "$main_root" fetch -q origin "$base" 2>/dev/null || true
 git -C "$main_root" worktree add "$dest" -b "$task" "$base" >/dev/null || die "git worktree add failed"
 "$main_root/scripts/install-hooks.sh" "$dest" >/dev/null
