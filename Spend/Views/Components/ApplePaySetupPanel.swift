@@ -39,6 +39,16 @@ struct ApplePaySetupPanel: View {
     /// mismatching it against `@AppStorage`'s own numeric representation.
     @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
     @State private var nudgeDismissed = false
+    /// Get the Shortcut was tapped in a build whose shortcut also logs
+    /// online payments (`ApplePaySetupSteps.showsUpdateLine`).
+    @AppStorage(ApplePaySetupSteps.gotOnlineShortcutKey) private var gotOnlineShortcut = false
+
+    /// iOS 27 has Wallet's Notification trigger, so the shortcut has two
+    /// automations; earlier iOS only the tap.
+    private var hasNotificationTrigger: Bool {
+        if #available(iOS 27.0, *) { return true }
+        return false
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -193,9 +203,16 @@ struct ApplePaySetupPanel: View {
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
+            if hasNotificationTrigger, ApplePaySetupSteps.showsUpdateLine(status: status, gotNewShortcut: gotOnlineShortcut) {
+                Label(ApplePaySetupSteps.updateLine, systemImage: "arrow.down.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Button {
                 openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
                 shortcutOpened = true
+                gotOnlineShortcut = true
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
@@ -223,8 +240,8 @@ struct ApplePaySetupPanel: View {
 
             Divider()
 
-            stepRow(3, ticked.turnOnAutomation, "Turn the automation on",
-                    "In the shortcut, tap › next to “tapped”, then switch on Automation.")
+            let automation = ApplePaySetupSteps.automationStep(notificationTrigger: hasNotificationTrigger)
+            stepRow(3, ticked.turnOnAutomation, automation.title, automation.detail)
 
             DisclosureGroup("Show me how") {
                 Group {
@@ -299,7 +316,7 @@ struct ApplePaySetupPanel: View {
     /// paragraph that used to sit here (router feel check, 27 Sep 2026:
     /// this screen carried the same steps three times over).
     private var scopeNote: some View {
-        Text("Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts.")
+        Text(ApplePaySetupSteps.scopeLine(notificationTrigger: hasNotificationTrigger))
             .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
