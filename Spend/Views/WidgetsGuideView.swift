@@ -15,6 +15,12 @@ struct WidgetsGuideView: View {
             Section {
                 widget("chart.bar.xaxis", "Spending",
                        "What you've spent against what you have to spend, in your category colours.")
+                widget("circle.dashed", "Budget Ring",
+                       "How much of this month's budget is left, as a ring. Turns red when you go over.")
+                widget("sun.max", "Today",
+                       "What you've spent today, and the last thing you paid for.")
+                widget("list.bullet", "Recent",
+                       "Your last three purchases. Tap one to open it.")
                 widget("plus.circle", "Quick Add",
                        "Add a purchase, scan a receipt or import a statement in one tap.")
                 widget("calendar.badge.clock", "Bills",
@@ -41,7 +47,7 @@ struct WidgetsGuideView: View {
             }
 
             Section {
-                Text("Widgets read a small summary on this iPhone — today's total, what's left, the next few bills. Nothing is uploaded.")
+                Text("Widgets read a small summary on this iPhone — today's total, what's left, your last few purchases, the next few bills. Nothing is uploaded. Shop names and amounts are hidden while the iPhone is locked.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } header: {

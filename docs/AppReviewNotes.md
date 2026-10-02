@@ -3,7 +3,8 @@
 Paste the "Notes" part into App Store Connect › App Review Information › Notes. Keep it under
 4,000 characters. Placeholders in [square brackets] are the ones only Raj can fill; see the list
 at the bottom. Updated 26 Sep 2026: sign-in and iCloud backup are on, contact name and email
-filled from the repo. Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more).
+filled from the repo. Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
+Budget Ring, Today and Recent widgets added.
 
 ---
 
@@ -37,25 +38,27 @@ Account asks the provider to cancel the sign-in and removes the usage record (5.
 an option to also delete all data on the device.
 
 **Setup questions, check-in, typing a purchase**
-- Setup asks optional questions (goals, how they pay, check-in time, spending abroad). Stored
+- Setup asks optional questions (goals, how they pay, check-in time, spending abroad), stored
   only on the device. Change: Settings › Help & Feedback › Run Setup Again. Delete All Data
   removes them.
 - Check-in: a repeating local notification (8 am, 8 pm or Sunday 6 pm), fixed text, no amounts,
-  no marketing. iOS's permission alert appears only after the user picks a time; "Not now" and
-  "Only when it matters" skip it. Settings › Bills & Reminders › Check-in. All notifications are
-  local (UNUserNotificationCenter); no push server, and none are required.
+  no marketing. iOS's permission alert appears only after the user picks a time. Settings ›
+  Bills & Reminders › Check-in. All notifications are local; no push server.
 - Add › the top line ("coffee 5.50 yesterday") is read by Apple's on-device model where Apple
-  Intelligence is on, otherwise by plain rules. Nothing leaves the device; it only fills the form.
+  Intelligence is on, otherwise by plain rules. Nothing leaves the device.
 - Home › "Finish setup" checks for a Sortd widget with WidgetKit, on the device.
+- Widgets: Budget Ring, Today and Recent show the budget left, today's total and the last three
+  purchases, read on the device. Shop names and amounts are hidden while
+  the iPhone is locked.
 
 **Other**
 - Exchange rates: frankfurter.dev (ECB data); only currency codes and a date are sent.
-- Scan Receipt: camera or one photo, read on the device (Vision, plus the on-device model where
-  available). Photo not stored or sent; the user checks the result before saving.
+- Scan Receipt: camera or one photo, read on the device. Not stored or sent; the user checks
+  the result before saving.
 - Cards: only the last 4 digits of the card and its Apple Pay number.
 - Settings › Backup & Data: Back up to iCloud (encrypted on the device, the user's own iCloud
   private database), Save a Backup, Import, Export as Spreadsheet, Delete All Data. Files are
-  only made when the user taps, via the share sheet.
+  only made when the user taps.
 - No tracking or ads. Usage analytics (PostHog) and crash reports (Sentry) are linked to a
   salted hash, scrubbed of purchases, merchants, emails and IP, and share one switch in
   Settings › Privacy. The switch starts off when the iPhone's region is in the EU/EEA, the UK
