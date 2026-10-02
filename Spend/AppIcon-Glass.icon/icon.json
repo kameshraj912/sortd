@@ -4,17 +4,20 @@
   },
   "groups" : [
     {
-      "name" : "2-bars",
+      "name" : "2-bar",
       "hidden" : false,
       "layers" : [
         {
-          "name" : "bars",
-          "image-name" : "bars.svg",
+          "name" : "bar",
+          "image-name" : "bar.svg",
           "glass" : true,
           "hidden" : false,
           "position" : {
             "scale" : 1,
-            "translation-in-points" : [ 0, 0 ]
+            "translation-in-points" : [
+              0,
+              0
+            ]
           }
         }
       ],
@@ -30,17 +33,20 @@
       }
     },
     {
-      "name" : "1-receipt",
+      "name" : "1-mark",
       "hidden" : false,
       "layers" : [
         {
-          "name" : "receipt",
-          "image-name" : "receipt.svg",
+          "name" : "mark",
+          "image-name" : "mark.svg",
           "glass" : true,
           "hidden" : false,
           "position" : {
             "scale" : 1,
-            "translation-in-points" : [ 0, 0 ]
+            "translation-in-points" : [
+              0,
+              0
+            ]
           }
         }
       ],
@@ -57,6 +63,8 @@
     }
   ],
   "supported-platforms" : {
-    "squares" : [ "iOS" ]
+    "squares" : [
+      "iOS"
+    ]
   }
 }
