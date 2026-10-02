@@ -242,13 +242,11 @@ struct FullDataBackupFidelityTests {
     }
 
     /// A currency code a person (or an older export) wrote in lower case.
-    /// The code never normalises it, so the row matches no currency, has no
-    /// rate and counts as zero in every total. A restored purchase must not
+    /// Restore used to keep it as written, so the row matched no currency,
+    /// had no rate and counted as zero in every total. A restored purchase must not
     /// quietly vanish from the totals. (The same family as the logger-side
     /// `aLowercaseHomeCurrencyStillCountsInTotals`, on the restore path.)
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("restore keeps a lower-case or padded currency code as written, so the purchase counts as zero"))
-    func aLowerCaseCurrencyInABackupIsNormalised() throws {
+    @Test func aLowerCaseCurrencyInABackupIsNormalised() throws {
         var snap = Backup.Snapshot()
         snap.transactions = [row(merchant: "Qantas", amount: 50, date: t0, currency: " aud ", homeAmount: nil)]
         let ctx = try store()
