@@ -51,17 +51,41 @@ nonisolated enum StatementImport {
         case auto
     }
 
+    /// What reading a statement found, and how many lines it could not read.
+    /// A line that is dropped without a word is lost money, so the screen
+    /// shows `skipped` ("3 rows couldn't be read").
+    struct Parsed: Sendable {
+        var rows: [Row]
+        /// Lines that look like purchases (a CSV row, or a line with a date)
+        /// but had no readable date, amount or description.
+        var skipped: Int
+    }
+
+    /// "3 rows couldn't be read." for the screen; nil when nothing was skipped.
+    static func skippedNote(_ count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return count == 1 ? "1 row couldn't be read." : "\(count) rows couldn't be read."
+    }
+
     // MARK: - CSV
 
     /// Reads a bank CSV. Works with a header row or without one (NAB's
     /// export has no header), and with either a signed Amount column or
     /// separate Debit/Credit columns.
     static func rows(fromCSV text: String, dateOrder: DateOrder = .auto) -> [Row] {
+        parse(csv: text, dateOrder: dateOrder).rows
+    }
+
+    /// Like `rows(fromCSV:)`, and counts the rows it could not read.
+    static func parse(csv text: String, dateOrder: DateOrder = .auto) -> Parsed {
         let grid = parseCSV(text)
-        guard !grid.isEmpty else { return [] }
+        guard !grid.isEmpty else { return Parsed(rows: [], skipped: 0) }
 
         let layout = layout(for: grid)
-        guard let dateColumn = layout.date, layout.hasAmount else { return [] }
+        // No date or amount column: nothing in the file could be read.
+        guard let dateColumn = layout.date, layout.hasAmount else {
+            return Parsed(rows: [], skipped: grid.count)
+        }
 
         let body = layout.headerRow.map { Array(grid.dropFirst($0 + 1)) } ?? grid
         let order = dateOrder == .auto
@@ -69,21 +93,22 @@ nonisolated enum StatementImport {
             : dateOrder
 
         var out: [Row] = []
+        var skipped = 0
         for fields in body {
             guard fields.indices.contains(dateColumn),
-                  let date = parseDate(fields[dateColumn], order: order) else { continue }
-            guard let money = money(in: fields, layout: layout) else { continue }
+                  let date = parseDate(fields[dateColumn], order: order),
+                  let money = money(in: fields, layout: layout) else { skipped += 1; continue }
 
             let detail = layout.detail.flatMap { fields.indices.contains($0) ? fields[$0] : nil }
                 ?? longestText(in: fields, skipping: [dateColumn])
             let clean = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !clean.isEmpty else { continue }
+            guard !clean.isEmpty else { skipped += 1; continue }
 
             out.append(Row(date: date, detail: clean, amount: money.amount,
                            currency: money.currency, kind: money.kind,
                            raw: fields.joined(separator: " ")))
         }
-        return out
+        return Parsed(rows: out, skipped: skipped)
     }
 
     /// Where the interesting columns are.
@@ -254,6 +279,14 @@ nonisolated enum StatementImport {
 
     static func rows(fromText text: String, dateOrder: DateOrder = .auto,
                      today: Date = .now) -> [Row] {
+        parse(text: text, dateOrder: dateOrder, today: today).rows
+    }
+
+    /// Like `rows(fromText:)`, and counts the lines that carried a date but
+    /// had no readable amount or description. Lines with no date (headers,
+    /// page numbers, marketing) are not statement lines and are not counted.
+    static func parse(text: String, dateOrder: DateOrder = .auto,
+                      today: Date = .now) -> Parsed {
         let lines = text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
@@ -261,6 +294,7 @@ nonisolated enum StatementImport {
         let order = dateOrder == .auto ? detectOrder(in: lines) : dateOrder
 
         var out: [Row] = []
+        var skipped = 0
         for line in lines {
             guard let (date, dateRange) = firstDate(in: line, order: order, today: today) else { continue }
 
@@ -269,14 +303,14 @@ nonisolated enum StatementImport {
             var rest = line
             rest.replaceSubrange(dateRange, with: " ")
 
-            guard let money = lastAmount(in: rest) else { continue }
-            guard let detail = detail(in: rest, without: money.range) else { continue }
+            guard let money = lastAmount(in: rest),
+                  let detail = detail(in: rest, without: money.range) else { skipped += 1; continue }
 
             out.append(Row(date: date, detail: detail, amount: abs(money.amount),
                            currency: money.currency,
                            kind: money.isCredit ? .moneyIn : .spend, raw: line))
         }
-        return out
+        return Parsed(rows: out, skipped: skipped)
     }
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
