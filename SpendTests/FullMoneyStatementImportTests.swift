@@ -29,8 +29,7 @@ struct FullMoneyStatementImportTests {
     ///
     /// Known bug: `StatementImport.save` (Spend/Services/StatementImport.swift:216) builds an
     /// `IncomingPurchase` from every row regardless of `row.kind`, never checking `.spend` vs `.moneyIn`.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-01", "StatementImport.save logs a moneyIn row (salary, refund) as spending"))
+    @Test(.bug(id: "full-money-01", "StatementImport.save logs a moneyIn row (salary, refund) as spending"))
     func saveNeverBooksAMoneyInRowAsAPurchase() throws {
         let previousHome = UserDefaults.standard.string(forKey: Money.homeKey)
         UserDefaults.standard.set("AUD", forKey: Money.homeKey)

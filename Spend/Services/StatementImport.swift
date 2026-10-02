@@ -207,7 +207,8 @@ nonisolated enum StatementImport {
     /// Anything without both a date and an amount is skipped, which throws
     /// away headers, page numbers and marketing without needing rules for
     /// each bank.
-    /// Saves chosen rows through `TransactionLogger`. A row may match a
+    /// Saves chosen rows through `TransactionLogger`. Only `.spend` rows are
+    /// saved; a `.moneyIn` row is ignored. A row may match a
     /// purchase Sortd already had (the tap), but never another row from this
     /// same import: two identical lines are two purchases.
     /// One save at the end (and one every 50 rows, so a very long
@@ -220,6 +221,10 @@ nonisolated enum StatementImport {
         var touched: Set<UUID> = []
         let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
         for (i, row) in rows.enumerated() {
+            // Money in (salary, a refund, a transfer) is not spending, whoever
+            // calls this. The review screen already filters; this keeps the
+            // rule in one place that every caller passes through.
+            guard row.kind == .spend else { progress(i + 1); continue }
             let purchase = IncomingPurchase(date: row.date, merchant: row.detail, amount: row.amount,
                                             currency: row.currency ?? Spend.Money.home, card: card, source: .csv)
             if let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched,
