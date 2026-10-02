@@ -13,8 +13,8 @@ struct FinishSetupCard: View {
     @AppStorage(SetupProfile.goalsKey) private var goalsRaw = ""
     @AppStorage(SetupProfile.paymentKey) private var paymentRaw = ""
     @AppStorage(SetupChecklist.hiddenKey) private var hidden = false
-    /// Read so the card re-checks when the app comes back (Gmail may have
-    /// been connected in Settings; GmailSync isn't observable).
+    /// Read so the card re-checks when the app comes back (the widget may
+    /// have been added from the Home Screen meanwhile).
     @Environment(\.scenePhase) private var scenePhase
     @State private var refresh = 0
     @State private var widgetAdded = false
@@ -22,13 +22,13 @@ struct FinishSetupCard: View {
 
     private var tasks: [SetupTask] {
         let flow = SetupFlow(goals: SetupProfile.goals(goalsRaw), payment: SetupProfile.Payment(rawValue: paymentRaw),
-                             hasCards: !CardBook.shared.active.isEmpty, gmailFeature: Features.gmail)
+                             hasCards: !CardBook.shared.active.isEmpty)
         return SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards,
                                     // A finished setup counts even before the first shop tap:
                                     // Shortcuts reaching the app at all is the proof.
                                     tapped: ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt,
                                                                    taps: transactions).isConnected,
-                                    widgetAdded: widgetAdded, gmailConnected: !GmailSync.accounts.isEmpty)
+                                    widgetAdded: widgetAdded)
     }
 
     var body: some View {
@@ -56,7 +56,6 @@ struct FinishSetupCard: View {
                 case .cards: NavigationStack { CardsSettingsView() }
                 case .applePay: NavigationStack { SetupGuideView(isPresentedAsSheet: true) }
                 case .widget: NavigationStack { WidgetsGuideView() }
-                case .gmail: ConnectGmailSheet()
                 case .answers: EmptyView()
                 }
             }

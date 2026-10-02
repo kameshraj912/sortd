@@ -112,7 +112,7 @@ nonisolated enum ReceiptScanner {
             date: date(in: text, now: now))
     }
 
-    /// The total paid. Uses the email rule, but first drops lines that only
+    /// The total paid. Uses `GenericReceipts.total`, but first drops lines that only
     /// mention tax, change or rounding ("GST included in total $1.14"),
     /// which would otherwise win as the last "total".
     /// Falls back to a "TOTAL 12.50" line with no currency sign, in the

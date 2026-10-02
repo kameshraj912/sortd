@@ -95,24 +95,41 @@ enum Sortd {
         }
     }
 
+    /// The same symbol the app draws for each category (`SpendCategory.symbol`
+    /// in Kinds.swift). `SortdWidgetThemeTests` fails if the two drift apart.
     static func symbol(forCategory raw: String) -> String {
         switch raw {
-        case "foodDelivery":  "takeoutbag.and.cup.and.straw"
+        case "foodDelivery":  "takeoutbag.and.cup.and.straw.fill"
         case "eatingOut":     "fork.knife"
-        case "groceries":     "cart"
-        case "transport":     "tram"
+        case "groceries":     "cart.fill"
+        case "transport":     "car.fill"
         case "subscriptions": "arrow.triangle.2.circlepath"
-        case "shopping":      "bag"
-        case "entertainment": "film"
-        case "housing":       "house"
-        case "bills":         "doc.text"
-        case "health":        "cross.case"
+        case "shopping":      "bag.fill"
+        case "entertainment": "ticket.fill"
+        case "housing":       "house.fill"
+        case "bills":         "bolt.fill"
+        case "health":        "cross.case.fill"
         case "travel":        "airplane"
-        case "education":     "graduationcap"
+        case "education":     "graduationcap.fill"
         case "transfers":     "arrow.left.arrow.right"
-        default:              "circle"
+        default:              "square.grid.2x2.fill"
         }
     }
+
+    // MARK: Budget colours
+
+    /// Sortd's green, the fourth dash of the mark. The ring shows what is
+    /// left of the budget in this.
+    static let brandGreen = brandPalette[3]
+
+    /// The app's "money out" red (`Color.down` in Theme.swift): the ring's
+    /// colour once the month is over budget.
+    static let over = Color(UIColor { t in
+        let high = t.accessibilityContrast == .high
+        return t.userInterfaceStyle == .dark
+            ? UIColor(red: high ? 1.00 : 0.96, green: high ? 0.56 : 0.45, blue: high ? 0.57 : 0.46, alpha: 1)
+            : UIColor(red: high ? 0.64 : 0.741, green: high ? 0.06 : 0.114, blue: high ? 0.09 : 0.153, alpha: 1)
+    })
 
     // MARK: Card style — matches the style chosen in Settings
 
@@ -154,6 +171,30 @@ enum Sortd {
         return f.string(from: value as NSDecimalNumber) ?? "\(value)"
     }
 
+    /// An amount as VoiceOver should say it: "5.50 Australian dollars", not
+    /// "A$5.50" (which reads as "A dollar sign five point five zero").
+    static func spoken(_ value: Decimal, _ code: String, cents: Bool? = nil) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = code
+        let natural = f.maximumFractionDigits   // 0 for yen, 2 for dollars
+        let digits = (cents ?? (abs(value) < 100)) ? natural : 0
+        return value.formatted(.currency(code: code).presentation(.fullName).precision(.fractionLength(digits)))
+    }
+
+    /// When a purchase happened, for the line under its amount: the time
+    /// today, otherwise "Yesterday" or the weekday and day.
+    static func when(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        return date.formatted(.dateTime.weekday(.abbreviated).day())
+    }
+
     /// "in 5d", "tomorrow", "today".
     static func countdown(to date: Date, from now: Date = .now,
                           calendar: Calendar = .current) -> String {
@@ -181,4 +222,7 @@ enum SortdLink {
     static let insights = URL(string: "sortd://insights")!
     static let bills = URL(string: "sortd://bills")!
     static let budget = URL(string: "sortd://budget")!
+
+    /// Opens that purchase's detail (Router.follow, "purchase").
+    static func purchase(_ id: UUID) -> URL { URL(string: "sortd://purchase/\(id.uuidString)")! }
 }

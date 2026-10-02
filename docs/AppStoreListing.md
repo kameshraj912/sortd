@@ -18,7 +18,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## Promotional text (170)
 
-Pay with Apple Pay. Sortd writes it down. No bank login, no account. Purchases stay on your iPhone.
+Pay with Apple Pay. Sortd writes it down. No bank login, no account. Purchases stay on your iPhone. Consider it Sortd.
 
 ## Description (4000)
 
@@ -38,11 +38,10 @@ SEE WHERE IT WENT
 • Every card gets its own page.
 • 30+ currencies, converted to your home currency at that day's European Central Bank rate. Handy if you live or travel across countries.
 • Categories learn: change one purchase and that shop stays fixed.
-• Home Screen and Lock Screen widgets: today, this month and what's about to charge you. Amounts are hidden on the Lock Screen unless you choose to show them.
+• Home Screen and Lock Screen widgets: a budget ring, today and your last purchase, your last three purchases, and what's about to charge you. Shop names and amounts are hidden while your iPhone is locked.
 • An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it.
 
 EVEN MORE
-• Gmail receipts: deliveries, rides, app stores and bank alerts, read from your inbox on your iPhone. Read-only.
 • Receipt camera: point at a paper receipt and Sortd fills in the shop and total. Read on your iPhone; the photo isn't kept.
 • Insights: this month next to last month, day by day.
 • Subscriptions and bills: every repeat charge found, price rises flagged, and a reminder the day before it charges.
