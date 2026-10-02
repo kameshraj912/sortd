@@ -1,5 +1,6 @@
 import Foundation
 import os
+import SwiftData
 
 /// A place to say "this failed" instead of swallowing it with `try?`.
 ///
@@ -78,6 +79,21 @@ enum ErrorLog {
             Task { @MainActor in
                 if CrashReporting.isOn { CrashReporting.captureNonFatal(where: place, errorType: type) }
             }
+        }
+    }
+}
+
+extension ModelContext {
+    /// `try? save()` that tells someone. Returns false when the save failed so a
+    /// screen can show `.saveFailedAlert`. Same behaviour otherwise.
+    @discardableResult
+    nonisolated func saveReporting(where place: String) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            ErrorLog.report(error, where: place)
+            return false
         }
     }
 }

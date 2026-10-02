@@ -250,6 +250,15 @@ nonisolated enum StatementImport {
     @MainActor
     static func save(_ rows: [Row], card: Card, in context: ModelContext,
                      progress: (Int) -> Void = { _ in }) -> (added: Int, merged: Int) {
+        let result = saveChecked(rows, card: card, in: context, progress: progress)
+        return (result.added, result.merged)
+    }
+
+    /// `save`, and whether the final write reached disk. A failed write is in
+    /// `ErrorLog`; the screen shows `.saveFailedAlert` when `saved` is false.
+    @MainActor
+    static func saveChecked(_ rows: [Row], card: Card, in context: ModelContext,
+                            progress: (Int) -> Void = { _ in }) -> (added: Int, merged: Int, saved: Bool) {
         let span = Perf.begin("statement.save")
         var added = 0, merged = 0
         var touched: Set<UUID> = []
@@ -261,20 +270,23 @@ nonisolated enum StatementImport {
             guard row.kind == .spend else { progress(i + 1); continue }
             let purchase = IncomingPurchase(date: row.date, merchant: row.detail, amount: row.amount,
                                             currency: row.currency ?? Spend.Money.home, card: card, source: .csv)
-            if let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched,
-                                                        learned: learned, save: false) {
+            do {
+                let outcome = try TransactionLogger.log(purchase, in: context, excluding: touched,
+                                                        learned: learned, save: false)
                 touched.insert(outcome.transaction.id)
                 switch outcome {
                 case .added: added += 1
                 case .merged: merged += 1
                 }
+            } catch {
+                ErrorLog.report(error, where: "StatementImport.log")
             }
-            if (i + 1) % 50 == 0 { try? context.save() }
+            if (i + 1) % 50 == 0 { context.saveReporting(where: "StatementImport.save") }
             progress(i + 1)
         }
-        try? context.save()
+        let saved = context.saveReporting(where: "StatementImport.save")
         span.end("\(rows.count) rows")
-        return (added, merged)
+        return (added, merged, saved)
     }
 
     static func rows(fromText text: String, dateOrder: DateOrder = .auto,

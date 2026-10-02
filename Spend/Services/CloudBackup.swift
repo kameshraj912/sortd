@@ -457,6 +457,7 @@ final class CloudBackup {
             clearPendingDelete()
         } catch {
             // Still pending; the next launch tries again.
+            ErrorLog.report(error, where: "CloudBackup.retryPendingDelete")
         }
     }
 
@@ -465,6 +466,7 @@ final class CloudBackup {
     private func fail(with error: Error, context: ModelContext?) {
         retry?.cancel()
         guard let known = error as? CloudBackupError else {
+            ErrorLog.report(error, where: "CloudBackup.backUp")
             status = .failed(error.localizedDescription)
             return
         }

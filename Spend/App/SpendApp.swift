@@ -456,7 +456,11 @@ struct RootView: View {
             #endif
             // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()
-            Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
+            Perf.measure("launch.recategorise") {
+                do { try TransactionLogger.refreshUncategorised(in: context) } catch {
+                    ErrorLog.report(error, where: "Launch.recategorise")
+                }
+            }
             // A tap Sortd couldn't save last time (spec 2026-09-26, failsafe
             // #8/#9): replay it now, at launch and every time the app comes
             // back to the foreground, not just once.

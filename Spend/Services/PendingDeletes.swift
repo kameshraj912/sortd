@@ -72,6 +72,7 @@ final class PendingDeletes {
             try context.save()
         } catch {
             log.error("Pending delete save failed: \(error.localizedDescription)")
+            ErrorLog.report(error, where: "PendingDeletes.commit")
         }
         WidgetBridge.refresh(from: context)
     }

@@ -457,6 +457,7 @@ struct AddTransactionView: View {
             dismiss()
         } catch {
             log.error("Manual add failed: \(error.localizedDescription)")
+            ErrorLog.report(error, where: "AddTransaction.save")
             saveError = "Please try again."
         }
     }

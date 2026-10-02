@@ -84,7 +84,7 @@ enum DemoData {
                                 category: Categorizer.category(for: merchant), source: .manual, note: marker)
             context.insert(t)
         }
-        try? context.save()
+        context.saveReporting(where: "DemoData.load")
         UserDefaults.standard.set(true, forKey: activeKey)
     }
 
@@ -94,7 +94,7 @@ enum DemoData {
         for t in (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.note == marker }))) ?? [] {
             context.delete(t)
         }
-        try? context.save()
+        context.saveReporting(where: "DemoData.clear")
         CardBook.shared.replaceAll(CardBook.shared.cards.filter { !cardIds.contains($0.id) })
         UserDefaults.standard.set(false, forKey: activeKey)
     }

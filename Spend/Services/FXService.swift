@@ -83,7 +83,7 @@ enum FXService {
         for t in (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] {
             t.audAmount = t.currencyCode == home ? t.amount : nil
         }
-        try? context.save()
+        context.saveReporting(where: "FXService.rebase")
         await backfill(in: context)
     }
 
