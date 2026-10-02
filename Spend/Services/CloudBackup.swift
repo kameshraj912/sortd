@@ -141,6 +141,10 @@ final class CloudBackup {
     @ObservationIgnored private var lastAttempt: Date?
     /// The store changed since the last backup, so a catch-up is worth it.
     @ObservationIgnored private var dirty = false
+    /// Goes up each time Delete All Data starts. A backup notes it before it
+    /// uploads; if it moved by the end, the upload holds wiped data and must
+    /// not stay in iCloud.
+    @ObservationIgnored private var resets = 0
 
     init(store: CloudBackupStore, keys: BackupKeyStore,
          defaults: UserDefaults = .standard, clock: @escaping () -> Date = { Date() }) {
@@ -236,6 +240,7 @@ final class CloudBackup {
     }
 
     private func backUp(from context: ModelContext, automatic: Bool) async throws {
+        let resetsAtStart = resets
         status = .backingUp
         do {
             let snapshot = try Backup.snapshot(in: context, defaults: defaults)
@@ -249,8 +254,23 @@ final class CloudBackup {
             let blob = try await Task.detached(priority: .utility) {
                 try Self.encrypt(try Backup.encode(snapshot), with: SymmetricKey(data: keyData))
             }.value
+            // Delete All Data started while this was being made: don't upload.
+            guard resets == resetsAtStart else {
+                status = .idle
+                return
+            }
             let now = clock()
             try await store.save(blob, modified: now)
+            // Delete All Data started while this was uploading, and its delete
+            // may already have run: take this copy out again (or leave the
+            // delete pending for the next launch). Nothing here counts as
+            // backed up.
+            guard resets == resetsAtStart else {
+                queuePendingDelete()
+                await retryPendingDelete()
+                status = .idle
+                return
+            }
             // This upload took the place of the copy an earlier Delete All
             // Data was still waiting to delete: nothing is left to delete,
             // and the next launch must not delete this new one.
@@ -260,6 +280,11 @@ final class CloudBackup {
             dirty = false
             status = .idle
         } catch {
+            // A backup of wiped data failed: nothing to pause or retry.
+            guard resets == resetsAtStart else {
+                status = .idle
+                throw error
+            }
             fail(with: error, context: context)
             throw error
         }
@@ -357,9 +382,12 @@ final class CloudBackup {
     /// iCloud can't be reached now, the delete is remembered and
     /// `retryPendingDelete` finishes it at the next launch.
     func deleteCloudCopyAfterReset() async {
+        // Any backup already running, even mid-upload, is now stale.
+        resets += 1
         isEnabled = false
         pending?.cancel()
         catchUp?.cancel()
+        retry?.cancel()
         queuePendingDelete()
         await retryPendingDelete()
     }
