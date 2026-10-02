@@ -54,6 +54,19 @@ struct ApplePayOnlineSetupTests {
         #expect(WalletSetupGuide.quickPages[2].detail == step.detail)
     }
 
+    /// "Show When Run" is off, so Shortcuts shows nothing after ▶: step 2
+    /// sends the person back to Sortd, and no copy promises a message there.
+    @Test func stepTwoSaysComeBackHereAndTheGuideMatches() {
+        let step = ApplePaySetupSteps.runStep
+        #expect(step.title == "Run it once and tap Allow")
+        #expect(step.detail == "Press ▶ in the shortcut and tap Allow. Then come back here.")
+        #expect(WalletSetupGuide.quickPages[1].title == step.title)
+        #expect(WalletSetupGuide.quickPages[1].detail == step.detail)
+        for page in WalletSetupGuide.quickPages + WalletSetupGuide.byHandPages {
+            #expect(!page.detail.contains("connected"))
+        }
+    }
+
     @Test func theScopeLineNamesAppsAndWebsitesOnIOS27() {
         #expect(ApplePaySetupSteps.scopeLine(notificationTrigger: true)
                 == "Taps in shops log from the tap. Payments in apps and on websites log from Wallet's notification, if your bank sends one.")

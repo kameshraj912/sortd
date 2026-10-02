@@ -31,8 +31,7 @@ struct WalletSetupGuide: View {
     static let quickPages: [Page] = [
         Page(id: 0, title: "Add the shortcut",
              detail: "Opens Shortcuts. Tap Add Shortcut."),
-        Page(id: 1, title: "Run it once and tap Allow",
-             detail: "Press ▶ in the shortcut. Sortd says it's connected."),
+        Page(id: 1, title: ApplePaySetupSteps.runStep.title, detail: ApplePaySetupSteps.runStep.detail),
         Page(id: 2, title: ApplePaySetupSteps.automationStep(notificationTrigger: true).title,
              detail: ApplePaySetupSteps.automationStep(notificationTrigger: true).detail),
     ]

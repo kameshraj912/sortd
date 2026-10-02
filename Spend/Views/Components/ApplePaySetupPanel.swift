@@ -225,8 +225,7 @@ struct ApplePaySetupPanel: View {
 
             Divider()
 
-            stepRow(2, ticked.runAndAllow, "Run it once and tap Allow",
-                    "Press ▶ in the shortcut. Sortd says it's connected.")
+            stepRow(2, ticked.runAndAllow, ApplePaySetupSteps.runStep.title, ApplePaySetupSteps.runStep.detail)
             Button {
                 if let url = URL(string: "shortcuts://") { openURL(url) }
             } label: {
