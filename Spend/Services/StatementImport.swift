@@ -51,17 +51,41 @@ nonisolated enum StatementImport {
         case auto
     }
 
+    /// What reading a statement found, and how many lines it could not read.
+    /// A line that is dropped without a word is lost money, so the screen
+    /// shows `skipped` ("3 rows couldn't be read").
+    struct Parsed: Sendable {
+        var rows: [Row]
+        /// Lines that look like purchases (a CSV row, or a line with a date)
+        /// but had no readable date, amount or description.
+        var skipped: Int
+    }
+
+    /// "3 rows couldn't be read." for the screen; nil when nothing was skipped.
+    static func skippedNote(_ count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return count == 1 ? "1 row couldn't be read." : "\(count) rows couldn't be read."
+    }
+
     // MARK: - CSV
 
     /// Reads a bank CSV. Works with a header row or without one (NAB's
     /// export has no header), and with either a signed Amount column or
     /// separate Debit/Credit columns.
     static func rows(fromCSV text: String, dateOrder: DateOrder = .auto) -> [Row] {
+        parse(csv: text, dateOrder: dateOrder).rows
+    }
+
+    /// Like `rows(fromCSV:)`, and counts the rows it could not read.
+    static func parse(csv text: String, dateOrder: DateOrder = .auto) -> Parsed {
         let grid = parseCSV(text)
-        guard !grid.isEmpty else { return [] }
+        guard !grid.isEmpty else { return Parsed(rows: [], skipped: 0) }
 
         let layout = layout(for: grid)
-        guard let dateColumn = layout.date, layout.hasAmount else { return [] }
+        // No date or amount column: nothing in the file could be read.
+        guard let dateColumn = layout.date, layout.hasAmount else {
+            return Parsed(rows: [], skipped: grid.count)
+        }
 
         let body = layout.headerRow.map { Array(grid.dropFirst($0 + 1)) } ?? grid
         let order = dateOrder == .auto
@@ -69,21 +93,22 @@ nonisolated enum StatementImport {
             : dateOrder
 
         var out: [Row] = []
+        var skipped = 0
         for fields in body {
             guard fields.indices.contains(dateColumn),
-                  let date = parseDate(fields[dateColumn], order: order) else { continue }
-            guard let money = money(in: fields, layout: layout) else { continue }
+                  let date = parseDate(fields[dateColumn], order: order),
+                  let money = money(in: fields, layout: layout) else { skipped += 1; continue }
 
             let detail = layout.detail.flatMap { fields.indices.contains($0) ? fields[$0] : nil }
                 ?? longestText(in: fields, skipping: [dateColumn])
             let clean = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !clean.isEmpty else { continue }
+            guard !clean.isEmpty else { skipped += 1; continue }
 
             out.append(Row(date: date, detail: clean, amount: money.amount,
                            currency: money.currency, kind: money.kind,
                            raw: fields.joined(separator: " ")))
         }
-        return out
+        return Parsed(rows: out, skipped: skipped)
     }
 
     /// Where the interesting columns are.
@@ -108,7 +133,8 @@ nonisolated enum StatementImport {
             for (j, cell) in row.enumerated() {
                 let key = cell.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty else { continue }
-                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date"]) {
+                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
+                                                       "time", "timestamp", "settled"]) {
                     found.date = j
                 } else if found.debit == nil, matches(key, ["debit", "withdrawal", "money out", "paid out", "spent"]) {
                     found.debit = j
@@ -116,7 +142,8 @@ nonisolated enum StatementImport {
                     found.credit = j
                 } else if found.balance == nil, matches(key, ["balance"]) {
                     found.balance = j
-                } else if found.amount == nil, matches(key, ["amount", "value", "transaction amount"]) {
+                } else if found.amount == nil, matches(key, ["amount", "value", "total", "transaction amount"]),
+                          !key.contains("round up"), !key.contains("roundup") {
                     found.amount = j
                 } else if found.detail == nil, matches(key, ["description", "details", "narrative", "merchant",
                                                             "particulars", "reference", "transaction", "payee", "name"]) {
@@ -141,9 +168,13 @@ nonisolated enum StatementImport {
         for row in sample {
             for (j, cell) in row.enumerated() where j < width {
                 let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
-                if parseDate(trimmed, order: .dayFirst) != nil { dateHits[j] += 1 }
-                if signedAmount(trimmed) != nil { moneyHits[j] += 1 }
-                if signedAmount(trimmed) == nil, parseDate(trimmed, order: .dayFirst) == nil {
+                // A date column holds only dates. A description that mentions
+                // one ("... Value Date: 30/08/2026") is still text.
+                let isDate = isWholeDate(trimmed)
+                let isMoney = signedAmount(trimmed) != nil
+                if isDate { dateHits[j] += 1 }
+                if isMoney { moneyHits[j] += 1 }
+                if !isMoney, !isDate {
                     textLength[j] += trimmed.count
                 }
             }
@@ -155,7 +186,10 @@ nonisolated enum StatementImport {
         let moneyColumns = moneyHits.enumerated().filter { $0.element > 0 }.map(\.offset)
         out.amount = moneyColumns.first
         if moneyColumns.count > 1 { out.balance = moneyColumns.last }
-        out.detail = textLength.enumerated().max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
+        // The shop is text: never the date, the amount or the balance.
+        let taken = Set([out.date, out.amount, out.balance].compactMap { $0 })
+        out.detail = textLength.enumerated().filter { !taken.contains($0.offset) }
+            .max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
         return out
     }
 
@@ -207,7 +241,8 @@ nonisolated enum StatementImport {
     /// Anything without both a date and an amount is skipped, which throws
     /// away headers, page numbers and marketing without needing rules for
     /// each bank.
-    /// Saves chosen rows through `TransactionLogger`. A row may match a
+    /// Saves chosen rows through `TransactionLogger`. Only `.spend` rows are
+    /// saved; a `.moneyIn` row is ignored. A row may match a
     /// purchase Sortd already had (the tap), but never another row from this
     /// same import: two identical lines are two purchases.
     /// One save at the end (and one every 50 rows, so a very long
@@ -220,6 +255,10 @@ nonisolated enum StatementImport {
         var touched: Set<UUID> = []
         let learned = (try? TransactionLogger.learnedRules(in: context)) ?? [:]
         for (i, row) in rows.enumerated() {
+            // Money in (salary, a refund, a transfer) is not spending, whoever
+            // calls this. The review screen already filters; this keeps the
+            // rule in one place that every caller passes through.
+            guard row.kind == .spend else { progress(i + 1); continue }
             let purchase = IncomingPurchase(date: row.date, merchant: row.detail, amount: row.amount,
                                             currency: row.currency ?? Spend.Money.home, card: card, source: .csv)
             if let outcome = try? TransactionLogger.log(purchase, in: context, excluding: touched,
@@ -240,6 +279,14 @@ nonisolated enum StatementImport {
 
     static func rows(fromText text: String, dateOrder: DateOrder = .auto,
                      today: Date = .now) -> [Row] {
+        parse(text: text, dateOrder: dateOrder, today: today).rows
+    }
+
+    /// Like `rows(fromText:)`, and counts the lines that carried a date but
+    /// had no readable amount or description. Lines with no date (headers,
+    /// page numbers, marketing) are not statement lines and are not counted.
+    static func parse(text: String, dateOrder: DateOrder = .auto,
+                      today: Date = .now) -> Parsed {
         let lines = text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
@@ -247,6 +294,7 @@ nonisolated enum StatementImport {
         let order = dateOrder == .auto ? detectOrder(in: lines) : dateOrder
 
         var out: [Row] = []
+        var skipped = 0
         for line in lines {
             guard let (date, dateRange) = firstDate(in: line, order: order, today: today) else { continue }
 
@@ -255,14 +303,14 @@ nonisolated enum StatementImport {
             var rest = line
             rest.replaceSubrange(dateRange, with: " ")
 
-            guard let money = lastAmount(in: rest) else { continue }
-            guard let detail = detail(in: rest, without: money.range) else { continue }
+            guard let money = lastAmount(in: rest),
+                  let detail = detail(in: rest, without: money.range) else { skipped += 1; continue }
 
             out.append(Row(date: date, detail: detail, amount: abs(money.amount),
                            currency: money.currency,
                            kind: money.isCredit ? .moneyIn : .spend, raw: line))
         }
-        return out
+        return Parsed(rows: out, skipped: skipped)
     }
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
@@ -270,7 +318,7 @@ nonisolated enum StatementImport {
         text.replaceSubrange(range, with: " ")
         let clean = text
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: " -–—|\t"))
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–—\u{2212}|\t"))
         // A line of pure punctuation isn't a merchant.
         guard clean.count >= 2, clean.contains(where: \.isLetter) else { return nil }
         return clean
@@ -300,8 +348,22 @@ nonisolated enum StatementImport {
         return .dayFirst
     }
 
-    /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 1 Sep 2026,
-    /// Sep 1 2026 and two-digit years.
+    /// True when the whole cell is a date, with an optional time after it.
+    /// "01/09/2026 12:30" and "2026-09-01T12:34:56+10:00" are dates; a
+    /// description that merely contains one is not.
+    static func isWholeDate(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let (_, range) = firstDate(in: trimmed, order: .dayFirst) else { return false }
+        var rest = trimmed
+        rest.removeSubrange(range)
+        rest = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        if rest.isEmpty { return true }
+        let time = #"^[Tt\s]*[0-9]{1,2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?\s*([AaPp][Mm])?\s*(Z|UTC|GMT|[+-][0-9]{2}(:?[0-9]{2})?)?$"#
+        return rest.range(of: time, options: .regularExpression) != nil
+    }
+
+    /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 2026-09-01T12:34:56+10:00,
+    /// 1 Sep 2026, 01-Sep-2026, Sep 1 2026 and two-digit years.
     static func parseDate(_ text: String, order: DateOrder, today: Date = .now) -> Date? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -321,8 +383,9 @@ nonisolated enum StatementImport {
         // [0-9], not \d: \d also matches full-width (１２) and Arabic (١٢)
         // digits, which Int() can't read, and the unwraps below would trap.
 
-        // yyyy-mm-dd — never ambiguous, so try it first.
-        if let regex = try? NSRegularExpression(pattern: #"\b([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})\b"#),
+        // yyyy-mm-dd — never ambiguous, so try it first. No \b at the ends:
+        // an ISO 8601 stamp is "2026-09-01T12:34:56", and "01T" has no boundary.
+        if let regex = try? NSRegularExpression(pattern: #"(?<![0-9])([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})(?![0-9])"#),
            let m = regex.firstMatch(in: line, range: full) {
             let y = Int(ns.substring(with: m.range(at: 1)))!
             let mo = Int(ns.substring(with: m.range(at: 2)))!
@@ -347,10 +410,10 @@ nonisolated enum StatementImport {
             }
         }
 
-        // 1 Sep 2026 / 1 September 26 / Sep 1, 2026. After the numeric form, so
+        // 1 Sep 2026 / 1 September 26 / 01-Sep-2026 / 01/Sep/2026 / Sep 1, 2026. After the numeric form, so
         // "03/09/2026 CAFE 12 MARKET ST" isn't read as 12 March.
         if let regex = try? NSRegularExpression(
-            pattern: #"\b([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
+            pattern: #"\b([0-9]{1,2})(?:\s+|[-/])([A-Za-z]{3,9})\.?(?:[\s\-/]+)?([0-9]{2,4})?\b"#, options: .caseInsensitive),
            let m = regex.firstMatch(in: line, range: full),
            let month = month(ns.substring(with: m.range(at: 2))) {
             let d = Int(ns.substring(with: m.range(at: 1)))!
@@ -429,7 +492,7 @@ nonisolated enum StatementImport {
     /// A line with no sign at all is spending — that is what a statement is
     /// mostly made of.
     static func lastAmount(in line: String) -> Amount? {
-        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
+        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = line as NSString
         let matches = regex.matches(in: line, range: NSRange(location: 0, length: ns.length))
@@ -475,11 +538,16 @@ nonisolated enum StatementImport {
 
     /// A single cell that is only an amount, with its sign.
     static func signedAmount(_ text: String) -> (amount: Decimal, currency: String?)? {
+        // Excel, Numbers and some locales write a true minus (U+2212); some
+        // exports an en dash. Both mean the ASCII hyphen here.
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\u{2212}", with: "-")
+            .replacingOccurrences(of: "\u{2013}", with: "-")
         guard !trimmed.isEmpty else { return nil }
         // Must be money and nothing else, or a description column with a
-        // house number in it would be read as an amount.
-        let pattern = #"^\(?\s*-?\s*(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*-?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?$"#
+        // house number in it would be read as an amount. An ISO code may sit
+        // before or after the number ("AUD -58.30", "12.00 SGD").
+        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = trimmed as NSString
         guard let m = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)) else { return nil }
@@ -488,16 +556,21 @@ nonisolated enum StatementImport {
             let r = m.range(at: i)
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
-        let whole = (group(2) ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group(3).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
+        // Three letters that are not a real currency are words ("KFC 12").
+        let codes = [group(1), group(6)].compactMap { $0?.uppercased() }
+        guard codes.allSatisfy({ isoCurrencyCodes.contains($0) }), codes.count <= 1 else { return nil }
+        let whole = (group(3) ?? "0").replacingOccurrences(of: ",", with: "")
+        let cents = group(4).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
         guard var value = Decimal(string: "\(whole).\(cents)") else { return nil }
 
         let negative = trimmed.contains("-") || (trimmed.hasPrefix("(") && trimmed.hasSuffix(")"))
-        let suffix = group(4)?.uppercased()
+        let suffix = group(5)?.uppercased()
         if negative || suffix == "DR" { value = -value }
         if suffix == "CR" { value = abs(value) }
-        return (value, currency(for: group(1)))
+        return (value, codes.first ?? currency(for: group(2)))
     }
+
+    private static let isoCurrencyCodes = Set(Locale.commonISOCurrencyCodes)
 
     private static func currency(for symbol: String?) -> String? {
         switch symbol?.uppercased() {
