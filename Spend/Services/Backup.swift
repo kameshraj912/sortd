@@ -20,9 +20,9 @@ nonisolated enum Backup {
     static let formatVersion = 1
 
     /// Settings worth carrying to a new phone. Deliberately an allowlist:
-    /// anything about *this* device or a live login stays behind. Gmail
-    /// accounts are excluded because their keys live in the Keychain and
-    /// would restore as connected-but-broken.
+    /// anything about *this* device or a live login stays behind. A backup
+    /// made while Gmail still existed may carry Gmail-era settings; they are
+    /// not in this list, so a restore ignores them.
     static let settingKeys = [
         "monthlyBudget",
         Money.homeKey,
@@ -45,9 +45,9 @@ nonisolated enum Backup {
         var settings: [String: Setting] = [:]
         var transactions: [Row] = []
         var rules: [Rule] = []
-        /// Emails already read from Gmail. Without these, reconnecting Gmail on
-        /// the new phone reads every email again and brings back purchases the
-        /// user had deleted. Optional: backups made before this have none.
+        /// Email ids recorded by the removed Gmail sync (`ImportedRecord`). Kept
+        /// so an old backup still restores completely and a new one keeps the
+        /// rows it held. Optional: backups made before this have none.
         var imported: [Imported]?
 
         /// One purchase. Flat and explicit so the file stays readable and a
@@ -380,7 +380,7 @@ nonisolated enum Backup {
             result.added += 1
         }
 
-        // Emails already read, so a reconnected Gmail doesn't import them again.
+        // Email ids from the removed Gmail sync: put back as they were.
         if let imported = snapshot.imported, !imported.isEmpty {
             let have = Set(try context.fetch(FetchDescriptor<ImportedRecord>()).map(\.id))
             for r in imported where !have.contains(r.id) {

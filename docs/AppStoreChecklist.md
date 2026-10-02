@@ -54,8 +54,8 @@ Checked by hand against the rule files in github.com/mjmirza/app-store-complianc
 hook were **not** installed or run). Guideline numbers are from that repo, not re-checked on
 Apple's site.
 
-- [x] **High · 2.3.1.** No longer applies: v1 ships with Gmail (22 Sep), so the listing and
-      site can keep it. Only submit after Google verification, or Gmail won't work for reviewers.
+- [x] **High · 2.3.1.** No longer applies: Gmail was removed on 2 Oct 2026, so there is no
+      hidden or dormant Gmail feature and nothing to verify with Google.
 - [x] **High · 2.1.** Superseded 25 Sep: no Pro, no paywall, nothing to unlock. Review notes now
       say every feature is free (`docs/AppReviewNotes.md`).
 - [ ] **High · 2.3.2.** Attach all three tip consumables to the version and submit them with the
@@ -84,7 +84,7 @@ Checked in code, not on a device. Not legal advice; items marked "lawyer" need o
 - [x] Quick entry with Apple Intelligence (`QuickEntryAI`, FoundationModels) runs on the device;
       output is checked against the typed line and only fills the Add form.
 - [x] "Finish setup" widget check uses `WidgetCenter.currentConfigurations()`, on the device.
-- [x] Only network calls in the app: Google OAuth/Gmail, frankfurter.dev, and StoreKit (Apple).
+- [x] Only network calls in the app: Google sign-in (identity only), frankfurter.dev, and StoreKit (Apple).
 - [x] sortd.page/privacy, terms and support updated for all of the above (not deployed).
 - [ ] Sentry is linked and on (see Crash reports above). Check Xcode's privacy report on the
       archive shows Crash, Performance and Other Diagnostic Data as linked, matching the label.
@@ -187,9 +187,10 @@ needs a backend, and isn't worth one until there's revenue to protect.
 - [ ] Apple Developer Program ($149 AUD/yr) — **decided 19 Sep 2026: individual for now.** If App
       Review cites 5.1.1(ix), switch to a company account (needs a D-U-N-S number) and resubmit.
       Review notes already say Sortd doesn't move, hold or manage money.
-- [ ] Gmail for v1 — **decided 22 Sep 2026 (replaces 19 Sep):** v1 ships **with** Gmail. Submit
-      to the App Store only after Google verifies gmail.readonly (docs/GoogleVerification.md).
-      Until then TestFlight only (up to 100 Google test users). `Features.gmail` / SORTD_GMAIL.
+- [x] Gmail — **decided 2 Oct 2026: removed from the app.** Google approves gmail.readonly only
+      after a paid yearly security assessment (CASA, about US$855 a year), with no free route.
+      The Google review is withdrawn (docs/GoogleVerification.md). "Continue with Google" stays
+      for optional sign-in (openid and email only).
 - [ ] A website with a **privacy policy** and **support page** (Apple and Google both need the URLs)
 - [ ] Trademark check on "Sortd" (see Brand/README.md)
 - [ ] EU Digital Services Act trader status in App Store Connect
@@ -201,42 +202,19 @@ needs a backend, and isn't worth one until there's revenue to protect.
 - [ ] Screenshots: 6.9" iPhone (1320×2868), 1–10 of them
 - [ ] Review notes: explain the Shortcuts automation, attach a short video, say sample data is available
 
-## Bank alerts (built, needs real emails to confirm)
-
-Sortd reads "you just spent $X at Y" emails from 18 banks across AU, SG
-and MY. This covers the card spending no merchant emails a receipt for,
-and it is the only source that reports a refund.
-
-- [x] One reader, not a regex per bank: banks change their wording, and a
-      bespoke pattern per bank breaks silently when they do
-- [x] An alert needs an amount **and** a merchant before it counts, so
-      balances, statements, OTPs and payment-due notices produce nothing
-- [x] Refunds and reversals are recorded as refunds, never as spending
-- [ ] **Check against real emails.** The Standard Chartered parser was
-      written against real alerts. These were written against the shapes
-      alerts take. Forward one real alert from NAB and from StanChart to
-      yourself, run a Gmail sync, and confirm the amount, merchant, card
-      and date all land right before relying on it.
-
-## Gmail connect (built)
-- [x] Ask for Gmail only when the user taps Connect, with a plain explanation first (5.1.1)
-- [x] "Disconnect Gmail" that revokes access and deletes imported data (5.1.1(v))
-- [x] App Privacy label: "Data Not Collected". Sortd doesn't use the GoogleSignIn SDK (own OAuth via
-      ASWebAuthenticationSession) and nothing reaches the developer or a partner.
-- [ ] CASA security assessment: Google requires it for apps that reach data "from or through a
-      third-party server". Sortd has no server (phone ↔ Google only). Say so in the verification
-      form and ask Google to confirm before paying for an assessment.
-- [ ] Google verification for `gmail.readonly`: homepage, privacy policy with Google's "Limited Use"
-      wording, verified domain, demo video, a few weeks. Describe it as receipt "reporting".
-- [ ] Until verified: max 100 test users, and they must reconnect every 7 days
-- [ ] Give App Review a test Gmail account
+## Gmail (removed 2 Oct 2026)
+- [x] The Gmail feature, bank-alert reading and the Google OAuth review are gone. Nothing to submit
+      to Google, no test Gmail account for App Review, no "Connect Gmail" anywhere in the app.
+- [x] A one-time launch clean-up revokes and deletes any saved Gmail token and the Gmail settings.
+- [x] App Privacy label: nothing to add for Gmail. Sign-in with Google asks for `openid` and
+      `email` only.
 
 ## Receipt scanning (built)
 - [x] Clear camera permission text; photo picker needs no permission
 - [x] Works on phones without Apple Intelligence (falls back to text rules)
 - [x] Covered in the privacy policy and review notes
 - [x] AI in finance (Apple's Foundation Models rules): the user confirms scanned receipts before
-      saving; Gmail purchases read by the model are marked "Read by on-device AI. Check…"
+      saving.
 
 ## Apple Pay taps (built)
 - [x] One-field "Log Wallet Tap" action + picture guide in setup
@@ -249,6 +227,5 @@ and it is the only source that reports a refund.
 - [ ] In-App Purchase only; subscription terms and Terms of Use + privacy links in the app and listing
 
 ## Not needed for this app
-- Account deletion (no Sortd accounts), Sign in with Apple (Gmail sign-in is to reach your own mail,
-  not an app login), report/moderation (no content shared between users), App Tracking Transparency
+- Account deletion (no Sortd accounts), Sign in with Apple (sign-in is optional; nothing needs it), report/moderation (no content shared between users), App Tracking Transparency
   (no tracking), "must be a bank" rules 3.2.1(viii) / 5.1.1(ix) (Sortd doesn't move or manage money).
