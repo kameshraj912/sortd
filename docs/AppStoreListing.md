@@ -38,7 +38,7 @@ SEE WHERE IT WENT
 • Every card gets its own page.
 • 30+ currencies, converted to your home currency at that day's European Central Bank rate. Handy if you live or travel across countries.
 • Categories learn: change one purchase and that shop stays fixed.
-• Home Screen and Lock Screen widgets: today, this month and what's about to charge you. Amounts are hidden on the Lock Screen unless you choose to show them.
+• Home Screen and Lock Screen widgets: a budget ring, today and your last purchase, your last three purchases, and what's about to charge you. Shop names and amounts are hidden while your iPhone is locked.
 • An optional check-in each morning, evening or Sunday: a short nudge to take a look, with no amounts in it.
 
 EVEN MORE
