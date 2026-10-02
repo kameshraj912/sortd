@@ -29,8 +29,7 @@ import SwiftData
         return SearchText.matches(t, folded: SearchText.fold(trimmed))
     }
 
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("an emoji-only search query folds to empty and matches every purchase"))
+    @Test
     func anEmojiOnlySearchMatchesNothingRatherThanEverything() throws {
         let ctx = try store()
         let coffee = try log(ctx, "Woolworths", 40)
@@ -41,8 +40,7 @@ import SwiftData
                 "an emoji query with nothing alphanumeric in it must not match an unrelated purchase")
     }
 
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a currency-sign-only search query folds to empty and matches every purchase"))
+    @Test
     func aDollarSignOnlySearchMatchesNothingRatherThanEverything() throws {
         let ctx = try store()
         let coffee = try log(ctx, "Woolworths", 40)
@@ -59,5 +57,24 @@ import SwiftData
         let ctx = try store()
         let coffee = try log(ctx, "Woolworths", 40)
         #expect(matchesTyped(coffee, typed: "wool"))
+    }
+
+    @Test func aDollarAmountFindsThatAmount() throws {
+        let ctx = try store()
+        let a = try log(ctx, "Cafe", 5.50)
+        let b = try log(ctx, "Bakery", 12)
+        let match = SearchText.matcher(for: "$5.50")
+        #expect(match(a))
+        #expect(!match(b))
+    }
+
+    @Test func aBlankSearchMatchesEverythingButASymbolOnlyOneMatchesNothing() throws {
+        let ctx = try store()
+        let a = try log(ctx, "Cafe", 5.50)
+        #expect(SearchText.matcher(for: "   ")(a))
+        #expect(SearchText.matcher(for: "")(a))
+        #expect(!SearchText.matcher(for: "$")(a))
+        #expect(!SearchText.matcher(for: "💸")(a))
+        #expect(SearchText.matcher(for: "caf")(a))
     }
 }
