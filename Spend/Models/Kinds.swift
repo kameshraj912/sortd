@@ -170,10 +170,12 @@ final class CardBook {
         save()
     }
 
-    /// Card for the last 4 digits on a receipt, if Raj has told us.
+    /// Card for the last 4 digits on a receipt, if Raj has told us. A card
+    /// still in use wins over an archived one with the same digits (a
+    /// replacement card often keeps the number).
     func card(last4: String?) -> Card? {
         guard let last4, !last4.isEmpty else { return nil }
-        return cards.first { $0.allLast4.contains(last4) }?.card
+        return (active.first { $0.allLast4.contains(last4) } ?? cards.first { $0.allLast4.contains(last4) })?.card
     }
 
     /// Every group of exactly 4 digits in the text ("•••• 4821", "…4821").
