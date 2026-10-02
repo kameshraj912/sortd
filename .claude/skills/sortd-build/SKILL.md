@@ -58,7 +58,10 @@ Ask Raj, **one question at a time**, only for what is missing:
    - `gh pr create --base main --head <task>` with a plain title and body: what, why,
      tests added, review result.
 10. `gh pr checks <n> --watch`. Report the PR link and CI state to Raj.
-11. Merge only when CI is green **and** Raj says merge:
+11. Park the task while the PR waits: `scripts/worktree-park.sh <task>` frees its
+    simulator and build folder (~11 GB) and keeps the branch. Do this before the session
+    ends, every time. CLAUDE.md "6. Finish" is the rule.
+12. Merge only when CI is green **and** Raj says merge:
     `gh pr merge <n> --merge --delete-branch`, then `scripts/worktree-done.sh <task>`.
 
 ## Output
