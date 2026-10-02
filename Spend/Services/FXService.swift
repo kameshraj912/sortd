@@ -144,11 +144,21 @@ enum FXService {
         var converted = 0
         var failure: Error?
         do {
-            let pending = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.audAmount == nil }))
-            guard !pending.isEmpty else { span.end("nothing"); return .nothingToDo }
-
             let home = Money.home
             var cached = try loadRates(in: context)
+
+            // A purchase whose date was corrected still holds the value from
+            // the old day. When that day's rate is already saved, re-rate it
+            // now; if it isn't, the value is cleared below so it is fetched.
+            converted += reRateMovedPurchases(home: home, rates: cached, in: context)
+
+            let pending = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.audAmount == nil }))
+            guard !pending.isEmpty else {
+                if converted > 0 { try context.save() }
+                span.end(converted == 0 ? "nothing" : "\(converted) re-rated")
+                return converted == 0 ? .nothingToDo : .updated(converted)
+            }
+
             for (currency, txns) in Dictionary(grouping: pending, by: \.currencyCode) {
                 if currency == home {
                     for t in txns { t.audAmount = t.amount }
@@ -195,6 +205,24 @@ enum FXService {
             return .failed(offline: offline)
         }
         return converted == 0 ? .nothingToDo : .updated(converted)
+    }
+
+    /// Foreign purchases whose saved value no longer matches the rate for their
+    /// own day (the date was edited). Only an exact-day rate counts, so a value
+    /// that used a weekend's earlier rate is not flipped back and forth.
+    /// Returns how many were changed.
+    private static func reRateMovedPurchases(home: String, rates: [String: Decimal],
+                                             in context: ModelContext) -> Int {
+        let converted = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate {
+            $0.audAmount != nil && $0.currencyCode != home
+        }))) ?? []
+        var changed = 0
+        for t in converted where !t.isDeleted && t.modelContext != nil {
+            guard let r = exactRate(t.currencyCode, home, t.date, rates) else { continue }
+            let value = (t.amount * r).rounded(2)
+            if t.audAmount != value { t.audAmount = value; changed += 1 }
+        }
+        return changed
     }
 
     /// Every saved rate by key, read once per pass (not up to 7 queries per purchase).

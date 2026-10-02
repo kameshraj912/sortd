@@ -149,6 +149,8 @@ struct TransactionDetailView: View {
         }
         .onChange(of: transaction.amount) { _, _ in refreshAUD() }
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
+        // A corrected date has its own day's rate.
+        .onChange(of: transaction.date) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
                 recategorise(to: category)
