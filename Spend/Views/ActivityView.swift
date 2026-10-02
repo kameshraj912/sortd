@@ -620,14 +620,14 @@ struct TransactionsScreen: View {
     private var isFiltering: Bool { cardFilter != nil || categoryFilter != nil }
 
     private var filtered: [Transaction] {
-        let q = SearchText.fold(search)
+        let matchesSearch = SearchText.matcher(for: search)
         let hidden = Set(pending.items.map(\.persistentModelID))
         return transactions.filter { t in
             !hidden.contains(t.persistentModelID)
             && (fixedCard == nil || t.card == fixedCard)
             && (cardFilter == nil || t.card == cardFilter)
             && (categoryFilter == nil || t.category == categoryFilter)
-            && SearchText.matches(t, folded: q)
+            && matchesSearch(t)
         }
     }
 

@@ -52,6 +52,10 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
             s.month = 0
             s.categories = []
             s.leftThisMonth = s.budget
+            // Budget over this month's days: February's figure is not March's.
+            if let budget = s.budget, budget > 0, let days = calendar.range(of: .day, in: .month, for: now)?.count {
+                s.dayAllowance = budget / Decimal(days)
+            }
         }
         return s
     }
