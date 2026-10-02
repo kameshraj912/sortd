@@ -8,8 +8,8 @@ import os
 /// screen goes through `Analytics.shared`, which sends named events with
 /// scalar properties to a `Sink`. Tests give it a fake sink.
 ///
-/// What is never sent: amounts, merchants, emails, notes, card digits or
-/// anything read from Gmail. A privacy guard drops a property whose key is
+/// What is never sent: amounts, merchants, emails, notes or card digits.
+/// A privacy guard drops a property whose key is
 /// on the deny list or whose value looks like money or an email; the event
 /// still goes with what is left.
 ///
@@ -36,8 +36,6 @@ final class Analytics {
         case purchaseAddedManually = "purchase_added_manually"
         case purchaseDeleted = "purchase_deleted"
         case purchaseUndone = "purchase_undone"
-        case gmailConnected = "gmail_connected"
-        case gmailSyncFinished = "gmail_sync_finished"
         case applePayTapLogged = "apple_pay_tap_logged"
         case tabOpened = "tab_opened"
         case tipLeft = "tip_left"
@@ -76,10 +74,6 @@ final class Analytics {
         /// first automatic purchase) or `about` (replayed from Settings).
         case founderNoteSeen = "founder_note_seen"
         case founderNoteReplyTapped = "founder_note_reply_tapped"
-        /// "Which card?" (spec 2026-09-27): unmatched digits shown on Home,
-        /// and how they were answered. Never the digits themselves.
-        case cardDigitsPrompted = "card_digits_prompted"
-        case cardDigitsAnswered = "card_digits_answered"
     }
 
     /// Where events go. `PostHogSink` in the app, `NoopSink` with no key,

@@ -134,7 +134,7 @@ enum CrashReporting {
     /// mechanism type, the device, OS and app context, and the user id (the
     /// hash). Exception values, the message and the mechanism data (the crash
     /// converter's "crash_info_messages": earlier Swift runtime messages)
-    /// go, since an error string can carry a merchant name or Gmail text.
+    /// go, since an error string can carry a merchant name.
     /// Request, breadcrumbs, extra and tags go whole.
     nonisolated static func scrub(_ event: Event, userId: String?) -> Event {
         for exception in event.exceptions ?? [] {

@@ -1,8 +1,8 @@
 import Foundation
 import OSLog
 
-/// Timing marks for the slow parts of Sortd: launch, sign-in, each Gmail
-/// sync phase, exchange rates, the widget and statement imports.
+/// Timing marks for the slow parts of Sortd: launch, sign-in,
+/// exchange rates, the widget and statement imports.
 ///
 /// Signposts show up in Instruments (Points of Interest / os_signpost,
 /// subsystem `com.kameshraj.spend`, category `perf`). The same durations go
