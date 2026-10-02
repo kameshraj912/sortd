@@ -144,12 +144,19 @@ struct SpendApp: App {
         // firing for the one tap (failsafe #14). Works the same way from
         // `xcrun devicectl device process launch --environment-variables`
         // on a real phone: both read `ProcessInfo.processInfo.environment`.
-        let tapKeys = ["SPEND_TAP_TEXT", "SPEND_TAP_MERCHANT", "SPEND_TAP_AMOUNT", "SPEND_TAP_CARD"]
+        // SPEND_TAP_NTITLE/_NSUBTITLE/_NBODY fill Wallet's notification
+        // (iOS 27 Notification trigger, 2 Oct 2026): any one set makes it a
+        // notification run, which ignores the four tap fields.
+        let tapKeys = ["SPEND_TAP_TEXT", "SPEND_TAP_MERCHANT", "SPEND_TAP_AMOUNT", "SPEND_TAP_CARD",
+                       "SPEND_TAP_NTITLE", "SPEND_TAP_NSUBTITLE", "SPEND_TAP_NBODY"]
         if tapKeys.contains(where: { env[$0] != nil }) {
             let text = env["SPEND_TAP_TEXT"] ?? ""
             let merchant = env["SPEND_TAP_MERCHANT"] ?? ""
             let amount = env["SPEND_TAP_AMOUNT"] ?? ""
             let card = env["SPEND_TAP_CARD"] ?? ""
+            let notification = WalletNotification(title: env["SPEND_TAP_NTITLE"] ?? "",
+                                                  subtitle: env["SPEND_TAP_NSUBTITLE"] ?? "",
+                                                  body: env["SPEND_TAP_NBODY"] ?? "")
             let delay = env["SPEND_TAP_DELAY"].flatMap(Double.init) ?? 1
             let repeatCount = max(1, env["SPEND_TAP_REPEAT"].flatMap(Int.init) ?? 1)
             let gap = env["SPEND_TAP_GAP"].flatMap(Double.init) ?? 2
@@ -157,11 +164,13 @@ struct SpendApp: App {
             Task {
                 for i in 0..<repeatCount {
                     try? await Task.sleep(for: .seconds(i == 0 ? delay : gap))
-                    let r = await LogWalletTapIntent.performAndLog(transaction: text, amount: amount, merchant: merchant, card: card)
+                    let r = await LogWalletTapIntent.performAndLog(transaction: text, amount: amount, merchant: merchant,
+                                                                   card: card, notification: notification)
                     replayLog.log("""
                         call \(i + 1)/\(repeatCount): text="\(text, privacy: .public)" \
                         merchant="\(merchant, privacy: .public)" amount="\(amount, privacy: .public)" \
-                        card="\(card, privacy: .public)" -> transaction=\(r.transaction != nil, privacy: .public) \
+                        card="\(card, privacy: .public)" \
+                        notification="\(notification.seen, privacy: .public)" -> transaction=\(r.transaction != nil, privacy: .public) \
                         merged=\(r.merged, privacy: .public) saveFailed=\(r.saveFailed, privacy: .public) \
                         dialog="\(r.message, privacy: .public)"
                         """)

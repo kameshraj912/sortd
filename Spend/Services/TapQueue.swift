@@ -18,6 +18,10 @@ enum TapQueue {
         var amount: String?
         var card: String?
         var date: Date
+        /// `TapTrigger` raw value: "n" when Wallet's notification sent it
+        /// (its fields are then already read from the notification). Nil
+        /// means the tap trigger, as every entry before 2 Oct 2026.
+        var trigger: String? = nil
 
         /// Dedupe key: the exact text and time already queued, so a crash
         /// mid-append (or the same failed run reaching Sortd twice) never
@@ -72,9 +76,11 @@ enum TapQueue {
     /// Appends one tap. A duplicate (the exact same fields at the exact
     /// same moment already queued) is a no-op, not a second row.
     @discardableResult
-    static func enqueue(merchant: String?, amount: String?, card: String?, date: Date = .now, url: URL? = nil) -> [Entry] {
+    static func enqueue(merchant: String?, amount: String?, card: String?, date: Date = .now,
+                        trigger: TapTrigger = .tap, url: URL? = nil) -> [Entry] {
         var entries = read(from: url)
-        let entry = Entry(merchant: merchant, amount: amount, card: card, date: date)
+        let entry = Entry(merchant: merchant, amount: amount, card: card, date: date,
+                          trigger: trigger == .tap ? nil : trigger.rawValue)
         guard !entries.contains(where: { $0.key == entry.key }) else { return entries }
         entries.append(entry)
         write(entries, to: url)
@@ -87,8 +93,9 @@ enum TapQueue {
     /// automation never shows as failed.
     @MainActor
     @discardableResult
-    static func saveForLater(merchant: String?, amount: String?, card: String?, date: Date = .now, url: URL? = nil) async -> String {
-        enqueue(merchant: merchant, amount: amount, card: card, date: date, url: url)
+    static func saveForLater(merchant: String?, amount: String?, card: String?, date: Date = .now,
+                             trigger: TapTrigger = .tap, url: URL? = nil) async -> String {
+        enqueue(merchant: merchant, amount: amount, card: card, date: date, trigger: trigger, url: url)
         await Reminders.notifyTapQueued()
         return "Saved for later. Sortd will finish it when it next opens."
     }
@@ -126,7 +133,8 @@ enum TapQueue {
         for entry in entries {
             let outcome = try? await LogPurchaseIntent.handle(merchant: entry.merchant, amount: entry.amount, card: entry.card,
                                                               in: context, book: book, now: entry.date,
-                                                              debugForceSaveFailure: debugForceSaveFailure)
+                                                              debugForceSaveFailure: debugForceSaveFailure,
+                                                              trigger: entry.trigger.flatMap(TapTrigger.init(rawValue:)) ?? .tap)
             if let outcome, !outcome.saveFailed {
                 replayed += 1
             } else {
