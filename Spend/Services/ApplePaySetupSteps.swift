@@ -30,3 +30,37 @@ enum ApplePaySetupSteps {
         }
     }
 }
+
+// MARK: - Online payments (2 Oct 2026)
+
+extension ApplePaySetupSteps {
+    /// Step 3's words. With iOS 27's Notification trigger the shortcut has
+    /// two "When…" lines (the tap and Wallet's notification), each with its
+    /// own Automation switch. Before iOS 27 there is only the tap.
+    static func automationStep(notificationTrigger: Bool) -> (title: String, detail: String) {
+        notificationTrigger
+            ? ("Turn both automations on",
+               "In the shortcut, tap › next to each \u{201C}When…\u{201D} line and switch on Automation.")
+            : ("Turn the automation on",
+               "In the shortcut, tap › next to \u{201C}tapped\u{201D}, then switch on Automation.")
+    }
+
+    /// The quiet line under the steps: what the shortcut can see.
+    static func scopeLine(notificationTrigger: Bool) -> String {
+        notificationTrigger
+            ? "Taps in shops log from the tap. Payments in apps and on websites log from Wallet's notification, if your bank sends one."
+            : "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts."
+    }
+
+    /// Set the first time Get the Shortcut is tapped in a build whose
+    /// shortcut carries the notification trigger.
+    static let gotOnlineShortcutKey = "applePayGotOnlineShortcut"
+
+    static let updateLine = "Updated 2 Oct: get it again to log online payments too."
+
+    /// A shortcut added before 2 Oct only has the tap trigger. Once it is
+    /// connected, say so under step 1 until Get the Shortcut is tapped again.
+    static func showsUpdateLine(status: ApplePayStatus, gotNewShortcut: Bool) -> Bool {
+        status.isConnected && !gotNewShortcut
+    }
+}

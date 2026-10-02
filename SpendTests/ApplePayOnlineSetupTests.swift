@@ -1,0 +1,142 @@
+import Testing
+import Foundation
+import SwiftData
+@testable import Spend
+
+/// Apple Pay in apps and on websites (2 Oct 2026): the raw record, the
+/// setup words, and `Transaction.tapOrigins` surviving a backup and the
+/// tap queue.
+@MainActor
+struct ApplePayOnlineSetupTests {
+    private func store() -> ModelContext {
+        let container = try! ModelContainer(for: Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self,
+                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        return ModelContext(container)
+    }
+    private func book() -> CardBook { CardBook(defaults: UserDefaults(suiteName: "online-setup-\(UUID().uuidString)")!) }
+    private let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+    // MARK: - The raw "last tap received" record
+
+    @Test func aNotificationRunRecordsItsKindAndEveryField() {
+        let record = LogWalletTapIntent.record(transaction: nil, amount: "stray", merchant: "", card: "Wallet",
+                                               notification: WalletNotification(title: "NAB Visa Debit", subtitle: "DoorDash",
+                                                                                body: "A$23.40"),
+                                               at: now)
+        #expect(record.contains("notification run"))
+        #expect(record.contains("title \u{201C}NAB Visa Debit\u{201D}"))
+        #expect(record.contains("subtitle \u{201C}DoorDash\u{201D}"))
+        #expect(record.contains("body \u{201C}A$23.40\u{201D}"))
+        // The ignored tap fields still show, so a phone test can see them.
+        #expect(record.contains("amount \u{201C}stray\u{201D}"))
+        #expect(record.contains("card \u{201C}Wallet\u{201D}"))
+    }
+
+    /// A tap run says so, and keeps the shape `ApplePayStatus.settleTestTap`
+    /// looks for (`merchant “Sortd Test”`).
+    @Test func aTapRunRecordsItsKindAndKeepsTheMerchantShape() {
+        let record = LogWalletTapIntent.record(transaction: nil, amount: "A$4.50",
+                                               merchant: LogPurchaseIntent.legacyTestMerchant, card: "NAB Visa Debit",
+                                               notification: WalletNotification(), at: now)
+        #expect(record.hasPrefix(now.formatted(date: .abbreviated, time: .standard)))
+        #expect(record.contains("tap run"))
+        #expect(record.contains("merchant \u{201C}\(LogPurchaseIntent.legacyTestMerchant)\u{201D}"))
+        #expect(record.contains("title \u{201C}\u{201D}"))
+    }
+
+    // MARK: - Setup words
+
+    @Test func stepThreeAsksForBothAutomationsOnIOS27() {
+        let step = ApplePaySetupSteps.automationStep(notificationTrigger: true)
+        #expect(step.title == "Turn both automations on")
+        #expect(step.detail == "In the shortcut, tap › next to each \u{201C}When…\u{201D} line and switch on Automation.")
+        #expect(WalletSetupGuide.quickPages[2].title == step.title)
+        #expect(WalletSetupGuide.quickPages[2].detail == step.detail)
+    }
+
+    @Test func theScopeLineNamesAppsAndWebsitesOnIOS27() {
+        #expect(ApplePaySetupSteps.scopeLine(notificationTrigger: true)
+                == "Taps in shops log from the tap. Payments in apps and on websites log from Wallet's notification, if your bank sends one.")
+        #expect(ApplePaySetupSteps.scopeLine(notificationTrigger: false)
+                == "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts.")
+    }
+
+    /// Someone who added the shortcut before this change is told to get it
+    /// again, until they tap Get the Shortcut once.
+    @Test func theUpdateLineShowsOnlyForAnOldConnectedShortcut() {
+        let reached = ApplePayStatus.shortcutReached(now)
+        #expect(ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: false))
+        #expect(!ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: true))
+        #expect(!ApplePaySetupSteps.showsUpdateLine(status: .notConnected, gotNewShortcut: false))
+        #expect(ApplePaySetupSteps.showsUpdateLine(status: .tapNeedsCheck(date: now), gotNewShortcut: false))
+        #expect(ApplePaySetupSteps.updateLine == "Updated 2 Oct: get it again to log online payments too.")
+    }
+
+    // MARK: - tapOrigins
+
+    @Test func originsAreAlwaysWrittenTapThenNotification() {
+        let t = Transaction(date: now, merchant: "Seven Seeds", amount: 5, currencyCode: "AUD", card: .other,
+                            category: .eatingOut, source: .tap)
+        t.tapOrigins = "n"
+        t.markOrigin(.tap)
+        #expect(t.tapOrigins == "tn")
+        t.markOrigin(.notification)
+        #expect(t.tapOrigins == "tn")
+    }
+
+    /// A notification that folds into an email receipt row (not a tap row)
+    /// marks it "n" only — the email row was never a tap.
+    @Test func aNotificationMergedIntoAnEmailRowIsMarkedNotificationOnly() async throws {
+        let ctx = store(), b = book()
+        try TransactionLogger.log(IncomingPurchase(date: now.addingTimeInterval(-3600), merchant: "DoorDash", amount: 23.4,
+                                                   currency: "AUD", card: .other, source: .email), in: ctx)
+        let r = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "",
+                                                    notificationTitle: "", notificationSubtitle: "DoorDash",
+                                                    notificationBody: "A$23.40", in: ctx, book: b, now: now)
+        #expect(r.merged)
+        let all = try ctx.fetch(FetchDescriptor<Transaction>())
+        #expect(all.count == 1)
+        #expect(all.first?.tapOrigins == "n")
+        #expect(all.first?.seenIn.contains(.tap) == true)
+    }
+
+    @Test func aBackupKeepsTapOrigins() async throws {
+        let ctx = store(), b = book()
+        _ = try await LogWalletTapIntent.handle(nil, amount: "A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                                                in: ctx, book: b, now: now)
+        _ = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "",
+                                                notificationTitle: "NAB Visa Debit", notificationSubtitle: "Seven Seeds",
+                                                notificationBody: "A$5.50", in: ctx, book: b, now: now.addingTimeInterval(3))
+        let data = try Backup.encode(try Backup.snapshot(in: ctx))
+        let restored = store()
+        try Backup.restore(data, mode: .merge, into: restored,
+                           defaults: UserDefaults(suiteName: "online-restore-\(UUID().uuidString)")!, cardBook: book())
+        let rows = try restored.fetch(FetchDescriptor<Transaction>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.tapOrigins == "tn")
+    }
+
+    /// A backup from before `tapOrigins` existed still restores.
+    @Test func anOldBackupWithNoOriginsStillRestores() throws {
+        let json = """
+        {"format":"sortd.backup","version":1,"createdAt":"2026-09-30T01:00:00Z","settings":{},"cards":[],"rules":[],"transactions":[
+        {"id":"\(UUID().uuidString)","date":"2026-09-30T01:00:00Z","merchant":"Coles","rawMerchant":"Coles",
+         "amount":12.5,"currencyCode":"AUD","card":"other","category":"groceries","source":"tap","seenIn":"tap",
+         "note":"","createdAt":"2026-09-30T01:00:00Z","refunded":false}]}
+        """
+        let snapshot = try Backup.decode(Data(json.utf8))
+        #expect(snapshot.transactions.first?.tapOrigins == nil)
+    }
+
+    @Test func aQueuedNotificationReplaysAsANotificationRow() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "online-queue-\(UUID().uuidString).json")
+        TapQueue.enqueue(merchant: "DoorDash", amount: "A$23.40", card: "NAB Visa Debit", date: now,
+                         trigger: .notification, url: url)
+        #expect(TapQueue.read(from: url).first?.trigger == "n")
+        let ctx = store()
+        let result = await TapQueue.replay(in: ctx, book: book(), url: url)
+        #expect(result.replayed == 1)
+        let rows = try ctx.fetch(FetchDescriptor<Transaction>())
+        #expect(rows.first?.tapOrigins == "n")
+    }
+}

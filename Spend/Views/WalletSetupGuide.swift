@@ -33,8 +33,8 @@ struct WalletSetupGuide: View {
              detail: "Opens Shortcuts. Tap Add Shortcut."),
         Page(id: 1, title: "Run it once and tap Allow",
              detail: "Press ▶ in the shortcut. Sortd says it's connected."),
-        Page(id: 2, title: "Turn the automation on",
-             detail: "Tap › next to “tapped”, then switch on Automation."),
+        Page(id: 2, title: ApplePaySetupSteps.automationStep(notificationTrigger: true).title,
+             detail: ApplePaySetupSteps.automationStep(notificationTrigger: true).detail),
     ]
 
     /// The long way, for anyone who would rather not install a shortcut.
@@ -225,49 +225,46 @@ struct ShortcutsMock: View {
         }
     }
 
-    /// (c) The trigger card expanded: Categories and Merchants left as the
-    /// shortcut ships them, Automation switched on (ringed).
+    /// (c) Both "When…" cards the shortcut carries since 2 Oct 2026 — the
+    /// tap at a till and Wallet's notification (apps and websites) — each
+    /// with its own Automation switch on (ringed, numbered in turn).
     private var automationSwitch: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            trigger
-            VStack(spacing: 0) {
-                pickRow("Categories", value: "Food & Drink and 5 more")
-                Divider().padding(.leading, 12)
-                pickRow("Merchants", value: "Any Merchant")
-                Divider().padding(.leading, 12)
-                HStack {
-                    Text("Automation").font(.subheadline)
-                    Spacer(minLength: 0)
-                    Capsule().fill(Self.blue).frame(width: 44, height: 26)
-                        .overlay(alignment: .trailing) {
-                            Circle().fill(.white).padding(2)
-                        }
-                }
-                .lineLimit(1)
-                .padding(.horizontal, 12).padding(.vertical, 10)
-                .tapRing(ring, label: nil)
-            }
-            .background(Color(uiColor: .secondarySystemGroupedBackground),
-                        in: .rect(cornerRadius: 14, style: .continuous))
+        VStack(alignment: .leading, spacing: 10) {
+            switchCard(trigger: trigger, order: "1")
+            switchCard(trigger: notificationTrigger, order: "2")
             Spacer(minLength: 0)
         }
     }
 
-    /// A settings row: a label on the left, its value on the right, and an
-    /// optional checkmark for the by-hand route's own choices.
-    private func pickRow(_ title: String, value: String? = nil, chosen: Bool = false) -> some View {
-        HStack(spacing: 10) {
-            Text(title).font(.subheadline)
-            Spacer(minLength: 0)
-            if let value {
-                Text(value).font(.subheadline).foregroundStyle(.secondary)
+    /// A "When…" card with its Automation switch on.
+    private func switchCard(trigger: some View, order: String) -> some View {
+        VStack(spacing: 0) {
+            trigger
+            Divider().padding(.leading, 12)
+            HStack {
+                Text("Automation").font(.subheadline)
+                Spacer(minLength: 0)
+                Capsule().fill(Self.blue).frame(width: 44, height: 26)
+                    .overlay(alignment: .trailing) {
+                        Circle().fill(.white).padding(2)
+                    }
+                    .tapRing(ring, label: order)
             }
-            if chosen {
-                Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Self.blue)
-            }
+            .lineLimit(1)
+            .padding(.horizontal, 12).padding(.vertical, 8)
         }
-        .lineLimit(1)
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color(uiColor: .secondarySystemGroupedBackground),
+                    in: .rect(cornerRadius: 14, style: .continuous))
+    }
+
+    /// The second "When…" line: Wallet's notification (iOS 27).
+    private var notificationTrigger: some View {
+        card {
+            Image(systemName: "app.badge.fill").foregroundStyle(Self.blue)
+            Text("When").font(.subheadline)
+            Text("Wallet").font(.subheadline).foregroundStyle(Self.blue)
+            Text("sends a notification").font(.subheadline)
+        }
     }
 
     // MARK: Screens
