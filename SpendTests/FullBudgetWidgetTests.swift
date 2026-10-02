@@ -42,8 +42,7 @@ import Foundation
     /// month). February (28 days) rolling into March (31 days) keeps
     /// February's per-day figure until the app is next opened to rebuild it —
     /// a stale number shown as if it were today's.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("dayAllowance is not recomputed when asOf rolls the summary into a new month"))
+    @Test
     func dayAllowanceIsRecomputedForTheNewMonth() {
         let cal = melbourne()
         var s = WidgetSummary()
