@@ -145,6 +145,11 @@ final class CloudBackup {
     /// uploads; if it moved by the end, the upload holds wiped data and must
     /// not stay in iCloud.
     @ObservationIgnored private var resets = 0
+    /// Counts saves seen by `scheduleBackup`. A backup notes it when it takes
+    /// its snapshot; if it moved by the end of the upload, a purchase saved
+    /// mid-upload isn't in this copy, so another backup is scheduled. (The
+    /// save's own scheduled backup found this one busy and gave up.)
+    @ObservationIgnored private var changes = 0
 
     init(store: CloudBackupStore, keys: BackupKeyStore,
          defaults: UserDefaults = .standard, clock: @escaping () -> Date = { Date() }) {
@@ -187,6 +192,7 @@ final class CloudBackup {
     func scheduleBackup(from context: ModelContext) {
         guard isEnabled else { return }
         dirty = true
+        changes += 1
         pending?.cancel()
         pending = Task { [weak self] in
             guard let self else { return }
@@ -241,6 +247,9 @@ final class CloudBackup {
 
     private func backUp(from context: ModelContext, automatic: Bool) async throws {
         let resetsAtStart = resets
+        // The snapshot below is taken with no wait before it, so every save
+        // counted after this line is missing from it.
+        let changesAtSnapshot = changes
         status = .backingUp
         do {
             let snapshot = try Backup.snapshot(in: context, defaults: defaults)
@@ -279,6 +288,8 @@ final class CloudBackup {
             lastBackup = now
             dirty = false
             status = .idle
+            // Saved while this was uploading: back that up too.
+            if changes != changesAtSnapshot { scheduleBackup(from: context) }
         } catch {
             // A backup of wiped data failed: nothing to pause or retry.
             guard resets == resetsAtStart else {

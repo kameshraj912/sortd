@@ -369,13 +369,11 @@ struct FullDataBackupFidelityTests {
     @MainActor private final class ClockBox { var now: Date; init(_ d: Date) { now = d } }
 
     /// A purchase is saved while a backup is mid-upload. The snapshot was
-    /// taken before it, so the upload cannot hold it. Today the end of the
-    /// upload marks the store "clean" (`dirty = false`) and the save's own
-    /// scheduled backup found the cloud busy and gave up, so nothing is
-    /// scheduled: that purchase is missing from iCloud until some later save.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a purchase saved during a backup upload is never backed up until another save happens"))
-    func aPurchaseSavedDuringAnUploadIsBackedUpAfterwards() async throws {
+    /// taken before it, so the upload cannot hold it. The end of the upload
+    /// used to mark the store "clean" (`dirty = false`) while the save's own
+    /// scheduled backup had found the cloud busy and given up, so nothing was
+    /// scheduled: that purchase was missing from iCloud until some later save.
+    @Test func aPurchaseSavedDuringAnUploadIsBackedUpAfterwards() async throws {
         let holding = HoldingCloudStore()
         let keys = FakeBackupKeyStore()
         let defaults = scratch()
