@@ -56,6 +56,10 @@ Ask Raj, **one question at a time**, only for what is missing:
    - `## Status`: the date and "untriaged".
 8. Show Raj the table and the counts. Commit the doc and the known-bug tests on
    `hunt-<YYYYMMDD>` only when he says so.
+9. Free the disk before the session ends (CLAUDE.md "6. Finish"). Copy any screenshots
+   Raj wants out of `.build/ui/`, then `scripts/worktree-done.sh ui-<YYYYMMDD>` and
+   `scripts/worktree-park.sh hunt-<YYYYMMDD>` (done, not park, once the hunt branch is
+   merged). Two worktrees with simulators are ~22 GB left behind otherwise.
 
 ## Output
 
