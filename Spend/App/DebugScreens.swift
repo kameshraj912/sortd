@@ -57,6 +57,7 @@ struct DebugScreenHost: View {
             case "privacy": PrivacyView()
             case "privacy-security": PrivacySecuritySettingsView()
             case "backup": BackupDataSettingsView()
+            case "purchase-sources": PurchaseSourcesSettingsView()
             case "help": HelpFeedbackSettingsView()
             case "about": AboutSettingsView()
             case "import": Color.page.sheet(isPresented: .constant(true)) { ImportView() }
