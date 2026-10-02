@@ -14,7 +14,6 @@ optional; every screen works without them.
 
 What it does today:
 - Logs Apple Pay taps through one Shortcuts automation. Setup shows a picture for each step.
-- Reads receipts and bank alerts from Gmail, on your phone. Read-only.
 - Scans paper receipts with the camera.
 - Imports a CSV or PDF statement, or a screenshot of your bank app.
 - Shows the month by category and by card, in your home currency.
@@ -38,19 +37,16 @@ Thanks for trying Sortd. Three things matter most this round.
    a minute, with the right shop, amount and card? If not, send the Last Tap Received text from
    that Settings page.
 
-2. Gmail. Connect your Gmail, wait for the sync, then check a few purchases against the real
-   emails. Wrong amount, wrong shop, a refund counted as spending, or a receipt it missed: tell
-   us which sender.
+2. Receipts and statements. Scan two or three paper receipts, then import a CSV or PDF
+   statement. Check the amount, the shop and the date. Wrong total, a missed line, or a refund
+   counted as spending: tell us which shop or bank.
 
 3. Sign-in and iCloud backup. Sign in with Apple or Google, turn on Back up to iCloud, then
    restore on the same phone. Anything missing after Restore is a bug. Sign Out and Delete
    Account should both work without touching your purchases unless you choose to.
 
-Also worth a look: the setup flow on a fresh install, the receipt camera, Dark Mode and the
-largest text size in Settings › Accessibility.
-
-Gmail is still under Google review, so Connect Gmail works only for the address you gave us
-when you signed up, and Google shows an "unverified app" screen first. Both are expected.
+Also worth a look: the setup flow on a fresh install, Dark Mode and the largest text size in
+Settings › Accessibility.
 
 Sessions are recorded during the beta (Settings › Privacy has the switch), with text fields
 like the amount, shop and note masked before anything leaves your phone.

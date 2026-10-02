@@ -8,26 +8,21 @@ struct SetupFlow: Equatable {
     /// Nothing is asked for before the app has earned it.
     enum Step: Int, CaseIterable, Sendable {
         case welcome, account, goals, payment, currency, budget, checkIn, building, plan
-        case cards, applePay, email
+        case cards, applePay
     }
 
     var goals: Set<SetupProfile.Goal> = []
     var payment: SetupProfile.Payment?
     var hasCards = false
-    /// The Gmail feature is switched on in this build.
-    var gmailFeature = false
     /// Sign in with Apple / Google is switched on in this build (needs the
     /// paid developer account's capability; see `Features.signIn`).
     var signInFeature = false
-
-    var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
 
     func isShown(_ s: Step) -> Bool {
         switch s {
         case .account: signInFeature
         case .budget: goals.contains(.spendLess)
         case .applePay: payment != .cash
-        case .email: gmailFeature && wantsGmail
         default: true
         }
     }
@@ -83,14 +78,13 @@ extension SetupFlow {
         /// purchase), never during setup.
         let checkIn: SetupProfile.CheckIn
         let goals: Set<SetupProfile.Goal>
-        let wantsGmail: Bool
     }
 
     /// The phone's own currency when daily rates exist for it, no limit,
-    /// a Sunday recap, no goals, no Gmail.
+    /// a Sunday recap, no goals.
     static func defaults(locale: Locale) -> Defaults {
         Defaults(currency: Money.detectedHome(for: locale),
-                 budget: 0, checkIn: .sunday, goals: [], wantsGmail: false)
+                 budget: 0, checkIn: .sunday, goals: [])
     }
 
     /// Nothing in setup is a required field: Continue always works, whatever

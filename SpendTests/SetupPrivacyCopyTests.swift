@@ -43,16 +43,6 @@ struct SetupPrivacyCopyTests {
         #expect(SetupCopy.welcomePrivacy.detail.lowercased().contains("purchases"))
     }
 
-    /// Gmail really is read on the phone: that claim stays.
-    @Test func theGmailLinesStillSayEmailIsReadOnTheIPhone() {
-        #expect(SetupCopy.gmailOnDevice.contains("iPhone"))
-        #expect(SetupCopy.gmailOnDevice.lowercased().contains("read"))
-        #if !SORTD_ICLOUD
-        #expect(SetupCopy.emailLine.contains("iPhone"))
-        #expect(SetupCopy.emailLine.lowercased().contains("read"))
-        #endif
-    }
-
     /// Short and plain: one line on a phone screen, two at most.
     @Test func everyPrivacyLineIsShort() {
         for line in SetupCopy.privacyLines {

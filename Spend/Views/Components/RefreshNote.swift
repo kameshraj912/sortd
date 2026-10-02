@@ -3,10 +3,8 @@ import SwiftData
 
 /// What a pull-to-refresh actually did.
 ///
-/// Home and Activity both used to run the sync and throw the result away, so
-/// the one gesture people repeat every day ended with the screen looking
-/// exactly as it did before — the same whether three purchases arrived, none
-/// did, or the sync failed.
+/// Home and Activity both refresh exchange rates on pull-down; this gives that
+/// gesture an answer, so the screen never looks exactly as it did before.
 struct RefreshNote: Equatable {
     let text: String
     let ok: Bool
@@ -14,19 +12,8 @@ struct RefreshNote: Equatable {
     /// Runs the whole refresh and says how it went.
     @MainActor
     static func run(in context: ModelContext) async -> RefreshNote {
-        let summary = await GmailSync.syncAll(in: context)
         await FXService.ensureConverted(in: context)
-
-        if summary.failed > 0 {
-            return RefreshNote(text: "Couldn't check your email. Pull down to try again.", ok: false)
-        }
-        if !Features.gmail || GmailSync.accounts.isEmpty {
-            // Nothing to sync is not a failure, and saying "0 new" would be
-            // misleading when no inbox is connected at all.
-            return RefreshNote(text: "Up to date", ok: true)
-        }
-        let found = summary.added + summary.merged + summary.refunds
-        return RefreshNote(text: found == 0 ? "No new receipts" : summary.text, ok: true)
+        return RefreshNote(text: "Up to date", ok: true)
     }
 }
 

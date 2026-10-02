@@ -154,7 +154,7 @@ struct LogPurchaseIntent: AppIntent {
             // total goes down. Refunds can take weeks, so look back 60 days.
             if refund, let p = parsed, p.amount > 0 {
                 let currency = p.currency ?? LocalCurrency.current()
-                if EmailSync.markRefunded(amount: p.amount, currency: currency, card: cardID, merchant: name,
+                if Refunds.markRefunded(amount: p.amount, currency: currency, card: cardID, merchant: name,
                                           platform: nil, before: now, lookbackDays: 60, in: context) {
                     try context.save()
                     return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
@@ -162,7 +162,7 @@ struct LogPurchaseIntent: AppIntent {
                 }
                 // No whole purchase matches: maybe this refund is only part of a
                 // bigger one (one returned item from a A$59.90 basket).
-                if let reduced = EmailSync.markPartiallyRefunded(amount: p.amount, currency: currency, card: cardID,
+                if let reduced = Refunds.markPartiallyRefunded(amount: p.amount, currency: currency, card: cardID,
                                                                  merchant: name, platform: nil, before: now,
                                                                  lookbackDays: 60, in: context) {
                     try context.save()

@@ -110,6 +110,12 @@ Every piece gets two versions.
 - **Spicy:** full roast, fourth wall, weird format. For TikTok, Reels, X, Threads.
 - **Mild:** same idea, one light jab, clear benefit. For LinkedIn, App Store text, emails, anything Raj's supervisor or a bank partner might read.
 
+### The three lines (set 2 Oct 2026)
+- Headline, says what it does: "Tap to pay. Sortd writes it down."
+- Sign-off (end cards, footers, last line of a post, end of setup): "Consider it Sortd."
+- After a tap logs (first-purchase card, a Reel's reveal): "You've been Sortd."
+- Always spelt Sortd, never "sorted". Never "Get Sortd" (a registered Australian trade mark).
+
 ### Examples from the live site (the benchmark)
 - "Tap to pay. Sortd writes it down."
 - "Most budgets die by February."

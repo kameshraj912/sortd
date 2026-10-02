@@ -10,7 +10,7 @@ import PhotosUI
 ///
 /// Nothing saves until you have seen the list and tapped Add. Everything
 /// goes through `TransactionLogger`, so a purchase already logged from an
-/// Apple Pay tap or a Gmail receipt is matched and merged, not doubled.
+/// Apple Pay tap is matched and merged, not doubled.
 struct ImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
