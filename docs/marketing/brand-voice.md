@@ -46,8 +46,14 @@ Every joke has to rest on something true. Before posting, check that each claim 
 - **Brand colours:** orange `#f0643d`, amber `#f5a623`, violet `#7b6bf0`, green `#2bb07a`. Font: Inter Tight, weight 800.
 
 ## Calls to action
-Pick one: "Free beta. Link in bio." · "Join the beta: sortd.page" · "Tap to pay. Sortd writes it down."
+Pick one: "Free beta. Link in bio." · "Join the beta: sortd.page" · "Tap to pay. Sortd writes it down." Then close with the sign-off: "Consider it Sortd."
 Never "Download now!!", "Don't miss out" or countdown pressure.
+
+## The three lines (set 2 Oct 2026)
+- **Headline, says what it does:** "Tap to pay. Sortd writes it down." (won the five-persona review.)
+- **Sign-off:** "Consider it Sortd." End cards, the site footer, the last line of a post, the end of setup.
+- **After a tap logs:** "You've been Sortd." Only where something has just happened: the first-purchase card, a reel's reveal.
+- Always spelt **Sortd**, never "sorted". Never "Get Sortd": that is a registered Australian trade mark (see Brand/README.md).
 
 ## Cast
 See `cast.md`. Mitch is the recurring face: a relaxed Melbourne guy, dry, openly AI.

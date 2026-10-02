@@ -18,7 +18,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## Promotional text (170)
 
-Pay with Apple Pay. Sortd writes it down. No bank login, no account. Purchases stay on your iPhone.
+Pay with Apple Pay. Sortd writes it down. No bank login, no account. Purchases stay on your iPhone. Consider it Sortd.
 
 ## Description (4000)
 

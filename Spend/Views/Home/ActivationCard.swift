@@ -37,12 +37,12 @@ struct ActivationCard: View {
                         .font(.title2)
                         .foregroundStyle(Color.up)
                         .symbolEffect(.bounce, value: celebrated)
-                    Text("Logged by itself. That's Sortd working.")
+                    Text("Logged by itself. You've been Sortd.")
                         .font(.headline)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Logged by itself. That's Sortd working.")
+                .accessibilityLabel("Logged by itself. You've been Sortd.")
 
                 Divider()
 
