@@ -257,20 +257,45 @@ struct FullDataBackupFidelityTests {
 
     /// Dates far outside any real life (1900, 2200) in a hand-edited backup.
     /// The statement importer is meant to refuse these (`absurdDatesAreNotImported`).
-    /// A backup written by Sortd never has them, so this is low priority and
-    /// the router and Raj decide whether restore should too.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("restore accepts purchases dated 1900 or 2200 from a hand-edited backup"))
-    func absurdDatesInABackupAreNotRestored() throws {
+    /// Restore now refuses them too (before 2000, or over a year ahead) and
+    /// counts them, so the restore message can say how many were skipped.
+    @Test func absurdDatesInABackupAreNotRestored() throws {
         let y1900 = Date(timeIntervalSince1970: -2_208_988_800)
         let y2200 = Date(timeIntervalSince1970: 7_258_118_400)
         var snap = Backup.Snapshot()
         snap.transactions = [row(merchant: "Old", date: y1900), row(merchant: "Future", date: y2200),
                              row(merchant: "Real", date: t0)]
         let ctx = try store()
-        try Backup.restore(try Backup.encode(snap), mode: .merge, into: ctx,
-                           defaults: scratch(), cardBook: book())
+        let result = try Backup.restore(try Backup.encode(snap), mode: .merge, into: ctx,
+                                        defaults: scratch(), cardBook: book())
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
+        #expect(result.added == 1)
+        #expect(result.badDates == 2)
+        #expect(result.summary.contains("2 rows skipped"))
+    }
+
+    /// The iCloud restore keeps the count, for its message.
+    @Test func anICloudRestoreCountsRowsWithImpossibleDates() async throws {
+        var snap = Backup.Snapshot()
+        snap.transactions = [row(merchant: "Old", date: Date(timeIntervalSince1970: -2_208_988_800)),
+                             row(merchant: "Real", date: t0)]
+        let keys = FakeBackupKeyStore()
+        keys.key = SymmetricKey(size: .bits256)
+        let cloudStore = FakeCloudBackupStore()
+        cloudStore.saved = (try CloudBackup.encrypt(try Backup.encode(snap), with: keys.key!), t0)
+        let cloud = CloudBackup(store: cloudStore, keys: keys, defaults: scratch(), clock: { self.t0 })
+        let added = try await cloud.restore(into: try store(), mode: .merge)
+        #expect(added == 1)
+        #expect(cloud.lastRestoreBadDates == 1)
+    }
+
+    /// The edges: 2000 and a year ahead are kept; just outside is not.
+    @Test func theRestoreDateRangeRunsFrom2000ToAYearAhead() {
+        let now = t0
+        #expect(Backup.plausible(Backup.earliestDate, now: now))
+        #expect(!Backup.plausible(Backup.earliestDate.addingTimeInterval(-1), now: now))
+        #expect(Backup.plausible(now.addingTimeInterval(365 * 24 * 3600), now: now))
+        #expect(!Backup.plausible(now.addingTimeInterval(367 * 24 * 3600), now: now))
     }
 
     // MARK: - A big history
@@ -282,7 +307,8 @@ struct FullDataBackupFidelityTests {
         var snap = Backup.Snapshot()
         snap.transactions = (0..<20_000).map { i in
             row(merchant: "Shop \(i)", amount: Decimal(i % 500) + 1,
-                date: t0.addingTimeInterval(Double(i) * 3600), homeAmount: Decimal(i % 500) + 1)
+                // Hours back from t0 (to 2024): restore refuses dates over a year ahead.
+                date: t0.addingTimeInterval(-Double(i) * 3600), homeAmount: Decimal(i % 500) + 1)
         }
         let from = try store()
         try Backup.restore(try Backup.encode(snap), mode: .replace, into: from,
