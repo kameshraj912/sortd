@@ -1,17 +1,18 @@
 # Sortd — iPhone spending tracker (repo folder is `Spend`)
 
-Logs Apple Pay taps, reads receipts from Gmail and the camera, and shows where the
+Logs Apple Pay taps, reads receipts with the camera, imports statements, and shows where the
 money goes. Multi-currency (AUD, SGD and others) with on-device FX. Purchases stay on the
 phone. What leaves it: opt-out usage counts and crash reports (off by default in the EU/UK),
 the optional iCloud copy, and the account Worker (`worker/`) that only deletes accounts.
 
-**Status (26 Sep 2026):** heading for TestFlight. The paid Apple Developer account is active
+**Status (2 Oct 2026):** heading for TestFlight. The paid Apple Developer account is active
 (team 7CLGYQ9P3L) with iCloud, Sign in with Apple and App Attest on the App ID. Site is live at sortd.page.
-Google OAuth restricted-scope review submitted 20 Sep 2026. The app is free since 25 Sep 2026.
+The app is free since 25 Sep 2026. Gmail receipts were removed on 2 Oct 2026 (Google wants a paid yearly
+security assessment for the Gmail scope); "Continue with Google" stays as an optional sign-in.
 
 - Store readiness: `docs/AppStoreChecklist.md` (read the top section before any App Store build)
 - Listing copy: `docs/AppStoreListing.md` · Review notes: `docs/AppReviewNotes.md`
-- Google: `docs/GoogleVerification.md` · Brand and trademark: `Brand/README.md`
+- Google (withdrawn): `docs/GoogleVerification.md` · Brand and trademark: `Brand/README.md`
 - Before any upload: `scripts/preflight.sh` (add `--appstore` for a store build)
 
 ## Several Claude sessions at once — read before editing
@@ -73,7 +74,7 @@ Full design: `docs/AgentPipeline.md`.
   in Settings › Accounts to refresh the profile. `SORTD_SIGNIN` and `SORTD_ICLOUD` are on in both configs.
 
 ## Tip jar
-Everything is free forever: Gmail, the receipt camera, Insights, Subscriptions & bills,
+Everything is free forever: the receipt camera, Insights, Subscriptions & bills,
 and category budgets included. Settings › About shows a "Leave a tip" row only once the three
 consumable tips exist in App Store Connect (`TipJar` loads them; empty means no row). StoreKit 2
 stays in the app only for that.
@@ -83,7 +84,7 @@ stays in the app only for that.
 ## Layout
 - `Spend/App` — app entry, tabs, DEBUG sample data.
 - `Spend/Models` — SwiftData models (`Transaction`, `MerchantRule`, `FXRate`), enums (`Card`, `SpendCategory`, `TxnSource`), bank presets.
-- `Spend/Services` — parsing, categorising, de-duplication, FX, Gmail, receipts, Pro, app lock.
+- `Spend/Services` — parsing, categorising, de-duplication, FX, receipts, Pro, app lock.
 - `Spend/Intents` — `LogPurchaseIntent`, `LogWalletTapIntent`, and the Siri question intents.
 - `Spend/Views` — SwiftUI screens; `Views/Components` holds shared rows and badges.
 - `SpendTests` — unit tests for the pure logic and the StoreKit flows.
@@ -94,7 +95,7 @@ stays in the app only for that.
 - Enums are stored as raw strings (`cardRaw`, `categoryRaw`, `sourceRaw`) so SwiftData predicates work.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.
-- No bank passwords, no screen scraping. Secrets (the Google refresh token) go in the Keychain, never in git.
+- No bank passwords, no screen scraping. Secrets (the account's Google sign-in token) go in the Keychain, never in git.
 - Debug-only escapes (`SPEND_DEMO`, `SPEND_REEL_TAP`, `SPEND_OLD_SETUP` for the old setup flow, `SPEND_ACTIVITY_LIST` for the old Activity list, `SPEND_FOUNDER_NOTE` for the founder's note, `SPEND_TAP_TEXT`/`SPEND_TAP_MERCHANT`/`SPEND_TAP_AMOUNT`/`SPEND_TAP_CARD`/`SPEND_TAP_DELAY`/`SPEND_TAP_REPEAT`/`SPEND_TAP_GAP` for the Apple Pay tap-replay hook) stay inside `#if DEBUG`.
 - The project uses folder-synced groups: new files under `Spend/` are picked up with no pbxproj edits.
 

@@ -1,5 +1,10 @@
 # Google verification — Sortd (gmail.readonly)
 
+> **Withdrawn 2 Oct 2026: Gmail removed from the app; CASA not pursued.** Google approves
+> `gmail.readonly` only after a paid yearly security assessment (about US$855 a year), with no free
+> route. Everything below is kept as history. The app now asks Google for `openid` and `email`
+> only, for the optional "Continue with Google" sign-in.
+
 Everything to paste into Google Cloud for the restricted-scope review. Project: `sortd-509110`.
 Written 19 Sep 2026. Check Google's current form before submitting; field names can change:
 https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification

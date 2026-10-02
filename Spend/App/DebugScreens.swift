@@ -53,11 +53,11 @@ struct DebugScreenHost: View {
                     }
                 }
             case "tip": Color.page.sheet(isPresented: .constant(true)) { TipJarView() }
-            case "gmail-connect": Color.page.sheet(isPresented: .constant(true)) { ConnectGmailSheet() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }
             case "privacy": PrivacyView()
             case "privacy-security": PrivacySecuritySettingsView()
             case "backup": BackupDataSettingsView()
+            case "purchase-sources": PurchaseSourcesSettingsView()
             case "help": HelpFeedbackSettingsView()
             case "about": AboutSettingsView()
             case "import": Color.page.sheet(isPresented: .constant(true)) { ImportView() }

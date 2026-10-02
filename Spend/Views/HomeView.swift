@@ -76,12 +76,6 @@ struct HomeView: View {
                                 FinishSetupCard()
                                 ApplePayNudgeCard()
                             }
-                            // Never on top of the Activation card: it always
-                            // sits after both, whether or not they're on
-                            // screen. Shows in demo data too (a receipt with
-                            // digits none of the sample cards have is still
-                            // a real thing to ask about).
-                            WhichCardCard()
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
                             cards
@@ -107,8 +101,6 @@ struct HomeView: View {
                 }
             }
             .background(Color.page)
-            // A Gmail connect or sync that's still going, or that stopped.
-            .safeAreaInset(edge: .bottom) { GmailStatusBanner() }
             .navigationTitle("Home")
             // Home draws its own title; the bar only carries the gear.
             .navigationBarTitleDisplayMode(.inline)

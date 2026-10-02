@@ -111,7 +111,7 @@ enum FXService {
         }
     }
 
-    /// A backfill already running. Launch, a Gmail sync and an import can
+    /// A backfill already running. Launch, a refresh and an import can
     /// all ask at once; they share one pass instead of racing each other.
     private static var running: Task<Outcome, Never>?
 

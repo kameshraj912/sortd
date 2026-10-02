@@ -11,21 +11,18 @@ import Foundation
 ///     struct SetupFlow: Equatable {
 ///         enum Step: Int, CaseIterable, Sendable {
 ///             case welcome, account, goals, payment, currency, budget, checkIn, building, plan
-///             case cards, applePay, email
+///             case cards, applePay
 ///         }
 ///         var goals: Set<SetupProfile.Goal> = []
 ///         var payment: SetupProfile.Payment?
 ///         var hasCards = false
-///         var gmailFeature = false
 ///         var signInFeature = false
 ///         // no `isPro`
-///         var wantsGmail: Bool { payment == .online || goals.contains(.receipts) }
 ///         func isShown(_ s: Step) -> Bool {
 ///             switch s {
 ///             case .account: signInFeature
 ///             case .budget: goals.contains(.spendLess)
 ///             case .applePay: payment != .cash
-///             case .email: gmailFeature && wantsGmail   // no isPro
 ///             default: true
 ///             }
 ///         }
@@ -39,7 +36,7 @@ struct SetupFlowTests {
     typealias Step = SetupFlow.Step
 
     private func tasks(_ flow: SetupFlow) -> [SetupTask] {
-        SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards, tapped: false, widgetAdded: false, gmailConnected: false)
+        SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards, tapped: false, widgetAdded: false)
     }
 
     // MARK: The checklist on the plan and on Home
@@ -49,12 +46,12 @@ struct SetupFlowTests {
         let fresh = tasks(flow)
         #expect(SetupChecklist.doneCount(fresh) == 1)      // answering the questions
         #expect(!SetupChecklist.isComplete(fresh))
-        let set = SetupChecklist.tasks(flow: flow, hasCards: true, tapped: true, widgetAdded: false, gmailConnected: false)
+        let set = SetupChecklist.tasks(flow: flow, hasCards: true, tapped: true, widgetAdded: false)
         #expect(SetupChecklist.isComplete(set))
         // A cash user is done once the widget is on the Home Screen, not by tapping.
         let cash = SetupFlow(payment: .cash)
-        #expect(!SetupChecklist.isComplete(SetupChecklist.tasks(flow: cash, hasCards: true, tapped: true, widgetAdded: false, gmailConnected: false)))
-        #expect(SetupChecklist.isComplete(SetupChecklist.tasks(flow: cash, hasCards: true, tapped: false, widgetAdded: true, gmailConnected: false)))
+        #expect(!SetupChecklist.isComplete(SetupChecklist.tasks(flow: cash, hasCards: true, tapped: true, widgetAdded: false)))
+        #expect(SetupChecklist.isComplete(SetupChecklist.tasks(flow: cash, hasCards: true, tapped: false, widgetAdded: true)))
     }
 
     // MARK: People
@@ -77,21 +74,13 @@ struct SetupFlowTests {
         #expect(flow.counter(.checkIn) == "Question 4 of 4")
     }
 
-    /// A person whose goals want receipts, with Gmail switched on in this
-    /// build, sees the email step -- with no Pro condition anywhere.
-    @Test func receiptsGoalWithGmailFeatureShowsTheEmailStep() {
-        let flow = SetupFlow(goals: [.receipts], payment: .online, hasCards: true, gmailFeature: true)
+    /// Gmail receipts are gone (2 Oct 2026): a receipts goal or online
+    /// shopping adds no step and no chore. The flow ends on Apple Pay.
+    @Test func receiptsGoalAddsNoEmailStep() {
+        let flow = SetupFlow(goals: [.receipts], payment: .online, hasCards: true)
         #expect(flow.path == [.welcome, .goals, .payment, .currency, .checkIn, .building, .plan,
-                              .cards, .applePay, .email])
-        #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay", "gmail"])
-    }
-
-    /// Gmail switched off in this build: never the email step, never the
-    /// gmail chore, no matter what the goals say.
-    @Test func gmailFeatureOffNeverShowsTheEmailStep() {
-        let flow = SetupFlow(goals: [.receipts], payment: .online, gmailFeature: false)
-        #expect(!flow.path.contains(.email))
-        #expect(!tasks(flow).contains { $0.id == "gmail" })
+                              .cards, .applePay])
+        #expect(tasks(flow).map(\.id) == ["answers", "cards", "applePay"])
     }
 
     @Test func goingBackSkipsTheBuildingPause() {
@@ -165,10 +154,7 @@ struct SetupFlowTests {
             let picked = Set(goals.enumerated().filter { mask & (1 << $0.offset) != 0 }.map(\.element))
             for payment in [nil] + SetupProfile.Payment.allCases.map(Optional.some) {
                 for cards in [false, true] {
-                    for gmail in [false, true] {
-                        people.append(SetupFlow(goals: picked, payment: payment, hasCards: cards,
-                                                gmailFeature: gmail))
-                    }
+                    people.append(SetupFlow(goals: picked, payment: payment, hasCards: cards))
                 }
             }
         }
@@ -176,7 +162,7 @@ struct SetupFlowTests {
     }()
 
     @Test func everyCombinationHasASaneRoute() {
-        #expect(Self.everyone.count == 32 * 6 * 4)
+        #expect(Self.everyone.count == 32 * 6 * 2)
         for flow in Self.everyone {
             let path = flow.path
             #expect(path.first == .welcome)
@@ -187,7 +173,6 @@ struct SetupFlowTests {
             // Conditional steps only when they should be.
             #expect(path.contains(.budget) == flow.goals.contains(.spendLess))
             #expect(path.contains(.applePay) == (flow.payment != .cash))
-            #expect(path.contains(.email) == (flow.gmailFeature && flow.wantsGmail))
             // `signInFeature` defaults to false for everyone in this matrix.
             #expect(!path.contains(.account))
             // The path ends on the last step (in declaration order) this
