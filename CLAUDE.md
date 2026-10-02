@@ -55,21 +55,27 @@ Full design: `docs/AgentPipeline.md`.
 - The account Worker deploys from `worker/` (`cd worker && npx wrangler deploy`), separately from the site. See `worker/README.md`.
 - The launch (hype) site soon.sortd.page deploys from `launch/` (`cd launch && npx wrangler deploy`). Its form posts to sortd.page/api/beta, so deploy `site/` first. See `launch/README.md`.
 
-**6. Finish: every session ends by freeing its disk.** Each task costs ~4 GB of build
-folder and ~7 GB of simulator. On 2 Oct 2026 leftovers from old sessions filled the Mac
-(275 GB of simulators, 2 GB free). So the last step of every task and every session is
-cleanup, not optional:
-- PR merged, or task abandoned: `scripts/worktree-done.sh <task>`. Removes the worktree,
-  its simulator and its build folder, and deletes the branch once `main` has it. It
-  refuses while there is uncommitted work: commit, or move stray files out, then run it.
-- Branch still waiting on a PR, or Raj says stop for now: `scripts/worktree-park.sh <task>`.
-  Frees the simulator and build folder, keeps the worktree, branch and edits. `test.sh`
-  and `build.sh` make both again on demand.
-- Also delete any extra simulator you made (`SORTD_SIM=<name> scripts/sim.sh delete`), and
-  stop background jobs you started. Never leave a simulator behind that no live task uses.
-- Housekeeping: `scripts/worktree-audit.sh` shows what every worktree still holds;
-  `scripts/clean.sh --yes` removes every build folder and every simulator with no worktree.
-  Run it when free disk is under 50 GB, and before a TestFlight build.
+**6. Finish, and clean up at once.** Every task costs about 11.5 GB while it exists
+(4.5 GB build folder + 7 GB simulator). Twenty left behind filled the disk on 2 Oct 2026
+(275 GB of simulators, 2.4 GB free). Cleanup is the last step of every task and every
+session, not optional.
+- The moment a branch is merged, run `scripts/worktree-done.sh <task>`: it removes the
+  worktree, its simulator and its build folder, and deletes the merged branch. Do it before
+  starting the next task, not at the end of the day. It refuses while there is uncommitted
+  work: commit, or move stray files out, then run it.
+- A branch still waiting on a PR, or a task Raj pauses: `scripts/worktree-park.sh <task>`.
+  It frees the simulator and build folder and keeps the worktree, branch and edits;
+  `test.sh` and `build.sh` make both again on demand.
+- A test or research worktree (bug hunt, UI pass, audit) goes as soon as its findings are
+  copied out. Anything worth keeping is committed on a branch or saved under `docs/` first.
+- Delete any extra simulator you made (`SORTD_SIM=<name> scripts/sim.sh delete`). Never
+  leave a simulator behind that no live task uses.
+- At most 4 task worktrees exist at once, and at most 2 builds run at once.
+  `scripts/worktree-new.sh` refuses past the limit or when under 40 GB is free.
+- Before ending a session: `scripts/worktree-audit.sh`, finish or park every task, then
+  `scripts/clean.sh --yes` (build folders and simulators with no worktree), and say how much
+  disk is free. A task that must stay open is named in the hand-off, with why.
+- Don't leave background jobs running. Stop anything you started before you finish.
 
 ## Build / test
 - Open: `open Spend.xcodeproj` (Xcode 27, iOS 26+ target, SwiftUI + SwiftData + Swift Charts + App Intents).

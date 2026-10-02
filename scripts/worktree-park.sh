@@ -14,10 +14,12 @@ main_root="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)";
 wt="$main_root/.claude/worktrees/$task"
 [ -d "$wt" ] || die "no worktree at $wt"
 
-if [ -d "$wt/.build" ]; then
-  size="$(du -sh "$wt/.build" 2>/dev/null | cut -f1)"
-  rm -rf "$wt/.build" && ok "removed $wt/.build ($size)"
-fi
+for d in "$wt/.build" "$wt/build"; do
+  [ -d "$d" ] || continue
+  git -C "$wt" check-ignore -q "$d" || continue
+  size="$(du -sh "$d" 2>/dev/null | cut -f1)"
+  rm -rf "$d" && ok "removed $d ($size)"
+done
 
 SORTD_SIM="Sortd-$task" "$main_root/scripts/sim.sh" delete
 for suffix in se max; do

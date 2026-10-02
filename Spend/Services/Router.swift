@@ -21,7 +21,17 @@ final class Router {
         case add, budget
     }
 
+    /// What a `sortd://` link names, and the id after it if it has one
+    /// ("sortd://purchase/<id>").
+    struct Target: Equatable {
+        var name: String
+        var id: String?
+    }
+
     var tab: AppTab = .home
+    /// A purchase a widget row asked to open. Activity opens its detail and
+    /// clears this; if the purchase is gone it just clears it.
+    var pendingPurchase: UUID?
     var sheet: Sheet?
     var settingsPath: [Destination] = []
     /// Settings is a sheet over the tabs, opened from the gear on Home.
@@ -49,8 +59,8 @@ final class Router {
         // Setup comes first: while it's on screen, links would open behind it.
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: OnboardingView.doneKey), !defaults.bool(forKey: SetupProfile.rerunKey) else { return }
-        // "sortd://add" puts "add" in the host, not the path.
-        let name = url.host() ?? url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let target = Self.target(for: url) else { return }
+        let name = target.name
 
         // Settings is a sheet: close it first for links that go somewhere
         // else, then follow the link once it's out of the way.
@@ -58,15 +68,35 @@ final class Router {
             showingSettings = false
             Task {
                 try? await Task.sleep(for: .milliseconds(450))
-                follow(name)
+                follow(target)
             }
             return
         }
-        follow(name)
+        follow(target)
     }
 
-    private func follow(_ name: String) {
-        switch name {
+    /// Splits a `sortd://` URL into its name and optional id. Pure, so the
+    /// parsing can be tested without a screen. Nil for any other scheme.
+    nonisolated static func target(for url: URL) -> Target? {
+        guard url.scheme == "sortd" else { return nil }
+        // "sortd://add" puts "add" in the host, not the path; whatever
+        // follows the host ("/<id>") is the id.
+        if let host = url.host() {
+            let id = url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return Target(name: host, id: id.isEmpty ? nil : id)
+        }
+        let parts = url.path().split(separator: "/").map(String.init)
+        return Target(name: parts.first ?? "", id: parts.dropFirst().first)
+    }
+
+    func follow(_ target: Target) {
+        switch target.name {
+        case "purchase":
+            // Straight to that purchase. A missing or unreadable id, or a
+            // purchase since deleted or merged, still lands on Activity:
+            // Activity decides there is nothing to open and says nothing.
+            tab = .activity
+            pendingPurchase = target.id.flatMap(UUID.init(uuidString:))
         case "add", "scan":
             tab = .home
             sheet = .add

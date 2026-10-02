@@ -49,6 +49,8 @@ struct TransactionsScreen: View {
     @State private var refreshNote: RefreshNote?
     @Namespace private var zoom
     @State private var router = Router.shared
+    /// The purchase a widget row linked to, pushed as its detail.
+    @State private var linked: Transaction?
     /// True only while the intro's `.move` step is on screen: gates whether
     /// `pagerHeader` spends a `GeometryReader` reporting its frame for the
     /// intro's cutout.
@@ -115,6 +117,17 @@ struct TransactionsScreen: View {
             router.pendingIntroDayTap = false
             if days.count > 1 { stepDay(1) }
         }
+        // A Recent widget row ("sortd://purchase/<id>"): open that purchase.
+        // Deleted or merged since the widget was drawn: do nothing, so the
+        // person simply lands on Activity.
+        .onChange(of: router.pendingPurchase, initial: true) { _, id in
+            guard let id, fixedCard == nil else { return }
+            router.pendingPurchase = nil
+            var find = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })
+            find.fetchLimit = 1
+            linked = (try? context.fetch(find))?.first
+        }
+        .navigationDestination(item: $linked) { TransactionDetailView(transaction: $0) }
         .toolbar {
             if fixedCard == nil, !transactions.isEmpty {
                 // No `.sharedBackgroundVisibility(.hidden)`: keeps its glass
