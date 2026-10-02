@@ -95,7 +95,7 @@ struct RecurringView: View {
         .overlay {
             if all.isEmpty {
                 EmptyState("No subscriptions or bills yet", symbol: "arrow.triangle.2.circlepath",
-                           message: "They show up here once they've charged a couple of times, or a receipt says when they renew.")
+                           message: "They show up here once they've charged a couple of times.")
             }
         }
     }

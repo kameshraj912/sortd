@@ -186,7 +186,7 @@ struct ActivationTests {
     }
 }
 
-// Device-only and UI-level cases (a real Apple Pay tap, a Gmail import, "0
+// Device-only and UI-level cases (a real Apple Pay tap, "0
 // permission requests" from a fake notification centre while only tapping
 // Continue, VoiceOver on the aha card, Reduce Motion) belong to `ui-driver`
 // and are not written here.

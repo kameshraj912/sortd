@@ -67,8 +67,7 @@ this isn't post/caption copy.
 > id that stands in for you. The hash can't be turned back into your Apple or Google
 > account, your name or your email.
 >
-> **What we never send:** amounts, shop names, notes, card numbers, or anything read from
-> Gmail. A filter on your phone checks every event before it leaves and drops anything that
+> **What we never send:** amounts, shop names, notes or card numbers. A filter on your phone checks every event before it leaves and drops anything that
 > looks like money or an email address, even if that means the event goes out missing a
 > detail.
 
@@ -105,7 +104,7 @@ this isn't post/caption copy.
 | Sentry | Crash reports, hashed id, device model, app version | US servers | Find and fix bugs |
 | Apple iCloud | An encrypted copy of your purchases, only if you turn on Back up to iCloud | Your own private iCloud database | So losing your phone doesn't lose your data |
 | Apple | Sign in with Apple hashed id; App Store purchase check | Apple's servers | Signing in, checking Sortd Pro |
-| Google | Sign in with Google hashed id; read-only Gmail access, only if you connect Gmail | Google's servers, then straight to your phone | Signing in, reading receipts |
+| Google | Sign in with Google hashed id (identity only: openid and email) | Google's servers | Signing in |
 
 *(Regions above are as given to me for this draft. See the code-vs-brief flag at the top —
 confirm PostHog's actual region before publishing.)*

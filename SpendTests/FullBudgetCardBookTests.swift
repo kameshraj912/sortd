@@ -63,12 +63,4 @@ import Foundation
         #expect(b.match("NAB Visa Debit ••2222").rawValue == "b")
     }
 
-    @Test func oneActiveCardTakesUnmatchedDigitsAndTwoDoNot() {
-        let b = book()
-        b.upsert(card("a", "Card A"))
-        #expect(b.noteUnmatchedDigits("9999")?.rawValue == "a")
-        #expect(b.info(Card(rawValue: "a"))?.last4 == ["9999"])
-        b.upsert(card("b", "Card B"))
-        #expect(b.noteUnmatchedDigits("8888") == nil)
-    }
 }

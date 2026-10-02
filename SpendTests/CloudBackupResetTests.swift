@@ -152,14 +152,14 @@ struct CloudBackupResetTests {
     // MARK: The Delete All alert
 
     @Test func theDeleteAllMessageMentionsICloudWhenTheCopyGoes() {
-        let text = BackupDataSettingsView.deleteAllMessage(gmailConnected: false, deletesCloudCopy: true)
+        let text = BackupDataSettingsView.deleteAllMessage(deletesCloudCopy: true)
         #expect(text.contains("iCloud"))
         #expect(text.hasSuffix("There's no undo."))
     }
 
     @Test func theDeleteAllMessageLeavesICloudOutWhenThereIsNoCopy() {
-        let text = BackupDataSettingsView.deleteAllMessage(gmailConnected: true, deletesCloudCopy: false)
+        let text = BackupDataSettingsView.deleteAllMessage(deletesCloudCopy: false)
         #expect(!text.contains("iCloud"))
-        #expect(text.contains("Gmail"))
+        #expect(!text.contains("Gmail"))
     }
 }

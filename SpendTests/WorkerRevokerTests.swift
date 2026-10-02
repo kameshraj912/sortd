@@ -41,11 +41,11 @@ struct WorkerRevokerTests {
     static let url = URL(string: "https://account.example")!
     static let hash = String(repeating: "ab", count: 32)
     static let apple = Account(provider: .apple, subject: "001234.abcdef", email: "raj@example.com")
-    static let google = Account(provider: .google, subject: "10769150350006150715113082367", email: "raj@gmail.com")
+    static let google = Account(provider: .google, subject: "10769150350006150715113082367", email: "raj@example.org")
 
     private func revoker(url: URL? = WorkerRevokerTests.url, transport: TransportFake,
                          attester: AttesterFake? = nil, counter: RevokeCounter? = nil,
-                         connectedGmail: [String] = [], appleCode: Result<String, AccountError> = .success("code-1"),
+                         appleCode: Result<String, AccountError> = .success("code-1"),
                          appleUser: String = WorkerRevokerTests.apple.subject) -> WorkerRevoker {
         let attester = attester ?? AttesterFake()
         let counter = counter ?? RevokeCounter()
@@ -56,7 +56,6 @@ struct WorkerRevokerTests {
                 counter.appleCodes += 1
                 return WorkerRevoker.AppleCode(user: appleUser, code: try appleCode.get())
             },
-            connectedGmail: { connectedGmail },
             googleRevoke: { counter.googleRevokes += 1 },
             clientID: "com.kameshraj.spend"))
     }
@@ -194,28 +193,12 @@ struct WorkerRevokerTests {
 
     // MARK: Google revoke
 
-    @Test func googleRevokeCancelsTheGrantWhenGmailIsNotConnectedForThatAccount() async throws {
+    @Test func googleRevokeCancelsTheGrant() async throws {
         let counter = RevokeCounter()
-        let r = revoker(transport: TransportFake([]), counter: counter, connectedGmail: ["other@gmail.com"])
+        let r = revoker(transport: TransportFake([]), counter: counter)
 
         try await r.revoke(Self.google)
 
         #expect(counter.googleRevokes == 1)
-    }
-
-    @Test func googleRevokeIsSkippedWhenGmailIsConnectedForTheSameAccount() async throws {
-        let counter = RevokeCounter()
-        let r = revoker(transport: TransportFake([]), counter: counter, connectedGmail: ["Raj@Gmail.com"])
-
-        try await r.revoke(Self.google)
-
-        #expect(counter.googleRevokes == 0)
-    }
-
-    @Test func keepsGmailComparesEmailsCaseBlindAndNeedsAnEmail() {
-        #expect(WorkerRevoker.keepsGmail(Self.google, connected: ["RAJ@gmail.com"]))
-        #expect(!WorkerRevoker.keepsGmail(Self.google, connected: ["other@gmail.com"]))
-        #expect(!WorkerRevoker.keepsGmail(Account(provider: .google, subject: "s", email: nil), connected: ["raj@gmail.com"]))
-        #expect(!WorkerRevoker.keepsGmail(Self.apple, connected: ["raj@example.com"]))
     }
 }

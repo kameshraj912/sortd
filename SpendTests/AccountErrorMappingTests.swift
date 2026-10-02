@@ -55,8 +55,8 @@ struct AccountErrorMappingTests {
     }
 
     @Test func googleAuthErrorsPassThroughAsTheirOwnPlainSentence() {
-        let mapped = GoogleIdentityProvider.error(from: GoogleAuth.AuthError.missingGmailAccess)
-        #expect(mapped.localizedDescription == GoogleAuth.AuthError.missingGmailAccess.localizedDescription)
+        let mapped = GoogleIdentityProvider.error(from: GoogleAuth.AuthError.noCode)
+        #expect(mapped.localizedDescription == GoogleAuth.AuthError.noCode.localizedDescription)
     }
 
     @Test func googleOfflineNetworkErrorBecomesOneOfflineSentence() {
