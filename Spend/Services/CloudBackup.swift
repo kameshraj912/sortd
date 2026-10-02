@@ -80,6 +80,10 @@ final class CloudBackup {
     nonisolated static let lastKey = "cloudBackupLast"
     /// Delete All Data could not reach iCloud: delete the copy at the next launch.
     nonisolated static let deletePendingKey = "cloudBackupDeletePending"
+    /// When that delete was queued. The retry leaves alone a backup made
+    /// after this moment: it is a new, wanted one, not the copy that Delete
+    /// All Data meant to remove.
+    nonisolated static let deleteQueuedAtKey = "cloudBackupDeleteQueuedAt"
     /// This iPhone wrote the iCloud copy (a backup, not only a restore), so
     /// Delete All Data deletes it even with the switch off. Cleared when the
     /// copy is deleted.
@@ -247,6 +251,10 @@ final class CloudBackup {
             }.value
             let now = clock()
             try await store.save(blob, modified: now)
+            // This upload took the place of the copy an earlier Delete All
+            // Data was still waiting to delete: nothing is left to delete,
+            // and the next launch must not delete this new one.
+            clearPendingDelete()
             defaults.set(true, forKey: Self.backedUpHereKey)
             lastBackup = now
             dirty = false
@@ -352,8 +360,18 @@ final class CloudBackup {
         isEnabled = false
         pending?.cancel()
         catchUp?.cancel()
-        defaults.set(true, forKey: Self.deletePendingKey)
+        queuePendingDelete()
         await retryPendingDelete()
+    }
+
+    private func queuePendingDelete() {
+        defaults.set(true, forKey: Self.deletePendingKey)
+        defaults.set(clock(), forKey: Self.deleteQueuedAtKey)
+    }
+
+    private func clearPendingDelete() {
+        defaults.removeObject(forKey: Self.deletePendingKey)
+        defaults.removeObject(forKey: Self.deleteQueuedAtKey)
     }
 
     /// Whether Delete All Data must delete the iCloud copy: whenever this
@@ -375,8 +393,24 @@ final class CloudBackup {
     func retryPendingDelete() async {
         guard isDeletePending else { return }
         do {
+            // A copy saved after the delete was queued is a new backup the
+            // person wanted (made from this iPhone or another), not the one
+            // Delete All Data meant to remove: leave it. A delete queued
+            // before this check existed has no time and deletes as before.
+            if let queued = defaults.object(forKey: Self.deleteQueuedAtKey) as? Date {
+                let record: (blob: Data, modified: Date)?
+                do {
+                    record = try await store.fetch()
+                } catch CloudBackupError.corrupt {
+                    record = nil   // unreadable: still delete it
+                }
+                if let record, record.modified > queued {
+                    clearPendingDelete()
+                    return
+                }
+            }
             try await deleteCloudCopy()
-            defaults.removeObject(forKey: Self.deletePendingKey)
+            clearPendingDelete()
         } catch {
             // Still pending; the next launch tries again.
         }
