@@ -30,7 +30,7 @@ Run these and keep the output. Steps 1 to 4 can run at once; step 5 is slow.
 6. Also note the newest `docs/BugHunt-*.md` and its date, and how many rows are still
    untriaged.
 7. Disk: `scripts/clean.sh` (dry run) lists every build folder and orphan simulator and
-   ends with the free space. Under 50 GB free, say so first and suggest
+   ends with the free space. Under 40 GB free (worktree-new.sh refuses there), say so first and suggest
    `scripts/clean.sh --yes` plus `scripts/worktree-park.sh` for parked branches.
 
 ## Output
