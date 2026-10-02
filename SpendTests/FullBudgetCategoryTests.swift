@@ -14,21 +14,24 @@ import Foundation
         UserDefaults(suiteName: "FullBudgetCategoryTests.\(UUID().uuidString)")!
     }
 
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a limit under an unknown (renamed/removed) category rawValue silently disappears"))
+    /// The typed view (`all`) can only hold known categories, so it leaves
+    /// the old key out. The stored dictionary must keep it through every
+    /// write (set, remove, currency change), so a later version that knows
+    /// the key again, or a restore, finds the limit intact.
+    @Test
     func aLimitUnderARemovedCategoryIsNotSilentlyLost() {
         let d = defaults()
-        // Simulates a limit that was set while "vacation" existed as a
-        // category rawValue, before it was renamed to "travel".
         d.set(["vacation": 400.0, "groceries": 600.0], forKey: CategoryBudgets.key)
 
-        let all = CategoryBudgets.all(d)
-        // The still-valid one is fine...
-        #expect(all[.groceries] == 600)
-        // ...but the renamed one's money is nowhere to be found: not under
-        // any current category, and not surfaced as needing attention.
-        #expect(all.values.contains(400),
-                "a $400 limit set before a category was renamed must still show up somewhere, not vanish")
+        #expect(CategoryBudgets.all(d) == [.groceries: 600])
+
+        CategoryBudgets.set(120, for: .bills, d)
+        CategoryBudgets.remove(.groceries, d)
+        #expect(CategoryBudgets.stored(d)["vacation"] == 400, "set/remove dropped the unknown key")
+
+        CategoryBudgets.convert(from: CategoryBudgets.stored(d), rate: 0.5, d)
+        #expect(CategoryBudgets.stored(d)["vacation"] == 200, "currency change dropped the unknown key")
+        #expect(CategoryBudgets.stored(d)["bills"] == 60)
     }
 
     /// A limit for a category with no spending this month: progress should
