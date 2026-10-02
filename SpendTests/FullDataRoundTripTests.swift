@@ -29,13 +29,11 @@ struct FullDataRoundTripTests {
 
     /// A receipt or bank alert whose last-4 matched none of Raj's active
     /// cards leaves `unmatchedLast4` set so "Which card?" (Home) can find it
-    /// once he answers. `Backup.Snapshot.Row` has no field for it at all, so
-    /// every backup made today silently drops it: after a restore the
+    /// once he answers. `Backup.Snapshot.Row` had no field for it at all, so
+    /// every backup silently dropped it: after a restore the
     /// purchase looks like any other unassigned-card row and "Which card?"
     /// can never find it to fix in bulk.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("unmatchedLast4 has no field in Backup.Snapshot.Row, so a restore always loses it"))
-    func unmatchedCardDigitsSurviveABackupRoundTrip() throws {
+    @Test func unmatchedCardDigitsSurviveABackupRoundTrip() throws {
         let from = try store()
         let p = IncomingPurchase(date: Date(timeIntervalSince1970: 1_790_000_000),
                                  merchant: "Woolworths", amount: 58.30, currency: "AUD",
@@ -51,5 +49,26 @@ struct FullDataRoundTripTests {
 
         let restored = try to.fetch(FetchDescriptor<Transaction>())
         #expect(restored.first?.unmatchedLast4 == "4821")
+    }
+
+    /// A backup written before `unmatchedLast4` was in the file: the row has
+    /// no such key and still restores, with no digits.
+    @Test func aBackupFromBeforeUnmatchedDigitsStillRestores() throws {
+        let old = """
+        {"format":"sortd.backup","version":1,"createdAt":"2026-09-01T00:00:00Z",
+         "cards":[],"settings":{},"rules":[],
+         "transactions":[{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF",
+           "date":"2026-09-01T02:00:00Z","merchant":"Woolworths","rawMerchant":"WOOLWORTHS",
+           "amount":58.3,"currencyCode":"AUD","homeAmount":58.3,"card":"other",
+           "category":"groceries","source":"manual","seenIn":"","note":"",
+           "createdAt":"2026-09-01T02:00:00Z","refunded":false}]}
+        """
+        let to = try store()
+        let result = try Backup.restore(Data(old.utf8), mode: .merge, into: to,
+                                        defaults: scratch(), cardBook: book())
+        #expect(result.added == 1)
+        let restored = try to.fetch(FetchDescriptor<Transaction>())
+        #expect(restored.first?.merchant == "Woolworths")
+        #expect(restored.first?.unmatchedLast4 == nil)
     }
 }
