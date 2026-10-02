@@ -12,8 +12,7 @@ import Foundation
 
     /// The monthly budget refuses anything over 1,000,000 (`BudgetSheet`),
     /// but the category limit sheet saves whatever digits were typed.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a category limit has no upper cap, unlike the monthly budget"))
+    @Test
     func aCategoryLimitIsCappedLikeTheMonthlyBudget() {
         let d = defaults()
         let saved = CategoryLimitSheet.apply("99999999999999999999", to: .bills, d)
