@@ -218,14 +218,12 @@ struct BackupDataSettingsView: View {
         #else
         let deletesCloudCopy = false
         #endif
-        return Self.deleteAllMessage(gmailConnected: !GmailSync.accounts.isEmpty, deletesCloudCopy: deletesCloudCopy)
+        return Self.deleteAllMessage(deletesCloudCopy: deletesCloudCopy)
     }
 
     /// The Delete All Data alert's message.
-    nonisolated static func deleteAllMessage(gmailConnected: Bool, deletesCloudCopy: Bool) -> String {
-        var text = gmailConnected
-            ? "Every purchase, card and budget on this iPhone goes, and Gmail is disconnected."
-            : "Every purchase, card and budget on this iPhone goes."
+    nonisolated static func deleteAllMessage(deletesCloudCopy: Bool) -> String {
+        var text = "Every purchase, card and budget on this iPhone goes."
         if deletesCloudCopy { text += " The iCloud backup is deleted too." }
         return text + " There's no undo."
     }

@@ -42,15 +42,23 @@ struct InsightCarousel: View {
         let amount: Decimal
     }
 
-    private var topMerchants: [Row] {
-        Dictionary(grouping: transactions) { $0.merchant }
-            .map { name, items in
-                Row(category: items[0].category, title: name,
-                    detail: items.count == 1 ? "1 purchase" : "\(items.count) purchases", amount: items.audTotal)
-            }
-            .sorted { $0.amount > $1.amount }
-            .prefix(3)
+    /// Shops by spend. Refunds and transfers are not purchases, so they are
+    /// left out of the count as well as the total.
+    nonisolated static func topShops(_ transactions: [Transaction], limit: Int = 3)
+        -> [(name: String, category: SpendCategory, count: Int, total: Decimal)] {
+        let purchases = transactions.filter { $0.category != .transfers && !$0.refunded }
+        return Dictionary(grouping: purchases) { $0.merchant }
+            .map { (name: $0.key, category: $0.value[0].category, count: $0.value.count, total: $0.value.audTotal) }
+            .sorted { $0.total > $1.total }
+            .prefix(limit)
             .map { $0 }
+    }
+
+    private var topMerchants: [Row] {
+        Self.topShops(transactions).map {
+            Row(category: $0.category, title: $0.name,
+                detail: $0.count == 1 ? "1 purchase" : "\($0.count) purchases", amount: $0.total)
+        }
     }
 
     private var biggest: [Row] {

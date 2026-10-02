@@ -41,7 +41,7 @@ struct GoogleSignInCoverTests {
         }, prompt: prompt)
 
         await #expect(throws: GoogleAuth.AuthError.cancelled) {
-            try await auth.authorize(scopes: GoogleAuth.identityScopes)
+            try await auth.authorize(scopes: GoogleAuth.scopes)
         }
 
         #expect(seen.activeDuringSheet == true)

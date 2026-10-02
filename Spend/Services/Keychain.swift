@@ -1,8 +1,8 @@
 import Foundation
 import Security
 
-/// Tiny wrapper for secrets (the Gmail-sync keys). Stored only on this
-/// device, readable after first unlock so background syncs work.
+/// Tiny wrapper for secrets (the Google sign-in token that Delete Account
+/// cancels). Stored only on this device.
 enum Keychain {
     private static let service = "com.kameshraj.spend"
 
@@ -37,6 +37,20 @@ enum Keychain {
     /// Every item Sortd stored, including ones from an earlier install.
     static func deleteAll() {
         SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary)
+    }
+
+    /// Every stored account name that starts with `prefix`.
+    static func accounts(withPrefix prefix: String) -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+              let items = out as? [[String: Any]] else { return [] }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }.filter { $0.hasPrefix(prefix) }
     }
 
     static func delete(_ account: String) {

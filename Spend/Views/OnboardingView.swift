@@ -87,8 +87,6 @@ struct OnboardingView: View {
     @State private var customBudget = ""
     @State private var bankCountry: String = Locale.current.region?.identifier ?? "AU"
     @State private var editing: CardInfo?
-    @State private var connectingGmail = false
-    @State private var gmail = GmailSync.accounts
     /// "S$25.00 ≈ A$28.40 today", once a rate has come in.
     @State private var ratePreview: String?
     @FocusState private var budgetFocused: Bool
@@ -163,8 +161,6 @@ struct OnboardingView: View {
                     }
             }
         }
-        .onChange(of: SyncStatus.gmail.phase) { gmail = GmailSync.accounts }
-        .sheet(isPresented: $connectingGmail, onDismiss: { gmail = GmailSync.accounts }) { ConnectGmailSheet() }
         .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
@@ -231,10 +227,8 @@ struct OnboardingView: View {
     private var payment: SetupProfile.Payment? { SetupProfile.Payment(rawValue: paymentRaw) }
     private var checkIn: SetupProfile.CheckIn { SetupProfile.CheckIn(rawValue: checkInRaw) ?? .sunday }
     private var flow: SetupFlow {
-        SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty,
-                  gmailFeature: Features.gmail, signInFeature: Features.signIn)
+        SetupFlow(goals: goals, payment: payment, hasCards: !book.active.isEmpty, signInFeature: Features.signIn)
     }
-    private var wantsGmail: Bool { flow.wantsGmail }
     /// Tap-through setup (sub-spec 6): Continue everywhere, no permission
     /// alert until the aha card on Home. See `SetupFlow.usesNewFlow`.
     private var newFlow: Bool { SetupFlow.usesNewFlow }
@@ -421,12 +415,6 @@ struct OnboardingView: View {
                     primaryButton(primaryTitle, action: primaryAction)
                     // New flow: the chores wait in the Finish Setup card on Home.
                     tertiaryButton(newFlow ? "Do this later" : "Do this later and look around") { finish() }
-                case .email where gmail.isEmpty && newFlow:
-                    primaryButton(primaryTitle, action: primaryAction)
-                    secondaryButton("Connect Gmail") { connectingGmail = true }
-                case .email where gmail.isEmpty:
-                    primaryButton("Connect Gmail") { connectingGmail = true }
-                    tertiaryButton("I'll do this later") { go(1) }
                 case .applePay where !tapConnected && !shortcutReached && !newFlow:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
@@ -466,7 +454,6 @@ struct OnboardingView: View {
         case .cards where book.active.isEmpty: return "Add Cards Later"
         case .applePay where !tapConnected && !shortcutReached:
             return last ? "Do This Later and Start" : "I'll Do This Later"
-        case .email where gmail.isEmpty: return "I'll Do This Later"
         default: return last ? "Start Using Sortd" : "Continue"
         }
     }
@@ -646,7 +633,6 @@ struct OnboardingView: View {
         case .plan: PlanPage(summary: planSummary, tasks: setupTasks, settings: planSettings)
         case .cards: cards
         case .applePay: applePay
-        case .email: emailPage
         }
     }
 
@@ -681,7 +667,7 @@ struct OnboardingView: View {
     private var setupTasks: [SetupTask] {
         SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty,
                              tapped: applePayStatus.isConnected,
-                             widgetAdded: false, gmailConnected: !gmail.isEmpty)
+                             widgetAdded: false)
     }
 
     private func header(_ title: String, _ subtitle: String? = nil) -> some View {
@@ -1120,74 +1106,6 @@ struct OnboardingView: View {
         }
     }
 
-
-    private var emailPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header("Catch online receipts", SetupCopy.line(.email))
-            FlowLayout(spacing: 8) {
-                ForEach([("car", "Rides"), ("takeoutbag.and.cup.and.straw", "Food delivery"), ("app.badge", "App stores"),
-                         ("shippingbox", "Online shops"), ("building.columns", "Bank alerts")], id: \.1) { symbol, name in
-                    Label(name, systemImage: symbol)
-                        .font(.subheadline)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.card, in: .capsule)
-                }
-            }
-            .padding(.bottom, 16)
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach([("lock", "Read-only. Can't send, delete or change email."),
-                         ("iphone", SetupCopy.gmailOnDevice),
-                         ("xmark.circle", "Disconnect any time in Settings.")], id: \.1) { symbol, text in
-                    HStack(alignment: .top, spacing: 12) {
-                        RowIcon(symbol)
-                        Text(text).font(.body).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .setupCard()
-            .padding(.bottom, 16)
-            if !gmail.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(gmail) { a in
-                        HStack(spacing: 12) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.up)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(a.email).lineLimit(1)
-                                Text(a.lastResult ?? "Connected").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 56)
-                    }
-                }
-                .surface(radius: 16)
-                .padding(.bottom, 14)
-            }
-            // A connect still reading after its sheet closed: say so here.
-            if SyncStatus.gmail.isBusyForPerson || (SyncStatus.gmail.phase.isEnd && !SyncStatus.gmail.quiet) {
-                SyncProgressCard(status: SyncStatus.gmail) {
-                    if case .failed(let f) = SyncStatus.gmail.phase { GmailSync.retry(f, in: context) }
-                }
-                .padding(.bottom, 14)
-            }
-            if !gmail.isEmpty {
-                Button { connectingGmail = true } label: {
-                    HStack(spacing: 12) {
-                        RowIcon("plus")
-                        Text("Connect another Gmail").font(.body).foregroundStyle(Color.ink)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 56)
-                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 
     private var budgetPresets: [Double] {
         // Round numbers for the currency (yen and rupiah need bigger ones).

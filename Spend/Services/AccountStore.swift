@@ -362,7 +362,7 @@ final class AccountStore {
 // MARK: - App implementations
 
 /// A generic-password item in its own service, this device only. Not in
-/// `Keychain` (the Gmail tokens' service): `Keychain.deleteAll()` is the
+/// `Keychain` (the general secrets service): `Keychain.deleteAll()` is the
 /// Delete All wipe, and the account is signed out on its own path.
 @MainActor
 final class KeychainAccountStore: AccountKeychain {
@@ -412,9 +412,7 @@ final class KeychainAccountStore: AccountKeychain {
 /// Apple: a fresh authorization code is needed each time (re-authenticate
 /// at delete), so a failure after that is `rejected` with Apple's manual
 /// steps, never queued. Google needs no Worker: `GoogleAuth` revokes from
-/// the phone, with its own retry list. The Google grant is one per account,
-/// so when Gmail is connected for the same address the identity token is
-/// forgotten locally and the grant is left alone.
+/// the phone, with its own retry list.
 @MainActor
 final class WorkerRevoker: AccountRevoker {
     typealias Transport = @MainActor (URLRequest) async throws -> (Data, HTTPURLResponse)
@@ -430,8 +428,6 @@ final class WorkerRevoker: AccountRevoker {
         var attester: AppAttester
         /// Asks Apple again and returns the single-use code.
         var appleCode: @MainActor (Account) async throws -> AppleCode
-        /// Emails of the Gmail accounts connected for receipts.
-        var connectedGmail: @MainActor () -> [String]
         var googleRevoke: @MainActor () async -> Void
         var clientID: String
 
@@ -448,7 +444,6 @@ final class WorkerRevoker: AccountRevoker {
                     guard let code = auth.authorizationCode else { throw AccountError.rejected(appleManualSteps) }
                     return AppleCode(user: auth.account.subject, code: code)
                 },
-                connectedGmail: { GmailSync.accounts.map(\.email) },
                 googleRevoke: { await GoogleAuth.revokeIdentity() },
                 clientID: Bundle.main.bundleIdentifier ?? "com.kameshraj.spend")
         }
@@ -476,21 +471,9 @@ final class WorkerRevoker: AccountRevoker {
         return WorkerRevoker(url: url)
     }
 
-    /// Gmail is connected for this same Google account: revoking the
-    /// identity token would cancel that grant too.
-    nonisolated static func keepsGmail(_ account: Account, connected: [String]) -> Bool {
-        guard account.provider == .google, let email = account.email?.lowercased() else { return false }
-        return connected.contains { $0.lowercased() == email }
-    }
-
     func revoke(_ account: Account) async throws {
         switch account.provider {
         case .google:
-            if Self.keepsGmail(account, connected: deps.connectedGmail()) {
-                log.notice("account: Gmail is connected for this Google account, grant kept")
-                GoogleAuth.forgetIdentityToken()
-                return
-            }
             await deps.googleRevoke()
         case .apple:
             // A cancel in Apple's sheet passes through as `cancelled`.
@@ -730,7 +713,7 @@ final class AppleIdentityProvider: NSObject, IdentityProvider, ASAuthorizationCo
     }
 }
 
-/// Google identity only: `openid email`, never the Gmail scope.
+/// Google identity only: `openid email`, no other scope.
 @MainActor
 final class GoogleIdentityProvider: IdentityProvider {
     func signIn() async throws -> Account {

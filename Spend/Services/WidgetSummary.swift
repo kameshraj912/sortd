@@ -15,6 +15,8 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     /// The currency totals are in (`Money.home`).
     var currency = "AUD"
     var today: Decimal = 0
+    /// How many purchases make up `today`. Cleared by `asOf` at midnight.
+    var todayCount = 0
     /// Monday to now. Less punishing than a daily figure for some people.
     var week: Decimal = 0
     var month: Decimal = 0
@@ -23,6 +25,10 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     /// Nil when no monthly budget is set.
     var leftThisMonth: Decimal?
     var perDay: Decimal?
+    /// The last three purchases, newest first. Shop names are in here since
+    /// 2 Oct 2026; the widgets hide them while the iPhone is locked.
+    /// `asOf` leaves this alone at midnight: "the most recent purchase" is
+    /// still true the next morning.
     var recent: [Item] = []
     /// Biggest categories this month, largest first.
     var categories: [Slice] = []
@@ -45,6 +51,7 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
         var s = self
         if !calendar.isDate(updatedAt, inSameDayAs: now) {
             s.today = 0
+            s.todayCount = 0
             s.perDay = nil
         }
         if !calendar.isDate(updatedAt, equalTo: now, toGranularity: .weekOfYear) { s.week = 0 }
@@ -52,6 +59,10 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
             s.month = 0
             s.categories = []
             s.leftThisMonth = s.budget
+            // Budget over this month's days: February's figure is not March's.
+            if let budget = s.budget, budget > 0, let days = calendar.range(of: .day, in: .month, for: now)?.count {
+                s.dayAllowance = budget / Decimal(days)
+            }
         }
         return s
     }
@@ -68,6 +79,8 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     }
 
     struct Item: Codable, Equatable, Sendable, Identifiable {
+        /// The purchase's own id (`Transaction.id`), so a widget row can link
+        /// to `sortd://purchase/<id>`.
         var id = UUID()
         var merchant: String
         var amount: Decimal
@@ -133,5 +146,33 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
         } catch {
             return false
         }
+    }
+}
+
+extension WidgetSummary {
+    /// Reads every field if present and falls back to its default if not, so
+    /// a file written by an older build (which has no `todayCount`, say) still
+    /// decodes. The synthesized decoder throws on any missing key, and a
+    /// widget that can't read its file shows "Nothing logged" until the app
+    /// next runs. In an extension so `WidgetSummary()` stays available.
+    nonisolated init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? updatedAt
+        currency = try c.decodeIfPresent(String.self, forKey: .currency) ?? currency
+        today = try c.decodeIfPresent(Decimal.self, forKey: .today) ?? today
+        todayCount = try c.decodeIfPresent(Int.self, forKey: .todayCount) ?? todayCount
+        week = try c.decodeIfPresent(Decimal.self, forKey: .week) ?? week
+        month = try c.decodeIfPresent(Decimal.self, forKey: .month) ?? month
+        dayAllowance = try c.decodeIfPresent(Decimal.self, forKey: .dayAllowance)
+        leftThisMonth = try c.decodeIfPresent(Decimal.self, forKey: .leftThisMonth)
+        perDay = try c.decodeIfPresent(Decimal.self, forKey: .perDay)
+        recent = try c.decodeIfPresent([Item].self, forKey: .recent) ?? recent
+        categories = try c.decodeIfPresent([Slice].self, forKey: .categories) ?? categories
+        bills = try c.decodeIfPresent([Bill].self, forKey: .bills) ?? bills
+        budget = try c.decodeIfPresent(Decimal.self, forKey: .budget)
+        style = try c.decodeIfPresent(String.self, forKey: .style) ?? style
+        hasAnyPurchases = try c.decodeIfPresent(Bool.self, forKey: .hasAnyPurchases) ?? hasAnyPurchases
+        showWhenLocked = try c.decodeIfPresent(Bool.self, forKey: .showWhenLocked)
     }
 }

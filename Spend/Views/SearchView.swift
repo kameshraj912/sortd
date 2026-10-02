@@ -109,8 +109,7 @@ struct SearchView: View {
     private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
 
     private var matches: [Transaction] {
-        let q = SearchText.fold(trimmed)
-        return transactions.filter { SearchText.matches($0, folded: q) }
+        return transactions.filter(SearchText.matcher(for: trimmed))
     }
 
     private var thisMonth: [Transaction] {
@@ -158,11 +157,37 @@ nonisolated enum SearchText {
     }
 
     /// True when `folded` (already run through `fold`) is in the shop,
-    /// category or note. An empty query matches everything.
+    /// category or note. A query with nothing left after folding (only
+    /// emoji or symbols) matches nothing; a blank search is the caller's
+    /// job (`matcher(for:)` handles it).
     static func matches(_ t: Transaction, folded q: String) -> Bool {
-        q.isEmpty
-            || fold(t.merchant).contains(q)
-            || fold(t.category.name).contains(q)
-            || fold(t.note).contains(q)
+        !q.isEmpty
+            && (fold(t.merchant).contains(q)
+                || fold(t.category.name).contains(q)
+                || fold(t.note).contains(q))
+    }
+
+    /// The amount in a query like "$5.50" or "€12": a currency sign, then a
+    /// plain number. Nil for anything else.
+    static func amount(in query: String) -> Decimal? {
+        let t = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = t.first, first.isCurrencySymbol else { return nil }
+        let rest = t.dropFirst().trimmingCharacters(in: .whitespaces)
+        guard let lead = rest.first, lead.isASCII, lead.isNumber,
+              rest.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == "." || $0 == ",") }) else { return nil }
+        return AmountParser.parse(rest)?.amount
+    }
+
+    /// One test for a typed query, built once and run on every purchase.
+    /// Blank matches everything; "$5.50" matches that amount; text that folds
+    /// to nothing (an emoji, a lone "$") matches nothing.
+    static func matcher(for raw: String) -> (Transaction) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return { _ in true } }
+        if let amount = amount(in: trimmed) {
+            return { $0.amount == amount || $0.audValue == amount }
+        }
+        let q = fold(trimmed)
+        return { matches($0, folded: q) }
     }
 }
