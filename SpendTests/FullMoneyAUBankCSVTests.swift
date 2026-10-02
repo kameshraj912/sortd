@@ -139,8 +139,7 @@ struct FullMoneyAUBankCSVTests {
     }
 
     /// An ISO 8601 stamp with a "T": "01T" has no word boundary, so the yyyy-mm-dd pattern never matches (Spend/Services/StatementImport.swift:325).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-05", "an ISO timestamp with a T (2026-09-01T12:34:56+10:00) is not read as a date, the row is dropped"))
+    @Test(.bug(id: "full-money-05", "an ISO timestamp with a T (2026-09-01T12:34:56+10:00) is not read as a date, the row is dropped"))
     func isoTimestampWithTIsADate() {
         let csv = """
         Date,Description,Amount
@@ -167,8 +166,7 @@ struct FullMoneyAUBankCSVTests {
     // MARK: Date shapes
 
     /// Day-Mon-year dates (Excel and several banks): the month-name pattern needs whitespace after the day (Spend/Services/StatementImport.swift:353).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-06", "01-Sep-2026 is not read as a date, the row is dropped"))
+    @Test(.bug(id: "full-money-06", "01-Sep-2026 is not read as a date, the row is dropped"))
     func dayDashMonthNameDates() {
         let csv = """
         Date,Description,Amount
@@ -180,8 +178,7 @@ struct FullMoneyAUBankCSVTests {
     }
 
     /// Same cause as the dash form: the month-name pattern only allows spaces.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "full-money-06", "01/Sep/2026 is not read as a date, the row is dropped"))
+    @Test(.bug(id: "full-money-06", "01/Sep/2026 is not read as a date, the row is dropped"))
     func slashMonthNameDates() {
         let csv = """
         Date,Description,Amount

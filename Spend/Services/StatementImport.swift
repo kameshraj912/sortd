@@ -328,8 +328,8 @@ nonisolated enum StatementImport {
         return rest.range(of: time, options: .regularExpression) != nil
     }
 
-    /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 1 Sep 2026,
-    /// Sep 1 2026 and two-digit years.
+    /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 2026-09-01T12:34:56+10:00,
+    /// 1 Sep 2026, 01-Sep-2026, Sep 1 2026 and two-digit years.
     static func parseDate(_ text: String, order: DateOrder, today: Date = .now) -> Date? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -349,8 +349,9 @@ nonisolated enum StatementImport {
         // [0-9], not \d: \d also matches full-width (１２) and Arabic (١٢)
         // digits, which Int() can't read, and the unwraps below would trap.
 
-        // yyyy-mm-dd — never ambiguous, so try it first.
-        if let regex = try? NSRegularExpression(pattern: #"\b([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})\b"#),
+        // yyyy-mm-dd — never ambiguous, so try it first. No \b at the ends:
+        // an ISO 8601 stamp is "2026-09-01T12:34:56", and "01T" has no boundary.
+        if let regex = try? NSRegularExpression(pattern: #"(?<![0-9])([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})(?![0-9])"#),
            let m = regex.firstMatch(in: line, range: full) {
             let y = Int(ns.substring(with: m.range(at: 1)))!
             let mo = Int(ns.substring(with: m.range(at: 2)))!
@@ -375,10 +376,10 @@ nonisolated enum StatementImport {
             }
         }
 
-        // 1 Sep 2026 / 1 September 26 / Sep 1, 2026. After the numeric form, so
+        // 1 Sep 2026 / 1 September 26 / 01-Sep-2026 / 01/Sep/2026 / Sep 1, 2026. After the numeric form, so
         // "03/09/2026 CAFE 12 MARKET ST" isn't read as 12 March.
         if let regex = try? NSRegularExpression(
-            pattern: #"\b([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s*([0-9]{2,4})?\b"#, options: .caseInsensitive),
+            pattern: #"\b([0-9]{1,2})(?:\s+|[-/])([A-Za-z]{3,9})\.?(?:[\s\-/]+)?([0-9]{2,4})?\b"#, options: .caseInsensitive),
            let m = regex.firstMatch(in: line, range: full),
            let month = month(ns.substring(with: m.range(at: 2))) {
             let d = Int(ns.substring(with: m.range(at: 1)))!
