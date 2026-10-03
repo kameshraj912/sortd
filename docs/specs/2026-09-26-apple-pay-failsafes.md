@@ -287,6 +287,31 @@ Read for comparison, all third-party, none Apple's own:
   Shortcuts-automation timeouts was found; the substantive reports are all on Apple's own
   developer forums (Sources 4, 6, 7, 14, 15).
 
+## Simulator check, 3 Oct 2026 (online payments, silent shortcut)
+
+Done by hand on an iOS 27 simulator with the signed shortcut from
+`scripts/build-apple-pay-shortcut.py` (branch `applepay-online`).
+
+Proved:
+- The shortcut imports with both "When…" lines (Any Card tapped, notification from Wallet)
+  and `ShowWhenRun: False` survives the import.
+- The first ▶ run shows only "Allow … to run actions from Sortd?". After Allow, runs show
+  no dialog.
+- With the notification line pointed at Messages (a stand-in), a pushed notification
+  (`xcrun simctl push`) ran the shortcut by itself about 11 seconds later, with no dialog.
+  Title, subtitle and body reached Sortd, the purchase was saved, and Sortd posted
+  "Logged · $5.50 at Seven Seeds".
+
+Not proved, and the main risk:
+- The same notification pushed as Wallet (`com.apple.Passbook`) was delivered but never
+  reached Shortcuts' trigger stream, three times out of three, while the Messages control
+  fired each time. Either the simulator does not pass Wallet notifications to Shortcuts, or
+  iOS leaves Wallet out of the Notification trigger. Only a real online payment on a phone
+  can tell.
+- If Wallet turns out to be left out: the fallback is the bank app's own purchase
+  notification. The "+" next to Wallet in the shortcut adds more apps. That needs new setup
+  words and looser parsing (bank wording differs), so it is a separate change.
+
 ## Rough size
 
 Throw-safety + tap queue + notification (#8/#9): ~1.5–2 days. Needs-a-check tagging,

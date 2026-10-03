@@ -83,6 +83,9 @@ struct IncomingPurchase {
     var category: SpendCategory? = nil
     var note: String = ""
     var platform: String? = nil
+    /// Which Apple Pay trigger sent it (`Transaction.tapOrigins`); nil for
+    /// every other source.
+    var tapOrigin: TapTrigger? = nil
 }
 
 enum TransactionLogger {
@@ -143,6 +146,7 @@ enum TransactionLogger {
             note: p.note
         )
         txn.platform = p.platform
+        txn.tapOrigins = p.tapOrigin?.rawValue
         context.insert(txn)
         if save { try context.save() }
         return .added(txn)
@@ -151,6 +155,9 @@ enum TransactionLogger {
     /// The more trusted source wins for merchant name and card; the tap keeps
     /// its exact time because bank records often only carry the date.
     private static func merge(_ p: IncomingPurchase, into t: Transaction) {
+        // Before `markSeen`: a row that was never a tap reads its old
+        // triggers from `seenIn`, which must not yet include this one.
+        if let origin = p.tapOrigin { t.markOrigin(origin) }
         t.markSeen(in: p.source)
         // A bank alert only says "DoorDash"; the DoorDash email names the
         // restaurant. Keep the more useful name whichever arrives first.
