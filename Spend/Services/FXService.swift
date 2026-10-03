@@ -8,10 +8,10 @@ enum FXService {
         let rates: [String: [String: Double]]
     }
 
-    /// "2026-09-18" in the phone's own time zone.
-    static func dayString(_ date: Date) -> String {
-        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    /// "2026-09-18" in the phone's own time zone, always Gregorian: it goes
+    /// into Frankfurter's URL and the saved rate keys (`DayKey`).
+    static func dayString(_ date: Date, calendar: Calendar = DayKey.calendar) -> String {
+        DayKey.string(date, calendar: calendar)
     }
 
     /// Home currency changed: forget converted values, then convert again.

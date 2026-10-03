@@ -72,12 +72,14 @@ nonisolated enum StatementImport {
     /// Reads a bank CSV. Works with a header row or without one (NAB's
     /// export has no header), and with either a signed Amount column or
     /// separate Debit/Credit columns.
-    static func rows(fromCSV text: String, dateOrder: DateOrder = .auto) -> [Row] {
-        parse(csv: text, dateOrder: dateOrder).rows
+    static func rows(fromCSV text: String, dateOrder: DateOrder = .auto,
+                     calendar: Calendar = DayKey.calendar) -> [Row] {
+        parse(csv: text, dateOrder: dateOrder, calendar: calendar).rows
     }
 
     /// Like `rows(fromCSV:)`, and counts the rows it could not read.
-    static func parse(csv text: String, dateOrder: DateOrder = .auto) -> Parsed {
+    static func parse(csv text: String, dateOrder: DateOrder = .auto,
+                      calendar: Calendar = DayKey.calendar) -> Parsed {
         let grid = parseCSV(text)
         guard !grid.isEmpty else { return Parsed(rows: [], skipped: 0) }
 
@@ -96,7 +98,7 @@ nonisolated enum StatementImport {
         var skipped = 0
         for fields in body {
             guard fields.indices.contains(dateColumn),
-                  let date = parseDate(fields[dateColumn], order: order),
+                  let date = parseDate(fields[dateColumn], order: order, calendar: calendar),
                   let money = money(in: fields, layout: layout) else { skipped += 1; continue }
 
             let detail = layout.detail.flatMap { fields.indices.contains($0) ? fields[$0] : nil }
@@ -211,12 +213,13 @@ nonisolated enum StatementImport {
         }
 
         // Separate Debit / Credit columns: whichever is filled says which way
-        // the money went, so the sign in the cell doesn't matter.
+        // the money went, so the sign in the cell doesn't matter. Some banks
+        // fill the unused one with "0.00": that is empty, not a $0 purchase.
         if layout.debit != nil || layout.credit != nil {
-            if let debit = cell(layout.debit), let parsed = signedAmount(debit) {
+            if let debit = cell(layout.debit), let parsed = signedAmount(debit), parsed.amount != 0 {
                 return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .spend)
             }
-            if let credit = cell(layout.credit), let parsed = signedAmount(credit) {
+            if let credit = cell(layout.credit), let parsed = signedAmount(credit), parsed.amount != 0 {
                 return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .moneyIn)
             }
             return nil
@@ -290,15 +293,15 @@ nonisolated enum StatementImport {
     }
 
     static func rows(fromText text: String, dateOrder: DateOrder = .auto,
-                     today: Date = .now) -> [Row] {
-        parse(text: text, dateOrder: dateOrder, today: today).rows
+                     today: Date = .now, calendar: Calendar = DayKey.calendar) -> [Row] {
+        parse(text: text, dateOrder: dateOrder, today: today, calendar: calendar).rows
     }
 
     /// Like `rows(fromText:)`, and counts the lines that carried a date but
     /// had no readable amount or description. Lines with no date (headers,
     /// page numbers, marketing) are not statement lines and are not counted.
     static func parse(text: String, dateOrder: DateOrder = .auto,
-                      today: Date = .now) -> Parsed {
+                      today: Date = .now, calendar: Calendar = DayKey.calendar) -> Parsed {
         let lines = text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
@@ -308,7 +311,8 @@ nonisolated enum StatementImport {
         var out: [Row] = []
         var skipped = 0
         for line in lines {
-            guard let (date, dateRange) = firstDate(in: line, order: order, today: today) else { continue }
+            guard let (date, dateRange) = firstDate(in: line, order: order, today: today,
+                                                    calendar: calendar) else { continue }
 
             // Take the date out before looking for money, or "01/09/2026"
             // donates a "2026" that reads perfectly well as an amount.
@@ -322,7 +326,99 @@ nonisolated enum StatementImport {
                            currency: money.currency,
                            kind: money.isCredit ? .moneyIn : .spend, raw: line))
         }
+        // No line had a date and an amount together: perhaps a screenshot
+        // of a list that puts the day on a line of its own.
+        if out.isEmpty {
+            let grouped = groupedByDay(lines, order: order, today: today, calendar: calendar)
+            if !grouped.rows.isEmpty { return grouped }
+        }
         return Parsed(rows: out, skipped: skipped)
+    }
+
+    /// Wallet's card list and most bank apps don't print the date on the
+    /// purchase's own line. Bank apps group purchases under a day header
+    /// ("Fri 26 Sep"); Wallet writes the day under each purchase
+    /// ("Yesterday", "Thursday", "26/09/2026"). Which of the two is decided
+    /// once, from whichever comes first. Only tried when no line had both a
+    /// date and an amount, so a PDF statement is never read this way.
+    private static func groupedByDay(_ lines: [String], order: DateOrder, today: Date,
+                                     calendar: Calendar) -> Parsed {
+        enum Line { case day(Date), purchase(Row), other }
+        let read: [Line] = lines.map { line in
+            if let day = dayHeader(line, order: order, today: today, calendar: calendar) { return .day(day) }
+            guard !isSummaryLine(line), let money = lastAmount(in: line),
+                  let detail = detail(in: line, without: money.range) else { return .other }
+            return .purchase(Row(date: today, detail: detail, amount: abs(money.amount), currency: money.currency,
+                                 kind: money.isCredit ? .moneyIn : .spend, raw: line))
+        }
+        let headersFirst = read.lazy.compactMap { line -> Bool? in
+            switch line {
+            case .day: true
+            case .purchase: false
+            case .other: nil
+            }
+        }.first ?? true
+
+        var out: [Row] = []
+        var waiting: [Row] = []
+        var current: Date?
+        for line in read {
+            switch line {
+            case .day(let day):
+                if headersFirst {
+                    current = day
+                } else {
+                    out += waiting.map { var row = $0; row.date = day; return row }
+                    waiting = []
+                }
+            case .purchase(var row):
+                if !headersFirst {
+                    waiting.append(row)
+                } else if let current {
+                    // Before the first header it is the balance or a banner.
+                    row.date = current
+                    out.append(row)
+                }
+            case .other:
+                break
+            }
+        }
+        // Purchases with no day under them were seen and not read: say so.
+        return Parsed(rows: out, skipped: waiting.count)
+    }
+
+    private static let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+    /// A line that is only a day: "Today", "Yesterday", "Thursday",
+    /// "26/09/2026", "Fri 26 Sep". Noon that day.
+    private static func dayHeader(_ line: String, order: DateOrder, today: Date, calendar: Calendar) -> Date? {
+        let calendar = DayKey.gregorian(like: calendar)
+        func noon(_ daysBack: Int) -> Date? {
+            calendar.date(byAdding: .day, value: -daysBack, to: today)
+                .flatMap { calendar.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
+        }
+        let word = line.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+        if word == "today" { return noon(0) }
+        if word == "yesterday" { return noon(1) }
+        // Wallet names the day for the last week: the latest one before today.
+        if let target = weekdays.firstIndex(of: word) {
+            let back = (calendar.component(.weekday, from: today) - 1 - target + 7) % 7
+            return noon(back == 0 ? 7 : back)
+        }
+        guard let (date, range) = firstDate(in: line, order: order, today: today, calendar: calendar) else { return nil }
+        var rest = line
+        rest.removeSubrange(range)
+        // Nothing else but a weekday name ("Fri", "Friday,").
+        guard !rest.contains(where: \.isNumber) else { return nil }
+        let words = rest.lowercased().split { !$0.isLetter }.map(String.init)
+        guard words.allSatisfy({ w in w.count >= 3 && weekdays.contains { $0.hasPrefix(w) } }) else { return nil }
+        return date
+    }
+
+    /// A balance or total at the top of a bank app's screen, not a purchase.
+    private static func isSummaryLine(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return ["balance", "available", "limit", "total", "owing"].contains { lower.contains($0) }
     }
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
@@ -376,10 +472,11 @@ nonisolated enum StatementImport {
 
     /// Parses one date cell. Handles 01/09/2026, 2026-09-01, 2026-09-01T12:34:56+10:00,
     /// 1 Sep 2026, 01-Sep-2026, Sep 1 2026 and two-digit years.
-    static func parseDate(_ text: String, order: DateOrder, today: Date = .now) -> Date? {
+    static func parseDate(_ text: String, order: DateOrder, today: Date = .now,
+                          calendar: Calendar = DayKey.calendar) -> Date? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard let (date, _) = firstDate(in: trimmed, order: order, today: today) else { return nil }
+        guard let (date, _) = firstDate(in: trimmed, order: order, today: today, calendar: calendar) else { return nil }
         return date
     }
 
@@ -388,8 +485,12 @@ nonisolated enum StatementImport {
         "jul": 7, "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
     ]
 
-    private static func firstDate(in line: String, order: DateOrder,
-                                  today: Date = .now) -> (Date, Range<String.Index>)? {
+    private static func firstDate(in line: String, order: DateOrder, today: Date = .now,
+                                  calendar: Calendar = DayKey.calendar) -> (Date, Range<String.Index>)? {
+        // Statements print Gregorian years. On a Buddhist or Japanese phone
+        // calendar, 2026 was read as 1483 or 4044 CE and a year-less line
+        // took year 2569 and was dropped. Only the time zone is the phone's.
+        let calendar = DayKey.gregorian(like: calendar)
         let ns = line as NSString
         let full = NSRange(location: 0, length: ns.length)
         // [0-9], not \d: \d also matches full-width (１２) and Arabic (١٢)
@@ -402,7 +503,7 @@ nonisolated enum StatementImport {
             let y = Int(ns.substring(with: m.range(at: 1)))!
             let mo = Int(ns.substring(with: m.range(at: 2)))!
             let d = Int(ns.substring(with: m.range(at: 3)))!
-            if let date = make(year: y, month: mo, day: d), let r = Range(m.range, in: line) {
+            if let date = make(year: y, month: mo, day: d, calendar: calendar), let r = Range(m.range, in: line) {
                 return (date, r)
             }
         }
@@ -417,7 +518,7 @@ nonisolated enum StatementImport {
             let dayFirst = order == .dayFirst ? a <= 31 : a > 12
             let day = dayFirst ? a : b
             let month = dayFirst ? b : a
-            if let date = make(year: y, month: month, day: day), let r = Range(m.range, in: line) {
+            if let date = make(year: y, month: month, day: day, calendar: calendar), let r = Range(m.range, in: line) {
                 return (date, r)
             }
         }
@@ -431,11 +532,11 @@ nonisolated enum StatementImport {
             let d = Int(ns.substring(with: m.range(at: 1)))!
             let noYear = m.range(at: 3).location == NSNotFound
             let y = noYear
-                ? Calendar.current.component(.year, from: today)
+                ? calendar.component(.year, from: today)
                 : year(Int(ns.substring(with: m.range(at: 3)))!)
-            if var date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
+            if var date = make(year: y, month: month, day: d, calendar: calendar), let r = Range(m.range, in: line) {
                 // "28 Dec" on a statement read in January is last December.
-                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d) {
+                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d, calendar: calendar) {
                     date = earlier
                 }
                 return (date, r)
@@ -448,11 +549,11 @@ nonisolated enum StatementImport {
             let d = Int(ns.substring(with: m.range(at: 2)))!
             let noYear = m.range(at: 3).location == NSNotFound
             let y = noYear
-                ? Calendar.current.component(.year, from: today)
+                ? calendar.component(.year, from: today)
                 : year(Int(ns.substring(with: m.range(at: 3)))!)
-            if var date = make(year: y, month: month, day: d), let r = Range(m.range, in: line) {
+            if var date = make(year: y, month: month, day: d, calendar: calendar), let r = Range(m.range, in: line) {
                 // "28 Dec" on a statement read in January is last December.
-                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d) {
+                if noYear, date > today.addingTimeInterval(86_400), let earlier = make(year: y - 1, month: month, day: d, calendar: calendar) {
                     date = earlier
                 }
                 return (date, r)
@@ -478,13 +579,14 @@ nonisolated enum StatementImport {
         value >= 100 ? value : (value <= 69 ? 2000 + value : 1900 + value)
     }
 
-    private static func make(year: Int, month: Int, day: Int) -> Date? {
+    private static func make(year: Int, month: Int, day: Int, calendar: Calendar) -> Date? {
         guard (1...12).contains(month), (1...31).contains(day), year >= 1900, year <= 2200 else { return nil }
+        let calendar = DayKey.gregorian(like: calendar)
         var c = DateComponents()
         c.year = year; c.month = month; c.day = day; c.hour = 12
-        guard let date = Calendar.current.date(from: c) else { return nil }
+        guard let date = calendar.date(from: c) else { return nil }
         // Reject 31 February and friends, which Calendar would roll forward.
-        let back = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let back = calendar.dateComponents([.year, .month, .day], from: date)
         guard back.year == year, back.month == month, back.day == day else { return nil }
         return date
     }
@@ -558,8 +660,12 @@ nonisolated enum StatementImport {
         guard !trimmed.isEmpty else { return nil }
         // Must be money and nothing else, or a description column with a
         // house number in it would be read as an amount. An ISO code may sit
-        // before or after the number ("AUD -58.30", "12.00 SGD").
-        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
+        // before or after the number ("AUD -58.30", "12.00 SGD"). Cents after
+        // a dot ("1,234.50"), or after a comma ("-12,50", "1.234,50"), the
+        // European way, which is why `parseCSV` reads ";" files at all.
+        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
+        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*"# + number
+            + #"\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = trimmed as NSString
         guard let m = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)) else { return nil }
@@ -569,14 +675,14 @@ nonisolated enum StatementImport {
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
         // Three letters that are not a real currency are words ("KFC 12").
-        let codes = [group(1), group(6)].compactMap { $0?.uppercased() }
+        let codes = [group(1), group(8)].compactMap { $0?.uppercased() }
         guard codes.allSatisfy({ isoCurrencyCodes.contains($0) }), codes.count <= 1 else { return nil }
-        let whole = (group(3) ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group(4).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
+        let whole = (group(3) ?? group(5) ?? "0").filter(\.isNumber)
+        let cents = (group(4) ?? group(6)).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
         guard var value = Decimal(string: "\(whole).\(cents)") else { return nil }
 
         let negative = trimmed.contains("-") || (trimmed.hasPrefix("(") && trimmed.hasSuffix(")"))
-        let suffix = group(5)?.uppercased()
+        let suffix = group(7)?.uppercased()
         if negative || suffix == "DR" { value = -value }
         if suffix == "CR" { value = abs(value) }
         return (value, codes.first ?? currency(for: group(2)))

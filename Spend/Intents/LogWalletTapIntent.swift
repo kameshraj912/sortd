@@ -489,11 +489,13 @@ nonisolated enum WalletTapText {
     static func money(in s: String) -> String? {
         let sign = #"(?:-|−)?"#
         // "CN¥" before the bare "¥" alternative, so yuan keep their "CN" and
-        // aren't cut down to a yen sign.
-        let marker = #"(?:[A-Z]{0,2}\$|CN¥|€|£|¥|₹|฿|₱|₩|RM|Rs\.?|[A-Z]{3})"#
+        // aren't cut down to a yen sign. "JP¥" (how en_GB and en_SG phones
+        // write yen) is listed too: the bare "¥" can't start inside a word.
+        let marker = #"(?:[A-Z]{0,2}\$|CN¥|JP¥|€|£|¥|₹|฿|₱|₩|₪|RM|Rs\.?|[A-Z]{3})"#
         // Grouped thousands ("1,234.50", "1.234,50") or a plain run of digits
         // ("1234.50" — the old pattern stopped at 3 digits and read A$123).
-        let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+|\d+)(?:[.,]\d{2})?"#
+        // A group is exactly 3 digits: "A$45 1234" is A$45, not A$45 123.
+        let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
         let patterns = [
             // Not inside a word: "PANTRY 24" is not 24 Turkish lira.
             #"(?<![A-Za-z])"# + sign + marker + #"\s?"# + number, // A$4.50, SGD 6.20, -$5

@@ -13,20 +13,27 @@ nonisolated enum GenericReceipts {
     /// one wins (receipts list subtotals first).
     static func total(in text: String) -> (currency: String, amount: String)? {
         // Currency codes must be real uppercase codes: "Total GST 4.09" is a tax line, not money in "GST".
-        let money = #"(A\$|AU\$|S\$|US\$|NZ\$|C\$|HK\$|RM|Rp|₹|£|€|¥|\$|(?-i:[A-Z]{3}))\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})"#
+        // EFTPOS slips write a code and a sign together ("TOTAL AUD $45.00"); the code wins.
+        let signs = #"A\$|AU\$|S\$|US\$|NZ\$|C\$|HK\$|\$"#
+        let money = #"((?-i:[A-Z]{3})\s?(?:"# + signs + #")|"# + signs
+            + #"|RM|Rp|₹|£|€|¥|(?-i:[A-Z]{3}))\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})"#
         let tiers = [
             #"(?:grand total|total charged|amount charged|amount paid|total paid|you paid|payment of|purchase of|charged)"#,
             #"(?:order total|total amount|total due|amount due|total \(incl[^)]*\))"#,
             #"(?:total)"#,
         ]
         for label in tiers {
-            let pattern = label + #"\s*[:\-–]?\s*"# + money
+            // A whole word: "SUBTOTAL" and "SUB TOTAL" are not the total.
+            let pattern = notInsideWord + label + #"\s*[:\-–]?\s*"# + money
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
             let ns = text as NSString
             let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
             // Last valid match wins (receipts list subtotals first).
             for m in matches.reversed() {
-                let symbol = ns.substring(with: m.range(at: 1))
+                var symbol = ns.substring(with: m.range(at: 1)).filter { !$0.isWhitespace }
+                if symbol.count > 3, symbol.prefix(3).allSatisfy({ $0.isLetter && $0.isUppercase }) {
+                    symbol = String(symbol.prefix(3))
+                }
                 if symbol.count == 3, symbol.allSatisfy(\.isLetter), !Locale.commonISOCurrencyCodes.contains(symbol) { continue }
                 let value = ns.substring(with: m.range(at: 2)).replacingOccurrences(of: ",", with: "")
                 guard let d = Decimal(string: value), d > 0 else { continue }
@@ -35,6 +42,9 @@ nonisolated enum GenericReceipts {
         }
         return nil
     }
+
+    /// Put before a total label: not part of a longer word, and not "SUB TOTAL".
+    static let notInsideWord = #"(?<![a-z])(?<!sub )(?<!sub-)"#
 
     static func currencyCode(_ symbol: String) -> String {
         switch symbol.uppercased() {

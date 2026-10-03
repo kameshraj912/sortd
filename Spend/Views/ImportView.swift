@@ -331,7 +331,7 @@ struct ImportView: View {
                     skipped = parsed.skipped
                     rows = found.map { PickedRow(row: $0, include: $0.kind == .spend) }
                     wasScanned = reading.wasScanned
-                    card = Card.mine.first ?? .other
+                    card = CardBook.shared.statementCard(in: reading.text)
                     stage = .review
                 }
             } catch {

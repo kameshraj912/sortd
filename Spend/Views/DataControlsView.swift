@@ -53,10 +53,19 @@ struct PrivacyView: View {
 
 /// Every purchase as a CSV file, for Numbers, Excel or another app.
 enum CSVExport {
+    /// Rows no total counts, so a spreadsheet sum must not either: "Check
+    /// the Shortcut"'s A$0.01 runs, the removed test button's rows
+    /// (`Transaction.excludingLegacyTest`) and sample data (which the backup
+    /// leaves out too).
+    static func isExported(_ t: Transaction) -> Bool {
+        let hidden = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
+        return t.note != DemoData.marker && !hidden.contains(t.merchant) && !hidden.contains(t.rawMerchant)
+    }
+
     static func data(_ transactions: [Transaction]) -> Data {
         let iso = ISO8601DateFormatter()
         var lines = ["date,merchant,amount,currency,amount_\(Money.home.lowercased()),category,card,refunded,note"]
-        for t in transactions.sorted(by: { $0.date < $1.date }) {
+        for t in transactions.filter({ isExported($0) }).sorted(by: { $0.date < $1.date }) {
             let fields = [iso.string(from: t.date), t.merchant, "\(t.amount)", t.currencyCode,
                           t.audAmount.map { "\($0)" } ?? "", t.category.name, t.card.name,
                           t.refunded ? "yes" : "no", t.note]

@@ -34,8 +34,14 @@ enum Exports {
         }
     }
 
-    nonisolated static func dated(_ stem: String, _ ext: String) -> String {
-        "\(stem) \(Date.now.formatted(.iso8601.year().month().day())).\(ext)"
+    /// "Sortd backup 2026-10-03.sortdbackup", dated by the phone's own day.
+    /// The ISO 8601 style is in UTC, so a morning backup in Melbourne was
+    /// named after yesterday.
+    nonisolated static func dated(_ stem: String, _ ext: String, now: Date = .now,
+                                  timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return "\(stem) \(DayKey.string(now, calendar: calendar)).\(ext)"
     }
 }
 
