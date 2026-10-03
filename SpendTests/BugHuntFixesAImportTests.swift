@@ -51,4 +51,57 @@ struct BugHuntFixesAImportTests {
         #expect(saved.merged == 1)
         #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
     }
+
+    // MARK: S4. Screenshots that put the day on its own line
+
+    /// Apple Wallet's card list: the day sits under each purchase. Synthetic
+    /// OCR-style text (no real Wallet screenshot in the repo). 3 Oct 2026 is a
+    /// Saturday, so "Thursday" is 1 Oct.
+    @Test func aWalletListTakesTheDayUnderEachPurchase() {
+        let rows = StatementImport.rows(fromText: """
+        Latest Transactions
+        Seven Seeds Coffee $5.50
+        Carlton VIC
+        Yesterday
+        Woolworths $58.30
+        Richmond VIC
+        Thursday
+        Kmart Burwood $22.00
+        Burwood VIC
+        26/09/2026
+        """, today: date("2026-10-03"))
+        #expect(rows.map(\.detail) == ["Seven Seeds Coffee", "Woolworths", "Kmart Burwood"])
+        #expect(rows.map { ymd($0.date) } == ["2026-10-02", "2026-10-01", "2026-09-26"])
+        #expect(rows.allSatisfy { $0.kind == .spend })
+    }
+
+    /// A bank app: day headers above the purchases, and the balance on top
+    /// (synthetic OCR-style text). The balance is not a purchase.
+    @Test func aBankAppListTakesTheDayAboveAndSkipsTheBalance() {
+        let parsed = StatementImport.parse(text: """
+        Everyday Account
+        Available balance $1,234.56
+        Today
+        Uber Eats -$31.40
+        Yesterday
+        Woolworths Richmond -$58.30
+        Fri 25 Sep
+        Seven Seeds Coffee -$5.50
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.map(\.detail) == ["Uber Eats", "Woolworths Richmond", "Seven Seeds Coffee"])
+        #expect(parsed.rows.map { ymd($0.date) } == ["2026-10-03", "2026-10-02", "2026-09-25"])
+        #expect(parsed.skipped == 0)
+    }
+
+    /// Unchanged: a statement whose lines carry their own date is read the
+    /// old way, and a line with an amount but no date is still not a row.
+    @Test func aStatementWithDatedLinesIsReadAsBefore() {
+        let rows = StatementImport.rows(fromText: """
+        Opening balance 1,234.00
+        01/09/2026 WOOLWORTHS 3342 58.30
+        02/09/2026 SEVEN SEEDS 5.50
+        Closing balance 1,170.20
+        """, today: date("2026-10-03"))
+        #expect(rows.map(\.detail) == ["WOOLWORTHS 3342", "SEVEN SEEDS"])
+    }
 }

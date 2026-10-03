@@ -326,7 +326,99 @@ nonisolated enum StatementImport {
                            currency: money.currency,
                            kind: money.isCredit ? .moneyIn : .spend, raw: line))
         }
+        // No line had a date and an amount together: perhaps a screenshot
+        // of a list that puts the day on a line of its own.
+        if out.isEmpty {
+            let grouped = groupedByDay(lines, order: order, today: today, calendar: calendar)
+            if !grouped.rows.isEmpty { return grouped }
+        }
         return Parsed(rows: out, skipped: skipped)
+    }
+
+    /// Wallet's card list and most bank apps don't print the date on the
+    /// purchase's own line. Bank apps group purchases under a day header
+    /// ("Fri 26 Sep"); Wallet writes the day under each purchase
+    /// ("Yesterday", "Thursday", "26/09/2026"). Which of the two is decided
+    /// once, from whichever comes first. Only tried when no line had both a
+    /// date and an amount, so a PDF statement is never read this way.
+    private static func groupedByDay(_ lines: [String], order: DateOrder, today: Date,
+                                     calendar: Calendar) -> Parsed {
+        enum Line { case day(Date), purchase(Row), other }
+        let read: [Line] = lines.map { line in
+            if let day = dayHeader(line, order: order, today: today, calendar: calendar) { return .day(day) }
+            guard !isSummaryLine(line), let money = lastAmount(in: line),
+                  let detail = detail(in: line, without: money.range) else { return .other }
+            return .purchase(Row(date: today, detail: detail, amount: abs(money.amount), currency: money.currency,
+                                 kind: money.isCredit ? .moneyIn : .spend, raw: line))
+        }
+        let headersFirst = read.lazy.compactMap { line -> Bool? in
+            switch line {
+            case .day: true
+            case .purchase: false
+            case .other: nil
+            }
+        }.first ?? true
+
+        var out: [Row] = []
+        var waiting: [Row] = []
+        var current: Date?
+        for line in read {
+            switch line {
+            case .day(let day):
+                if headersFirst {
+                    current = day
+                } else {
+                    out += waiting.map { var row = $0; row.date = day; return row }
+                    waiting = []
+                }
+            case .purchase(var row):
+                if !headersFirst {
+                    waiting.append(row)
+                } else if let current {
+                    // Before the first header it is the balance or a banner.
+                    row.date = current
+                    out.append(row)
+                }
+            case .other:
+                break
+            }
+        }
+        // Purchases with no day under them were seen and not read: say so.
+        return Parsed(rows: out, skipped: waiting.count)
+    }
+
+    private static let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+    /// A line that is only a day: "Today", "Yesterday", "Thursday",
+    /// "26/09/2026", "Fri 26 Sep". Noon that day.
+    private static func dayHeader(_ line: String, order: DateOrder, today: Date, calendar: Calendar) -> Date? {
+        let calendar = DayKey.gregorian(like: calendar)
+        func noon(_ daysBack: Int) -> Date? {
+            calendar.date(byAdding: .day, value: -daysBack, to: today)
+                .flatMap { calendar.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
+        }
+        let word = line.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+        if word == "today" { return noon(0) }
+        if word == "yesterday" { return noon(1) }
+        // Wallet names the day for the last week: the latest one before today.
+        if let target = weekdays.firstIndex(of: word) {
+            let back = (calendar.component(.weekday, from: today) - 1 - target + 7) % 7
+            return noon(back == 0 ? 7 : back)
+        }
+        guard let (date, range) = firstDate(in: line, order: order, today: today, calendar: calendar) else { return nil }
+        var rest = line
+        rest.removeSubrange(range)
+        // Nothing else but a weekday name ("Fri", "Friday,").
+        guard !rest.contains(where: \.isNumber) else { return nil }
+        let words = rest.lowercased().split { !$0.isLetter }.map(String.init)
+        guard words.allSatisfy({ w in w.count >= 3 && weekdays.contains { $0.hasPrefix(w) } }) else { return nil }
+        return date
+    }
+
+    /// A balance or total at the top of a bank app's screen, not a purchase.
+    private static func isSummaryLine(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return ["balance", "available", "limit", "total", "owing"].contains { lower.contains($0) }
     }
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
