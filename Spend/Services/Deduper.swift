@@ -20,8 +20,13 @@ enum Deduper {
 
     static let window: TimeInterval = 2 * 24 * 3600
 
+    /// Sources that carry the real time of the purchase, not just its date.
+    private static let timed: Set<TxnSource> = [.tap, .manual]
+
     /// Index of the best match in `existing`, or nil if this is a new purchase.
-    static func match(_ new: Candidate, in existing: [Candidate]) -> Int? {
+    /// `calendar` decides what "the same day" is (the phone's own days).
+    static func match(_ new: Candidate, in existing: [Candidate],
+                      calendar: Calendar = DayKey.calendar) -> Int? {
         // A zero amount means the source failed to send one; never merge those.
         guard new.amount > 0 else { return nil }
         var best: (index: Int, score: Double)?
@@ -53,6 +58,14 @@ enum Deduper {
             // purchases (a coffee on Monday and Tuesday); only near-identical
             // times are a re-send.
             if sameSourceSeenBefore, abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
+            // A hand-typed purchase and an Apple Pay tap both carry the real
+            // time; the 2-day window is for statement rows, which carry only
+            // a date. Between those two, only the same day is one purchase: a
+            // coffee typed on Monday and a tap at the same shop on Tuesday are
+            // two coffees, and Monday's must not move to Tuesday.
+            if timed.contains(new.source), everSeenIn.allSatisfy(timed.contains),
+               new.source == .manual || everSeenIn.contains(.manual),
+               !calendar.isDate(old.date, inSameDayAs: new.date) { continue }
 
             let timeScore = 1 - abs(old.date.timeIntervalSince(new.date)) / window
             let score = nameScore + timeScore
