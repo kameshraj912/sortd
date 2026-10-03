@@ -244,9 +244,7 @@ struct BugHuntAccountTests {
     /// App Attest failing with `serverUnavailable` (Apple says: try again
     /// later) is not treated as offline, so the PostHog delete is dropped for
     /// good instead of queued, and the user sees a raw DeviceCheck error.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("DCError.serverUnavailable from App Attest drops the PostHog delete"))
-    func anAppAttestServerOutageQueuesThePersonDelete() async throws {
+    @Test func anAppAttestServerOutageQueuesThePersonDelete() async throws {
         let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#)])
         let attester = HuntAttester()
         attester.error = DCError(.serverUnavailable)
@@ -260,11 +258,24 @@ struct BugHuntAccountTests {
         #expect(problems.isEmpty)
     }
 
+    /// Any other App Attest refusal is plain words too, not DeviceCheck's own text.
+    @Test func anAppAttestRefusalIsShownInPlainWords() async throws {
+        let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#)])
+        let attester = HuntAttester()
+        attester.error = DCError(.invalidKey)
+        let (defaults, _) = scratch()
+        let store = accountStore(revoker(transport, attester: attester), defaults: defaults)
+        try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
+
+        let result = await store.deleteAccount()
+
+        #expect(result.problems == [WorkerRevoker.usageRecordNotDeleted])
+        #expect((defaults.array(forKey: AccountStore.pendingDeletesKey) as? [String] ?? []).isEmpty)
+    }
+
     /// A Worker refusal reaches the user as the Worker's machine code: the
     /// alert reads "posthog_auth".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Delete Account alert shows the raw Worker error code"))
-    func aWorkerRefusalIsShownInPlainWordsNotAsACode() async throws {
+    @Test func aWorkerRefusalIsShownInPlainWordsNotAsACode() async throws {
         let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#), (502, #"{"error":"posthog_auth"}"#)])
         let (defaults, _) = scratch()
         let store = accountStore(revoker(transport), defaults: defaults)
@@ -280,9 +291,7 @@ struct BugHuntAccountTests {
     /// no iCloud) the alert says "Try again in a moment", but the account is
     /// already forgotten, so there is nothing to try again; Apple's manual
     /// steps are never shown and the sign-in stays active.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Apple sheet failure at Delete Account says try again, not the manual steps"))
-    func aFailedAppleConfirmSheetGivesTheManualSteps() async throws {
+    @Test func aFailedAppleConfirmSheetGivesTheManualSteps() async throws {
         let r = revoker(HuntTransport([]), appleCode: { _ in
             throw AppleIdentityProvider.error(from: ASAuthorizationError(.failed))
         })
