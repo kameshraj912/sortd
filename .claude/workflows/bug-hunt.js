@@ -19,11 +19,11 @@
 
 export const meta = {
   name: 'bug-hunt',
-  description: 'Sortd bug hunt: 5 area reviewers in parallel, then finding-verifier on the top 5 findings by severity. Returns confirmed and rejected findings; writes no docs.',
+  description: 'Sortd bug hunt: 7 area reviewers in parallel, then finding-verifier on the top 6 findings by severity. Returns confirmed and rejected findings; writes no docs.',
   whenToUse: 'Stage 4 (sortd-test), after scripts/test.sh --all, when Raj has said yes to a bug hunt. Pass args {worktree}.',
   phases: [
-    { title: 'Review', detail: 'money-parsing, gmail-security, data-backup, ui-intents-widget, statement-import in parallel' },
-    { title: 'Verify', detail: 'finding-verifier on the top 5 findings by severity, one at a time' },
+    { title: 'Review', detail: '7 areas in parallel: money, data/backup, statement import, UI/intents/widget, account/sync/safety, onboarding/Apple Pay, security' },
+    { title: 'Verify', detail: 'finding-verifier on the top 6 findings by severity, one at a time' },
   ],
 }
 
@@ -31,19 +31,23 @@ if (!args || typeof args.worktree !== 'string' || !args.worktree.startsWith('/')
   throw new Error('bug-hunt needs args {worktree: "<absolute worktree path>"}')
 }
 const WT = args.worktree
-const VERIFY_CAP = 5
+const VERIFY_CAP = 6
 
 const AREAS = [
-  { id: 'money-parsing', suite: 'BugHuntMoneyTests',
-    files: 'Spend/Services/Parsing.swift, QuickEntry.swift, BankAlerts.swift, EmailParsers.swift, GenericReceipts.swift, FXService.swift' },
-  { id: 'gmail-security', suite: 'BugHuntGmailTests',
-    files: 'Spend/Services/GmailSync.swift, GoogleAuth.swift, EmailSync.swift, Keychain.swift, AppLock.swift, ProStore.swift, CrashReporting.swift' },
-  { id: 'data-backup', suite: 'BugHuntDataTests',
-    files: 'Spend/Services/Backup.swift, Deduper.swift, SpendStore.swift, Exports.swift, Recurring.swift, CategoryBudgets.swift, and wherever TransactionLogger lives' },
-  { id: 'ui-intents-widget', suite: 'BugHuntUITests',
-    files: 'Spend/Intents/*, SortdWidget/*, Spend/Services/WidgetBridge.swift, WidgetSummary.swift, Reminders.swift, Spend/Views/*' },
-  { id: 'statement-import', suite: 'BugHuntStatementTests',
-    files: 'Spend/Services/StatementImport.swift, StatementReader.swift, Deduper.swift, Spend/Views (ImportView)' },
+  { id: 'money-parsing', sections: ['money-parsing', 'input-and-monkey'], suite: 'BugHuntMoneyTests',
+    files: 'Spend/Services/Parsing.swift, QuickEntry.swift, GenericReceipts.swift, FXService.swift, Money formatting, CategoryBudgets.swift, Recurring.swift' },
+  { id: 'data-backup', sections: ['data-backup', 'crash-and-stress'], suite: 'BugHuntDataTests',
+    files: 'Spend/Services/Backup.swift, CloudBackup.swift, CloudKitBackupStore.swift, Deduper.swift, SpendStore.swift, Exports.swift, ErrorLog.swift, Connectivity.swift, PurchaseDraft.swift, and wherever TransactionLogger lives' },
+  { id: 'statement-import', sections: ['statement-import'], suite: 'BugHuntStatementTests',
+    files: 'Spend/Services/StatementImport.swift, StatementReader.swift, ReceiptScanner.swift, Deduper.swift, Spend/Views/ImportView.swift (also: a screenshot of the Apple Wallet card transaction list)' },
+  { id: 'ui-intents-widget', sections: ['ui-intents-widget', 'deep-links-and-intents'], suite: 'BugHuntUITests',
+    files: 'Spend/Views/ActivityView.swift (rebuilt 3 Oct), ActivityDays.swift, Spend/Views/*, Spend/Intents/*, SortdWidget/*, Spend/Services/WidgetBridge.swift, WidgetSummary.swift, Reminders.swift, Router' },
+  { id: 'account-sync-safety', sections: ['account-sync-safety'], suite: 'BugHuntAccountTests',
+    files: 'Spend/Services/AccountStore.swift, GoogleAuth.swift, Keychain.swift, AppLock.swift (Face ID unlock), CloudBackup.swift, CrashReporting.swift, Analytics.swift, ErrorLog.swift, Connectivity.swift, GmailCleanup.swift, worker/ (the Cloudflare account Worker)' },
+  { id: 'onboarding-and-applepay', sections: ['onboarding-and-applepay'], suite: 'BugHuntApplePayTests',
+    files: 'Spend/Views/OnboardingView.swift, Spend/Views/Onboarding/*, SetupProfile.swift, Spend/Intents/LogWalletTapIntent.swift, LogPurchaseIntent.swift, TapQueue.swift, LoggedNotice.swift, ApplePayStatus.swift, ApplePaySetupSteps.swift, Spend/Views/Components/ApplePaySetupPanel.swift, scripts/build-apple-pay-shortcut.py' },
+  { id: 'security-masvs', sections: ['security-masvs'], suite: 'BugHuntSecurityTests',
+    files: 'Spend/Spend-Info.plist, Spend.entitlements, PrivacyInfo.xcprivacy, Keychain.swift, AppLock.swift, Router (sortd:// links), CrashReporting.swift, Analytics.swift, ErrorLog.swift, WidgetSummary.swift, Exports.swift, Backup.swift, worker/index.js, Config.xcconfig' },
 ]
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 }
@@ -91,7 +95,8 @@ ${WT}/.claude/agents/abuse-tester.md and ${WT}/.claude/agents/code-reviewer.md a
 Worktree: ${WT}. Work only there. Never cd to the main Sortd folder or any other worktree.
 Run \`git -C ${WT} branch --show-current\` first and return it as \`branch\`.
 
-Start from the "${area.id}" section of ${WT}/docs/testing/attacks.md. Try every line, then add your own.
+Start from these sections of ${WT}/docs/testing/attacks.md: ${area.sections.map(x => '"' + x + '"').join(', ')}. Try every line, then add your own.
+Also read ${WT}/docs/testing/full-test-plan-2026-10-03.md, the "Spotted while reading" list and "Priority order": check any lead in your area first, and give recently changed code (Activity rebuild, polish slices, ErrorLog/Connectivity, online Apple Pay, Gmail removal) the most attention.
 Main files: ${area.files}.
 Skip bugs that ${WT}/docs/BugHunt-*.md lists as fixed, unless the fix has regressed.
 
@@ -101,11 +106,11 @@ Rules:
   Use an in-memory ModelContainer. If KnownBugs or the .knownBug tag is not defined in SpendTests/
   on this branch, do not create the file; put the test code in \`evidence\` instead.
 - Check the file parses: \`swiftc -parse ${WT}/SpendTests/${area.suite}.swift\`.
-- Do NOT run scripts/build.sh, scripts/test.sh, xcodebuild or simctl. Four other reviewers share this
+- Do NOT run scripts/build.sh, scripts/test.sh, xcodebuild or simctl. Six other reviewers share this
   worktree and its one simulator; the verifiers run the tests later, one at a time.
 - Do not commit, stage, stash or edit any other file.
 - Every finding needs a real file and line you read in ${WT}, a concrete input, expected vs actual.
-  No input, no finding. Do not invent problems to look thorough. At most 8 findings.
+  No input, no finding. Do not invent problems to look thorough. At most 10 findings.
 - Severity: critical = wrong money or lost data for many users; high = wrong money or lost data in a
   real case; medium = wrong but visible and recoverable; low = cosmetic or rare.`
 }

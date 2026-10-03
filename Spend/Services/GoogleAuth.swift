@@ -71,6 +71,9 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         let tokens = try await Self.exchange(code: code, verifier: verifier)
         guard let idToken = tokens.id_token else { throw AuthError.providerFailed }
         let account = try Self.identity(fromIDToken: idToken)
+        // An earlier sign-in's token is not overwritten and lost: its grant
+        // is queued for cancelling first.
+        Self.queueIdentityRevoke()
         Keychain.set(tokens.refresh_token ?? tokens.access_token, for: Self.identityTokenKey)
         return account
     }
@@ -94,8 +97,21 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     /// the token. A failed revoke joins the pending list and is retried.
     static func revokeIdentity() async {
         guard let token = Keychain.get(identityTokenKey) else { return }
+        // On the pending list until Google answers, so an app closed
+        // mid-request does not lose the grant.
+        addPending(token)
         Keychain.delete(identityTokenKey)
         await revoke(token)
+    }
+
+    /// Sign Out: forgets the identity token here, but keeps it on the revoke
+    /// list so the grant is still cancelled (the next time the app is
+    /// active, `retryPendingRevokes`). Nothing is left in the Keychain that
+    /// a later Google sign-in could overwrite.
+    static func queueIdentityRevoke() {
+        guard let token = Keychain.get(identityTokenKey) else { return }
+        addPending(token)
+        Keychain.delete(identityTokenKey)
     }
 
     private static let identityTokenKey = "google-identity-token"
@@ -164,17 +180,33 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     /// Kept only until Google confirms, then deleted.
     private static let pendingKey = "google-revoke-pending"
 
+    /// A token stays on the pending list until Google answers 200 or 400, so
+    /// a closed app or a slow network never loses a grant that is still on.
     private static func revoke(_ token: String) async {
         var req = URLRequest(url: URL(string: "https://oauth2.googleapis.com/revoke")!)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.httpBody = form(["token": token])
+        req.timeoutInterval = 20
         let code = ((try? await session.data(for: req))?.1 as? HTTPURLResponse)?.statusCode
         // 200 = revoked. 400 = Google no longer knows the token (already gone).
-        if code == 200 || code == 400 { return }
-        var pending = Set((Keychain.get(pendingKey) ?? "").split(separator: "\n").map(String.init))
-        pending.insert(token)
+        if code == 200 || code == 400 {
+            removePending(token)
+        } else {
+            addPending(token)
+        }
+    }
+
+    static func addPending(_ token: String) {
+        var pending = pendingTokens(Keychain.get(pendingKey))
+        guard !pending.contains(token) else { return }
+        pending.append(token)
         Keychain.set(pending.joined(separator: "\n"), for: pendingKey)
+    }
+
+    private static func removePending(_ token: String) {
+        let pending = pendingTokens(Keychain.get(pendingKey)).filter { $0 != token }
+        if pending.isEmpty { Keychain.delete(pendingKey) } else { Keychain.set(pending.joined(separator: "\n"), for: pendingKey) }
     }
 
     /// For Delete All. Reads the saved list of revokes that never reached
@@ -198,11 +230,11 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         for token in tokens { await revoke(token) }
     }
 
-    /// Tries the revokes that failed before. Called when the app becomes active.
+    /// Tries the revokes that failed before. Called when the app becomes
+    /// active. The list is not emptied first: each token leaves it only when
+    /// Google has answered.
     static func retryPendingRevokes() async {
-        guard let saved = Keychain.get(pendingKey), !saved.isEmpty else { return }
-        Keychain.delete(pendingKey)
-        for token in saved.split(separator: "\n") { await revoke(String(token)) }
+        for token in pendingTokens(Keychain.get(pendingKey)) { await revoke(token) }
     }
 
     private static func tokenRequest(_ fields: [String: String]) async throws -> Tokens {

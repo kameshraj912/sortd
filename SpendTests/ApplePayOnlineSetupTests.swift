@@ -18,30 +18,36 @@ struct ApplePayOnlineSetupTests {
 
     // MARK: - The raw "last tap received" record
 
-    @Test func aNotificationRunRecordsItsKindAndEveryField() {
+    /// The record says how every field arrived, never the words (X5, 3 Oct
+    /// 2026): a shop or an amount must not outlive its purchase in the defaults.
+    @Test func aNotificationRunRecordsItsKindAndHowEveryFieldArrived() {
         let record = LogWalletTapIntent.record(transaction: nil, amount: "stray", merchant: "", card: "Wallet",
                                                notification: WalletNotification(title: "NAB Visa Debit", subtitle: "DoorDash",
                                                                                 body: "A$23.40"),
                                                at: now)
         #expect(record.contains("notification run"))
-        #expect(record.contains("title \u{201C}NAB Visa Debit\u{201D}"))
-        #expect(record.contains("subtitle \u{201C}DoorDash\u{201D}"))
-        #expect(record.contains("body \u{201C}A$23.40\u{201D}"))
+        #expect(record.contains("title 14 characters"))
+        #expect(record.contains("subtitle 8 characters"))
+        #expect(record.contains("body 7 characters"))
         // The ignored tap fields still show, so a phone test can see them.
-        #expect(record.contains("amount \u{201C}stray\u{201D}"))
-        #expect(record.contains("card \u{201C}Wallet\u{201D}"))
+        #expect(record.contains("amount 5 characters"))
+        #expect(record.contains("merchant empty"))
+        #expect(record.contains("card 6 characters"))
+        for words in ["NAB Visa Debit", "DoorDash", "23.40", "stray", "Wallet"] {
+            #expect(!record.contains(words))
+        }
     }
 
-    /// A tap run says so, and keeps the shape `ApplePayStatus.settleTestTap`
-    /// looks for (`merchant “Sortd Test”`).
-    @Test func aTapRunRecordsItsKindAndKeepsTheMerchantShape() {
+    /// A tap run says so, with the same shape for every field.
+    @Test func aTapRunRecordsItsKindAndHowEveryFieldArrived() {
         let record = LogWalletTapIntent.record(transaction: nil, amount: "A$4.50",
                                                merchant: LogPurchaseIntent.legacyTestMerchant, card: "NAB Visa Debit",
                                                notification: WalletNotification(), at: now)
         #expect(record.hasPrefix(now.formatted(date: .abbreviated, time: .standard)))
         #expect(record.contains("tap run"))
-        #expect(record.contains("merchant \u{201C}\(LogPurchaseIntent.legacyTestMerchant)\u{201D}"))
-        #expect(record.contains("title \u{201C}\u{201D}"))
+        #expect(record.contains("merchant 10 characters"))
+        #expect(record.contains("title empty"))
+        #expect(!record.contains("4.50"))
     }
 
     // MARK: - Recent runs (the last 10 raw lines)
