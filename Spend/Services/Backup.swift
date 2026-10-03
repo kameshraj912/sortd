@@ -74,6 +74,8 @@ nonisolated enum Backup {
             var renewsOn: Date?
             var billingPeriod: String?
             var sourceAccount: String?
+            /// `Transaction.tapOrigins`. Optional: older backups have none.
+            var tapOrigins: String? = nil
             /// Card digits that matched none of the cards, so "Which card?"
             /// can find the purchase. Optional: older backups have none.
             var unmatchedLast4: String? = nil
@@ -151,6 +153,7 @@ nonisolated enum Backup {
                 seenIn: t.seenInRaw, note: t.note, createdAt: t.createdAt,
                 platform: t.platform, refunded: t.refunded, renewsOn: t.renewsOn,
                 billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount,
+                tapOrigins: t.tapOrigins,
                 unmatchedLast4: t.unmatchedLast4
             )
         }
@@ -410,6 +413,7 @@ nonisolated enum Backup {
             t.renewsOn = row.renewsOn
             t.billingPeriod = row.billingPeriod
             t.sourceAccount = row.sourceAccount
+            t.tapOrigins = row.tapOrigins
             t.unmatchedLast4 = row.unmatchedLast4
             context.insert(t)
             result.added += 1

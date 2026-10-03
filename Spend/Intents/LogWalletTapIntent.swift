@@ -33,6 +33,66 @@ nonisolated enum TapField {
     static func isBlank(_ value: String?) -> Bool { normalize(value).isEmpty }
 }
 
+/// Wallet's notification as the iOS 27 Notification trigger hands it over.
+/// Any one part non-blank (`TapField` rules) makes it a notification run;
+/// all three blank means the tap trigger ran (or a ▶ test) and the
+/// notification is ignored.
+nonisolated struct WalletNotification: Equatable, Sendable {
+    var title: String?
+    var subtitle: String?
+    var body: String?
+
+    var isPresent: Bool { !TapField.isBlank(title) || !TapField.isBlank(subtitle) || !TapField.isBlank(body) }
+
+    /// The non-blank parts, one per line, in Title, Subtitle, Body order.
+    var joined: String {
+        [title, subtitle, body].map(TapField.normalize).filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// Exactly what arrived, for the "needs a check" note.
+    var seen: String {
+        "title \u{201C}\(title ?? "")\u{201D} · subtitle \u{201C}\(subtitle ?? "")\u{201D} · body \u{201C}\(body ?? "")\u{201D}"
+    }
+
+    /// What one notification says.
+    enum Reading: Equatable {
+        /// A payment with an amount. `amount` starts with "-" for a refund,
+        /// so it takes the existing refund path.
+        case payment(amount: String, merchant: String?, card: String?)
+        /// The payment did not go through ("declined", "failed"…).
+        case notCompleted
+        /// No amount at all: a boarding pass, an order update, a card added.
+        case noAmount
+    }
+
+    /// Wording that means no money moved. Checked before anything else, so
+    /// "Payment declined · A$23.40" is never logged.
+    private static let notCompletedPattern =
+        #"\b(?:declined|not completed|failed|unsuccessful|couldn['’]t be|could not be|insufficient)\b"#
+    private static let refundPattern = #"\brefund(?:ed|s)?\b"#
+
+    /// Reads the parts in any order: the amount by its money pattern, the
+    /// card by card words, masked digits or `isKnownCard`, the shop from
+    /// what is left. The tap fields are never looked at.
+    @MainActor
+    func read(isKnownCard: (String) -> Bool = { _ in false }) -> Reading {
+        let text = joined
+        if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            return .notCompleted
+        }
+        let parts = WalletTapText.parse(text, notification: true, isKnownCard: isKnownCard)
+        guard let amount = parts.amount, let value = AmountParser.parse(amount)?.amount, value > 0 else {
+            return .noAmount
+        }
+        let refund = text.range(of: Self.refundPattern, options: [.regularExpression, .caseInsensitive]) != nil
+        let signed = refund && !AmountParser.isNegative(amount) ? "-" + amount : amount
+        return .payment(amount: signed, merchant: parts.merchant, card: parts.card)
+    }
+
+    static let noAmountMessage = "Sortd saw a Wallet notification with no amount."
+    static let notCompletedMessage = "Sortd saw a payment that didn't go through. Nothing was logged."
+}
+
 /// One-field version of Log Purchase for the Wallet automation: pick the
 /// Transaction once and Sortd pulls out the amount, shop and card itself.
 /// Shortcuts turns the transaction into text; its exact layout isn't
@@ -61,16 +121,34 @@ struct LogWalletTapIntent: AppIntent {
     @Parameter(title: "Card", description: "The card that was tapped.")
     var card: String?
 
+    /// iOS 27's Notification trigger (an app or a website, as well as a
+    /// till): Wallet's notification, part by part. When any of these is
+    /// set, Amount, Shop, Card and Transaction are ignored.
+    @Parameter(title: "Notification Title", description: "The Wallet notification's title.")
+    var notificationTitle: String?
+
+    @Parameter(title: "Notification Subtitle", description: "The Wallet notification's subtitle.")
+    var notificationSubtitle: String?
+
+    @Parameter(title: "Notification Body", description: "The Wallet notification's body.")
+    var notificationBody: String?
+
     static var parameterSummary: some ParameterSummary {
         Summary("Log \(\.$amount) at \(\.$merchant) in Sortd") {
             \.$card
             \.$transaction
+            \.$notificationTitle
+            \.$notificationSubtitle
+            \.$notificationBody
         }
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let r = await Self.performAndLog(transaction: transaction, amount: amount, merchant: merchant, card: card)
+        let r = await Self.performAndLog(transaction: transaction, amount: amount, merchant: merchant, card: card,
+                                         notification: WalletNotification(title: notificationTitle,
+                                                                          subtitle: notificationSubtitle,
+                                                                          body: notificationBody))
         return .result(dialog: IntentDialog(stringLiteral: r.message))
     }
 
@@ -89,8 +167,23 @@ struct LogWalletTapIntent: AppIntent {
     /// closed store, would not be.
     @MainActor
     static func performAndLog(transaction: String?, amount: String?, merchant: String?, card: String?,
+                             notification: WalletNotification = .init(),
                              now: Date = .now) async -> LogPurchaseIntent.Outcome {
         guard case .success(let container) = SpendStore.containerForIntent() else {
+            if notification.isPresent {
+                // Read now, so only a real payment is queued.
+                let reading = notification.read(isKnownCard: { CardBook.shared.match($0) != .other })
+                switch reading {
+                case .notCompleted, .noAmount:
+                    LogPurchaseIntent.recordReach(Self.record(transaction: transaction, amount: amount, merchant: merchant,
+                                                              card: card, notification: notification, at: now), at: now)
+                    return Self.notPaymentOutcome(reading)
+                case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
+                    let message = await TapQueue.saveForLater(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
+                                                              date: now, trigger: .notification)
+                    return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+                }
+            }
             let resolved = Self.resolvedFields(transaction: transaction, amount: amount, merchant: merchant, card: card)
             let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card, date: now)
             return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
@@ -98,6 +191,9 @@ struct LogWalletTapIntent: AppIntent {
         let outcome: LogPurchaseIntent.Outcome
         do {
             outcome = try await Self.handle(transaction, amount: amount, merchant: merchant, card: card,
+                                            notificationTitle: notification.title,
+                                            notificationSubtitle: notification.subtitle,
+                                            notificationBody: notification.body,
                                             in: container.mainContext, book: .shared, now: now)
         } catch {
             // `handle` never actually throws (its own do/catch queues
@@ -108,6 +204,9 @@ struct LogWalletTapIntent: AppIntent {
         }
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: container.mainContext)
+        // The shortcut runs with "Show When Run" off, so the dialog is not
+        // seen: say "Logged" with a notification, if already allowed.
+        await LoggedNotice.post(for: outcome)
         return outcome
     }
 
@@ -138,20 +237,68 @@ struct LogWalletTapIntent: AppIntent {
         return (parts.merchant, parts.amount, parts.card)
     }
 
+    /// A notification run: any of the three notification parts is set.
+    /// Then only the notification is read — the tap fields may hold stray
+    /// text when this trigger fired, so they are ignored entirely. All
+    /// three blank: exactly the tap behaviour from before.
     @MainActor
     static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
+                       notificationTitle: String? = nil, notificationSubtitle: String? = nil,
+                       notificationBody: String? = nil,
                        in context: ModelContext, book: CardBook,
                        now: Date = .now, debugForceSaveFailure: Bool = false) async throws -> LogPurchaseIntent.Outcome {
-        let resolved = resolvedFields(transaction: text, amount: amount, merchant: merchant, card: card)
-        let result = try await LogPurchaseIntent.handle(merchant: resolved.merchant, amount: resolved.amount,
+        let notification = WalletNotification(title: notificationTitle, subtitle: notificationSubtitle, body: notificationBody)
+        let record = Self.record(transaction: text, amount: amount, merchant: merchant, card: card,
+                                 notification: notification, at: now)
+        let result: LogPurchaseIntent.Outcome
+        let shop: String?
+        if notification.isPresent {
+            let reading = notification.read(isKnownCard: { book.match($0) != .other })
+            switch reading {
+            case .notCompleted, .noAmount:
+                // Shortcuts reached Sortd, but there is nothing to save:
+                // never a "needs a check" row for a boarding pass.
+                LogPurchaseIntent.recordReach(record, at: now)
+                return Self.notPaymentOutcome(reading)
+            case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
+                shop = parsedMerchant
+                result = try await LogPurchaseIntent.handle(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
+                                                            in: context, book: book, now: now,
+                                                            debugForceSaveFailure: debugForceSaveFailure,
+                                                            trigger: .notification, record: record, seen: notification.seen)
+            }
+        } else {
+            let resolved = resolvedFields(transaction: text, amount: amount, merchant: merchant, card: card)
+            shop = resolved.merchant
+            result = try await LogPurchaseIntent.handle(merchant: resolved.merchant, amount: resolved.amount,
                                                         card: resolved.card, in: context, book: book, now: now,
-                                                        debugForceSaveFailure: debugForceSaveFailure)
+                                                        debugForceSaveFailure: debugForceSaveFailure, record: record)
+        }
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
         // purchase; a legacy "Send a Test Tap" row is not a real tap).
-        if result.transaction != nil, resolved.merchant != LogPurchaseIntent.legacyTestMerchant {
+        if result.transaction != nil, shop != LogPurchaseIntent.legacyTestMerchant {
             Analytics.shared.track(.applePayTapLogged, ["merged": .bool(result.merged)])
         }
         return result
+    }
+
+    /// The raw "last tap received" line: which kind of run it was and
+    /// every field exactly as it arrived, tap fields and notification parts
+    /// both (on a notification run the tap fields are ignored, but what
+    /// they held is the thing to check on a phone).
+    nonisolated static func record(transaction: String?, amount: String?, merchant: String?, card: String?,
+                                   notification: WalletNotification, at now: Date) -> String {
+        let kind = notification.isPresent ? "notification run" : "tap run"
+        var fields = "amount \u{201C}\(amount ?? "")\u{201D} · merchant \u{201C}\(merchant ?? "")\u{201D} · card \u{201C}\(card ?? "")\u{201D}"
+        if !TapField.isBlank(transaction) { fields += " · text \u{201C}\(transaction ?? "")\u{201D}" }
+        return "\(now.formatted(date: .abbreviated, time: .standard)): \(kind) · \(fields) · \(notification.seen)"
+    }
+
+    /// Nothing saved: say which kind of notification it was.
+    private static func notPaymentOutcome(_ reading: WalletNotification.Reading) -> LogPurchaseIntent.Outcome {
+        let message = reading == .notCompleted ? WalletNotification.notCompletedMessage
+            : WalletNotification.noAmountMessage
+        return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false)
     }
 }
 
@@ -160,7 +307,14 @@ struct LogWalletTapIntent: AppIntent {
 nonisolated enum WalletTapText {
     struct Parts: Equatable { var amount: String?; var merchant: String?; var card: String? }
 
-    static func parse(_ text: String) -> Parts {
+    /// `notification`: the text is Wallet's own notification (Title,
+    /// Subtitle and Body joined by newlines), so framing words around the
+    /// shop ("You paid", "paid to", "Refund from", "Apple Pay") are dropped
+    /// too, and a line naming one of the person's own cards
+    /// (`isKnownCard`, a `CardBook` match) is the card even with no card
+    /// word in it ("YouTrip"). Off, the tap text reads exactly as before.
+    static func parse(_ text: String, notification: Bool = false,
+                      isKnownCard: (String) -> Bool = { _ in false }) -> Parts {
         // Fields may come one per line, as "Key: value" pairs, or on one
         // line separated by commas.
         var lines = text.split(whereSeparator: \.isNewline)
@@ -198,8 +352,10 @@ nonisolated enum WalletTapText {
                 rest.append(contentsOf: splitIntoCandidates(line))
             }
         }
+        if notification { rest = rest.compactMap(withoutNotificationFiller) }
         // The card is the last line that names a card; the shop is the first other one.
         if parts.card == nil, let i = rest.lastIndex(where: looksLikeCard) { parts.card = rest.remove(at: i) }
+        if notification, parts.card == nil, let i = rest.lastIndex(where: isKnownCard) { parts.card = rest.remove(at: i) }
         if parts.merchant == nil, let first = rest.first { parts.merchant = first }
         return parts
     }
@@ -234,6 +390,40 @@ nonisolated enum WalletTapText {
             .filter { !$0.isEmpty && !nonShopPhrases.contains($0.lowercased()) }
     }
 
+    /// Words Wallet's notification may put around a shop name. Only ever
+    /// dropped at the start ("You paid DoorDash", "Refund from…" once
+    /// "from" has split it off) or the end ("DoorDash refund").
+    private static let leadingFiller: Set<String> = [
+        "you", "you've", "have", "has", "just", "paid", "spent", "sent", "payment", "purchase", "charged",
+        "made", "refund", "refunded", "received", "to",
+    ]
+    /// Dropped only straight after a leading filler word ("paid to", "a
+    /// payment of"), never at the start of a name on its own ("A Little Cafe").
+    private static let followingFiller: Set<String> = ["a", "an", "of", "at", "your"]
+    private static let trailingFiller: Set<String> = ["refund", "refunded", "payment", "purchase"]
+    /// Whole lines that name Wallet itself, never a shop.
+    private static let walletNames: Set<String> = ["apple pay", "wallet", "apple wallet", "apple cash"]
+
+    /// One shop/card candidate from a notification with its framing words
+    /// and stray punctuation removed, or nil when nothing is left.
+    private static func withoutNotificationFiller(_ candidate: String) -> String? {
+        var words = candidate.split(separator: " ").map(String.init)
+        var dropped = false
+        while let first = words.first?.lowercased(),
+              leadingFiller.contains(first) || (dropped && followingFiller.contains(first)) {
+            words.removeFirst()
+            dropped = true
+        }
+        while let last = words.last?.lowercased(), trailingFiller.contains(last) { words.removeLast() }
+        let joined = words.joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces.union(.init(charactersIn: ".,;:!·-–—|")))
+        guard !joined.isEmpty, !walletNames.contains(joined.lowercased()) else { return nil }
+        // Nothing but punctuation ("·", "…") is not a name; an emoji is kept.
+        guard joined.unicodeScalars.contains(where: { !CharacterSet.punctuationCharacters.contains($0) }) else { return nil }
+        guard !nonShopPhrases.contains(joined.lowercased()) else { return nil }
+        return joined
+    }
+
     private static func keyValue(_ line: String) -> (String, String)? {
         guard let colon = line.firstIndex(of: ":") else { return nil }
         let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
@@ -255,7 +445,8 @@ nonisolated enum WalletTapText {
         let patterns = [
             sign + marker + #"\s?"# + number,                  // A$4.50, SGD 6.20, -$5
             sign + number + #"\s?(?:[A-Z]{3})\b"#,             // 6.20 SGD
-            sign + #"\d+[.,]\d{2}\b"#,                          // 4.50
+            // 4.50, 1,234.50 — the whole number, not "234.50" out of it.
+            sign + #"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)[.,]\d{2}\b"#,
         ]
         let ns = s as NSString
         for p in patterns {
