@@ -764,3 +764,66 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
   .steps { grid-template-columns: repeat(3, 1fr); gap: 20px; }
   .steps .iphone.sm { --w: 200px; }
 }
+
+/* ---------- Motion pass (3 Oct 2026). Same layout; only how things arrive. ---------- */
+:root {
+  --m-out: cubic-bezier(.16, 1, .3, 1);
+  --m-spring: linear(0, .025, .091, .186, .298, .42, .542, .659, .766, .861, .941, 1.007, 1.058, 1.094, 1.118, 1.132, 1.135, 1.132, 1.123, 1.11, 1.095, 1.079, 1.062, 1.046, 1.032, 1.019, 1.008, .999, .992, .987, .984, .982, .982, .982, .983, .985, .987, .989, .992, .994, .996, .997, .999, 1, 1.001, 1.002, 1.002, 1.002, 1);
+}
+.m-word { display: inline-block; }
+.price .m-ast { display: inline-block; font-size: .55em; vertical-align: super; color: var(--orange); margin-left: 2px; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  /* The gate: the app drifts by behind the glass, the card lands, the words follow. */
+  .gate .early-peek { animation: peek-in 1.4s var(--m-out) both; }
+  .gate .early-peek img { animation: peek-drift 26s ease-in-out infinite alternate; }
+  .gate .early-peek img:nth-child(odd) { animation-name: peek-drift-odd; animation-duration: 31s; }
+  @keyframes peek-in { from { opacity: 0; } }
+  @keyframes peek-drift { from { transform: translate3d(-2.5%, -1.5%, 0); } to { transform: translate3d(2.5%, 1.5%, 0); } }
+  @keyframes peek-drift-odd { from { transform: translate3d(2%, 13%, 0); } to { transform: translate3d(-2.5%, 11%, 0); } }
+  .early[open] { animation: early-land .7s var(--m-out) .1s both; }
+  .early[open]::backdrop { animation: early-glass .8s ease both; }
+  @keyframes early-land { from { opacity: 0; transform: translateY(18px) scale(.97); } }
+  @keyframes early-glass { from { background: rgba(18,18,20,0); } }
+  .early[open] > img { animation: icon-pop .8s var(--m-spring) .35s both; }
+  @keyframes icon-pop { from { opacity: 0; transform: scale(.75); } }
+  .early[open] h2 .m-word { animation: word-in .8s var(--m-out) both; animation-delay: calc(.35s + var(--w) * 50ms); }
+  @keyframes word-in { from { opacity: 0; transform: translateY(.3em); } }
+  .early[open] > p, .early[open] .early-actions { animation: m-rise .8s var(--m-out) both; }
+  .early[open] > p:not(.early-note) { animation-delay: .6s; } .early[open] .early-actions { animation-delay: .68s; } .early[open] .early-note { animation-delay: .76s; }
+  @keyframes m-rise { from { opacity: 0; transform: translateY(12px); } }
+
+  /* The home page itself (after the gate lifts). */
+  .hero h1 .m-line { display: inline-block; animation: m-line 1s var(--m-out) both; }
+  .hero h1 .m-line:nth-of-type(2) { animation-delay: .22s; }
+  @keyframes m-line { from { opacity: 0; transform: translateY(.35em); } }
+  .hero .eyebrow .bars span, .js .reveal.in > .bars span { transform-origin: left; animation: bar-load .6s var(--m-out) both; }
+  .hero .eyebrow .bars span:nth-child(2), .js .reveal.in > .bars span:nth-child(2) { animation-delay: .08s; }
+  .hero .eyebrow .bars span:nth-child(3), .js .reveal.in > .bars span:nth-child(3) { animation-delay: .16s; }
+  .hero .eyebrow .bars span:nth-child(4), .js .reveal.in > .bars span:nth-child(4) { animation-delay: .24s; }
+  @keyframes bar-load { from { transform: scaleX(0); } }
+  .hero .lead, .hero .cta, .hero .small-note { animation: m-rise .9s var(--m-out) both; }
+  .hero .lead { animation-delay: .35s; } .hero .cta { animation-delay: .45s; } .hero .small-note { animation-delay: .55s; }
+  .hero .demo { animation: demo-in 1s var(--m-out) .3s both; }
+  @keyframes demo-in { from { opacity: 0; transform: translateY(30px); } }
+
+  /* Scroll reveals: a spring, a little blur, and children dealt in one after another. */
+  .js .reveal { transform: translateY(28px); transition: opacity .8s var(--m-out), transform .9s var(--m-out); }
+  .js .reveal.in .source, .js .reveal.in .pblock, .js .reveal.in .bank-group, .js .reveal.in .plan-includes li, .js .plan-includes.reveal.in li { animation: m-deal .7s var(--m-out) both; }
+  .js .reveal.in :is(.source, .pblock, .bank-group):nth-child(2), .js .plan-includes.reveal.in li:nth-child(2) { animation-delay: .08s; }
+  .js .reveal.in :is(.source, .pblock, .bank-group):nth-child(3), .js .plan-includes.reveal.in li:nth-child(3) { animation-delay: .16s; }
+  .js .reveal.in :is(.source, .pblock, .bank-group):nth-child(4) { animation-delay: .24s; }
+  .js .reveal.in :is(.source, .pblock, .bank-group):nth-child(5) { animation-delay: .32s; }
+  .js .reveal.in :is(.source, .pblock, .bank-group):nth-child(6) { animation-delay: .4s; }
+  @keyframes m-deal { from { opacity: 0; transform: translateY(14px); } }
+  .js .reveal.in .chip { animation: m-chip .5s var(--m-spring) both; animation-delay: calc(.2s + var(--k, 0) * 30ms); }
+  @keyframes m-chip { from { opacity: 0; transform: scale(.92); } }
+    .pgrid .pblock, .source { transition: transform .5s var(--m-out); }
+  .pgrid .pblock:hover, .source:hover { transform: translateY(-4px); }
+
+  /* Pricing: $0 lands, an asterisk tries to sneak in, and falls off. */
+  .js .plans.reveal.in .price { display: inline-block; animation: price-pop .9s var(--m-spring) .15s both; }
+  @keyframes price-pop { from { opacity: 0; transform: scale(.8); } }
+  .js .plans.reveal.in .m-ast { animation: ast 2.2s var(--m-out) .9s both; }
+  @keyframes ast { 0% { opacity: 0; transform: translateY(-30px) rotate(-30deg); } 18% { opacity: 1; transform: none; } 55% { opacity: 1; transform: rotate(12deg); }
+    100% { opacity: 0; transform: translate(26px, 90px) rotate(160deg); } }
+}
