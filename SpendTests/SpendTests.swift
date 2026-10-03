@@ -1015,7 +1015,7 @@ struct ApplePayTapTests {
     /// otherwise setup keeps saying "waiting" after the automation is built.
     @Test func testRunMarksTheShortcutAsConnected() async throws {
         let (ctx, book) = try setup()
-        UserDefaults.standard.removeObject(forKey: LogPurchaseIntent.lastTapAtKey)
+        LogPurchaseIntent.reachDefaults.removeObject(forKey: LogPurchaseIntent.lastTapAtKey)
         #expect(LogPurchaseIntent.shortcutHasReachedApp == false)
         _ = try await LogPurchaseIntent.handle(merchant: nil, amount: nil, card: nil, in: ctx, book: book)
         #expect(LogPurchaseIntent.shortcutHasReachedApp)
@@ -1024,7 +1024,7 @@ struct ApplePayTapTests {
     /// The same is true for a real tap, so the status never goes backwards.
     @Test func realTapAlsoMarksTheShortcutAsConnected() async throws {
         let (ctx, book) = try setup(cards: [nab])
-        UserDefaults.standard.removeObject(forKey: LogPurchaseIntent.lastTapAtKey)
+        LogPurchaseIntent.reachDefaults.removeObject(forKey: LogPurchaseIntent.lastTapAtKey)
         _ = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "A$4.50",
                                                card: "NAB Visa Debit", in: ctx, book: book)
         #expect(LogPurchaseIntent.shortcutHasReachedApp)
