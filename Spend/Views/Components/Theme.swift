@@ -176,6 +176,22 @@ extension Font {
     static var moneySmall: Font { .title2.weight(.bold).monospacedDigit() }
 }
 
+/// The one height for a full-width button: the primary pill, the outlined
+/// twin under it, and the sign-in buttons. Sign in with Apple and Google were
+/// already 50; the rest had drifted to 48, 52, 54 and 56. Tap targets are never
+/// smaller than `minTap` (HIG).
+enum ButtonMetrics {
+    static let height: CGFloat = 50
+    static let minTap: CGFloat = 44
+    /// A large glass button adds about 26 pt of its own above and below the
+    /// label, so its label asks for the height minus that. Measured on the
+    /// iPhone 18 Pro simulator, 3 Oct 2026.
+    static let glassPadding: CGFloat = 26
+    /// What the label inside a large glass button asks for, so the whole
+    /// button comes out at `height`.
+    static var labelHeight: CGFloat { height - glassPadding }
+}
+
 /// The label of a full-width primary button. The capsule itself comes from
 /// the system glass style — see `primaryGlass()`.
 struct PrimaryPill: ViewModifier {
@@ -184,7 +200,7 @@ struct PrimaryPill: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(.headline)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
             .foregroundStyle(enabled ? Color.onBrand : Color.secondary)
     }
 }
@@ -240,6 +256,16 @@ extension ButtonStyle where Self == PressableButtonStyle {
 }
 
 extension View {
+    /// Grows a small control's tap target to 44 x 44 pt (HIG) without moving
+    /// anything around it: `growsBy` is how much taller than 44 the control's
+    /// own height falls short (about 24 for one line of subheadline text),
+    /// handed back as negative padding so the layout stays as it was.
+    func minTapTarget(growsBy: CGFloat) -> some View {
+        frame(minWidth: ButtonMetrics.minTap, minHeight: ButtonMetrics.minTap)
+            .contentShape(.rect)
+            .padding(.vertical, -growsBy / 2)
+    }
+
     func surface(radius: CGFloat = 24) -> some View { modifier(Surface(radius: radius)) }
     func chip(selected: Bool) -> some View { modifier(ChipStyle(selected: selected)) }
     func primaryPill(enabled: Bool = true) -> some View { modifier(PrimaryPill(enabled: enabled)) }

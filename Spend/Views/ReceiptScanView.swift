@@ -38,7 +38,7 @@ struct ReceiptScanView: View {
 
                 if reading {
                     ProgressView("Reading your receipt…")
-                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .frame(maxWidth: .infinity, minHeight: ButtonMetrics.height)
                 } else {
                     VStack(spacing: 10) {
                         if cameraWorks {
@@ -51,7 +51,7 @@ struct ReceiptScanView: View {
                         PhotosPicker(selection: $photo, matching: .images) {
                             Label("Choose Photo", systemImage: "photo")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: 52)
+                                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.height)
                                 .foregroundStyle(Color.ink)
                                 .surface(radius: 26)
                         }
