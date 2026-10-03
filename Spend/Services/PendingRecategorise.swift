@@ -57,6 +57,7 @@ final class PendingRecategorise {
             try TransactionLogger.undo(change, in: context)
         } catch {
             log.error("Recategorise undo failed: \(error.localizedDescription)")
+            ErrorLog.report(error, where: "PendingRecategorise.undo")
         }
         self.change = nil
         closing = false

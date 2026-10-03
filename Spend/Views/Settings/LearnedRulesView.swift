@@ -7,6 +7,7 @@ struct LearnedRulesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \MerchantRule.key) private var rules: [MerchantRule]
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
+    @State private var saveFailed = false
 
     var body: some View {
         let names = shopNames
@@ -28,7 +29,7 @@ struct LearnedRulesView: View {
                     }
                     .onDelete { offsets in
                         for i in offsets { context.delete(rules[i]) }
-                        try? context.save()
+                        if !context.saveReporting(where: "LearnedRules.delete") { saveFailed = true }
                     }
                 } footer: {
                     Text("Swipe left to forget one.")
@@ -38,6 +39,7 @@ struct LearnedRulesView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Learned Categories")
+        .saveFailedAlert($saveFailed)
     }
 
     /// A rule only stores its key ("sevenseedscoffee", see `MerchantName.key`).

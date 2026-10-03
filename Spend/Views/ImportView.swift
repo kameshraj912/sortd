@@ -38,6 +38,7 @@ struct ImportView: View {
     @State private var backupContents: Backup.Contents?
     /// Purchases being added right now, for "Adding 42 purchases…".
     @State private var saving: Int?
+    @State private var saveFailed = false
 
     private enum Stage { case start, review, backup }
 
@@ -60,6 +61,7 @@ struct ImportView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Import")
+        .saveFailedAlert($saveFailed)
         .feedback(.confirm, trigger: imported)
         .fileImporter(isPresented: $pickingFile,
                       allowedContentTypes: StatementReader.readableTypes) { result in
@@ -355,13 +357,20 @@ struct ImportView: View {
             // Let "Adding N purchases…" reach the screen before the work starts.
             try? await Task.sleep(for: .milliseconds(30))
             WidgetBridge.hold()
-            let (added, merged) = StatementImport.save(found, card: card, in: context)
-            try? TransactionLogger.refreshUncategorised(in: context)
+            let (added, merged, saved) = StatementImport.saveChecked(found, card: card, in: context)
+            do { try TransactionLogger.refreshUncategorised(in: context) } catch {
+                ErrorLog.report(error, where: "ImportView.refreshUncategorised")
+            }
             // Refreshes the widget once for the whole import.
             WidgetBridge.release()
             Task { await FXService.backfill(in: context) }
             busy = false
             saving = nil
+            guard saved else {
+                // "Done" would be false: say the write failed instead.
+                saveFailed = true
+                return
+            }
             imported += 1
             done = merged > 0
                 ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
