@@ -50,7 +50,8 @@ Pick one: "Free beta. Link in bio." · "Join the beta: sortd.page" · "Tap to pa
 Never "Download now!!", "Don't miss out" or countdown pressure.
 
 ## The three lines (set 2 Oct 2026)
-- **Headline, says what it does:** "Tap to pay. Sortd writes it down." (won the five-persona review.)
+- **Website headline (3 Oct 2026, from the market survey `hero-problem-survey-2026-10-03.md`):** "Where did it go? / Consider it Sortd." It names the problem: taps are so quick they barely feel like spending.
+- **Says what it does:** "Tap to pay. Sortd writes it down." (won the five-persona review). Still the line for the App Store, posts and anywhere the mechanism needs saying.
 - **Sign-off:** "Consider it Sortd." End cards, the site footer, the last line of a post, the end of setup.
 - **After a tap logs:** "You've been Sortd." Only where something has just happened: the first-purchase card, a reel's reveal.
 - Always spelt **Sortd**, never "sorted". Never "Get Sortd": that is a registered Australian trade mark (see Brand/README.md).
