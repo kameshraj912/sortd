@@ -946,11 +946,15 @@ struct OnboardingView: View {
     /// One country at a time, so the list stays short. "" = works anywhere.
     private var countryPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
+            // 8 pt between tabs. The flag sits closer to its name so Singapore,
+            // Australia and Malaysia fit inside the screen with room to spare
+            // (Malaysia touched the right edge and lost its border, 3 Oct 2026).
+            // Further tabs scroll in from the edge.
             HStack(spacing: 8) {
                 ForEach(allBankCountries, id: \.self) { c in
                     let picked = book.active.filter { $0.country == c && !$0.bank.isEmpty }.count
                     Button { withAnimation(.snappy) { bankCountry = c } } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 2) {
                             Text(c.isEmpty ? "🌐" : CardInfo.flag(for: c))
                             Text(c.isEmpty ? "Anywhere" : countryName(c)).font(.subheadline.weight(.medium))
                             if picked > 0 {
