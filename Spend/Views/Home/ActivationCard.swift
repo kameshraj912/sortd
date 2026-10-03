@@ -57,7 +57,7 @@ struct ActivationCard: View {
                         Text("Yes")
                             .font(.headline)
                             .foregroundStyle(Color.onBrand)
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
                     }
                     .buttonStyle(.glassProminent)
                     .tint(Color.brand)
@@ -65,7 +65,7 @@ struct ActivationCard: View {
                         Text("Not now")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color.ink)
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
                     }
                     .buttonStyle(.glass)
                 }

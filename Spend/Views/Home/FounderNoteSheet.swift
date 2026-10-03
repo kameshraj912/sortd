@@ -188,7 +188,7 @@ struct FounderNoteSheet: View {
             } label: {
                 Text("Tell Kamesh")
                     .font(.headline)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
                     .foregroundStyle(Color.ink)
             }
             .secondaryGlass()

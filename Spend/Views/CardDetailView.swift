@@ -177,7 +177,7 @@ struct CardDetailView: View {
                                 .padding(.vertical, 11)
                                 .contentShape(.rect)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         if t.id != shown.last?.id {
                             Divider().padding(.leading, 64)
                         }

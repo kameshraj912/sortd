@@ -38,6 +38,8 @@ struct ImportView: View {
     @State private var backupContents: Backup.Contents?
     /// Purchases being added right now, for "Adding 42 purchases…".
     @State private var saving: Int?
+    /// Purchases in the backup being put back, for "Restoring 214 purchases…".
+    @State private var restoringCount: Int?
     @State private var saveFailed = false
 
     private enum Stage { case start, review, backup }
@@ -120,6 +122,7 @@ struct ImportView: View {
                     Image(systemName: "folder")
                 }
             }
+            .disabled(busy)
             PhotosPicker(selection: $photo, matching: .images) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
@@ -131,6 +134,7 @@ struct ImportView: View {
                     Image(systemName: "photo")
                 }
             }
+            .disabled(busy)
         } footer: {
             Text("Read on this iPhone. Nothing uploads, and nothing saves until you tap Add.")
         }
@@ -171,7 +175,11 @@ struct ImportView: View {
 
         Section {
             if spend.isEmpty {
-                Text("No purchases found.").foregroundStyle(.secondary)
+                EmptyState("No purchases found", symbol: "doc.text.magnifyingglass",
+                           message: moneyIn.isEmpty
+                               ? "Nothing in this file looks like a purchase."
+                               : "Only money coming in was found. Nothing here will be added.")
+                    .listRowBackground(Color.clear)
             }
             ForEach($rows) { $picked in
                 if picked.row.kind == .spend { line($picked) }
@@ -258,14 +266,26 @@ struct ImportView: View {
             BoldHeader("Restore")
         }
         Section {
+            if busy {
+                // Said in words with the count, so a long backup is not a
+                // spinner with nothing on it.
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(restoringCount.map { "Restoring \($0) purchase\($0 == 1 ? "" : "s")…" } ?? "Restoring…")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Button("Add What's Missing") { restore(.merge) }
+                .disabled(busy)
             Button("Replace Everything", role: .destructive) {
                 replaceCount = (try? context.fetchCount(FetchDescriptor<Transaction>())) ?? 0
                 backupContents = backup.flatMap(Backup.contents(of:))
                 confirmingReplace = true
             }
             .foregroundStyle(Color.down)
+            .disabled(busy)
             Button("Cancel") { reset() }.foregroundStyle(.secondary)
+                .disabled(busy)
         } footer: {
             Text("Add What's Missing keeps what's on this iPhone. Replace Everything clears it first. Use that on a new phone.")
         }
@@ -382,6 +402,7 @@ struct ImportView: View {
     private func restore(_ mode: Backup.Mode) {
         guard let data = backup, !busy else { return }
         busy = true
+        restoringCount = Backup.contents(of: data)?.purchases
         Task {
             await Task.yield()
             do {
@@ -394,6 +415,7 @@ struct ImportView: View {
                 self.error = error.localizedDescription
             }
             busy = false
+            restoringCount = nil
         }
     }
 }
