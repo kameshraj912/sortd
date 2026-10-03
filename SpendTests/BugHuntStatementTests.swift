@@ -290,13 +290,13 @@ struct BugHuntStatement1003Tests {
 
     // MARK: 3. An account line on top sends the CSV to the free-text reader
 
-    /// `ImportView.looksLikeCSV` needs 2+ separators on the first line. A CSV
-    /// with an account line on top ("Account,NAB Classic ...", one comma) is
-    /// read by `parse(text:)` instead, where an unsigned number is spending:
-    /// the $3,200 salary in the Credit column is listed as a ticked purchase.
-    /// `parse(csv:)` reads the same file correctly.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-3", "a CSV with an account line on top is read as free text; credits become purchases"))
+    /// `ImportView` used to need 2+ separators on the first line to call a
+    /// file a CSV. A CSV with an account line on top ("Account,NAB Classic
+    /// ...", one comma) went to the free-text reader instead, where an
+    /// unsigned number is spending: the $3,200 salary in the Credit column was
+    /// listed as a ticked purchase. `StatementImport.reader(for:)` now looks
+    /// past the first line, and `parse(statement:)` is what the screen runs.
+    @Test(.bug(id: "hunt-1003-stmt-3", "a CSV with an account line on top is read as free text; credits become purchases"))
     func aCSVWithAnAccountLineOnTopKeepsTheSalaryOut() {
         let csv = """
         Account,NAB Classic Banking 084-234 12345678
@@ -304,13 +304,37 @@ struct BugHuntStatement1003Tests {
         01/09/2026,WOOLWORTHS 3342,58.30,,2451.70
         02/09/2026,SALARY ACME PTY LTD,,3200.00,5651.70
         """
-        // The CSV reader gets it right.
-        #expect(StatementImport.parse(csv: csv).rows.filter { $0.kind == .spend }.count == 1)
-        // What ImportView actually runs for this file (looksLikeCSV is false).
-        let spend = StatementImport.parse(text: csv).rows.filter { $0.kind == .spend }
+        #expect(StatementImport.reader(for: csv) == .csv)
+        // What ImportView actually runs for this file.
+        let spend = StatementImport.parse(statement: csv).rows.filter { $0.kind == .spend }
         #expect(!spend.contains { $0.detail.contains("SALARY") })
         #expect(spend.reduce(Decimal(0)) { $0 + $1.amount } == money("58.30"))
         #expect(spend.allSatisfy { !$0.detail.contains("2451.70") })
+    }
+
+    /// Pasted text (one shop and amount per line, no separators) and PDF text
+    /// with thousands commas still go to the text reader, and so does anything
+    /// that was scanned, even if it happens to look like a CSV.
+    @Test func plainTextAndScansStillGoToTheTextReader() {
+        let pasted = """
+        01 Sep 2026 Woolworths 58.30
+        02 Sep 2026 Seven Seeds Coffee 5.50
+        03 Sep 2026 Kmart Burwood 22.00
+        """
+        #expect(StatementImport.reader(for: pasted) == .text)
+        #expect(StatementImport.parse(statement: pasted).rows.count == 3)
+
+        let pdf = """
+        Statement period 1 Sep to 30 Sep 2026
+        01 Sep 2026 Woolworths 1,258.30
+        02 Sep 2026 Seven Seeds Coffee 5.50
+        """
+        #expect(StatementImport.reader(for: pdf) == .text)
+
+        let csv = "Date,Description,Amount\n01/09/2026,WOOLWORTHS,-58.30\n02/09/2026,COLES,-12.00"
+        #expect(StatementImport.reader(for: csv) == .csv)
+        #expect(StatementImport.reader(for: csv, wasScanned: true) == .text)
+        #expect(StatementImport.reader(for: "") == .text)
     }
 
     // MARK: 4. "0.00" in the unused Debit column
