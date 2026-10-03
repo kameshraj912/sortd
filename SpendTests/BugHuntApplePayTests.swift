@@ -87,8 +87,7 @@ struct BugHuntApplePayTests {
 
     /// Money coming in (Apple Cash "You received $25.00 from …") is logged
     /// as a purchase at the sender's name.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a Wallet notification for money received is logged as spending"))
+    @Test(.bug("a Wallet notification for money received is logged as spending"))
     func moneyReceivedIsNotLoggedAsSpending() async throws {
         let ctx = store(), b = book()
         let r = try await notified("Apple Cash", "", "You received $25.00 from John Appleseed", at: 0, ctx: ctx, book: b)
@@ -100,8 +99,7 @@ struct BugHuntApplePayTests {
 
     /// A shop name with a joining word in it ("on") is cut at that word on
     /// a notification run, so "Cafe on Collins" is saved as "Cafe".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("notification shop line is split on connector words even with no amount on it"))
+    @Test(.bug("notification shop line is split on connector words even with no amount on it"))
     func aShopNameWithAJoiningWordIsKeptWhole() async throws {
         let ctx = store(), b = book()
         let r = try await notified("NAB Visa Debit", "Cafe on Collins", "A$12.00", at: 0, ctx: ctx, book: b)
@@ -112,8 +110,7 @@ struct BugHuntApplePayTests {
     /// A three-letter ISO code at the end of an upper-case shop word, before
     /// a store number ("PANTRY 24" → "TRY 24"), is read as the amount, so a
     /// A$12.50 purchase is saved as 24 Turkish lira at "THE PAN".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("WalletTapText.money matches a currency code inside a word (no left word boundary)"))
+    @Test(.bug("WalletTapText.money matches a currency code inside a word (no left word boundary)"))
     func aCurrencyCodeInsideAShopWordIsNotTheAmount() async throws {
         let ctx = store(), b = book()
         let r = try await notified("NAB Visa Debit", "THE PANTRY 24", "A$12.50", at: 0, ctx: ctx, book: b)
@@ -186,5 +183,14 @@ struct BugHuntApplePayTests {
         try await notified("NAB Visa Debit", "SQ *SEVEN SEEDS CARLTON", "A$15.00", at: 0, ctx: ctx, book: b)
         try await tap("Seven Seeds", "A$15.00", at: 300, ctx: ctx, book: b)
         #expect(try rows(ctx).count == 1)
+    }
+
+    /// P4 leaves refunds alone: a refund that says "credited" is still a refund.
+    @Test func aCreditedRefundIsStillARefund() async throws {
+        let ctx = store(), b = book()
+        let r = try await notified("NAB Visa Debit", "Coles", "Refund A$20.00 credited", at: 0,
+                                   ctx: ctx, book: b)
+        #expect(r.refund)
+        #expect(try rows(ctx).allSatisfy(\.refunded))
     }
 }
