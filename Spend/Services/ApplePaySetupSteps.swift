@@ -58,6 +58,13 @@ extension ApplePaySetupSteps {
             : "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts."
     }
 
+    /// The footer under the panel: what still needs adding by hand.
+    static func byHandLine(notificationTrigger: Bool) -> String {
+        notificationTrigger
+            ? "Anything the shortcut misses, add by hand with +."
+            : "Add in-app and online Apple Pay by hand."
+    }
+
     /// Set the first time Get the Shortcut is tapped in a build whose
     /// shortcut carries the notification trigger.
     static let gotOnlineShortcutKey = "applePayGotOnlineShortcut"

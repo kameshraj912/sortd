@@ -16,6 +16,11 @@ struct SetupGuideView: View {
     @State private var notificationsAllowed = false
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
+    private var hasNotificationTrigger: Bool {
+        if #available(iOS 27.0, *) { return true }
+        return false
+    }
+
     private var status: ApplePayStatus {
         ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
     }
@@ -41,7 +46,7 @@ struct SetupGuideView: View {
             Section {
                 ApplePaySetupPanel(status: status, needsCheckCount: ApplePayStatus.needsCheckCount(in: transactions))
             } footer: {
-                Text("Add in-app and online Apple Pay by hand.")
+                Text(ApplePaySetupSteps.byHandLine(notificationTrigger: hasNotificationTrigger))
             }
             .listRowBackground(Color.clear)
 
