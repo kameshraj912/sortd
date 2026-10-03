@@ -123,7 +123,7 @@ struct CategoryLimitSheet: View {
                     } label: {
                         Text("Remove Limit")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: ButtonMetrics.height)
                             .foregroundStyle(.primary)
                             .overlay(Capsule().strokeBorder(Color.primary, lineWidth: 1.5))
                     }

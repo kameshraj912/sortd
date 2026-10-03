@@ -95,6 +95,7 @@ struct ApplePaySetupPanel: View {
                         nudgeDismissed = true
                     }
                     .font(.caption.weight(.semibold))
+                    .minTapTarget(growsBy: 28)
                 }
                 .onAppear { if nudgeLastShownAt == nil { nudgeLastShownAt = ApplePayNudge.markShown() } }
             }
@@ -217,7 +218,7 @@ struct ApplePaySetupPanel: View {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
                     .foregroundStyle(Color.onBrand)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
             }
             .buttonStyle(.glassProminent)
             .tint(Color.brand)

@@ -35,6 +35,7 @@ struct ApplePayNudgeCard: View {
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.brand)
+                    .minTapTarget(growsBy: 24)
                 }
             }
             .setupCard()
