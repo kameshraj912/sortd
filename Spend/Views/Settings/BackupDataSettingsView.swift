@@ -11,6 +11,10 @@ struct BackupDataSettingsView: View {
     /// Making the backup file takes a few seconds on a big history.
     @State private var preparing = false
     @State private var sharing: SharedFile?
+    /// The spreadsheet is built when asked, which takes a few seconds on a
+    /// long history; the row shows it is working until the share sheet opens.
+    @State private var exporting = false
+    @State private var sharingCSV: SharedFile?
     @State private var lastSaved = UserDefaults.standard.object(forKey: BackupDataSettingsView.lastBackupKey) as? Date
     @State private var failure: String?
 
@@ -120,9 +124,20 @@ struct BackupDataSettingsView: View {
 
             Section {
                 if !transactions.isEmpty {
-                    ShareLink(item: CSVFileExport(), preview: SharePreview("Sortd purchases")) {
-                        Label("Export as Spreadsheet", systemImage: "square.and.arrow.up")
+                    Button(action: prepareSpreadsheet) {
+                        Label {
+                            Text("Export as Spreadsheet")
+                                .foregroundStyle(Color.primary)
+                        } icon: {
+                            if exporting {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                        }
                     }
+                    .disabled(exporting)
+                    .accessibilityValue(exporting ? "Preparing" : "")
                 }
                 Button(role: .destructive) { confirmingDelete = true } label: {
                     Label("Delete All Data", systemImage: "trash")
@@ -153,6 +168,10 @@ struct BackupDataSettingsView: View {
             // UIActivityViewController lays itself out. Forcing a medium
             // detent cropped its app row on an SE, and ignoring the safe
             // area let its bottom row sit under the home indicator.
+        }
+        .sheet(item: $sharingCSV) { file in
+            // Sharing a spreadsheet is not a backup, so it leaves "Last saved" alone.
+            ActivitySheet(items: [file.url]) { _ in sharingCSV = nil }
         }
         .alert("Couldn't Save a Backup", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
@@ -233,6 +252,29 @@ struct BackupDataSettingsView: View {
         var text = "Every purchase, card and budget on this iPhone goes."
         if deletesCloudCopy { text += " The iCloud backup is deleted too." }
         return text + " There's no undo."
+    }
+
+    // MARK: - Spreadsheet
+
+    /// Builds the CSV (main thread, where the purchases live), writes the file
+    /// off it, then opens the share sheet. The row's spinner shows meanwhile.
+    private func prepareSpreadsheet() {
+        guard !exporting else { return }
+        exporting = true
+        Task {
+            // Let the spinner draw before the work starts.
+            await Task.yield()
+            let data = CSVExport.data(transactions)
+            do {
+                let url = try await Task.detached(priority: .userInitiated) {
+                    try Exports.write(data, named: Exports.dated("Sortd purchases", "csv"))
+                }.value
+                sharingCSV = SharedFile(url: url)
+            } catch {
+                failure = error.localizedDescription
+            }
+            exporting = false
+        }
     }
 
     // MARK: - Backup file
