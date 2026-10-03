@@ -54,8 +54,14 @@ enum SpendQuestions {
     static var budget: Double { UserDefaults.standard.double(forKey: "monthlyBudget") }
 
     static func transactions() throws -> [Transaction] {
-        let context = SpendStore.container.mainContext
-        return try context.fetch(FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\.date)]))
+        try transactions(in: SpendStore.container.mainContext)
+    }
+
+    /// The rows Home and Activity count: never the hidden "Check the
+    /// Shortcut" runs or old test taps (`Transaction.excludingLegacyTest`).
+    static func transactions(in context: ModelContext) throws -> [Transaction] {
+        try context.fetch(FetchDescriptor<Transaction>(predicate: Transaction.excludingLegacyTest,
+                                                       sortBy: [SortDescriptor(\.date)]))
     }
 }
 
