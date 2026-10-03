@@ -70,6 +70,9 @@ struct AddTransactionView: View {
                 .onChange(of: quick) { quickProblem = nil }
             if reading {
                 ProgressView()
+                Text("Reading…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             } else if !quick.isEmpty {
                 Button("Fill", action: applyQuick)
                     .font(.subheadline.weight(.semibold))

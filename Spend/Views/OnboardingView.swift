@@ -388,12 +388,18 @@ struct OnboardingView: View {
                         }
                         #endif
                     } label: {
-                        Text("More Options")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(.rect)
+                        // The menu closes the moment an item is tapped, so the
+                        // wait shows here, where the eye already is.
+                        HStack(spacing: 8) {
+                            if restoring { ProgressView() }
+                            Text(restoring ? "Restoring from iCloud…" : "More Options")
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(.rect)
                     }
+                    .disabled(restoring)
                     .buttonStyle(.pressable)
                     Text("Free. No account needed.")
                         .font(.footnote).foregroundStyle(.secondary)
