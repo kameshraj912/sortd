@@ -25,6 +25,9 @@ struct BackupDataSettingsView: View {
     @State private var restored: String?
     @State private var noBackup = false
     @State private var cloudFailure: String?
+    /// Why the switch stayed off: no iCloud account, restricted, or not
+    /// reachable. Shown under the switch until the next try.
+    @State private var accountProblem: String?
     #endif
 
     var body: some View {
@@ -38,8 +41,9 @@ struct BackupDataSettingsView: View {
                             Text("Back up to iCloud")
                             // Redrawn each minute so "2 min ago" stays true.
                             TimelineView(.everyMinute) { tl in
-                                let line = CloudBackup.statusLine(status: cloud.status, isEnabled: cloud.isEnabled,
-                                                                  isBehind: cloud.behind, isOnline: connectivity.isOnline)
+                                let line = accountProblem
+                                    ?? CloudBackup.statusLine(status: cloud.status, isEnabled: cloud.isEnabled,
+                                                              isBehind: cloud.behind, isOnline: connectivity.isOnline)
                                 Text(line ?? Self.lastCloudText(cloud.lastBackup, now: tl.date))
                                     .accessibilityLabel(line
                                                         ?? Self.lastCloudText(cloud.lastBackup, now: tl.date, spoken: true))
@@ -275,11 +279,24 @@ extension BackupDataSettingsView {
     /// the user chooses whether the copy stays.
     fileprivate var cloudSwitch: Binding<Bool> {
         Binding(get: { cloud.isEnabled }, set: { on in
-            cloud.isEnabled = on
+            accountProblem = nil
             if on {
-                Task { await cloud.backUpIfDue(from: context) }
-            } else if cloud.lastBackup != nil || cloud.status == .paused(.restoreFirst) {
-                confirmingSwitchOff = true
+                // No iCloud account (or a restricted one): the switch stays
+                // off and the line under it says why.
+                Task {
+                    if let reason = await CloudKitBackupStore.currentUnavailableReason() {
+                        accountProblem = reason
+                        AccessibilityNotification.Announcement(reason).post()
+                        return
+                    }
+                    cloud.isEnabled = true
+                    await cloud.backUpIfDue(from: context)
+                }
+            } else {
+                cloud.isEnabled = false
+                if cloud.lastBackup != nil || cloud.status == .paused(.restoreFirst) {
+                    confirmingSwitchOff = true
+                }
             }
         })
     }

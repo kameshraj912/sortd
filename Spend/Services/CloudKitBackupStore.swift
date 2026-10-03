@@ -63,6 +63,34 @@ final class CloudKitBackupStore: CloudBackupStore {
         }
     }
 
+    /// Why the switch can't go on, in one plain line; nil when iCloud is
+    /// ready. Checked before the switch turns on, so a phone with no iCloud
+    /// account says so instead of leaving the switch to flip back unexplained.
+    nonisolated static func unavailableReason(for status: CKAccountStatus) -> String? {
+        switch status {
+        case .available:
+            nil
+        case .noAccount:
+            "Sign in to iCloud in the Settings app to back up."
+        case .restricted:
+            "iCloud is turned off for this iPhone by a restriction."
+        case .couldNotDetermine, .temporarilyUnavailable:
+            "Couldn't check iCloud. Try again in a moment."
+        @unknown default:
+            "Couldn't check iCloud. Try again in a moment."
+        }
+    }
+
+    /// Asks the system for the account state now (not at launch: like the
+    /// database, the container is only touched on use).
+    static func currentUnavailableReason() async -> String? {
+        do {
+            return unavailableReason(for: try await CKContainer.default().accountStatus())
+        } catch {
+            return unavailableReason(for: .couldNotDetermine)
+        }
+    }
+
     /// CloudKit's errors as the few Sortd acts on. Anything else becomes a
     /// `Failure` with plain words for the status line, never CloudKit's own.
     nonisolated static func map(_ error: Error) -> Error {

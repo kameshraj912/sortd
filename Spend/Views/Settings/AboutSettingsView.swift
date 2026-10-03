@@ -71,7 +71,7 @@ struct AboutSettingsView: View {
                 Button { requestReview() } label: {
                     Label("Rate on the App Store", systemImage: "star")
                 }
-                Link(destination: URL(string: "https://sortd.page/changelog")!) {
+                Link(destination: URL(string: "https://sortd.page/support#whats-new")!) {
                     Label("What's New", systemImage: "sparkles")
                 }
                 Link(destination: URL(string: "https://sortd.page")!) {

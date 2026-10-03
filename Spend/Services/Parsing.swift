@@ -128,6 +128,14 @@ enum MerchantName {
     /// email receipts to a few dozen; anything past this is pasted text.
     static let maxLength = 80
 
+    /// A name as typed or parsed, cut to `maxLength` and trimmed. What is
+    /// stored as the original name, so a pasted page cannot become a
+    /// thousand-character row.
+    static func limited(_ raw: String) -> String {
+        String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(maxLength))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Whitespace plus the real control characters (C0 and C1). Not
     /// `.controlCharacters`: that also covers format characters — the joiner
     /// inside "👨‍👩‍👧", the ZWNJ in a Persian name, a soft hyphen — which are
