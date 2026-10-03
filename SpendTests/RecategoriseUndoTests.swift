@@ -139,7 +139,10 @@ struct PendingRecategoriseTests {
         return try TransactionLogger.log(p, in: context).transaction
     }
 
-    private func waitUntil(_ limit: Duration = .seconds(10), _ condition: @MainActor () -> Bool) async throws {
+    /// Returns as soon as `condition` holds. The limit is long because on a
+    /// busy CI machine the main actor (where the fade timer runs) can be held
+    /// for tens of seconds; 10 s timed out there twice on 3 Oct 2026.
+    private func waitUntil(_ limit: Duration = .seconds(60), _ condition: @MainActor () -> Bool) async throws {
         let clock = ContinuousClock()
         let end = clock.now + limit
         while !condition(), clock.now < end {
