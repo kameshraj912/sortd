@@ -35,6 +35,10 @@ export default {
     if (url.hostname === "www.sortd.page") {
       return Response.redirect(`https://sortd.page${url.pathname}${url.search}`, 301);
     }
+    // The app's "Learn more" links: /help#app-lock and friends live on the support page
+    // (the browser keeps the #part), and /changelog is its "What's new" section.
+    if (url.pathname === "/help") return Response.redirect("https://sortd.page/support", 301);
+    if (url.pathname === "/changelog") return Response.redirect("https://sortd.page/support#whats-new", 301);
     if (url.pathname === "/api/beta") {
       if (request.method !== "POST") return json({ ok: false, error: "Use POST." }, 405);
       return handleBeta(request, env);
@@ -86,7 +90,6 @@ async function handleBeta(request, env) {
   const name = field("name", 80);
   const country = COUNTRIES.includes(field("country", 20)) ? field("country", 20) : "";
   const applePay = ["yes", "no", "not sure"].includes(field("applepay", 10)) ? field("applepay", 10) : "";
-  const gmail = field("gmail", 254).toLowerCase();
 
   if (!EMAIL_RE.test(email)) return reply(false, "That's not an email. Even your spam folder would reject it.");
   // Which form it came from: sortd.page/beta or the launch site (soon.sortd.page).
@@ -94,7 +97,6 @@ async function handleBeta(request, env) {
   if (!name) return reply(false, "What should we call you? First name is fine.");
   if (!country) return reply(false, "Pick where you live. \"Other\" counts.");
   if (!applePay) return reply(false, "Pick an Apple Pay answer. \"Not sure\" is allowed.");
-  if (gmail && !EMAIL_RE.test(gmail)) return reply(false, "That doesn't look like a Gmail address.");
   if (!env.BETA_TO || !env.SEND_EMAIL) return reply(false, "Sign-ups are closed for a moment. Please email support@sortd.page.");
 
   const when = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
@@ -105,7 +107,6 @@ async function handleBeta(request, env) {
     `Name:       ${name || "-"}`,
     `Country:    ${country || "-"}`,
     `Apple Pay:  ${applePay || "-"}`,
-    `Gmail:      ${gmail || "-"}`,
     "",
     `Form:       ${source === "soon" ? "soon.sortd.page (launch site)" : "sortd.page/beta"}`,
     ...(source === "soon" ? [`Consent:    agreed to "${CONSENT}"`] : []),

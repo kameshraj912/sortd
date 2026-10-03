@@ -21,11 +21,11 @@
     var form = document.getElementById("beta-form");
     if (form) {
       var err = document.getElementById("beta-error"), done = document.getElementById("beta-done");
-      var email = form.elements.email, gmail = form.elements.gmail, submit = form.querySelector('button[type="submit"]');
+      var email = form.elements.email, submit = form.querySelector('button[type="submit"]');
       var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
       var show = function (msg, field) {
         err.textContent = msg; err.hidden = !msg;
-        [email, gmail, form.elements.name, form.elements.country].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
+        [email, form.elements.name, form.elements.country].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
       // Turnstile tokens are single-use: after a failed submit, clear it so the next try gets a fresh one.
@@ -38,7 +38,6 @@
         if (form.elements.name && !form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
         if (form.elements.country && !form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
         if (form.querySelector('input[name="applepay"]') && !form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
-        if (gmail && gmail.value.trim() && !ok(gmail.value.trim())) return show("That doesn't look like a Gmail\u00a0address.", gmail);
         show(""); submit.disabled = true; submit.textContent = "Sending…";
         fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
           .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
@@ -59,7 +58,7 @@
 
     // "Oops. You found us early." The home page is a gate until the beta opens:
     // the card covers the site completely and can't be closed. Privacy, terms and
-    // support stay reachable from the card (Google's Gmail review checks them).
+    // support stay reachable from the card.
     var early = document.getElementById("early");
     if (early && early.showModal) {
       try { early.showModal(); } catch (e) {}
