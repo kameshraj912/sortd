@@ -20,7 +20,7 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     /// Monday to now. Less punishing than a daily figure for some people.
     var week: Decimal = 0
     var month: Decimal = 0
-    /// Budget split over the days in the month, so "today" has a limit too.
+    /// What one day is worth against the budget (`perDay`), so "today" has a limit too.
     var dayAllowance: Decimal?
     /// Nil when no monthly budget is set.
     var leftThisMonth: Decimal?
@@ -65,6 +65,19 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
             }
         }
         return s
+    }
+
+    /// What can be spent each day for the rest of this month, today included:
+    /// what's left of the budget, less bills still to charge, over the days
+    /// left. Home's "a day" and the widget's both come from here, so they
+    /// always agree. 0 when the budget is used up.
+    static func perDay(budget: Decimal, spent: Decimal, billsToCome: Decimal,
+                       now: Date, calendar: Calendar = .current) -> Decimal {
+        let left = budget - spent
+        guard left > 0 else { return 0 }
+        let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
+        let daysLeft = max(1, daysInMonth - calendar.component(.day, from: now) + 1)
+        return max(0, left - billsToCome) / Decimal(daysLeft)
     }
 
     /// Whether widgets should redact their numbers while the phone is locked.
