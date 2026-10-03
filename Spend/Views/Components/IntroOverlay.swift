@@ -434,7 +434,7 @@ struct IntroOverlay: View {
 
     private var skipButton: some View {
         Button("Skip", action: onSkip)
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .foregroundStyle(.secondary)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -451,7 +451,7 @@ struct IntroOverlay: View {
     /// whole card, visibly taller.
     private var cardSkipButton: some View {
         Button("Skip", action: onSkip)
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.secondary)
             .frame(minWidth: 44, minHeight: 44)

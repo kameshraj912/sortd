@@ -331,7 +331,7 @@ struct CardStyleView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
                 ForEach(styles) { style in
                     Button { styleRaw = style.rawValue } label: { tile(style) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .accessibilityLabel(style.name)
                         .accessibilityAddTraits(styleRaw == style.rawValue ? .isSelected : [])
                 }

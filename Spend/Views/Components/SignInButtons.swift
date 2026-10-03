@@ -40,7 +40,7 @@ struct SignInButtons: View {
             // A fixed height: with only a minimum, the button fills whatever
             // container it is in (it swallowed the whole page in the bottom bar).
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .frame(height: ButtonMetrics.height)
             // Apple's button lets the corner radius follow the app's UI
             // (HIG, "Using the system-provided buttons"): a capsule here.
             .clipShape(.capsule)
