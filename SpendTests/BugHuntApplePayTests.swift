@@ -135,8 +135,7 @@ struct BugHuntApplePayTests {
 
     /// When the save fails and the queue file can't be written either
     /// (disk full), the tap is gone but Shortcuts is told it was saved.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("TapQueue.write failure is swallowed; saveForLater still says 'Saved for later'"))
+    @Test(.bug("TapQueue.write failure is swallowed; saveForLater still says 'Saved for later'"))
     func aTapThatCouldNotBeQueuedIsNotReportedAsSaved() async throws {
         let ctx = store(), b = book()
         let badURL = FileManager.default.temporaryDirectory
@@ -148,6 +147,7 @@ struct BugHuntApplePayTests {
         let queued = TapQueue.read(from: badURL)
         #expect(queued.count == 1 || !r.message.hasPrefix("Saved for later"),
                 "nothing was queued, yet the run said: \(r.message)")
+        #expect(r.message == TapQueue.notSavedMessage)
     }
 
     // MARK: - Regression guards for the fixes above
@@ -192,5 +192,16 @@ struct BugHuntApplePayTests {
                                    ctx: ctx, book: b)
         #expect(r.refund)
         #expect(try rows(ctx).allSatisfy(\.refunded))
+    }
+
+    /// P5: when the first queue file can't be written, the next one takes the tap.
+    @Test func aTapGoesToTheSecondQueueFileWhenTheFirstFails() throws {
+        let tmp = FileManager.default.temporaryDirectory
+        let bad = tmp.appending(path: "no-such-dir-\(UUID().uuidString)").appending(path: TapQueue.fileName)
+        let good = tmp.appending(path: "hunt-queue-\(UUID().uuidString).json")
+        let entry = TapQueue.Entry(merchant: "Seven Seeds", amount: "A$5.50", card: "NAB Visa Debit", date: now)
+        #expect(TapQueue.enqueue(entry, into: [bad, good]))
+        #expect(TapQueue.read(from: good) == [entry])
+        #expect(!TapQueue.enqueue(entry, into: [bad]))
     }
 }
