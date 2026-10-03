@@ -208,8 +208,10 @@ struct BugHuntStatementTests {
 }
 
 /// Bug hunt, 3 Oct 2026: statement import. New findings only; the 26 Sep
-/// ones above are still open and not repeated. Each test fails today and
-/// runs only with `scripts/test.sh --known-bugs`.
+/// ones above are still open and not repeated. A test tagged `.knownBug`
+/// fails today and runs only with `scripts/test.sh --known-bugs`; the
+/// untagged ones (stmt-4 to stmt-8) were fixed on `fix-hunt-a` and run
+/// everywhere as regression tests.
 @MainActor
 struct BugHuntStatement1003Tests {
 
@@ -317,8 +319,7 @@ struct BugHuntStatement1003Tests {
     /// whenever it parses, and "0.00" parses. A salary row written as
     /// "0.00,3200.00" becomes a ticked $0.00 purchase named SALARY, saved
     /// to the store, and the credit is never listed as money in.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-4", "a 0.00 Debit cell wins over the Credit cell; credits become $0 purchases"))
+    @Test(.bug(id: "hunt-1003-stmt-4", "a 0.00 Debit cell wins over the Credit cell; credits become $0 purchases"))
     func aZeroInTheUnusedColumnIsNotAPurchase() throws {
         let rows = StatementImport.rows(fromCSV: """
         Date,Description,Debit,Credit,Balance
@@ -342,8 +343,7 @@ struct BugHuntStatement1003Tests {
     /// which is why `parseCSV` supports ";") reads no rows at all:
     /// `signedAmount`'s pattern only knows "." for cents, so every row is
     /// "couldn't be read".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-5", "signedAmount does not read decimal commas, so a ; CSV imports nothing"))
+    @Test(.bug(id: "hunt-1003-stmt-5", "signedAmount does not read decimal commas, so a ; CSV imports nothing"))
     func aSemicolonCSVWithDecimalCommasIsRead() {
         let parsed = StatementImport.parse(csv: """
         Date;Description;Amount
@@ -363,8 +363,7 @@ struct BugHuntStatement1003Tests {
     /// together. Apple Wallet's card list puts the merchant and amount on one
     /// line and the day ("Yesterday", "26/09/2026") on a line below; bank
     /// apps group rows under a date header. Both read as zero purchases.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-6", "screenshot import needs date and amount on one line; Wallet and bank-app lists read as nothing"))
+    @Test(.bug(id: "hunt-1003-stmt-6", "screenshot import needs date and amount on one line; Wallet and bank-app lists read as nothing"))
     func aWalletOrBankAppListIsRead() {
         let today = date("2026-10-03")
         let wallet = StatementImport.rows(fromText: """
@@ -397,8 +396,7 @@ struct BugHuntStatement1003Tests {
     /// Excel's "Unicode Text" export is UTF-16 with a BOM. `decodeText`
     /// tries UTF-8, then Windows-1252, which accepts those bytes and turns
     /// them into "ÿþD\0a\0t\0e..." So the import says nothing was found.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-7", "decodeText reads a UTF-16 file as Windows-1252 garbage"))
+    @Test(.bug(id: "hunt-1003-stmt-7", "decodeText reads a UTF-16 file as Windows-1252 garbage"))
     func aUTF16FileIsDecoded() throws {
         let text = "Date,Description,Amount\n01/09/2026,WOOLWORTHS 3342,-58.30\n"
         let data = try #require(text.data(using: .utf16))
@@ -413,8 +411,7 @@ struct BugHuntStatement1003Tests {
     /// "time", "order", "copy" and so on as substrings, so "ROYAL HOTEL"
     /// (and "PASTEL BAKERY") is skipped and the next line ("Public Bar") is
     /// used as the shop. Australian pubs are nearly all "... Hotel".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-8", "receipt merchant skip words match inside HOTEL and PASTEL"))
+    @Test(.bug(id: "hunt-1003-stmt-8", "receipt merchant skip words match inside HOTEL and PASTEL"))
     func aHotelReceiptKeepsItsName() {
         #expect(ReceiptScanner.merchant(in: """
         ROYAL HOTEL

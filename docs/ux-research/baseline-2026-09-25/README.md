@@ -100,11 +100,9 @@ they're missing here, not that they're unchanged.
 - aRefundWithTheMinusAfterTheSymbolIsStillARefund
 - aRowWithNoDateIsNotSilentlyDropped
 - aTapWithNoAmountStillMergesWithItsReceipt
-- aWrittenCurrencyTheAppSupportsIsKept
 - absurdDatesAreNotImported
 - anAbsurdlyLongNumberIsRefused
 - anUnsupportedCurrencyIsNotLeftConvertingForEver
-- currencySignsAreRead
 - duplicateIdsSurviveASecondRestoreAndDoubleTheTotal
 - extraDecimalsAreNotTurnedIntoThousands
 - theAmountBeatsAnyOtherNumberInTheText
@@ -121,7 +119,6 @@ replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlert
 - aForeignAmountInTheDescriptionIsNotThePurchase
 - aRowWithNoSymbolTakesTheCardsCurrency
 - aTapPostedAfterTheWeekendStillMerges
-- aTextTapThatIsOnlyACardNameIsNotAPurchase
 - aTransactionTypeColumnIsNotTheMerchant
 - absurdYearsAreRejected
 - justThisOneOnADeliveryOrderSurvivesALaunch
@@ -144,19 +141,6 @@ replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlert
 
 ## Added 3 Oct 2026 (bug hunt, docs/BugHunt-2026-10-03.md)
 Still failing on `fix-hunt-c`: these belong to the money, Apple Pay and statement findings that the other fix branches (`fix-hunt-a`, `fix-hunt-b`) own, plus the two rejected claims (S8, S9). Each fixer takes its names off this list when the fix lands.
-- aCSVWithAnAccountLineOnTopKeepsTheSalaryOut (S8, rejected: cannot reproduce)
+- aCSVWithAnAccountLineOnTopKeepsTheSalaryOut (S8: the verifier could not run it, but the test fails, so it does reproduce)
 - aForeignTapMergesWithItsStatementLine (S9, rejected: needs a design choice)
-- aCurrencyCodeInsideAShopWordIsNotTheAmount (U1)
-- aHotelReceiptKeepsItsName (S7)
-- aLaterOnlinePaymentIsNotFoldedIntoATapAtAnotherShop (P3)
-- anOnlinePaymentIsNotSwallowedByALaterTapAtAnotherShop (P2)
-- aSemicolonCSVWithDecimalCommasIsRead (S3)
-- aShopNameWithAJoiningWordIsKeptWhole (P6)
-- aTapThatCouldNotBeQueuedIsNotReportedAsSaved (P5)
-- aTillRefundAndItsNotificationTakeTheRefundOffOnce (P1)
-- aUTF16FileIsDecoded (S6)
-- aWalletOrBankAppListIsRead (S4)
-- aZeroInTheUnusedColumnIsNotAPurchase (S2)
-- moneyReceivedIsNotLoggedAsSpending (P4)
-- reimportingAfterATapMergeDoesNotDouble
-- theHealthCheckDoesNotSaveATestCard (U3)
+- reimportingAfterATapMergeDoesNotDouble (stmt-1)

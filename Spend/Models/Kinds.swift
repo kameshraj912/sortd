@@ -225,6 +225,21 @@ final class CardBook {
         return scored.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
+    /// The card a statement import starts on. The statement's own heading
+    /// (the lines before its first dated row) wins when it names one card,
+    /// by its digits or its bank. With one card, that card. Otherwise "Card
+    /// not known" (`.other`), which merges with a tap on any card: defaulting
+    /// to the first card left another card's taps unmatched and doubled.
+    func statementCard(in text: String) -> Card {
+        let heading = text.split(whereSeparator: \.isNewline).prefix(6)
+            .prefix { $0.range(of: #"[0-9]{1,4}[/\-.][0-9]{1,2}[/\-.][0-9]{1,4}"#, options: .regularExpression) == nil }
+            .joined(separator: "\n")
+        if let card = card(digitsIn: heading) { return card }
+        let named = candidates(heading)
+        if named.count == 1 { return named[0].card }
+        return active.count == 1 ? active[0].card : .other
+    }
+
     private static let genericWords: Set<String> = ["debit", "credit", "card", "visa", "mastercard", "atm", "platinum"]
 
     private func save() {

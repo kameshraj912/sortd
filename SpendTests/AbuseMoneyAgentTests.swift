@@ -300,9 +300,8 @@ struct AbuseQuickEntryCurrencyTests {
     /// Anything outside a short hard-coded list is dropped and the purchase
     /// is logged in the home currency instead.
     ///
-    /// Known bug: `QuickEntry.amountPattern` (Spend/Services/QuickEntry.swift) lists 9 codes, not everything in `Money.supported`.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-12", "QuickEntry only reads 9 currency codes, so THB, CHF, PHP and CNY are logged in the home currency"))
+    /// Was a known bug (`QuickEntry.amountPattern` listed 9 codes); fixed on `fix-hunt-a` with hunt M3.
+    @Test(.bug(id: "abuse-12", "QuickEntry only reads 9 currency codes, so THB, CHF, PHP and CNY are logged in the home currency"))
     func aWrittenCurrencyTheAppSupportsIsKept() {
         #expect(QuickEntry.read("dinner 120 thb")?.currency == "THB", "120 THB logged as 120 in the home currency")
         #expect(QuickEntry.read("lunch 50 chf")?.currency == "CHF")
@@ -312,9 +311,8 @@ struct AbuseQuickEntryCurrencyTests {
 
     /// Currency signs the app shows elsewhere must be read here too.
     ///
-    /// Known bug: `QuickEntry.amountPattern` and `currency(for:)` (Spend/Services/QuickEntry.swift) have no `¥`.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "abuse-13", "QuickEntry does not read the yen sign, so sushi 1200 yen is logged in the home currency"))
+    /// Was a known bug (no `¥` in `QuickEntry.amountPattern`); fixed on `fix-hunt-a` with hunt M3.
+    @Test(.bug(id: "abuse-13", "QuickEntry does not read the yen sign, so sushi 1200 yen is logged in the home currency"))
     func currencySignsAreRead() {
         #expect(QuickEntry.read("sushi ¥1200")?.currency == "JPY", "¥1200 logged as 1200 in the home currency")
         #expect(QuickEntry.read("coffee £3.20")?.currency == "GBP")   // passes today

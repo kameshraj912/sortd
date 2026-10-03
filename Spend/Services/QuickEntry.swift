@@ -152,10 +152,18 @@ nonisolated enum QuickEntry {
         var moneyLike: Bool
     }
 
+    /// Codes read before or after the number ("SGD 12.50", "sgd12.50",
+    /// "12 sgd"). Not TRY or RON, which are words and names too.
+    private static let codes = "aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur|jpy|cny|cad|chf|thb|php|krw|idr|"
+        + "nok|sek|dkk|pln|czk|huf|ils|mxn|brl|zar|bgn|isk"
+
     /// Numbers glued to a letter, "/" or "-" are not amounts: "7-eleven",
     /// "3/9", "2kg", "x2". A minus in front ("-5") is kept as a match so the
-    /// line can be refused. "5k" is 5000.
-    private static let amountPattern = #"(?<![\p{L}\p{N}/.\-−])(?<!\d,)([-−])?(?:(A\$|S\$|US\$|NZ\$|HK\$|RM|₹|£|€|\$)\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)(k)?(?:\s*(aud|sgd|usd|nzd|hkd|myr|inr|gbp|eur)(?!\p{L}))?(?![\p{L}\p{N}/\-−]|[.,]\d)"#
+    /// line can be refused. "5k" is 5000. A sign or code may sit before the
+    /// number ("฿350", "EUR 12") and a code or sign after it ("12,50€").
+    private static let amountPattern = #"(?<![\p{L}\p{N}/.\-−])(?<!\d,)([-−])?(?:(CN¥|JP¥|US\$|NZ\$|HK\$|CA\$|MX\$|NT\$|A\$|S\$|C\$|R\$|RM|Rs\.?|₹|£|€|¥|฿|₱|₩|₪|\$|"#
+        + codes + #")\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)(k)?(?:\s*("#
+        + codes + #")(?!\p{L})|\s?(€|£|¥|฿|₱|₩|₪|₹))?(?![\p{L}\p{N}/\-−]|[.,]\d)"#
 
     private static func matches(in text: String) -> [Found] {
         guard let regex = try? NSRegularExpression(pattern: amountPattern, options: .caseInsensitive) else { return [] }
@@ -172,9 +180,12 @@ nonisolated enum QuickEntry {
                 : raw.replacingOccurrences(of: ",", with: ".")
             guard var value = Decimal(string: digits) else { return nil }
             if group(4) != nil { value *= 1000 }
-            let code = group(5)?.uppercased() ?? currency(for: group(2))
+            // The same reader as a tap's amount, so every sign means the same
+            // thing everywhere. A bare "$" names no currency (the home one).
+            let marked = [group(2), group(5), group(6)].compactMap { $0 }
+            let code = marked.isEmpty ? nil : AmountParser.currency(in: ns.substring(with: m.range))
             return Found(amount: value, currency: code, range: range, negative: group(1) != nil,
-                         moneyLike: group(2) != nil || group(5) != nil || raw.contains(where: { $0 == "." || $0 == "," }))
+                         moneyLike: !marked.isEmpty || raw.contains(where: { $0 == "." || $0 == "," }))
         }
     }
 
@@ -189,21 +200,6 @@ nonisolated enum QuickEntry {
         guard let pick = found.last(where: \.moneyLike) ?? found.last,
               pick.amount > 0, pick.amount < limit else { return nil }
         return Money(amount: pick.amount, currency: pick.currency, range: pick.range)
-    }
-
-    private static func currency(for symbol: String?) -> String? {
-        switch symbol?.uppercased() {
-        case "A$": "AUD"
-        case "S$": "SGD"
-        case "US$": "USD"
-        case "NZ$": "NZD"
-        case "HK$": "HKD"
-        case "RM": "MYR"
-        case "₹": "INR"
-        case "£": "GBP"
-        case "€": "EUR"
-        default: nil
-        }
     }
 
     /// What's left after the amount and the date, minus the filler, tidied
