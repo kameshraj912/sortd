@@ -10,7 +10,9 @@ import SwiftData
 /// set outside these tests) makes the do/catch inside `handle` behave
 /// exactly as if the save had thrown, without needing a genuinely broken
 /// disk — deterministic and fast, with no sleeps, and no shared mutable
-/// state to race on when the whole suite runs in parallel.
+/// state to race on when the whole suite runs in parallel. Every test here
+/// that queues passes its own `queueURL`: the real queue file is shared
+/// with the test host app, which replays and rewrites it at launch.
 @MainActor
 struct ThrowSafetyTests {
     private func store() -> ModelContext {
@@ -25,21 +27,25 @@ struct ThrowSafetyTests {
 
     @Test func handleNeverThrowsWhenSaveFails() async throws {
         let r = try await LogPurchaseIntent.handle(merchant: "Seven Seeds", amount: "A$4.50", card: "NAB Visa Debit",
-                                                   in: store(), book: book(), debugForceSaveFailure: true)
+                                                   in: store(), book: book(), debugForceSaveFailure: true,
+                                                   queueURL: queueURL())
         #expect(r.saveFailed)
         #expect(r.transaction == nil)
         #expect(r.message.contains("Saved for later"))
     }
 
     @Test func aFailedSaveQueuesTheRawFields() async throws {
-        // `handle` queues to the real app-group/fallback location (it has no
-        // `url:` parameter of its own) — a unique merchant name makes this
-        // run's entry findable without disturbing whatever else is there.
+        let url = queueURL()
         let marker = "Seven Seeds \(UUID().uuidString.prefix(8))"
         _ = try await LogPurchaseIntent.handle(merchant: marker, amount: "A$4.50", card: "NAB Visa Debit",
-                                               in: store(), book: book(), debugForceSaveFailure: true)
-        let queued = TapQueue.read()
-        #expect(queued.contains { $0.merchant == marker && $0.amount == "A$4.50" })
+                                               in: store(), book: book(), debugForceSaveFailure: true, queueURL: url)
+        let queued = TapQueue.read(from: url)
+        #expect(queued.count == 1)
+        #expect(queued.first?.merchant == marker)
+        #expect(queued.first?.amount == "A$4.50")
+        #expect(queued.first?.card == "NAB Visa Debit")
+        // The real queue never sees it.
+        #expect(!TapQueue.read().contains { $0.merchant == marker })
     }
 
     @Test func aSuccessfulSaveDoesNotQueueOrFlagSaveFailed() async throws {
@@ -50,10 +56,26 @@ struct ThrowSafetyTests {
     }
 
     @Test func walletTapAlsoNeverThrowsWhenSaveFails() async throws {
+        let url = queueURL()
         let r = try await LogWalletTapIntent.handle("Seven Seeds A$4.50 NAB Visa Debit", in: store(), book: book(),
-                                                    debugForceSaveFailure: true)
+                                                    debugForceSaveFailure: true, queueURL: url)
         #expect(r.saveFailed)
         #expect(r.message.contains("Saved for later"))
+        #expect(TapQueue.read(from: url).count == 1)
+    }
+
+    /// Wallet's notification takes the other branch of
+    /// `LogWalletTapIntent.handle`: it queues to the same given file,
+    /// marked as a notification.
+    @Test func aFailedNotificationSaveQueuesToTheGivenFile() async throws {
+        let url = queueURL()
+        let r = try await LogWalletTapIntent.handle(nil, notificationTitle: "NAB Visa Debit", notificationSubtitle: "DoorDash",
+                                                    notificationBody: "A$23.40", in: store(), book: book(),
+                                                    debugForceSaveFailure: true, queueURL: url)
+        #expect(r.saveFailed)
+        let queued = TapQueue.read(from: url)
+        #expect(queued.count == 1)
+        #expect(queued.first?.trigger == "n")
     }
 
     /// A tap that fails again on replay (the store is still unavailable)
@@ -133,6 +155,56 @@ struct TapQueueTests {
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
 
+    /// A tap and its Wallet notification can arrive seconds apart, and
+    /// `enqueue` can be called from any thread: 50 at once on one file,
+    /// none lost to two of them reading the same list.
+    @Test func fiftyEnqueuesAtOnceAreAllKept() async {
+        let url = queueURL()
+        let base = Date(timeIntervalSince1970: 1_790_000_000)
+        await withTaskGroup(of: Void.self) { group in
+            for n in 0..<50 {
+                group.addTask {
+                    _ = TapQueue.enqueue(merchant: "Shop \(n)", amount: "A$4.50", card: "NAB Visa Debit",
+                                         date: base.addingTimeInterval(Double(n)), url: url)
+                }
+            }
+        }
+        let merchants = Set(TapQueue.read(from: url).compactMap(\.merchant))
+        #expect(merchants == Set((0..<50).map { "Shop \($0)" }))
+    }
+
+    /// The app replays at launch and on every return to the foreground, and
+    /// a replay waits on each tap in turn. A tap queued while one is running
+    /// must still be there afterwards: the replay only takes out what it
+    /// logged, it never writes back the list it read at the start. (This
+    /// was the 3 Oct 2026 flake: the test host's own launch replay wiped a
+    /// tap another test had just queued.) The forced failure makes every
+    /// step of the replay really wait, so the late taps land in the middle.
+    @Test func aTapQueuedDuringAReplayIsNotLost() async throws {
+        let ctx = store()
+        let cards = book()
+        let url = queueURL()
+        let base = Date(timeIntervalSince1970: 1_790_000_000)
+        for n in 0..<20 {
+            TapQueue.enqueue(merchant: "Early \(n)", amount: "A$4.50", card: "NAB Visa Debit",
+                             date: base.addingTimeInterval(Double(n) * 3600), url: url)
+        }
+
+        async let replay = TapQueue.replay(in: ctx, book: cards, url: url, debugForceSaveFailure: true)
+        for n in 0..<20 {
+            await Task.yield()
+            TapQueue.enqueue(merchant: "Late \(n)", amount: "A$9.00", card: "NAB Visa Debit",
+                             date: base.addingTimeInterval(Double(n) * 3600 + 60), url: url)
+        }
+        let result = await replay
+
+        let merchants = Set(TapQueue.read(from: url).compactMap(\.merchant))
+        #expect(result.replayed == 0)
+        for n in 0..<20 {
+            #expect(merchants.contains("Early \(n)"))
+            #expect(merchants.contains("Late \(n)"))
+        }
+    }
 }
 
 /// Item 10 (spec 2026-09-26): a lone card name in the free-text

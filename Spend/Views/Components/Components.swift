@@ -7,8 +7,12 @@ enum Money {
     /// The currency totals are shown in. Set during setup (detected from the
     /// phone) and changeable in Settings. Every purchase also keeps its own
     /// currency; `audAmount`/`audValue` hold the value in this currency.
-    nonisolated static var home: String {
-        UserDefaults.standard.string(forKey: homeKey) ?? detectedHome
+    nonisolated static var home: String { home(in: .standard) }
+
+    /// The same, read from any defaults (tests pass a scratch suite, so they
+    /// never change the real value other tests are reading).
+    nonisolated static func home(in defaults: UserDefaults) -> String {
+        defaults.string(forKey: homeKey) ?? detectedHome
     }
 
     /// The phone's own currency, if we have daily rates for it.
