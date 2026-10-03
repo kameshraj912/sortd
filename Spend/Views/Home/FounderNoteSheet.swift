@@ -22,6 +22,18 @@ enum FounderNote {
         defaults.set(now.timeIntervalSince1970, forKey: seenAtKey)
     }
 
+    /// The note's first paragraph. "That tap you just made" is only true
+    /// straight after the first purchase Sortd logged by itself, so
+    /// Settings › About gets the plain thank-you.
+    static func opening(for moment: Moment) -> String {
+        switch moment {
+        case .aha:
+            "Thank you for trusting Sortd. That tap you just made was logged by itself. That's how tracking your money should be."
+        case .about:
+            "Thank you for trusting Sortd. Tracking your money should be this easy."
+        }
+    }
+
     /// The pure "should show now?" rule for the aha moment, kept free of
     /// SwiftUI, UserDefaults and `Activation` so it is testable on its own
     /// (`SpendTests/FounderNoteTests.swift`).
@@ -65,10 +77,12 @@ struct FounderNoteSheet: View {
     /// No mail app to open: same fallback as Help & Feedback.
     @State private var showingAddress = false
 
-    private let paragraphs: [String] = [
-        "Thank you for trusting Sortd. That tap you just made was logged by itself. That's how tracking your money should be.",
-        "I wanted a clear picture of my money, with two rules:",
-    ]
+    private var paragraphs: [String] {
+        [
+            FounderNote.opening(for: moment),
+            "I wanted a clear picture of my money, with two rules:",
+        ]
+    }
 
     private let bullets: [String] = [
         "No typing. Pay as usual and Sortd writes it down.",
