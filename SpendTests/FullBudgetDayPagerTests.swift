@@ -2,6 +2,8 @@ import Testing
 import Foundation
 @testable import Spend
 
+// The pager is debug-only now (spec 2026-10-03): so are its tests.
+#if DEBUG
 /// The Activity day pager (`DayPager`) at its edges: no days at all, a huge
 /// history (5,000 days, well over 13 years of daily use), and a filter that
 /// leaves nothing on screen.
@@ -70,3 +72,4 @@ import Foundation
         #expect(DayPager.neighbour(of: old[3], in: old, still: new) == old[4])
     }
 }
+#endif

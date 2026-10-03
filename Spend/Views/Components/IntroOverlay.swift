@@ -7,7 +7,8 @@ import UIKit
 /// - **motion allowed** (Reduce Motion off, VoiceOver off): three thin
 ///   progress segments at the top, a card with a small "N of 3" eyebrow and
 ///   a secondary Skip button sharing that row (no Next), the line below,
-///   real per-step motion (a finger tapping, or the tab bar's own ring),
+///   real per-step motion (a finger tapping or swiping, or the tab bar's
+///   own ring),
 ///   auto-advance after `IntroStep.stepDuration`, a tap anywhere advances
 ///   early, a finger held down pauses the clock; or
 /// - **Reduce Motion, or VoiceOver running** (kept exactly as first built,
@@ -16,23 +17,16 @@ import UIKit
 ///   nothing times out.
 ///
 /// `RootView` drives the selected tab from `tour.step`, so the highlighted
-/// control is real, and threads the day header's measured frame in from
-/// `ActivityView` via `IntroDayHeaderKey` for the `.move` step.
+/// control is real, and threads Activity's first row's measured frame in
+/// from `ActivityView` via `IntroFirstRowKey` for the `.swipe` step.
 struct IntroOverlay: View {
     @Binding var tour: IntroTour
-    /// The day header's frame (chevrons + day title), measured by
-    /// `ActivityView.pagerHeader` and read at `RootView` via
-    /// `.overlayPreferenceValue(IntroDayHeaderKey.self)`. Nil until
-    /// `ActivityView` has laid out at least once on step `.move`, or if it
-    /// never can be (see `IntroDayHeaderKey`'s doc) — either way this falls
-    /// back to the whole tab bar band, same as `.add`/`.insights` do today.
-    let dayHeaderFrame: CGRect?
-    /// The "Older Day" chevron button's own frame (a 44pt square that hangs
-    /// out past the header row's measured frame — `pagerHeader`'s negative
-    /// horizontal padding), measured the same way as `dayHeaderFrame`. Only
-    /// used to place the finger for `.move`; the cutout still uses the
-    /// whole header.
-    let dayChevronFrame: CGRect?
+    /// Activity's first purchase row, measured by `ActivityView.row` and
+    /// read at `RootView` via `.overlayPreferenceValue(IntroFirstRowKey.self)`.
+    /// Nil until `ActivityView` has laid out at least once on step `.swipe`,
+    /// or when there are no purchases yet — either way this falls back to
+    /// the whole tab bar band, as `.add`/`.insights` do.
+    let firstRowFrame: CGRect?
     /// A tap anywhere, or the classic-mode Next/Done button.
     let onNext: () -> Void
     /// The step's own clock ran out with nobody tapping.
@@ -46,6 +40,8 @@ struct IntroOverlay: View {
     @State private var pulse = false
     @State private var fingerOpacity: Double = 0
     @State private var fingerScale: CGFloat = 1
+    /// How far the finger has slid left, for the `.swipe` step.
+    @State private var fingerOffset: CGFloat = 0
     @State private var countdown: IntroCountdown?
     /// 0...1: how far through the current step's `stepDuration` the poll
     /// loop has gotten, driving the progress segment's fill. Frozen while
@@ -81,18 +77,18 @@ struct IntroOverlay: View {
                 let origin = proxy.frame(in: .global).origin
                 let bounds = CGRect(origin: .zero, size: proxy.size)
                 let target = Self.clamp(
-                    Self.targetFrame(for: step, probe: probe, dayHeaderFrame: dayHeaderFrame,
+                    Self.targetFrame(for: step, probe: probe, firstRowFrame: firstRowFrame,
                                       screen: proxy.size, safeBottom: proxy.safeAreaInsets.bottom)
                         .offsetBy(dx: -origin.x, dy: -origin.y),
                     to: bounds)
                 let pointerX = Self.clampedPointerOffset(target: target, screenWidth: proxy.size.width)
-                let approximate = probe.foundNothing && (step != .move || dayHeaderFrame == nil)
+                let approximate = probe.foundNothing && (step != .swipe || firstRowFrame == nil)
                 let showButtons = !autoAdvanceAllowed
 
                 ZStack(alignment: .top) {
                     dim(cutout: target)
                     highlight(target, approximate: approximate)
-                    finger(at: fingerAnchor(for: step, target: target, chevron: dayChevronFrame))
+                    finger(at: fingerAnchor(for: step, target: target))
                     cardLayer(for: step, target: target, pointerOffsetX: pointerX,
                               bounds: bounds, safeBottom: proxy.safeAreaInsets.bottom, showButtons: showButtons)
                     if !showButtons {
@@ -109,6 +105,7 @@ struct IntroOverlay: View {
             .task(id: step) {
                 pulse = false
                 fingerOpacity = 0
+                fingerOffset = 0
                 progress = 0
                 countdown = IntroCountdown(startedAt: .now)
                 guard !reduceMotion else { return }
@@ -162,10 +159,16 @@ struct IntroOverlay: View {
             await tap()
             try? await Task.sleep(for: .milliseconds(250))
             withAnimation(.easeOut(duration: 0.25)) { fingerOpacity = 0 }
-        case .tapOnce:
+        case .swipeLeft:
+            // Touch down on the row, slide left the way a delete swipe
+            // goes, lift and fade: about `motionDuration` in all.
+            fingerOffset = 0
             fingerOpacity = 1
-            await tap()
-            try? await Task.sleep(for: .milliseconds(350))
+            withAnimation(.easeOut(duration: 0.12)) { fingerScale = 0.8 }
+            try? await Task.sleep(for: .milliseconds(150))
+            withAnimation(.easeInOut(duration: 0.45)) { fingerOffset = -Self.swipeDistance }
+            try? await Task.sleep(for: .milliseconds(480))
+            withAnimation(.easeOut(duration: 0.12)) { fingerScale = 1 }
             withAnimation(.easeOut(duration: 0.25)) { fingerOpacity = 0 }
         }
     }
@@ -178,23 +181,22 @@ struct IntroOverlay: View {
         try? await Task.sleep(for: .milliseconds(120))
     }
 
-    /// Where the simulated finger lands: the + circle's centre for `.add`,
-    /// the "Older Day" chevron button's own centre for `.move` — its measured
-    /// frame when `ActivityView` reported one, else a guess inset from the
-    /// header's trailing edge (the chevron's 44pt square hangs out past the
-    /// header row's own frame, `pagerHeader`'s negative horizontal padding —
-    /// close enough only when the real measurement isn't there). `.insights`
-    /// has no finger — the ring pulse alone is its motion, on the tab the app
-    /// really selects.
-    private func fingerAnchor(for step: IntroStep, target: CGRect, chevron: CGRect?) -> CGPoint {
+    /// How far the `.swipe` step's finger slides, in points.
+    static let swipeDistance: CGFloat = 150
+
+    /// Where the simulated finger starts: the + circle's centre for `.add`;
+    /// near the row's trailing edge for `.swipe`, so the slide left stays on
+    /// the row. With no row measured (no purchases yet) the target is the
+    /// tab bar, and there is no finger. `.insights` has no finger either —
+    /// the ring pulse alone is its motion, on the tab the app really selects.
+    private func fingerAnchor(for step: IntroStep, target: CGRect) -> CGPoint {
+        guard target != .zero else { return .zero }
         switch step {
         case .add:
-            guard target != .zero else { return .zero }
             return CGPoint(x: target.midX, y: target.midY)
-        case .move:
-            if let chevron, chevron != .zero { return CGPoint(x: chevron.midX, y: chevron.midY) }
-            guard target != .zero else { return .zero }
-            return CGPoint(x: target.maxX - 8, y: target.midY)
+        case .swipe:
+            guard firstRowFrame != nil else { return .zero }
+            return CGPoint(x: max(target.maxX - 40, target.midX), y: target.midY)
         case .insights: return .zero
         }
     }
@@ -210,6 +212,7 @@ struct IntroOverlay: View {
                 .shadow(color: .black.opacity(0.3), radius: 4)
                 .opacity(fingerOpacity)
                 .position(point)
+                .offset(x: fingerOffset)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
@@ -322,9 +325,9 @@ struct IntroOverlay: View {
 
     /// Where the card sits: bottom-anchored, just above the target, for
     /// `.add`/`.insights` (both live in or next to the tab bar, near the
-    /// bottom edge); hanging just under the target for `.move` (the day
-    /// header sits near the top, under the nav bar) — and for the whole-bar
-    /// fallback too, since that target is back at the bottom.
+    /// bottom edge); hanging just under the target for `.swipe` (the first
+    /// row sits near the top, under the title and chips) — and above it for
+    /// the whole-bar fallback, since that target is back at the bottom.
     private func cardLayer(for step: IntroStep, target: CGRect, pointerOffsetX: CGFloat,
                             bounds: CGRect, safeBottom: CGFloat, showButtons: Bool) -> some View {
         let hangsBelow = target != .zero && target.midY < bounds.height / 2
@@ -460,7 +463,7 @@ struct IntroOverlay: View {
     }
 
     private func nextButton(_ step: IntroStep) -> some View {
-        Button(step == .move ? "Done" : "Next", action: onNext)
+        Button(step == .swipe ? "Done" : "Next", action: onNext)
             .buttonStyle(.glassProminent)
             .tint(Color.brand)
             // The window sets `.foregroundStyle(Color.ink)` further up
@@ -472,10 +475,10 @@ struct IntroOverlay: View {
     // MARK: Target frame
 
     /// Where to draw the cutout: the probe's live UIKit frame when it found
-    /// one, the day header's measured frame for `.move`, else a computed
+    /// one, the first row's measured frame for `.swipe`, else a computed
     /// slot over the whole tab bar band (the spec's fallback when the exact
     /// control can't be measured).
-    static func targetFrame(for step: IntroStep, probe: TabBarLayout, dayHeaderFrame: CGRect?,
+    static func targetFrame(for step: IntroStep, probe: TabBarLayout, firstRowFrame: CGRect?,
                              screen: CGSize, safeBottom: CGFloat) -> CGRect {
         switch step {
         case .add:
@@ -489,8 +492,8 @@ struct IntroOverlay: View {
                 return probe.items[index]
             }
             return probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
-        case .move:
-            return dayHeaderFrame ?? probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
+        case .swipe:
+            return firstRowFrame ?? probe.bar ?? fallbackBand(screen: screen, safeBottom: safeBottom)
         }
     }
 
@@ -668,43 +671,29 @@ struct TabBarProbe: UIViewRepresentable {
     }
 }
 
-// MARK: - Day header measurement (step `.move`)
+// MARK: - First row measurement (step `.swipe`)
 
-/// Reported by `ActivityView.pagerHeader` up to whichever ancestor reads
-/// `.overlayPreferenceValue(IntroDayHeaderKey.self)` — `RootView`, at the
-/// same level `IntroOverlay` is placed, since `ActivityView`'s own `List` +
-/// `ScrollViewReader` sits well below that.
-///
-/// Both frames `pagerHeader` reports, in one value: the whole row (for the
-/// cutout) and the "Older Day" chevron button's own 44pt square separately
-/// (for the finger) — its measured frame doesn't line up with the header
-/// row's, since the chevrons hang out past it (`pagerHeader`'s negative
-/// horizontal padding). Two `.preference` calls from different descendants
-/// of the same `pagerHeader` each set one field; `reduce` merges them.
-struct IntroDayFrames: Equatable {
-    var header: CGRect? = nil
-    var chevron: CGRect? = nil
-}
-
-struct IntroDayHeaderKey: PreferenceKey {
-    static var defaultValue = IntroDayFrames()
-    static func reduce(value: inout IntroDayFrames, nextValue: () -> IntroDayFrames) {
-        let next = nextValue()
-        if let header = next.header { value.header = header }
-        if let chevron = next.chevron { value.chevron = chevron }
+/// Reported by `ActivityView.row` (the main list's first purchase) up to
+/// whichever ancestor reads `.overlayPreferenceValue(IntroFirstRowKey.self)`
+/// — `RootView`, at the same level `IntroOverlay` is placed, since
+/// `ActivityView`'s `List` sits well below that. In global coordinates.
+struct IntroFirstRowKey: PreferenceKey {
+    static var defaultValue: CGRect? { nil }
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        if let next = nextValue() { value = next }
     }
 }
 
-private struct IntroWatchingDayHeaderKey: EnvironmentKey {
+private struct IntroWatchingFirstRowKey: EnvironmentKey {
     static let defaultValue = false
 }
 
 extension EnvironmentValues {
-    /// True only while the intro's `.move` step is on screen: gates whether
-    /// `ActivityView`'s day header spends a `GeometryReader` measuring
-    /// itself for `IntroDayHeaderKey` — free the rest of the time.
-    var introWatchingDayHeader: Bool {
-        get { self[IntroWatchingDayHeaderKey.self] }
-        set { self[IntroWatchingDayHeaderKey.self] = newValue }
+    /// True only while the intro's `.swipe` step is on screen: gates whether
+    /// `ActivityView`'s first row spends a `GeometryReader` measuring itself
+    /// for `IntroFirstRowKey` — free the rest of the time.
+    var introWatchingFirstRow: Bool {
+        get { self[IntroWatchingFirstRowKey.self] }
+        set { self[IntroWatchingFirstRowKey.self] = newValue }
     }
 }
