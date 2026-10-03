@@ -102,6 +102,15 @@ enum TipRules {
     /// The same reset with no answer, for callers that cannot act on one.
     static var resetDatastore: () -> Void = { _ = TipRules.tryResetDatastore() }
 
+    /// The oldest a purchase can be and still count towards "days of data"
+    /// and "months of data". Real imported history sits inside this.
+    static let historyWindowDays = 400
+
+    static func countsAsHistory(_ date: Date, now: Date, calendar: Calendar) -> Bool {
+        guard let oldest = calendar.date(byAdding: .day, value: -historyWindowDays, to: now) else { return true }
+        return date >= oldest
+    }
+
     /// Calendar days from the earliest purchase to today, both included.
     /// No purchases: 0.
     static func daysOfData(from earliest: Date?, to now: Date, calendar: Calendar) -> Int {
@@ -240,7 +249,9 @@ enum TipState {
             let real = rows.filter { !$0.sample }
             manualCount = real.filter(\.manual).count
             purchases = real.count
-            let dates = real.map(\.date)
+            // A purchase dated years back (a bad import, a typo) must not make
+            // a new install look like it has months of history.
+            let dates = real.map(\.date).filter { TipRules.countsAsHistory($0, now: now, calendar: calendar) }
             daysOfData = TipRules.daysOfData(from: dates.min(), to: now, calendar: calendar)
             monthsOfData = TipRules.calendarMonths(of: dates, calendar: calendar)
         }
@@ -497,11 +508,19 @@ extension View {
 private struct SortdPopoverTip: ViewModifier {
     let tip: (any Tip)?
     let arrowEdge: Edge
+    /// TabView keeps every tab alive, so a tip on another tab's view would be
+    /// presented over the tab you are looking at, anchored to nothing. The tip
+    /// is only given to TipKit (and only counted as shown) while this view is
+    /// on screen.
+    @State private var onScreen = false
 
     func body(content: Content) -> some View {
+        let live = onScreen ? tip : nil
         content
-            .popoverTip(tip, arrowEdge: arrowEdge)
-            .modifier(TipShownReporter(tip: tip))
+            .popoverTip(live, arrowEdge: arrowEdge)
+            .modifier(TipShownReporter(tip: live))
+            .onAppear { onScreen = true }
+            .onDisappear { onScreen = false }
     }
 }
 
