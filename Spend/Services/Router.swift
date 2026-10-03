@@ -18,7 +18,7 @@ final class Router {
 
     /// A sheet for Home to present.
     enum Sheet: Hashable {
-        case add, budget
+        case add, budget, scan
     }
 
     /// What a `sortd://` link names, and the id after it if it has one
@@ -93,9 +93,13 @@ final class Router {
             // Activity decides there is nothing to open and says nothing.
             tab = .activity
             pendingPurchase = target.id.flatMap(UUID.init(uuidString:))
-        case "add", "scan":
+        case "add":
             tab = .home
             sheet = .add
+        case "scan":
+            // The Add sheet, straight into the receipt scanner.
+            tab = .home
+            sheet = .scan
         case "budget":
             tab = .home
             sheet = .budget

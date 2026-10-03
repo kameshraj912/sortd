@@ -159,9 +159,10 @@ extension WidgetBridge {
 
     /// Newest first. Left out: the rows Activity hides (the old test tap and
     /// the Apple Pay health check), refunds and transfers (not purchases,
-    /// same rule as the totals), and taps that landed with no shop name or no
-    /// amount, which have nothing sensible to show and read as "Needs a
-    /// check" in the app.
+    /// same rule as the totals), and taps that landed with no shop name
+    /// (`Transaction.lacksShop`: saved as "Unknown merchant") or no amount,
+    /// which have nothing sensible to show and read as "Needs a check" in
+    /// the app.
     ///
     /// The amount is in the home currency, as Home and Insights total it. A
     /// purchase still waiting on its exchange rate keeps its own currency.
@@ -171,8 +172,7 @@ extension WidgetBridge {
             .filter { t in
                 !t.refunded && t.category != .transfers
                     && !hidden.contains(t.merchant) && !hidden.contains(t.rawMerchant)
-                    && !t.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && !t.needsReview
+                    && !t.lacksShop && !t.needsReview
             }
             .sorted { $0.date > $1.date }
             .prefix(recentLimit)

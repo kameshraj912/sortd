@@ -22,9 +22,18 @@ enum LoggedNotice {
         defaults.object(forKey: enabledKey) as? Bool ?? true
     }
 
-    /// Tapping it opens Activity (`NotificationRouter` reads `userInfo["url"]`).
+    /// Tapping "Logged" opens Activity (`NotificationRouter` reads `userInfo["url"]`).
     nonisolated static let url = "sortd://activity"
     private static let idPrefix = "logged-"
+
+    /// Where tapping the notice goes: "Needs a check" opens that purchase,
+    /// where the missing amount or shop is typed in.
+    static func link(for saved: Saved) -> String {
+        switch saved {
+        case .purchase: url
+        case .needsCheck(let id, _, _): "sortd://purchase/\(id.uuidString)"
+        }
+    }
 
     /// What one run left behind, as far as the notice cares.
     enum Saved: Equatable {
@@ -44,14 +53,15 @@ enum LoggedNotice {
 
     /// The run's result in the notice's terms. Nil when nothing was saved
     /// or merged: a ▶ test run, a declined payment, a notification with no
-    /// amount, a save that failed and was queued, a refund, or a legacy
-    /// "Sortd Test" row.
+    /// amount, a save that failed and was queued, a refund, a legacy
+    /// "Sortd Test" row, or a "Check the Shortcut" run.
     @MainActor
     static func saved(from outcome: LogPurchaseIntent.Outcome) -> Saved? {
         guard !outcome.saveFailed, !outcome.refund, let t = outcome.transaction,
-              t.rawMerchant != LogPurchaseIntent.legacyTestMerchant, !t.refunded else { return nil }
+              t.rawMerchant != LogPurchaseIntent.legacyTestMerchant, t.rawMerchant != ApplePayHealthCheck.merchant,
+              !t.refunded else { return nil }
         let missingAmount = t.amount <= 0
-        let missingShop = t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
+        let missingShop = t.lacksShop
         if missingAmount || missingShop || t.note.hasPrefix(Transaction.needsCheckTag) {
             return .needsCheck(id: t.id, missingShop: missingShop, missingAmount: missingAmount)
         }
@@ -93,7 +103,7 @@ enum LoggedNotice {
         let note = UNMutableNotificationContent()
         note.title = content.title
         note.body = content.body
-        note.userInfo = ["url": url]
+        note.userInfo = ["url": link(for: saved)]
         try? await UNUserNotificationCenter.current()
             .add(UNNotificationRequest(identifier: content.id, content: note, trigger: nil))
     }
