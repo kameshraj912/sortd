@@ -501,7 +501,7 @@ struct AddTransactionView: View {
     /// setup, changeable in Settings), not the phone's locale/time-zone
     /// guess: a Melbourne phone with SGD chosen as the main currency should
     /// still default to SGD here, not AUD (UX pass, fresh-user walkthrough).
-    nonisolated static func defaultCurrency() -> String { Money.home }
+    nonisolated static func defaultCurrency(defaults: UserDefaults = .standard) -> String { Money.home(in: defaults) }
 
     private var isValid: Bool {
         // Only the amount is needed; a nameless purchase is saved under its category.
