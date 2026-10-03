@@ -207,13 +207,26 @@ private struct SpendBar: View {
 /// A row that never wraps: the amount keeps its full width and the name
 /// gives way. The other way round turns "A$58.30" into "A$58." / "30".
 private struct MoneyRow: View {
-    var title: String
+    /// The shop's name, drawn as `ShopName`: always private while locked.
+    var shop: ShopName
     var detail: String?
     var amount: String
     var symbol: String?
     var tint: Color = .secondary
+    /// What VoiceOver must leave out while the iPhone is locked.
+    var hiding: Hiding
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if hiding.shop {
+            row
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+        } else {
+            row.accessibilityElement(children: .combine)
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 8) {
             if let symbol {
                 Image(systemName: symbol)
@@ -222,11 +235,7 @@ private struct MoneyRow: View {
                     .foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(Sortd.ink)
+                shop
                 if let detail {
                     Text(detail)
                         .font(.caption2)
@@ -241,7 +250,12 @@ private struct MoneyRow: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.secondary)
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    /// Said aloud while locked: no shop name, and no amount either unless
+    /// "Show Amounts When Locked" is on.
+    private var spoken: String {
+        ["A bill", detail, hiding.amounts ? nil : amount].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -522,6 +536,7 @@ struct SortdQuickAddWidget: Widget {
 
 struct BillsView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.redactionReasons) private var redaction
     var entry: LookEntry
 
     var body: some View {
@@ -540,10 +555,11 @@ struct BillsView: View {
             Heading(text: "Coming up",
                     trailing: family == .systemSmall ? nil : Sortd.money(total, s.currency, cents: false))
             ForEach(soon) { bill in
-                MoneyRow(title: bill.name,
+                MoneyRow(shop: ShopName(name: bill.name),
                          detail: Sortd.countdown(to: bill.due),
                          amount: Sortd.money(bill.amount, bill.currency),
-                         symbol: nil)
+                         symbol: nil,
+                         hiding: Hiding(redaction, s))
             }
             Spacer(minLength: 0)
         }

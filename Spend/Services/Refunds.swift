@@ -11,12 +11,20 @@ enum Refunds {
     static func markRefunded(amount: Decimal, currency: String, card: Card, merchant: String,
                              platform: String?, before date: Date, lookbackDays: Double = 14,
                              in context: ModelContext) -> Bool {
+        markRefundedPurchase(amount: amount, currency: currency, card: card, merchant: merchant,
+                             platform: platform, before: date, lookbackDays: lookbackDays, in: context) != nil
+    }
+
+    /// `markRefunded`, returning the purchase it marked (nil if none fit).
+    static func markRefundedPurchase(amount: Decimal, currency: String, card: Card, merchant: String,
+                                     platform: String?, before date: Date, lookbackDays: Double = 14,
+                                     in context: ModelContext) -> Transaction? {
         let from = date.addingTimeInterval(-lookbackDays * 86400)
         let to = date.addingTimeInterval(86400)
         guard let pool = try? context.fetch(FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= from && $0.date <= to && $0.refunded == false },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )) else { return false }
+        )) else { return nil }
 
         let refund = Deduper.Candidate(date: date, merchant: merchant, amount: amount, currency: currency,
                                        card: card, source: .tap, platform: platform)
@@ -29,11 +37,11 @@ enum Refunds {
             return samePlatform || Deduper.similarity(merchant, t.rawMerchant) >= 0.3
                 || Deduper.similarity(merchant, t.merchant) >= 0.3
         }
-        guard let t = hit else { return false }
+        guard let t = hit else { return nil }
         t.refunded = true
         if !t.note.isEmpty { t.note += " · " }
         t.note += "Refunded"
-        return true
+        return t
     }
 
     /// A partial refund: less than the whole purchase (one item back from a

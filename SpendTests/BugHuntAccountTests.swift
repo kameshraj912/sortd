@@ -6,8 +6,9 @@ import DeviceCheck
 import AuthenticationServices
 @testable import Spend
 
-// Bug hunt 3 Oct 2026, area account-sync-safety. Every test here documents a
-// real, unfixed bug: it fails today and runs only with `--known-bugs`.
+// Bug hunt 3 Oct 2026, area account-sync-safety. Each test was written to fail
+// on the code of that day. All are fixed (docs/BugHunt-2026-10-03-fixes-c.md)
+// and run in the normal suite.
 // Reuses `FakeCloudBackupStore` and `FakeBackupKeyStore` from CloudBackupTests.
 
 // MARK: - Fakes (this file's own)
@@ -42,6 +43,7 @@ private final class HuntTransport {
 
 private final class HuntAttester: AppAttester {
     var error: Error?
+    nonisolated init() {}
     var isSupported: Bool { true }
     func attest(clientDataHash: Data) async throws -> (keyID: String, attestation: Data) {
         if let error { throw error }
@@ -133,9 +135,7 @@ struct BugHuntAccountTests {
     /// After Delete All Data on a phone that only restored, the in-memory
     /// `lastBackup` survives the defaults wipe, so the restore-first guard is
     /// skipped and the next backup writes over the other phone's iCloud copy.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Delete All leaves CloudBackup.lastBackup set; restoreFirst guard skipped"))
-    func deleteAllOnARestoredPhoneStillRefusesToOverwriteTheOtherPhonesBackup() async throws {
+    @Test func deleteAllOnARestoredPhoneStillRefusesToOverwriteTheOtherPhonesBackup() async throws {
         let cloudStore = FakeCloudBackupStore()
         let keys = FakeBackupKeyStore()   // one iCloud Keychain, shared by both phones
 
@@ -176,12 +176,50 @@ struct BugHuntAccountTests {
         #expect(Backup.contents(of: plain)?.purchases == 3)
     }
 
+    /// D3: an iPhone whose last backup is older than the iCloud copy (another
+    /// iPhone wrote it since) must not write over it. It restores first, then
+    /// its backup holds both phones' purchases.
+    @Test func anOlderPhoneDoesNotWriteOverANewerICloudCopy() async throws {
+        let cloudStore = FakeCloudBackupStore()
+        let keys = FakeBackupKeyStore()
+        let t0 = clock()
+
+        // Old phone: one purchase, backed up at t0.
+        let ctxA = try context()
+        try log(ctxA, "Woolworths", 58.30, minutes: 0)
+        let phoneA = CloudBackup(store: cloudStore, keys: keys, defaults: scratch().0, clock: { t0 })
+        phoneA.isEnabled = true
+        try await phoneA.backUpNow(from: ctxA)
+
+        // New phone, same iCloud: restores, adds Coles, backs up a day later.
+        let ctxB = try context()
+        let phoneB = CloudBackup(store: cloudStore, keys: keys, defaults: scratch().0,
+                                 clock: { t0.addingTimeInterval(86_400) })
+        #expect(try await phoneB.restore(into: ctxB, mode: .merge) == 1)
+        try log(ctxB, "Coles", 20.00, minutes: 30)
+        phoneB.isEnabled = true
+        try await phoneB.backUpNow(from: ctxB)
+
+        // The old phone saves something and tries to back up.
+        try log(ctxA, "Aldi", 7.45, minutes: 10)
+        await #expect(throws: CloudBackupError.newerInCloud) {
+            try await phoneA.backUpNow(from: ctxA)
+        }
+        let key = try #require(try keys.load())
+        let kept = try CloudBackup.decrypt(try #require(cloudStore.saved).blob, with: key)
+        #expect(Backup.contents(of: kept)?.purchases == 2, "the newer copy was written over")
+
+        // After restoring what the other phone added, it may back up again.
+        #expect(try await phoneA.restore(into: ctxA, mode: .merge) == 1)
+        try await phoneA.backUpNow(from: ctxA)
+        let merged = try CloudBackup.decrypt(try #require(cloudStore.saved).blob, with: key)
+        #expect(Backup.contents(of: merged)?.purchases == 3)
+    }
+
     /// Turning backup off and choosing "Delete iCloud Copy" while an upload is
     /// still running: the delete finishes first, then the upload lands and the
     /// copy is back in iCloud.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Delete iCloud Copy during an upload is undone by the upload"))
-    func deleteICloudCopyDuringAnUploadLeavesNoCopy() async throws {
+    @Test func deleteICloudCopyDuringAnUploadLeavesNoCopy() async throws {
         let cloudStore = HeldCloudStore()
         let keys = FakeBackupKeyStore()
         let ctx = try context()
@@ -211,9 +249,7 @@ struct BugHuntAccountTests {
     /// A rate-limited backup retries after iCloud's wait even when backup was
     /// switched off during that wait ("Keep It"), so one more upload happens
     /// after "Backups have stopped".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("rate-limit retry uploads with the switch off"))
-    func aRateLimitRetryDoesNotUploadOnceBackupIsSwitchedOff() async throws {
+    @Test func aRateLimitRetryDoesNotUploadOnceBackupIsSwitchedOff() async throws {
         let cloudStore = FakeCloudBackupStore()
         let keys = FakeBackupKeyStore()
         let ctx = try context()
@@ -244,9 +280,7 @@ struct BugHuntAccountTests {
     /// App Attest failing with `serverUnavailable` (Apple says: try again
     /// later) is not treated as offline, so the PostHog delete is dropped for
     /// good instead of queued, and the user sees a raw DeviceCheck error.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("DCError.serverUnavailable from App Attest drops the PostHog delete"))
-    func anAppAttestServerOutageQueuesThePersonDelete() async throws {
+    @Test func anAppAttestServerOutageQueuesThePersonDelete() async throws {
         let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#)])
         let attester = HuntAttester()
         attester.error = DCError(.serverUnavailable)
@@ -254,23 +288,36 @@ struct BugHuntAccountTests {
         let store = accountStore(revoker(transport, attester: attester), defaults: defaults)
         try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
 
-        let problems = await store.deleteAccount()
+        let problems = await store.deleteAccount().problems
 
         #expect((defaults.array(forKey: AccountStore.pendingDeletesKey) as? [String] ?? []).count == 1)
         #expect(problems.isEmpty)
     }
 
+    /// Any other App Attest refusal is plain words too, not DeviceCheck's own text.
+    @Test func anAppAttestRefusalIsShownInPlainWords() async throws {
+        let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#)])
+        let attester = HuntAttester()
+        attester.error = DCError(.invalidKey)
+        let (defaults, _) = scratch()
+        let store = accountStore(revoker(transport, attester: attester), defaults: defaults)
+        try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
+
+        let result = await store.deleteAccount()
+
+        #expect(result.problems == [WorkerRevoker.usageRecordNotDeleted])
+        #expect((defaults.array(forKey: AccountStore.pendingDeletesKey) as? [String] ?? []).isEmpty)
+    }
+
     /// A Worker refusal reaches the user as the Worker's machine code: the
     /// alert reads "posthog_auth".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Delete Account alert shows the raw Worker error code"))
-    func aWorkerRefusalIsShownInPlainWordsNotAsACode() async throws {
+    @Test func aWorkerRefusalIsShownInPlainWordsNotAsACode() async throws {
         let transport = HuntTransport([(200, #"{"challenge":"chal-1"}"#), (502, #"{"error":"posthog_auth"}"#)])
         let (defaults, _) = scratch()
         let store = accountStore(revoker(transport), defaults: defaults)
         try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
 
-        let problems = await store.deleteAccount()
+        let problems = await store.deleteAccount().problems
 
         #expect(problems.count == 1)
         #expect(problems.allSatisfy { !$0.contains("_") && $0.contains(" ") })
@@ -280,9 +327,7 @@ struct BugHuntAccountTests {
     /// no iCloud) the alert says "Try again in a moment", but the account is
     /// already forgotten, so there is nothing to try again; Apple's manual
     /// steps are never shown and the sign-in stays active.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Apple sheet failure at Delete Account says try again, not the manual steps"))
-    func aFailedAppleConfirmSheetGivesTheManualSteps() async throws {
+    @Test func aFailedAppleConfirmSheetGivesTheManualSteps() async throws {
         let r = revoker(HuntTransport([]), appleCode: { _ in
             throw AppleIdentityProvider.error(from: ASAuthorizationError(.failed))
         })
@@ -297,9 +342,7 @@ struct BugHuntAccountTests {
     /// Sign Out after Continue with Google leaves the Google token in the
     /// Keychain; the next Google sign-in overwrites it, so that grant can
     /// never be cancelled from Sortd.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Sign Out keeps google-identity-token in the Keychain"))
-    func signOutFromGoogleForgetsTheGoogleToken() async throws {
+    @Test func signOutFromGoogleForgetsTheGoogleToken() async throws {
         let tokenKey = "google-identity-token"   // GoogleAuth.identityTokenKey (private)
         defer { Keychain.delete(tokenKey) }
         Keychain.set("1//old-google-refresh-token", for: tokenKey)
@@ -313,5 +356,7 @@ struct BugHuntAccountTests {
 
         #expect(store.current == nil)
         #expect(Keychain.get(tokenKey) == nil)
+        // Not just forgotten: the grant is on the revoke list, so Google still cancels it.
+        #expect(GoogleAuth.pendingTokens(Keychain.get("google-revoke-pending")).contains("1//old-google-refresh-token"))
     }
 }

@@ -4,8 +4,8 @@ import SwiftData
 @testable import Spend
 
 // Bug hunt 3 Oct 2026, area security-masvs (docs/testing/attacks.md).
-// Every test here documents a real, unfixed bug: it fails today, and runs
-// only with `scripts/test.sh --known-bugs`.
+// Each test was written to fail on the code of that day. All five are fixed
+// (docs/BugHunt-2026-10-03-fixes-c.md) and run in the normal suite.
 
 // MARK: - Fakes for the account store (this file's own)
 
@@ -79,11 +79,7 @@ struct BugHuntSecurityTests {
     /// Cancelling Apple's "sign in once more to confirm" sheet during Delete
     /// Account still deletes the usage record and signs out (and, from
     /// "Delete Account and All Data", the view then wipes every purchase).
-    /// Note: `AccountStoreReviewTests.aCancelledJobIsDroppedQuietly` pins
-    /// today's behaviour and must change with the fix.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-01", "Cancel on Apple's confirm sheet does not cancel Delete Account"))
-    func cancellingApplesConfirmSheetCancelsTheDelete() async throws {
+    @Test func cancellingApplesConfirmSheetCancelsTheDelete() async throws {
         let account = Account(provider: .apple, subject: "001234.sechunt", email: nil)
         let revoker = SecHuntRevoker()
         let store = AccountStore(keychain: SecHuntKeychain(), revoker: revoker, sink: SecHuntSink(),
@@ -105,9 +101,7 @@ struct BugHuntSecurityTests {
     /// which never applies `.shopNameIsPrivate()`. With "Show Amounts When
     /// Locked" on, the whole widget is `.privacySensitive(false)`, so shop
     /// names show on a locked phone (StandBy), against the widget rule.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-02", "Bills widget shows shop names while the iPhone is locked"))
-    func billsWidgetKeepsShopNamesPrivateWhileLocked() throws {
+    @Test func billsWidgetKeepsShopNamesPrivateWhileLocked() throws {
         let bridge = try source("Spend/Services/WidgetBridge.swift")
         #expect(bridge.contains("WidgetSummary.Bill(name: $0.merchant"), "premise: a bill's name is the shop")
 
@@ -126,9 +120,7 @@ struct BugHuntSecurityTests {
     /// revoke then runs in an unawaited Task (60 s default timeout). If the
     /// app is closed in that window the token is gone and the Gmail grant
     /// is never cancelled (`doneKey` is already set, so it never re-runs).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-03", "Google revokes forget the token before Google confirms"))
-    func gmailCleanupKeepsTheTokenUntilGoogleConfirms() throws {
+    @Test func gmailCleanupKeepsTheTokenUntilGoogleConfirms() throws {
         let token = "sec-hunt-refresh-\(UUID().uuidString)"
         let box = SecHuntTokenBox()
         box.items["google-refresh-raj@example.com"] = token
@@ -152,9 +144,7 @@ struct BugHuntSecurityTests {
     /// the Sentry and PostHog placeholders ("replace_me") the app accepts
     /// it: a copied example sends Delete Account calls to
     /// sortd-account.example.workers.dev, a host Sortd does not own.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-04", "example Worker URL is used as a real Worker"))
-    func exampleWorkerURLIsNeverUsedAsARealWorker() throws {
+    @Test func exampleWorkerURLIsNeverUsedAsARealWorker() throws {
         let example = try source("Secrets.xcconfig.example")
         let line = try #require(example.split(separator: "\n").first { $0.hasPrefix("ACCOUNT_WORKER_URL") })
         let value = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
@@ -170,10 +160,9 @@ struct BugHuntSecurityTests {
     /// UserDefaults ("lastTapReceived" and the last 10 "recentTapRuns"),
     /// and it stays there after the purchase is deleted. attacks.md
     /// STORAGE-1: only the SwiftData store may hold a shop name.
-    /// (Right behaviour not obvious: it is a setup-check aid. Raj decides.)
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-05", "shop and amount of a deleted purchase stay in UserDefaults"))
-    func aDeletedTapLeavesNoShopOrAmountInDefaults() async throws {
+    /// Fixed: the run log keeps only how each field arrived (empty, a
+    /// placeholder, a length), never the words.
+    @Test func aDeletedTapLeavesNoShopOrAmountInDefaults() async throws {
         let shop = "ZEBRACAFE\(UUID().uuidString.prefix(6))"
         let now = Date(timeIntervalSince1970: 1_790_000_000)
 

@@ -31,6 +31,17 @@ nonisolated enum TapField {
     }
 
     static func isBlank(_ value: String?) -> Bool { normalize(value).isEmpty }
+
+    /// How a field arrived, never what it said: "empty", "placeholder" (a
+    /// magic variable's own name) or its length. This is all the run log in
+    /// Settings keeps, so a shop name or an amount cannot outlive the
+    /// purchase it came from.
+    static func shape(_ value: String?) -> String {
+        let n = normalize(value).count
+        if n > 0 { return "\(n) characters" }
+        let raw = value?.trimmingCharacters(in: invisible) ?? ""
+        return raw.isEmpty ? "empty" : "placeholder"
+    }
 }
 
 /// Wallet's notification as the iOS 27 Notification trigger hands it over.
@@ -54,6 +65,12 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         "title \u{201C}\(title ?? "")\u{201D} · subtitle \u{201C}\(subtitle ?? "")\u{201D} · body \u{201C}\(body ?? "")\u{201D}"
     }
 
+    /// How it arrived, without the words (see `TapField.shape`): what the
+    /// run log keeps.
+    var shape: String {
+        "title \(TapField.shape(title)) · subtitle \(TapField.shape(subtitle)) · body \(TapField.shape(body))"
+    }
+
     /// What one notification says.
     enum Reading: Equatable {
         /// A payment with an amount. `amount` starts with "-" for a refund,
@@ -63,6 +80,9 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         case notCompleted
         /// No amount at all: a boarding pass, an order update, a card added.
         case noAmount
+        /// Money came in ("You received $25.00 from …", a deposit): not
+        /// spending. A refund is not this: it takes the refund path.
+        case moneyIn
     }
 
     /// Wording that means no money moved. Checked before anything else, so
@@ -70,6 +90,10 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     private static let notCompletedPattern =
         #"\b(?:declined|not completed|failed|unsuccessful|couldn['’]t be|could not be|insufficient)\b"#
     private static let refundPattern = #"\brefund(?:ed|s)?\b"#
+    /// Wording that means money came to the person, not from them. Not a
+    /// bare "deposit": paying a booking deposit is spending.
+    private static let moneyInPattern =
+        #"\b(?:you(?:['’]ve| have)? received|received from|sent you|deposited|deposit (?:to|into) your|credited)\b"#
 
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
@@ -85,12 +109,16 @@ nonisolated struct WalletNotification: Equatable, Sendable {
             return .noAmount
         }
         let refund = text.range(of: Self.refundPattern, options: [.regularExpression, .caseInsensitive]) != nil
+        if !refund, text.range(of: Self.moneyInPattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            return .moneyIn
+        }
         let signed = refund && !AmountParser.isNegative(amount) ? "-" + amount : amount
         return .payment(amount: signed, merchant: parts.merchant, card: parts.card)
     }
 
     static let noAmountMessage = "Sortd saw a Wallet notification with no amount."
     static let notCompletedMessage = "Sortd saw a payment that didn't go through. Nothing was logged."
+    static let moneyInMessage = "Sortd saw money coming in, not a purchase. Nothing was logged."
 }
 
 /// One-field version of Log Purchase for the Wallet automation: pick the
@@ -174,7 +202,7 @@ struct LogWalletTapIntent: AppIntent {
                 // Read now, so only a real payment is queued.
                 let reading = notification.read(isKnownCard: { CardBook.shared.match($0) != .other })
                 switch reading {
-                case .notCompleted, .noAmount:
+                case .notCompleted, .noAmount, .moneyIn:
                     LogPurchaseIntent.recordReach(Self.record(transaction: transaction, amount: amount, merchant: merchant,
                                                               card: card, notification: notification, at: now), at: now)
                     return Self.notPaymentOutcome(reading)
@@ -257,7 +285,7 @@ struct LogWalletTapIntent: AppIntent {
         if notification.isPresent {
             let reading = notification.read(isKnownCard: { book.match($0) != .other })
             switch reading {
-            case .notCompleted, .noAmount:
+            case .notCompleted, .noAmount, .moneyIn:
                 // Shortcuts reached Sortd, but there is nothing to save:
                 // never a "needs a check" row for a boarding pass.
                 LogPurchaseIntent.recordReach(record, at: now)
@@ -286,22 +314,27 @@ struct LogWalletTapIntent: AppIntent {
         return result
     }
 
-    /// The raw "last tap received" line: which kind of run it was and
-    /// every field exactly as it arrived, tap fields and notification parts
-    /// both (on a notification run the tap fields are ignored, but what
-    /// they held is the thing to check on a phone).
+    /// The "last tap received" line: which kind of run it was and how each
+    /// field arrived (empty, a placeholder, or how long), tap fields and
+    /// notification parts both (on a notification run the tap fields are
+    /// ignored, but whether they were filled is the thing to check on a
+    /// phone). Never the words: the shop, the amount and the card would stay
+    /// in the app's defaults after the purchase is deleted (X5, 3 Oct 2026).
     nonisolated static func record(transaction: String?, amount: String?, merchant: String?, card: String?,
                                    notification: WalletNotification, at now: Date) -> String {
         let kind = notification.isPresent ? "notification run" : "tap run"
-        var fields = "amount \u{201C}\(amount ?? "")\u{201D} · merchant \u{201C}\(merchant ?? "")\u{201D} · card \u{201C}\(card ?? "")\u{201D}"
-        if !TapField.isBlank(transaction) { fields += " · text \u{201C}\(transaction ?? "")\u{201D}" }
-        return "\(now.formatted(date: .abbreviated, time: .standard)): \(kind) · \(fields) · \(notification.seen)"
+        var fields = "amount \(TapField.shape(amount)) · merchant \(TapField.shape(merchant)) · card \(TapField.shape(card))"
+        if !TapField.isBlank(transaction) { fields += " · text \(TapField.shape(transaction))" }
+        return "\(now.formatted(date: .abbreviated, time: .standard)): \(kind) · \(fields) · \(notification.shape)"
     }
 
     /// Nothing saved: say which kind of notification it was.
     private static func notPaymentOutcome(_ reading: WalletNotification.Reading) -> LogPurchaseIntent.Outcome {
-        let message = reading == .notCompleted ? WalletNotification.notCompletedMessage
-            : WalletNotification.noAmountMessage
+        let message = switch reading {
+        case .notCompleted: WalletNotification.notCompletedMessage
+        case .moneyIn: WalletNotification.moneyInMessage
+        default: WalletNotification.noAmountMessage
+        }
         return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false)
     }
 }
@@ -329,6 +362,12 @@ nonisolated enum WalletTapText {
         }
         var parts = Parts()
         var rest: [String] = []
+        // A shop word that is also a currency code, before a number ("TOP
+        // 10 PIZZA"), is only a guess at the amount: a real one elsewhere,
+        // with a sign or cents ("A$23.50"), wins.
+        let hasClearAmount = lines.contains { line in
+            !looksLikeDate(line) && money(in: withoutClockTimes(line)).map(isClearAmount) == true
+        }
         for line in lines {
             // A whole line that is only a Shortcuts placeholder (an unfilled
             // Title/Subtitle/Body, spec 2026-09-26 failsafe #13) is not a
@@ -346,12 +385,21 @@ nonisolated enum WalletTapText {
                 }
             }
             if looksLikeDate(line) { continue }
-            if parts.amount == nil, let money = money(in: line) {
+            // "Coles A$23.50 9:41 am NAB Visa Debit": the time is not part of
+            // the shop or the card.
+            let line = withoutClockTimes(line)
+            if line.isEmpty { continue }
+            if parts.amount == nil, let money = money(in: line), !hasClearAmount || isClearAmount(money) {
                 parts.amount = money
                 // "Seven Seeds A$4.50 NAB Visa Debit": keep what's around it.
                 let leftover = line.replacingOccurrences(of: money, with: "\n")
                     .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 rest.append(contentsOf: leftover.flatMap(splitIntoCandidates))
+            } else if notification, !splitIntoCandidates(line).contains(where: looksLikeCard) {
+                // A notification's own line with no amount is one name
+                // ("Cafe on Collins"), not prose to cut at "on". Only a
+                // card glued on with a joining word is split off.
+                rest.append(line)
             } else {
                 rest.append(contentsOf: splitIntoCandidates(line))
             }
@@ -403,7 +451,7 @@ nonisolated enum WalletTapText {
     ]
     /// Dropped only straight after a leading filler word ("paid to", "a
     /// payment of"), never at the start of a name on its own ("A Little Cafe").
-    private static let followingFiller: Set<String> = ["a", "an", "of", "at", "your"]
+    private static let followingFiller: Set<String> = ["a", "an", "of", "at", "your", "from"]
     private static let trailingFiller: Set<String> = ["refund", "refunded", "payment", "purchase"]
     /// Whole lines that name Wallet itself, never a shop.
     private static let walletNames: Set<String> = ["apple pay", "wallet", "apple wallet", "apple cash"]
@@ -448,12 +496,16 @@ nonisolated enum WalletTapText {
         // A group is exactly 3 digits: "A$45 1234" is A$45, not A$45 123.
         let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
         let patterns = [
-            sign + marker + #"\s?"# + number,                  // A$4.50, SGD 6.20, -$5
+            // Not inside a word: "PANTRY 24" is not 24 Turkish lira.
+            #"(?<![A-Za-z])"# + sign + marker + #"\s?"# + number, // A$4.50, SGD 6.20, -$5
             sign + number + #"\s?(?:[A-Z]{3})\b"#,             // 6.20 SGD
             // 4.50, 1,234.50 — the whole number, not "234.50" out of it.
             sign + #"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)[.,]\d{2}\b"#,
         ]
         let ns = s as NSString
+        // A code and a whole number ("TOP 10") is kept only if nothing
+        // clearer (a sign or cents) is in the text.
+        var guess: String?
         for p in patterns {
             guard let regex = try? NSRegularExpression(pattern: p) else { continue }
             // Every match, not just the first: in "NAB 4821 A$4.50" the first
@@ -463,10 +515,11 @@ nonisolated enum WalletTapText {
                 // A bare code must be a real currency ("THB 120", not "ABC 12").
                 if let code = hit.uppercased().split(whereSeparator: { !$0.isLetter }).first, code.count == 3,
                    !hit.contains("$"), AmountParser.currency(in: String(code)) == nil { continue }
-                return hit
+                if isClearAmount(hit) { return hit }
+                if guess == nil { guess = hit }
             }
         }
-        return nil
+        return guess
     }
 
     static func looksLikeCard(_ s: String) -> Bool {
@@ -478,8 +531,32 @@ nonisolated enum WalletTapText {
         return s.range(of: #"[•·…*]\s?\d{4}\b"#, options: .regularExpression) != nil
     }
 
+    /// A line that is a date or a time, so neither the shop nor the card. A
+    /// clock time counts only when no amount is on the line too: one-line
+    /// tap text ("Coles A$23.50 9:41 am NAB Visa Debit") is the whole
+    /// purchase, not a date.
     static func looksLikeDate(_ s: String) -> Bool {
-        s.range(of: #"^\d{1,2}[ /.-](\d{1,2}|[A-Za-z]{3,9})[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}|\b\d{1,2}:\d{2}\b"#,
-                options: .regularExpression) != nil
+        if s.range(of: #"^\d{1,2}[ /.-](\d{1,2}|[A-Za-z]{3,9})[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}"#,
+                   options: .regularExpression) != nil { return true }
+        return s.range(of: clockTime, options: .regularExpression) != nil && money(in: withoutClockTimes(s)) == nil
+    }
+
+    /// "9:41", "9:41 am", "21:05:33", "9:41 p.m.".
+    private static let clockTime = #"\b\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AaPp]\.?[Mm]\b\.?)?"#
+
+    /// The line with any clock time taken out and the spaces tidied.
+    static func withoutClockTimes(_ s: String) -> String {
+        s.replacingOccurrences(of: clockTime, with: " ", options: .regularExpression)
+            .split(separator: " ").joined(separator: " ")
+    }
+
+    /// An amount with a currency sign or cents ("A$23.50", "SGD 6.20",
+    /// "4.50", "RM12"), not just a three-letter word and a whole number
+    /// ("TOP 10", which may be a shop's name).
+    static func isClearAmount(_ hit: String) -> Bool {
+        if hit.unicodeScalars.contains(where: { $0.properties.generalCategory == .currencySymbol }) { return true }
+        if hit.range(of: #"\d[.,]\d{2}(?!\d)"#, options: .regularExpression) != nil { return true }
+        let marker = hit.trimmingCharacters(in: CharacterSet(charactersIn: "-−")).prefix(2)
+        return marker == "RM" || marker == "Rs"
     }
 }

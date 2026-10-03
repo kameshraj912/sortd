@@ -139,3 +139,22 @@ replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlert
 
 ## Added 2 Oct 2026 (safety-net polish)
 - anUnconvertedForeignPurchaseIsNotMissingFromTheMonth (abuse-30: a foreign purchase with no exchange rate yet counts as zero in the widget's month total. Fails only on a machine with no cached rates, so it comes and goes between runs)
+
+## Added 3 Oct 2026 (bug hunt, docs/BugHunt-2026-10-03.md)
+Still failing on `fix-hunt-c`: these belong to the money, Apple Pay and statement findings that the other fix branches (`fix-hunt-a`, `fix-hunt-b`) own, plus the two rejected claims (S8, S9). Each fixer takes its names off this list when the fix lands.
+- aCSVWithAnAccountLineOnTopKeepsTheSalaryOut (S8, rejected: cannot reproduce)
+- aForeignTapMergesWithItsStatementLine (S9, rejected: needs a design choice)
+- aCurrencyCodeInsideAShopWordIsNotTheAmount (U1)
+- aHotelReceiptKeepsItsName (S7)
+- aLaterOnlinePaymentIsNotFoldedIntoATapAtAnotherShop (P3)
+- anOnlinePaymentIsNotSwallowedByALaterTapAtAnotherShop (P2)
+- aSemicolonCSVWithDecimalCommasIsRead (S3)
+- aShopNameWithAJoiningWordIsKeptWhole (P6)
+- aTapThatCouldNotBeQueuedIsNotReportedAsSaved (P5)
+- aTillRefundAndItsNotificationTakeTheRefundOffOnce (P1)
+- aUTF16FileIsDecoded (S6)
+- aWalletOrBankAppListIsRead (S4)
+- aZeroInTheUnusedColumnIsNotAPurchase (S2)
+- moneyReceivedIsNotLoggedAsSpending (P4)
+- reimportingAfterATapMergeDoesNotDouble
+- theHealthCheckDoesNotSaveATestCard (U3)

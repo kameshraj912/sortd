@@ -26,12 +26,8 @@ enum SpendMigrationPlan: SchemaMigrationPlan {
 /// One container shared by the app UI and the App Intent, so a purchase
 /// logged from Shortcuts shows up straight away.
 enum SpendStore {
-    /// Builds a fresh container pointed at the real store. Throws instead
-    /// of crashing, so callers can decide what "can't open" means for them
-    /// (the app's own launch below still treats it as fatal; an App Intent
-    /// does not — see `containerForIntent`).
-    static func open() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+    /// The real store's settings (one place, so a recovery can find its files).
+    private static func configuration(schema: Schema) -> ModelConfiguration {
         #if DEBUG
         let inMemory = ProcessInfo.processInfo.environment["SPEND_IN_MEMORY"] == "1"
         #else
@@ -41,30 +37,84 @@ enum SpendStore {
         // otherwise mirror the whole store to CloudKit on its own and refuse
         // to open it (unique keys on FXRate, ImportedRecord and MerchantRule
         // are not allowed there). Backup is CloudBackup's own encrypted record.
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none)
-        return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self, configurations: [config])
+        return ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory, cloudKitDatabase: .none)
     }
 
-    static let container: ModelContainer = {
+    /// Builds a fresh container pointed at the real store. Throws instead
+    /// of crashing, so callers can decide what "can't open" means for them
+    /// (the app's own launch below shows a recovery screen; an App Intent
+    /// queues the tap — see `containerForIntent`).
+    static func open() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: SchemaV1.self)
+        return try ModelContainer(for: schema, migrationPlan: SpendMigrationPlan.self,
+                                  configurations: [configuration(schema: schema)])
+    }
+
+    /// The store the app runs on, and why it could not be the real one.
+    /// A store that cannot open used to end the launch with `fatalError`,
+    /// on every launch, with no way out but deleting the app. Now the app
+    /// runs on an empty in-memory store that nothing writes to, shows
+    /// `StoreRecoveryView`, and says what happened (D4, 3 Oct 2026 hunt).
+    private static let state: (container: ModelContainer, failure: Error?) = {
         do {
-            return try open()
+            #if DEBUG
+            // Forces the recovery screen (once: "Start Fresh" can still open a store).
+            if ProcessInfo.processInfo.environment["SPEND_STORE_FAIL"] == "1" {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            #endif
+            return (try open(), nil)
         } catch {
-            fatalError("Could not open the Spend database: \(error)")
+            ErrorLog.report(error, where: "SpendStore.open")
+            let schema = Schema(versionedSchema: SchemaV1.self)
+            do {
+                let placeholder = try ModelContainer(
+                    for: schema,
+                    configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+                return (placeholder, error)
+            } catch {
+                fatalError("Could not open even an empty Spend database: \(error)")
+            }
         }
     }()
 
+    static var container: ModelContainer { state.container }
+
+    /// Non-nil when the real store could not be opened at launch.
+    static var openFailure: Error? { state.failure }
+
+    /// Recovery: moves the store's files out of the way (kept, not deleted,
+    /// in `Recovered stores` beside them, for support) and opens an empty
+    /// store in their place. The caller restores into it or leaves it empty.
+    static func setAsideAndOpenEmpty() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: SchemaV1.self)
+        let base = configuration(schema: schema).url
+        let fm = FileManager.default
+        let folder = base.deletingLastPathComponent()
+            .appending(path: "Recovered stores")
+            .appending(path: ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-"))
+        for suffix in ["", "-shm", "-wal"] {
+            let file = URL(fileURLWithPath: base.path + suffix)
+            guard fm.fileExists(atPath: file.path) else { continue }
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            try fm.moveItem(at: file, to: folder.appending(path: file.lastPathComponent))
+        }
+        return try open()
+    }
+
     /// For an App Intent only: never crashes the process. A dry run
     /// (`open()`) checks the store still opens cleanly first; only then is
-    /// the real, shared `container` touched, so a genuine failure here
-    /// never risks `container`'s own `fatalError` (spec 2026-09-26, Apple
-    /// Pay failsafes #8 — "disk full, corrupt file, failed migration").
-    /// On failure the caller queues the raw tap instead of losing it
-    /// (`TapQueue`); the app's own launch keeps the crashing path above — a
-    /// phone that can't open its own database needs to say so loudly, not
-    /// run headless with an intent silently queuing forever.
+    /// the real, shared `container` touched (spec 2026-09-26, Apple Pay
+    /// failsafes #8 — "disk full, corrupt file, failed migration"). On
+    /// failure the caller queues the raw tap instead of losing it
+    /// (`TapQueue`); the app itself shows the recovery screen, which says
+    /// so loudly instead of crashing.
     static func containerForIntent() -> Result<ModelContainer, Error> {
         do {
             _ = try open()
+            // The app's own launch fell back to an empty in-memory store: a tap
+            // saved there would be lost, so queue it instead.
+            if let failure = openFailure { return .failure(failure) }
             return .success(container)
         } catch {
             return .failure(error)
@@ -106,9 +156,12 @@ enum TransactionLogger {
     /// Bulk imports pass `learned` (read once) and `save: false`, then save
     /// once at the end: one disk write and one screen refresh, not hundreds.
     /// Unsaved purchases still count for matching (fetches include them).
+    /// `commit` is how a save reaches disk; only a test changes it, to make
+    /// the save fail.
     @discardableResult
     static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = [],
-                    learned known: [String: SpendCategory]? = nil, save: Bool = true) throws -> Outcome {
+                    learned known: [String: SpendCategory]? = nil, save: Bool = true,
+                    commit: (ModelContext) throws -> Void = { try $0.save() }) throws -> Outcome {
         let learned = try known ?? learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
@@ -130,7 +183,7 @@ enum TransactionLogger {
         if let i = Deduper.match(candidate, in: pool) {
             let existing = nearby[i]
             merge(p, into: existing)
-            if save { try context.save() }
+            if save { try commit(context) }
             return .merged(existing)
         }
 
@@ -148,7 +201,17 @@ enum TransactionLogger {
         txn.platform = p.platform
         txn.tapOrigins = p.tapOrigin?.rawValue
         context.insert(txn)
-        if save { try context.save() }
+        if save {
+            do {
+                try commit(context)
+            } catch {
+                // A save that failed leaves the row pending in the context. Take
+                // it out, or the person's retry adds a second one and the next
+                // save that works writes both (hand-typed rows never de-dupe).
+                context.delete(txn)
+                throw error
+            }
+        }
         return .added(txn)
     }
 

@@ -96,9 +96,14 @@ protocol AccountRevoker {
     /// A revoke queued earlier. The queue keeps no subject or email, only
     /// the provider and sha256(subject). Optional: a fake leaves it out.
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws
+    /// Sign Out: this phone must stop holding a token for the account.
+    /// Optional: a fake leaves it out.
+    func signedOut(_ account: Account)
 }
 
 extension AccountRevoker {
+    func signedOut(_ account: Account) {}
+
     /// For conformers without a queued path (the test fakes): the same
     /// call with a placeholder account that carries the subject hash.
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
@@ -198,22 +203,36 @@ final class AccountStore {
     /// Forgets the ID on this phone. Purchases stay. Says `signed_out`
     /// under the old id, then resets.
     func signOut() {
-        guard current != nil else { return }
+        guard let account = current else { return }
         sink.signedOut()
+        // The Google token goes to the revoke list first: forgotten here, but
+        // its grant is still cancelled with Google, never left behind.
+        revoker.signedOut(account)
         forgetLocally()
         sink.reset()
         log.info("account: signed out")
+    }
+
+    /// What `deleteAccount` did.
+    struct DeleteResult: Equatable {
+        /// The person cancelled the provider's confirmation (Apple's "sign in
+        /// once more" sheet). Nothing was deleted, here or on a server, and
+        /// the caller must not wipe anything either.
+        var cancelled = false
+        /// What could not be done for good, in words for the user.
+        var problems: [String] = []
     }
 
     /// Resets the analytics id first (nothing may be sent under the person
     /// about to be deleted, so no `signed_out`), then asks the provider to
     /// cancel the sign-in and the Worker to delete the PostHog person, then
     /// forgets the account here. Jobs the network could not carry are
-    /// queued, hash included, and retried at the next launch. Returns what
-    /// could not be done for good, in words for the user.
+    /// queued, hash included, and retried at the next launch. A cancel on the
+    /// provider's confirmation stops it all: still signed in, nothing
+    /// deleted, nothing queued.
     @discardableResult
-    func deleteAccount() async -> [String] {
-        guard let account = current else { return [] }
+    func deleteAccount() async -> DeleteResult {
+        guard let account = current else { return DeleteResult() }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
         let subjectHash = Self.subjectHash(account.subject)
         sink.reset()
@@ -221,6 +240,11 @@ final class AccountStore {
         var problems: [String] = []
         do {
             try await revoker.revoke(account)
+        } catch AccountError.cancelled {
+            // The person said no. Put the analytics id back and stop.
+            sink.identify(hash)
+            log.notice("account: delete cancelled at the provider's confirmation, nothing deleted")
+            return DeleteResult(cancelled: true)
         } catch {
             sort(error, job: PendingDelete(kind: .revoke, provider: account.provider, subjectHash: subjectHash, hash: hash),
                  failed: &failed, problems: &problems)
@@ -235,7 +259,7 @@ final class AccountStore {
         // Behind any jobs an earlier delete left, never over them.
         queue(pending + failed)
         log.info("account: deleted, \(failed.count, privacy: .public) job(s) queued, \(problems.count, privacy: .public) dropped")
-        return problems
+        return DeleteResult(problems: problems)
     }
 
     /// Delete All Data: the PostHog person goes too, so its delete is
@@ -452,6 +476,10 @@ final class WorkerRevoker: AccountRevoker {
     nonisolated static let appleManualSteps = "Apple couldn't be asked to cancel the sign-in. To stop Sortd using your Apple Account: Settings › your name › Sign in with Apple › Sortd › Stop Using."
     nonisolated static let wrongAppleAccount = "That's a different Apple Account. Sortd is signed in with another one, so nothing was cancelled."
 
+    /// What the user reads when the Worker (or App Attest) says no for good.
+    /// The Worker's own code goes to the log, never to the screen.
+    nonisolated static let usageRecordNotDeleted = "Sortd couldn't delete your usage record just now. Email support@sortd.page and we'll remove it by hand."
+
     let url: URL?
     private let deps: Dependencies
 
@@ -462,13 +490,25 @@ final class WorkerRevoker: AccountRevoker {
 
     /// `ACCOUNT_WORKER_URL` from Info.plist (Config.xcconfig / Secrets.xcconfig).
     static func fromBundle() -> WorkerRevoker {
-        let text = (Bundle.main.object(forInfoDictionaryKey: "ACCOUNT_WORKER_URL") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        // "//" is a comment in an xcconfig, so a URL that lost its scheme is
-        // a broken line, not a Worker.
-        let url = text.contains("://") ? URL(string: text) : nil
+        let url = workerURL(from: Bundle.main.object(forInfoDictionaryKey: "ACCOUNT_WORKER_URL") as? String ?? "")
         if url == nil { log.notice("account: no Worker URL (ACCOUNT_WORKER_URL is empty), deletes are queued") }
         return WorkerRevoker(url: url)
+    }
+
+    /// The Worker's URL from the build setting, or nil when it is not a
+    /// real one: empty, a line that lost its scheme ("//" is a comment in an
+    /// xcconfig, so that is a broken line, not a Worker), or the placeholder
+    /// the example file once carried (an `.example` host, `example.workers.dev`,
+    /// "replace_me"), like the Sentry and PostHog placeholders.
+    nonisolated static func workerURL(from setting: String) -> URL? {
+        let text = setting.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.contains("://"), !text.contains("replace_me"),
+              let url = URL(string: text), let host = url.host?.lowercased() else { return nil }
+        if host == "example.workers.dev" || host.hasSuffix(".example.workers.dev")
+            || host == "example" || host.hasSuffix(".example") || host.hasSuffix(".example.com") || host == "example.com" {
+            return nil
+        }
+        return url
     }
 
     func revoke(_ account: Account) async throws {
@@ -476,8 +516,18 @@ final class WorkerRevoker: AccountRevoker {
         case .google:
             await deps.googleRevoke()
         case .apple:
-            // A cancel in Apple's sheet passes through as `cancelled`.
-            let fresh = try await deps.appleCode(account)
+            // A cancel in Apple's sheet passes through as `cancelled`. Any
+            // other failure (offline, no iCloud) means no code, and the
+            // account is forgotten right after this, so "try again" would
+            // be a lie: give Apple's manual steps instead.
+            let fresh: AppleCode
+            do {
+                fresh = try await deps.appleCode(account)
+            } catch AccountError.cancelled {
+                throw AccountError.cancelled
+            } catch {
+                throw AccountError.rejected(Self.appleManualSteps)
+            }
             guard fresh.user == account.subject else { throw AccountError.rejected(Self.wrongAppleAccount) }
             do {
                 try await post(route: "apple/revoke", body: ["client_id": deps.clientID, "authorization_code": fresh.code])
@@ -486,6 +536,10 @@ final class WorkerRevoker: AccountRevoker {
                 throw AccountError.rejected(Self.appleManualSteps)
             }
         }
+    }
+
+    func signedOut(_ account: Account) {
+        if account.provider == .google { GoogleAuth.queueIdentityRevoke() }
     }
 
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
@@ -520,10 +574,19 @@ final class WorkerRevoker: AccountRevoker {
             throw AccountError.offline
         }
 
-        let (keyID, attestation) = try await deps.attester.attest(clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
+        let attested: (keyID: String, attestation: Data)
+        do {
+            attested = try await deps.attester.attest(clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
+        } catch let error as DCError where error.code == .serverUnavailable {
+            // Apple's attest servers can't be reached: worth a retry, like any network trouble.
+            throw AccountError.offline
+        } catch let error as DCError {
+            log.error("account: App Attest failed (DCError \(error.code.rawValue, privacy: .public))")
+            throw AccountError.rejected(Self.usageRecordNotDeleted)
+        }
         let (data, response) = try await send(url.appending(path: "v1/" + route), body: bodyData, headers: [
-            "X-Attest-Key-Id": keyID,
-            "X-Attest-Object": attestation.base64EncodedString(),
+            "X-Attest-Key-Id": attested.keyID,
+            "X-Attest-Object": attested.attestation.base64EncodedString(),
             "X-Attest-Challenge": challenge,
         ])
         try Self.check(response, data: data)
@@ -551,7 +614,8 @@ final class WorkerRevoker: AccountRevoker {
         case 429, 503: throw AccountError.offline
         default:
             let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw AccountError.rejected(code ?? "http_\(response.statusCode)")
+            log.error("account: the Worker refused (HTTP \(response.statusCode, privacy: .public), \(code ?? "no code", privacy: .public))")
+            throw AccountError.rejected(usageRecordNotDeleted)
         }
     }
 }
