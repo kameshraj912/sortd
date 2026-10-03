@@ -208,8 +208,10 @@ struct BugHuntStatementTests {
 }
 
 /// Bug hunt, 3 Oct 2026: statement import. New findings only; the 26 Sep
-/// ones above are still open and not repeated. Each test fails today and
-/// runs only with `scripts/test.sh --known-bugs`.
+/// ones above are still open and not repeated. A test tagged `.knownBug`
+/// fails today and runs only with `scripts/test.sh --known-bugs`; the
+/// untagged ones (stmt-4 to stmt-8) were fixed on `fix-hunt-a` and run
+/// everywhere as regression tests.
 @MainActor
 struct BugHuntStatement1003Tests {
 
@@ -361,8 +363,7 @@ struct BugHuntStatement1003Tests {
     /// together. Apple Wallet's card list puts the merchant and amount on one
     /// line and the day ("Yesterday", "26/09/2026") on a line below; bank
     /// apps group rows under a date header. Both read as zero purchases.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-6", "screenshot import needs date and amount on one line; Wallet and bank-app lists read as nothing"))
+    @Test(.bug(id: "hunt-1003-stmt-6", "screenshot import needs date and amount on one line; Wallet and bank-app lists read as nothing"))
     func aWalletOrBankAppListIsRead() {
         let today = date("2026-10-03")
         let wallet = StatementImport.rows(fromText: """
