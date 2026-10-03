@@ -23,6 +23,10 @@ struct ApplePaySetupPanel: View {
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
+    /// One state each, so a tap on one never opens the other (seen on
+    /// iOS 26.4 with no state of their own).
+    @State private var showingHow = false
+    @State private var showingByHand = false
     /// The shortcut file opens here, in Sortd's own Safari sheet, never the
     /// default browser.
     @State private var safariPage: SafariPage?
@@ -246,7 +250,7 @@ struct ApplePaySetupPanel: View {
             let automation = ApplePaySetupSteps.automationStep(notificationTrigger: hasNotificationTrigger)
             stepRow(3, ticked.turnOnAutomation, automation.title, automation.detail)
 
-            DisclosureGroup("Show me how") {
+            DisclosureGroup("Show me how", isExpanded: $showingHow) {
                 Group {
                     if #available(iOS 27.0, *) {
                         WalletSetupGuide(route: .quick)
@@ -259,7 +263,7 @@ struct ApplePaySetupPanel: View {
             .font(.subheadline.weight(.semibold))
             .tint(Color.ink)
 
-            DisclosureGroup("Build it by hand instead") {
+            DisclosureGroup("Build it by hand instead", isExpanded: $showingByHand) {
                 WalletSetupGuide(route: .byHand)
                     .padding(.top, 8)
             }
