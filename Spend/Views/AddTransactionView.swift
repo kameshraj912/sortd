@@ -6,6 +6,14 @@ struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("lastCard") private var lastCard: Card = .other
 
+    /// Opened from a Scan button (the widget's, `sortd://scan`): the receipt
+    /// scanner comes up straight away, over the empty form it fills in.
+    private let startsScanning: Bool
+
+    init(startsScanning: Bool = false) {
+        self.startsScanning = startsScanning
+    }
+
     @State private var amountText = ""
     @State private var currency = AddTransactionView.defaultCurrency()
     @State private var merchant = ""
@@ -279,8 +287,16 @@ struct AddTransactionView: View {
             .onAppear {
                 card = Card.mine.contains(lastCard) ? lastCard : (Card.mine.first ?? .other)
                 restoreDraft()
-                amountFocused = true
+                amountFocused = !startsScanning
                 loadSuggestions()
+            }
+            .task {
+                guard startsScanning else { return }
+                // Once this sheet has finished sliding up: a sheet can't
+                // present another while its own presentation is running.
+                try? await Task.sleep(for: .milliseconds(450))
+                guard !Task.isCancelled else { return }
+                showingScanner = true
             }
             // Every change is kept, so a kill loses nothing.
             .onChange(of: currentDraft) { _, draft in

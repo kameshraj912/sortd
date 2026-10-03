@@ -268,6 +268,9 @@ struct RootView: View {
     /// is forcing it open.
     @State private var setupFinished = false
     @State private var showingAdd = false
+    /// The Add sheet opens straight into the receipt scanner (the widget's
+    /// and the + menu's Scan, `sortd://scan`).
+    @State private var addStartsScanning = false
     /// When setup closed: a second tap from a double-tap on setup's last
     /// button mustn't land on the tab bar underneath.
     @State private var setupClosedAt: Date = .distantPast
@@ -321,7 +324,7 @@ struct RootView: View {
             .overlay(alignment: .bottomTrailing) {
                 if layout == .fab, tab == .home || tab == .activity {
                     AddFAB(add: { showingAdd = true },
-                           scan: { showingAdd = true },
+                           scan: { addStartsScanning = true; showingAdd = true },
                            importing: { router.open(URL(string: "sortd://import")!) })
                         .padding(.trailing, 20)
                         .padding(.bottom, 72)
@@ -342,7 +345,9 @@ struct RootView: View {
                 // A tip visit: a tab opened, not a return from a pushed row.
                 if !setupPresented { TipState.visited(new) }
             }
-            .sheet(isPresented: $showingAdd) { AddTransactionView() }
+            .sheet(isPresented: $showingAdd, onDismiss: { addStartsScanning = false }) {
+                AddTransactionView(startsScanning: addStartsScanning)
+            }
         .feedback(.select, trigger: tab)
         // The + never assigns `tab`, so the app's main action was the
         // one tab that gave no feedback at all.
@@ -386,9 +391,10 @@ struct RootView: View {
             tab = router.tab
         }
         .onChange(of: router.tab) { _, new in if tab != new { tab = new } }
-        // Widget, Siri and notification "add" links: the one add sheet.
+        // Widget, Siri and notification "add" and "scan" links: the one add sheet.
         .onChange(of: router.sheet, initial: true) { _, pending in
-            guard pending == .add else { return }
+            guard pending == .add || pending == .scan else { return }
+            addStartsScanning = pending == .scan
             showingAdd = true
             router.clearSheet()
         }
