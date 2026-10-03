@@ -621,7 +621,7 @@ struct TransactionsScreen: View {
             }
             .chip(selected: selected)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -729,7 +729,7 @@ struct CategoryPickerSheet: View {
                                     .strokeBorder(category == selected ? Color.primary : .clear, lineWidth: 2)
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .accessibilityAddTraits(category == selected ? .isSelected : [])
                     }
                 }

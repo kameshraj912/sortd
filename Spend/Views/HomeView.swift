@@ -367,7 +367,7 @@ struct HomeView: View {
                 .font(.subheadline.weight(over ? .semibold : .regular))
                 .foregroundStyle(over ? Color.down : .secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityHint("Edit your monthly budget")
             if let day = projectedOverDay {
                 Label(Pace.line(day: day), systemImage: "gauge.with.needle")
@@ -385,7 +385,7 @@ struct HomeView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.down)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityHint("Shows your categories")
             }
         }
@@ -478,7 +478,7 @@ struct HomeView: View {
                 .padding(16)
                 .surface()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             // `.combine` read out only the three category names — no amounts,
             // no total. This is the app's main spending breakdown, so it says
             // what it shows.
@@ -622,7 +622,7 @@ struct HomeView: View {
                                         .padding(.horizontal, 16)
                                         .contentShape(.rect)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                                 .matchedTransitionSource(id: t.persistentModelID, in: zoom)
                                 if t.id != rows.last?.id {
                                     Divider().padding(.leading, 64)
@@ -658,7 +658,7 @@ struct HomeView: View {
                     .frame(minHeight: 56)
                     .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -695,7 +695,7 @@ struct SectionHeader: View {
                     Text("See All").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                         .frame(minHeight: 44).contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("See All, \(title)")
             }
         }
@@ -747,7 +747,7 @@ struct RoundIconButton: View {
                 .frame(width: 44, height: 44)
                 .background(Color.brand, in: .circle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityLabel(label)
     }
 }
@@ -1028,7 +1028,7 @@ struct SpendChart: View {
                 .accessibilityAddTraits(r == range ? .isSelected : [])
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         // The Insights tip points at the chips (the chart is Insights-only).
         .sortdTip(InsightsTip(), arrowEdge: .top)
     }

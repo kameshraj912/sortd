@@ -8,6 +8,7 @@ struct LearnedRulesView: View {
     @Query(sort: \MerchantRule.key) private var rules: [MerchantRule]
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @State private var saveFailed = false
+    @State private var forgotten = 0
 
     var body: some View {
         let names = shopNames
@@ -29,13 +30,14 @@ struct LearnedRulesView: View {
                     }
                     .onDelete { offsets in
                         for i in offsets { context.delete(rules[i]) }
-                        if !context.saveReporting(where: "LearnedRules.delete") { saveFailed = true }
+                        if context.saveReporting(where: "LearnedRules.delete") { forgotten += 1 } else { saveFailed = true }
                     }
                 } footer: {
                     Text("Swipe left to forget one.")
                 }
             }
         }
+        .feedback(.delete, trigger: forgotten)
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Learned Categories")
