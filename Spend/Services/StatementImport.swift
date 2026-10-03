@@ -67,6 +67,44 @@ nonisolated enum StatementImport {
         return count == 1 ? "1 row couldn't be read." : "\(count) rows couldn't be read."
     }
 
+    // MARK: - Choosing the reader
+
+    /// Which reader a file goes to.
+    enum Reader: Equatable, Sendable { case csv, text }
+
+    /// CSV or free text? A scanned page or photo is always text. Otherwise a
+    /// CSV has the same number of separators on most lines, and text pulled
+    /// out of a PDF does not. The first line is not trusted: some exports put
+    /// an account line ("Account,NAB Classic ...") above the header, so a
+    /// run of matching lines starting at any of the first five lines counts.
+    static func reader(for text: String, wasScanned: Bool = false) -> Reader {
+        if wasScanned { return .text }
+        let lines = text.split(whereSeparator: \.isNewline)
+            .filter { !$0.allSatisfy(\.isWhitespace) }
+            .prefix(10)
+        let counts = lines.map { line in
+            max(line.filter { $0 == "," }.count,
+                max(line.filter { $0 == ";" }.count, line.filter { $0 == "\t" }.count))
+        }
+        for start in 0..<min(5, max(0, counts.count - 1)) {
+            let run = counts[start...]
+            let reference = run.first ?? 0
+            guard reference >= 2, run.count >= 2 else { continue }
+            if run.filter({ $0 == reference }).count >= run.count - 1 { return .csv }
+        }
+        return .text
+    }
+
+    /// Reads a file with the reader `reader(for:wasScanned:)` picks. This is
+    /// what the import screen runs.
+    static func parse(statement text: String, wasScanned: Bool = false,
+                      dateOrder: DateOrder = .auto) -> Parsed {
+        switch reader(for: text, wasScanned: wasScanned) {
+        case .csv: parse(csv: text, dateOrder: dateOrder)
+        case .text: parse(text: text, dateOrder: dateOrder)
+        }
+    }
+
     // MARK: - CSV
 
     /// Reads a bank CSV. Works with a header row or without one (NAB's
