@@ -106,7 +106,7 @@ New events, never amounts or merchant/shop names:
 - `budget_set`: the monthly budget sheet's Save button, no amount
 - `category_limit_set(category)`: a category's monthly limit sheet's Save button; `category` is the `SpendCategory` name, never the limit
 - `insights_range_changed(range)`: the Home chips, `range` is `1W`, `1M` or `3M`
-- `day_stepped(direction)`: the Activity day pager's chevrons, `direction` is `newer` or `older`
+- ~~`day_stepped(direction)`~~: removed 3 Oct 2026. It counted the Activity day pager's chevrons, and Activity is one scrolling list again (`docs/specs/2026-10-03-activity-rebuild.md`). A chart of it goes flat from that build.
 - `purchase_edited(field)`: the transaction detail screen commits a changed amount or shop name; `field` is `amount` or `shop`, never the value
 - `category_changed(from, to)`: a purchase's category changed after it was logged (Activity swipe/long-press, or the detail screen); both are `SpendCategory` names
 - `card_added`: Settings › Cards' New Card sheet saves a card that did not exist before
