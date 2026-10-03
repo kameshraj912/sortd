@@ -22,6 +22,8 @@ struct TransactionsScreen: View {
     private var transactions: [Transaction]
 
     @State private var search = ""
+    /// The search field is out (the magnifier was tapped). See `ActivitySearch`.
+    @State private var searchOpen = false
     @State private var saveFailed = false
     @State private var cardFilter: Card?
     @State private var categoryFilter: SpendCategory?
@@ -113,8 +115,13 @@ struct TransactionsScreen: View {
         // there's no Search tab (nav option A). Hand-rolling this field lost
         // the Cancel button and scroll-to-reveal, and left the app with two
         // different searches — the Search tab already uses .searchable.
-        .modifier(ActivitySearch(enabled: fixedCard != nil || NavOption.current.searchInActivity,
-                                 text: $search))
+        .modifier(ActivitySearch(enabled: searchEnabled, open: $searchOpen, text: $search))
+        // Leaving the tab ends a search, so Activity is never found later
+        // filtered by a query that is out of sight. (A push to a purchase
+        // and back keeps it: that is the same tab.)
+        .onChange(of: router.tab) { _, tab in
+            if fixedCard == nil, tab != .activity, searchOpen { searchOpen = false; search = "" }
+        }
         .scrollDismissesKeyboard(.immediately)
         // Tips: the rules read the purchase figures (visits are counted by
         // RootView, on the tab), and typing a search is the search tip's "done".
@@ -143,6 +150,15 @@ struct TransactionsScreen: View {
                 ToolbarItem(placement: .topBarLeading) { filterMenu }
             }
             if fixedCard == nil { SettingsToolbarButton() }
+            if searchEnabled, !searchOpen {
+                // Our own magnifier beside the gear, opening the system search
+                // field under the bar (`ActivitySearch`). In the top bar too
+                // on a card's own list, so nothing floats over its rows.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Search", systemImage: "magnifyingglass") { searchOpen = true }
+                        .tint(Color.ink)
+                }
+            }
             if NavLayout.current == .header || NavLayout.current == .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Purchase", systemImage: "plus") { showingAdd = true }
@@ -685,6 +701,10 @@ struct TransactionsScreen: View {
 
     private var isFiltering: Bool { cardFilter != nil || categoryFilter != nil }
 
+    /// A card's own list always has search; the main list has it when
+    /// there's no Search tab (nav option A).
+    private var searchEnabled: Bool { fixedCard != nil || NavOption.current.searchInActivity }
+
     /// What the list shows: every day at once, through the search, the
     /// chips and the card filter, without rows waiting on Undo.
     private var days: [ActivityDays.Day] {
@@ -843,44 +863,69 @@ struct TransactionPreview: View {
 }
 
 
-/// `.searchable` only when this list is the one that carries search.
+/// Activity's search. The magnifier in the bar (`TransactionsScreen`) sets
+/// `open`; only then does the screen carry `.searchable`, as a field under
+/// the bar with its own X, so the page title sits where Home's and
+/// Insights' do the rest of the time.
+///
+/// Not the system's `.searchToolbarBehavior(.minimize)` button: in this bar
+/// (filter on the left, gear beside it) its X folded the field away but
+/// never ended the search, so the list stayed filtered by a query nobody
+/// could see, and with the gear in the same glass group the X did nothing
+/// at all (Raj on his phone, 3 Oct 2026; both reproduced in the simulator).
+/// The standard field's X ends the search; closing clears the query.
 private struct ActivitySearch: ViewModifier {
     let enabled: Bool
+    @Binding var open: Bool
     @Binding var text: String
     @Environment(\.dynamicTypeSize) private var typeSize
     @FocusState private var focused: Bool
+    /// The system's own "search is active"; false again once the X is tapped.
+    @State private var presented = false
 
     func body(content: Content) -> some View {
-        if enabled {
-            content
-                // A search button in the bar that opens into the field
-                // (iOS 26 minimize), so the page title sits where Home's and
-                // Insights' do instead of under a permanent search pill.
-                // The long prompt has no room at accessibility sizes and the
-                // field showed as an empty pill (UI pass finding 8).
-                .searchable(text: $text, placement: .toolbar,
-                            prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
-                .searchToolbarBehavior(.minimize)
-                .searchFocused($focused)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .task {
-                    #if DEBUG
-                    // Screenshots: SPEND_SEARCH=1 asks for the field's focus;
-                    // SPEND_SEARCH_TEXT=uber also sets a query. (With the
-                    // field minimised into the bar button, focus alone does
-                    // not open it in the simulator: the results show, the
-                    // field stays a button.)
-                    let env = ProcessInfo.processInfo.environment
-                    if env["SPEND_SEARCH"] == "1" || env["SPEND_SEARCH_TEXT"] != nil {
-                        try? await Task.sleep(for: .milliseconds(600))
+        Group {
+            if enabled, open {
+                content
+                    // The long prompt has no room at accessibility sizes and
+                    // the field showed as an empty pill (UI pass finding 8).
+                    .searchable(text: $text, isPresented: $presented,
+                                placement: .navigationBarDrawer(displayMode: .always),
+                                prompt: typeSize.isAccessibilitySize ? "Search" : "Shop, category or note")
+                    .searchFocused($focused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    // Straight into typing: the tap on the magnifier was the ask.
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(50))
+                        presented = true
                         focused = true
-                        if let query = env["SPEND_SEARCH_TEXT"] { text = query }
                     }
-                    #endif
-                }
-        } else {
-            content
+                    .onChange(of: presented) { was, now in
+                        guard was, !now else { return }
+                        text = ""
+                        open = false
+                    }
+            } else {
+                content
+            }
+        }
+        .onChange(of: open) { _, now in
+            if !now { presented = false; text = "" }
+        }
+        .task {
+            #if DEBUG
+            DebugSearchDriver.runIfAsked()
+            // Screenshots: SPEND_SEARCH=1 opens the field; SPEND_SEARCH_TEXT=uber
+            // also types a query.
+            let env = ProcessInfo.processInfo.environment
+            if enabled, env["SPEND_SEARCH"] == "1" || env["SPEND_SEARCH_TEXT"] != nil {
+                try? await Task.sleep(for: .milliseconds(800))
+                open = true
+                try? await Task.sleep(for: .milliseconds(400))
+                if let query = env["SPEND_SEARCH_TEXT"] { text = query }
+            }
+            #endif
         }
     }
 }
