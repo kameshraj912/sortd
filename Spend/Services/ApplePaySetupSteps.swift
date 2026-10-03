@@ -72,12 +72,9 @@ extension ApplePaySetupSteps {
             : "Add in-app and online Apple Pay by hand."
     }
 
-    /// Where Get the Shortcut goes: the iCloud link to the same signed
-    /// shortcut as `sortd.page/apple-pay.shortcut`. The Shortcuts app opens
-    /// this link itself, whatever the default browser is. A plain file link
-    /// opened in Chrome showed a blank page, and in Safari it needed a
-    /// download first (checked on an iPhone 17 Pro, iOS 27, 4 Oct 2026).
-    /// When the shortcut is rebuilt, share the new one from Shortcuts and
-    /// put its iCloud link here and on `site/support.html`.
-    static let shortcutURL = URL(string: "https://www.icloud.com/shortcuts/e8269fbf559d4369b96fe88ba0d60ec6")!
+    /// Where Get the Shortcut goes: our own signed shortcut file (built by
+    /// `scripts/build-apple-pay-shortcut.py`). It opens in Sortd's in-app
+    /// Safari sheet, never through `openURL`: with Chrome as the default
+    /// browser the link showed a blank page (4 Oct 2026).
+    static let shortcutURL = URL(string: "https://sortd.page/apple-pay.shortcut")!
 }
