@@ -139,6 +139,8 @@ struct AccountSettingsView: View {
     // MARK: Actions
 
     private func deleteAccount(alsoData: Bool) async {
+        // Offline, the store queues the server jobs and `Connectivity.catchUp`
+        // finishes them when the phone is back online.
         // The provider and the Worker are asked before the local wipe, so
         // this can take a moment when the network is slow.
         working = true

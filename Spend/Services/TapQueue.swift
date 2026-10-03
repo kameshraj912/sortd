@@ -58,8 +58,11 @@ enum TapQueue {
         guard let target = resolve(url) else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(entries) else { return }
-        try? data.write(to: target, options: .atomic)
+        do {
+            try encoder.encode(entries).write(to: target, options: .atomic)
+        } catch {
+            ErrorLog.report(error, where: "TapQueue.write")
+        }
     }
 
     /// How many taps are waiting on the next replay (diagnostics).

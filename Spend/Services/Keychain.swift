@@ -1,6 +1,12 @@
 import Foundation
 import Security
 
+/// A Keychain call that did not return success, for `ErrorLog`.
+nonisolated struct KeychainError: LocalizedError {
+    let status: OSStatus
+    var errorDescription: String? { "Keychain status \(status)" }
+}
+
 /// Tiny wrapper for secrets (the Google sign-in token that Delete Account
 /// cancels). Stored only on this device.
 enum Keychain {
@@ -17,7 +23,10 @@ enum Keychain {
         var add = query
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(add as CFDictionary, nil)
+        let status = SecItemAdd(add as CFDictionary, nil)
+        if status != errSecSuccess {
+            ErrorLog.report(KeychainError(status: status), where: "Keychain.set")
+        }
     }
 
     static func get(_ account: String) -> String? {

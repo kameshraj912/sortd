@@ -228,7 +228,11 @@ final class CardBook {
     private static let genericWords: Set<String> = ["debit", "credit", "card", "visa", "mastercard", "atm", "platinum"]
 
     private func save() {
-        if let data = try? JSONEncoder().encode(cards) { defaults.set(data, forKey: Self.key) }
+        do {
+            defaults.set(try JSONEncoder().encode(cards), forKey: Self.key)
+        } catch {
+            ErrorLog.report(error, where: "CardBook.save")
+        }
         // Apple Pay taps run in the background and the app is closed right
         // after: write now, or a card made by a tap is lost.
         defaults.synchronize()

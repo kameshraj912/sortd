@@ -62,7 +62,7 @@ enum AccountError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .cancelled: "Sign-in was cancelled."
-        case .offline: "Sortd couldn't reach the server. It will try again next time you open the app."
+        case .offline: "Sortd couldn't reach the server. It will finish when you're back online."
         case .noIdentity: "Sign-in didn't finish. Please try again."
         case .rejected(let text): text
         case .notSupported: "This device can't prove it is running Sortd, so the server was not asked. " + WorkerRevoker.appleManualSteps
@@ -298,7 +298,7 @@ final class AccountStore {
 
     private func forgetLocally() {
         current = nil
-        try? keychain.delete()
+        do { try keychain.delete() } catch { ErrorLog.report(error, where: "AccountStore.forgetLocally") }
     }
 
     /// `offline` keeps the job for a retry; a cancel drops it quietly;
@@ -311,7 +311,7 @@ final class AccountStore {
         case .cancelled:
             log.notice("account: \(job.kind.rawValue, privacy: .public) job cancelled, dropped")
         default:
-            problems.append(error.localizedDescription)
+            problems.append(Connectivity.plainMessage(for: error) ?? error.localizedDescription)
             log.error("account: \(job.kind.rawValue, privacy: .public) job dropped (\(error.localizedDescription, privacy: .public))")
         }
     }
@@ -736,7 +736,7 @@ final class GoogleIdentityProvider: IdentityProvider {
         case let e as GoogleAuth.AuthError:
             return e
         case let e as URLError where isOffline(e):
-            return AccountError.rejected("You're offline. Connect to the internet and try again.")
+            return AccountError.rejected(Connectivity.offlineMessage)
         default:
             return AccountError.rejected("Sign in with Google didn't work. Try again.")
         }

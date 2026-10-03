@@ -19,6 +19,8 @@ struct ImportView: View {
     @State private var rows: [PickedRow] = []
     @State private var card = Card.other
     @State private var wasScanned = false
+    /// Lines in the file the importer could not read. Shown, never hidden.
+    @State private var skipped = 0
     @State private var error: String?
     /// The file was read but had no purchases in it. Changes the alert title.
     @State private var foundNothing = false
@@ -36,6 +38,7 @@ struct ImportView: View {
     @State private var backupContents: Backup.Contents?
     /// Purchases being added right now, for "Adding 42 purchases…".
     @State private var saving: Int?
+    @State private var saveFailed = false
 
     private enum Stage { case start, review, backup }
 
@@ -58,6 +61,7 @@ struct ImportView: View {
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Import")
+        .saveFailedAlert($saveFailed)
         .feedback(.confirm, trigger: imported)
         .fileImporter(isPresented: $pickingFile,
                       allowedContentTypes: StatementReader.readableTypes) { result in
@@ -174,6 +178,10 @@ struct ImportView: View {
             }
         } header: {
             BoldHeader("Purchases (\(spend.filter(\.include).count) of \(spend.count))")
+        } footer: {
+            if let note = StatementImport.skippedNote(skipped) {
+                Text(note)
+            }
         }
 
         if !moneyIn.isEmpty {
@@ -288,16 +296,19 @@ struct ImportView: View {
                     backup = Data(reading.text.utf8)
                     stage = .backup
                 } else {
-                    let found = reading.wasScanned || !looksLikeCSV(reading.text)
-                        ? StatementImport.rows(fromText: reading.text)
-                        : StatementImport.rows(fromCSV: reading.text)
+                    let parsed = reading.wasScanned || !looksLikeCSV(reading.text)
+                        ? StatementImport.parse(text: reading.text)
+                        : StatementImport.parse(csv: reading.text)
+                    let found = parsed.rows
                     guard !found.isEmpty else {
                         foundNothing = true
-                        error = SortdVoice.importFoundNothing
+                        error = [StatementImport.skippedNote(parsed.skipped), SortdVoice.importFoundNothing]
+                            .compactMap { $0 }.joined(separator: " ")
                         busy = false
                         photo = nil
                         return
                     }
+                    skipped = parsed.skipped
                     rows = found.map { PickedRow(row: $0, include: $0.kind == .spend) }
                     wasScanned = reading.wasScanned
                     card = Card.mine.first ?? .other
@@ -326,6 +337,7 @@ struct ImportView: View {
 
     private func reset() {
         rows = []
+        skipped = 0
         backup = nil
         wasScanned = false
         photo = nil
@@ -345,13 +357,20 @@ struct ImportView: View {
             // Let "Adding N purchases…" reach the screen before the work starts.
             try? await Task.sleep(for: .milliseconds(30))
             WidgetBridge.hold()
-            let (added, merged) = StatementImport.save(found, card: card, in: context)
-            try? TransactionLogger.refreshUncategorised(in: context)
+            let (added, merged, saved) = StatementImport.saveChecked(found, card: card, in: context)
+            do { try TransactionLogger.refreshUncategorised(in: context) } catch {
+                ErrorLog.report(error, where: "ImportView.refreshUncategorised")
+            }
             // Refreshes the widget once for the whole import.
             WidgetBridge.release()
             Task { await FXService.backfill(in: context) }
             busy = false
             saving = nil
+            guard saved else {
+                // "Done" would be false: say the write failed instead.
+                saveFailed = true
+                return
+            }
             imported += 1
             done = merged > 0
                 ? "\(added) added. \(merged) \(merged == 1 ? "was" : "were") already in Sortd."
