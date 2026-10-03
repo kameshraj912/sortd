@@ -317,8 +317,7 @@ struct BugHuntStatement1003Tests {
     /// whenever it parses, and "0.00" parses. A salary row written as
     /// "0.00,3200.00" becomes a ticked $0.00 purchase named SALARY, saved
     /// to the store, and the credit is never listed as money in.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-4", "a 0.00 Debit cell wins over the Credit cell; credits become $0 purchases"))
+    @Test(.bug(id: "hunt-1003-stmt-4", "a 0.00 Debit cell wins over the Credit cell; credits become $0 purchases"))
     func aZeroInTheUnusedColumnIsNotAPurchase() throws {
         let rows = StatementImport.rows(fromCSV: """
         Date,Description,Debit,Credit,Balance
@@ -342,8 +341,7 @@ struct BugHuntStatement1003Tests {
     /// which is why `parseCSV` supports ";") reads no rows at all:
     /// `signedAmount`'s pattern only knows "." for cents, so every row is
     /// "couldn't be read".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-5", "signedAmount does not read decimal commas, so a ; CSV imports nothing"))
+    @Test(.bug(id: "hunt-1003-stmt-5", "signedAmount does not read decimal commas, so a ; CSV imports nothing"))
     func aSemicolonCSVWithDecimalCommasIsRead() {
         let parsed = StatementImport.parse(csv: """
         Date;Description;Amount
