@@ -219,11 +219,34 @@ enum FXService {
         }))) ?? []
         var changed = 0
         for t in converted where !t.isDeleted && t.modelContext != nil {
+            // A foreign tap that met its statement line holds what the bank
+            // charged (Deduper's cross-currency merge); keep it.
+            if t.seenIn.count > 1, t.seenIn.contains(.csv) { continue }
             guard let r = exactRate(t.currencyCode, home, t.date, rates) else { continue }
             let value = (t.amount * r).rounded(2)
             if t.audAmount != value { t.audAmount = value; changed += 1 }
         }
         return changed
+    }
+
+    /// `amount` in `currency` as home-currency money, from the rates already
+    /// saved on this phone (the day's, or the nearest earlier day within a
+    /// week). Never goes to the network. Nil when the currency is the home one
+    /// or no saved rate is close enough.
+    static func homeValue(of amount: Decimal, currency: String, on date: Date,
+                          in context: ModelContext) -> Decimal? {
+        let home = Money.home
+        guard currency != home else { return nil }
+        let keys = (0..<7).map { rateKey(currency, home, dayString(date.addingTimeInterval(Double(-$0) * 86400))) }
+        guard let saved = try? context.fetch(FetchDescriptor<FXRate>(predicate: #Predicate { keys.contains($0.key) })) else { return nil }
+        let byKey = Dictionary(saved.map { ($0.key, $0.rate) }, uniquingKeysWith: { a, _ in a })
+        for key in keys { if let r = byKey[key], r > 0 { return (amount * r).rounded(2) } }
+        return nil
+    }
+
+    /// The key a saved rate is stored under.
+    static func savedRateKey(from: String, to: String, on date: Date) -> String {
+        rateKey(from, to, dayString(date))
     }
 
     /// Every saved rate by key, read once per pass (not up to 7 queries per purchase).
