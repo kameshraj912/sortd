@@ -146,9 +146,7 @@ struct BugHuntSecurityTests {
     /// the Sentry and PostHog placeholders ("replace_me") the app accepts
     /// it: a copied example sends Delete Account calls to
     /// sortd-account.example.workers.dev, a host Sortd does not own.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-04", "example Worker URL is used as a real Worker"))
-    func exampleWorkerURLIsNeverUsedAsARealWorker() throws {
+    @Test func exampleWorkerURLIsNeverUsedAsARealWorker() throws {
         let example = try source("Secrets.xcconfig.example")
         let line = try #require(example.split(separator: "\n").first { $0.hasPrefix("ACCOUNT_WORKER_URL") })
         let value = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
