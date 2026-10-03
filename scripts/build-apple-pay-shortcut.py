@@ -35,6 +35,11 @@ only produces an error.
 
 Then sign it:
     shortcuts sign --mode anyone --input <out> --output site/apple-pay.shortcut
+
+Then add it on an iPhone, share it from Shortcuts with Copy iCloud Link, and
+put the new link in `ApplePaySetupSteps.shortcutURL` and `site/support.html`.
+The app and the support page open that link, because the Shortcuts app takes
+it over in any browser; a plain file link shows a blank page in Chrome.
 """
 
 import argparse, plistlib, pathlib, pprint, uuid

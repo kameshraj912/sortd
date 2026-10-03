@@ -211,7 +211,7 @@ struct ApplePaySetupPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Button {
-                openURL(URL(string: "https://sortd.page/apple-pay.shortcut")!)
+                openURL(ApplePaySetupSteps.shortcutURL)
                 shortcutOpened = true
                 gotOnlineShortcut = true
             } label: {
