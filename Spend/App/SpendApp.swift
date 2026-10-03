@@ -63,6 +63,10 @@ struct SpendApp: App {
         TipVisibility.shared.start()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
+        // The store could not be opened: the recovery screen runs instead of
+        // the app, on an empty in-memory store. Nothing below (widgets,
+        // backups, cards) may touch it.
+        if SpendStore.openFailure != nil { return }
         WidgetBridge.watchSaves()
         // Back online: the pending iCloud backup, FX rates and queued account
         // deletes each try again (see `RootView`).
@@ -187,6 +191,9 @@ struct SpendApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
+            if let failure = SpendStore.openFailure {
+                StoreRecoveryView(failure: failure)
+            } else {
             #if DEBUG
             if ProcessInfo.processInfo.environment["SPEND_GRADIENT_LAB"] == "1" {
                 GradientLab()
@@ -198,6 +205,7 @@ struct SpendApp: App {
             #else
             RootView()
             #endif
+            }
             }
             .foregroundStyle(Color.ink)
             // Same colour as LaunchBackground (the static launch screen), so
