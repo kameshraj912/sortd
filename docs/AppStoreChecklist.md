@@ -5,9 +5,11 @@ OAuth docs. "Done" means built and tested in the simulator.
 
 ## Before any App Store build — do not skip
 
-- [ ] **Remove `SORTD_REPLAY`** from `SWIFT_ACTIVE_COMPILATION_CONDITIONS` in the app target's
+- [x] **Remove `SORTD_REPLAY`** from `SWIFT_ACTIVE_COMPILATION_CONDITIONS` in the app target's
       Release config (`Spend.xcodeproj/project.pbxproj`). Session replay is for TestFlight only.
       Run `scripts/preflight.sh --appstore` — it fails while the flag is still there.
+      Done in #114 (3 Oct 2026); checked 4 Oct: the Release line reads
+      `SORTD_SIGNIN SORTD_ICLOUD $(inherited)`. It is still in Debug only.
 - [ ] Create the three tip consumables in App Store Connect and get them to "Ready to Submit":
       `com.kameshraj.spend.tip.small`, `com.kameshraj.spend.tip.medium`,
       `com.kameshraj.spend.tip.large`. Raj sets the prices. Each needs one review screenshot
