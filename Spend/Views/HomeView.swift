@@ -69,6 +69,9 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
+                            // Under the total, as a card. As a popover on the
+                            // month title it sat over the total (3 Oct 2026).
+                            SortdTipView(tip: MonthTip())
                             if !demo {
                                 // The aha: the first purchase logged by itself,
                                 // then the one notification ask.
@@ -301,7 +304,6 @@ struct HomeView: View {
                         .foregroundStyle(Color.ink)
                     }
                     .accessibilityLabel("Month, \(month.formatted(.dateTime.month(.wide).year()))")
-                    .sortdTip(MonthTip(), arrowEdge: .top)
                     BrandBar(width: 14, height: 3)
                 }
                 Spacer()
