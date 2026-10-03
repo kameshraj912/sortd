@@ -15,6 +15,8 @@ struct AddTransactionView: View {
     @State private var date = Date.now
     @State private var note = ""
     @State private var saved = 0
+    /// Remembers the row once it is logged, so a retry cannot add another.
+    @State private var saver = ManualPurchaseSave()
     @State private var showingCategories = false
     @State private var showingScanner = false
     /// True once fields were filled from a scanned receipt.
@@ -158,8 +160,6 @@ struct AddTransactionView: View {
                 Section {
                     amountField
                         .listRowSeparator(.hidden)
-                    scanButton
-                        .listRowSeparator(.hidden)
                 }
                 .listRowBackground(Color.clear)
 
@@ -172,22 +172,14 @@ struct AddTransactionView: View {
                 }
 
                 Section {
-                    quickField
-                } footer: {
-                    if let quickProblem {
-                        Label(quickProblem, systemImage: "exclamationmark.circle")
-                            .foregroundStyle(.orange)
-                    } else {
-                        Text(QuickEntryAI.isAvailable
-                             ? "Type it how you'd say it. Apple Intelligence fills in the rest on this iPhone."
-                             : "Type it how you'd say it, then tap Fill.")
-                    }
-                }
-
-                Section {
                     TextField("Paid to", text: $merchant)
                         .textInputAutocapitalization(.words)
                         .onChange(of: merchant) { _, name in
+                            // Shop names stop at 80 characters; a longer paste is cut quietly.
+                            if name.count > MerchantName.maxLength {
+                                merchant = String(name.prefix(MerchantName.maxLength))
+                                return
+                            }
                             // A retyped name drops the model's guess for the old one.
                             // fill() records the name it set, so its own change keeps it.
                             if name != aiCategoryMerchant { aiCategory = nil }
@@ -217,6 +209,25 @@ struct AddTransactionView: View {
                     }
                     .buttonStyle(.pressable)
                     .accessibilityLabel("Category, \(category.name)")
+                }
+
+                Section {
+                    scanButton
+                        .listRowSeparator(.hidden)
+                }
+                .listRowBackground(Color.clear)
+
+                Section {
+                    quickField
+                } footer: {
+                    if let quickProblem {
+                        Label(quickProblem, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text(QuickEntryAI.isAvailable
+                             ? "Type it how you'd say it. Apple Intelligence fills in the rest on this iPhone."
+                             : "Type it how you'd say it, then tap Fill.")
+                    }
                 }
 
                 Section(bold: "Paid With") {
@@ -443,6 +454,14 @@ struct AddTransactionView: View {
             }
             .tint(.secondary)
             .accessibilityLabel("Currency, \(currency)")
+
+            // Why the tick is grey: no amount yet.
+            if parsedAmount == nil {
+                Text("Enter an amount")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
         }
         .padding(.vertical, 16)
     }
@@ -531,10 +550,9 @@ struct AddTransactionView: View {
             note: noteToSave
         )
         do {
-            let outcome = try TransactionLogger.log(purchase, in: context)
-            if categoryTouched {
-                try TransactionLogger.recategorise(outcome.transaction, to: category, in: context)
-            }
+            // Once the row is in, a retry (after the re-file failed) updates
+            // it instead of adding a second one.
+            try saver.save(purchase, recategoriseTo: categoryTouched ? category : nil, in: context)
             lastCard = card
             saved += 1
             discardDraft()
