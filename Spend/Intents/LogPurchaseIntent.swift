@@ -416,7 +416,7 @@ struct LogPurchaseIntent: AppIntent {
     // MARK: - One purchase, two triggers (2 Oct 2026)
 
     /// How far apart a tap and Wallet's notification for one purchase can
-    /// land and still be matched on amount and card alone.
+    /// land and still be matched on amount, card and shop.
     static let triggerPairWindow: TimeInterval = 10 * 60
 
     private static func lacksShop(_ t: Transaction) -> Bool {
@@ -424,7 +424,9 @@ struct LogPurchaseIntent: AppIntent {
     }
 
     /// Two names for one shop: either is blank, or they are the same shop
-    /// however spelled ("SQ *SEVEN SEEDS" and "Seven Seeds").
+    /// however spelled ("SQ *SEVEN SEEDS" and "Seven Seeds": the same
+    /// cleaned name, one inside the other, or nearly the same words).
+    /// Two different shops never agree, whatever the amount.
     private static func shopsAgree(_ t: Transaction, _ name: String) -> Bool {
         name.isEmpty || lacksShop(t)
             || Deduper.similarity(t.rawMerchant, name) >= 0.8 || Deduper.similarity(t.merchant, name) >= 0.8
@@ -456,7 +458,8 @@ struct LogPurchaseIntent: AppIntent {
     /// 1. the tap of this purchase: the row only the tap trigger has
     ///    reported that is closest in time (the latest tap, in real use),
     ///    within 10 minutes either side, same amount, same card when both
-    ///    know it — the shop may be spelled differently;
+    ///    know it, shops agree (`shopsAgree`: spelled differently is fine,
+    ///    another shop is not);
     /// 2. a tap that arrived with no amount: within 3 minutes, shops agree;
     /// 3. the same notification again: a row that has already seen one,
     ///    within 60 s, same amount, same shop (Wallet posting twice).
@@ -482,7 +485,9 @@ struct LogPurchaseIntent: AppIntent {
         func closer(_ a: Transaction, _ b: Transaction) -> Bool {
             gap(a) != gap(b) ? gap(a) < gap(b) : a.date > b.date
         }
-        let tapRow = tapOnly.filter { $0.amount == parsed.amount }.min(by: closer)
+        // Same amount alone is not enough: a tap at another shop is another
+        // purchase (an online payment of the same amount minutes later).
+        let tapRow = tapOnly.filter { $0.amount == parsed.amount && shopsAgree($0, name) }.min(by: closer)
         let blankTap = tapOnly.filter { $0.amount == 0 && gap($0) <= 3 * 60 && shopsAgree($0, name) }.min(by: closer)
         let repeatOf = candidates
             .filter { $0.seenByNotification && gap($0) <= 60 && $0.amount == parsed.amount && shopsAgree($0, name) }
@@ -506,7 +511,7 @@ struct LogPurchaseIntent: AppIntent {
 
     /// A tap run, ahead of `mergeTapCompanion`: a row only Wallet's
     /// notification has reported, within 10 minutes, same amount, same card
-    /// when both know it, is this purchase — the tap joins it and the tap's
+    /// when both know it, shops agree (`shopsAgree`), is this purchase — the tap joins it and the tap's
     /// shop and card win (the tap names the shop as the till does). A tap
     /// with no amount only joins one within 3 minutes whose shop agrees.
     @MainActor
@@ -518,8 +523,10 @@ struct LogPurchaseIntent: AppIntent {
         func gap(_ t: Transaction) -> TimeInterval { abs(t.date.timeIntervalSince(now)) }
         let match = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= to }))
             .filter { $0.tapOrigins == onlyNotification && !$0.refunded && cardsAgree($0.card, cardID) }
+            // The shops must agree too: a tap at another shop for the same
+            // amount is another purchase, not this online payment.
             .filter { t in
-                missingAmount ? gap(t) <= 3 * 60 && shopsAgree(t, name) : t.amount == parsed?.amount
+                shopsAgree(t, name) && (missingAmount ? gap(t) <= 3 * 60 : t.amount == parsed?.amount)
             }
             .min { gap($0) < gap($1) }
         guard let t = match else { return nil }
