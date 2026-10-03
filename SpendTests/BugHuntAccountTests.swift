@@ -111,13 +111,13 @@ struct BugHuntAccountTests {
 
     private let clock: () -> Date = { Date(timeIntervalSince1970: 1_790_500_000) }
 
-    private func revoker(_ transport: HuntTransport, attester: HuntAttester = HuntAttester(),
+    private func revoker(_ transport: HuntTransport, attester: HuntAttester? = nil,
                          appleCode: @escaping @MainActor (Account) async throws -> WorkerRevoker.AppleCode = { _ in
                              throw AccountError.cancelled
                          }) -> WorkerRevoker {
         WorkerRevoker(url: Self.workerURL, deps: WorkerRevoker.Dependencies(
             transport: { try await transport.call($0) },
-            attester: attester,
+            attester: attester ?? HuntAttester(),
             appleCode: appleCode,
             googleRevoke: {},
             clientID: "com.kameshraj.spend"))
