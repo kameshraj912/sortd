@@ -23,6 +23,10 @@ enum Deduper {
     /// Sources that carry the real time of the purchase, not just its date.
     private static let timed: Set<TxnSource> = [.tap, .manual]
 
+    /// Sources that carry only the day: a statement import (CSV, PDF text or
+    /// a screenshot, all saved as `.csv`) puts every row at noon.
+    private static let dateOnly: Set<TxnSource> = [.csv]
+
     /// Index of the best match in `existing`, or nil if this is a new purchase.
     /// `calendar` decides what "the same day" is (the phone's own days).
     static func match(_ new: Candidate, in existing: [Candidate],
@@ -56,8 +60,15 @@ enum Deduper {
             guard nameScore >= needed else { continue }
             // Same source, same shop, same amount on different days is two
             // purchases (a coffee on Monday and Tuesday); only near-identical
-            // times are a re-send.
-            if sameSourceSeenBefore, abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
+            // times are a re-send. A statement row has no time of day, and a
+            // row that merged with a tap keeps the tap's time (09:14), so the
+            // same statement imported again is a re-send when it is the same
+            // calendar day, not when it is within 10 minutes.
+            if sameSourceSeenBefore {
+                if dateOnly.contains(new.source) {
+                    if !calendar.isDate(old.date, inSameDayAs: new.date) { continue }
+                } else if abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
+            }
             // A hand-typed purchase and an Apple Pay tap both carry the real
             // time; the 2-day window is for statement rows, which carry only
             // a date. Between those two, only the same day is one purchase: a

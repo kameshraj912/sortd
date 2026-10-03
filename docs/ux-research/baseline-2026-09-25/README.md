@@ -142,4 +142,3 @@ replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlert
 ## Added 3 Oct 2026 (bug hunt, docs/BugHunt-2026-10-03.md)
 Still failing on `fix-hunt-c`: these belong to the money, Apple Pay and statement findings that the other fix branches (`fix-hunt-a`, `fix-hunt-b`) own, plus the two rejected claims (S8, S9). Each fixer takes its names off this list when the fix lands.
 - aForeignTapMergesWithItsStatementLine (S9, rejected: needs a design choice)
-- reimportingAfterATapMergeDoesNotDouble (stmt-1)

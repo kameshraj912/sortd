@@ -240,8 +240,7 @@ struct BugHuntStatement1003Tests {
     /// the merged row keeps the tap's time (09:14) and now has `.csv` in
     /// `seenIn`, so `Deduper.match` treats the new `.csv` row as "same source"
     /// and needs the times within 10 minutes, but statement rows are at noon.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-1", "re-importing a statement doubles every row that merged with a tap"))
+    @Test(.bug(id: "hunt-1003-stmt-1", "re-importing a statement doubles every row that merged with a tap"))
     func reimportingAfterATapMergeDoesNotDouble() throws {
         let ctx = try store()
         let tap = IncomingPurchase(date: date("2026-09-01", "09:14"), merchant: "Seven Seeds",
@@ -260,6 +259,29 @@ struct BugHuntStatement1003Tests {
         #expect(again.added == 0)
         #expect(again.merged == 1)
         #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
+    }
+
+    /// Fixed by comparing statement rows by calendar day. Two identical lines
+    /// in one statement are still two purchases, on the first import and when
+    /// the same file is imported again; a coffee on two different days stays
+    /// two as well.
+    @Test func identicalLinesInOneStatementStayTwoRows() throws {
+        let ctx = try store()
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Description,Amount
+        01/09/2026,SEVEN SEEDS COFFEE CARLTON,-5.50
+        01/09/2026,SEVEN SEEDS COFFEE CARLTON,-5.50
+        02/09/2026,SEVEN SEEDS COFFEE CARLTON,-5.50
+        """)
+        try #require(rows.count == 3)
+        let first = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(first.added == 3)
+        #expect(first.merged == 0)
+
+        let again = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(again.added == 0)
+        #expect(again.merged == 3)
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 3)
     }
 
     // MARK: 2. A tap abroad never meets its statement line
