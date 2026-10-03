@@ -181,10 +181,17 @@ enum TransactionLogger {
         let pool = nearby.map {
             Deduper.Candidate(date: $0.date, merchant: $0.rawMerchant, amount: $0.amount,
                               currency: $0.currencyCode, card: $0.card, source: $0.source,
-                              platform: $0.platform, seenIn: $0.seenIn)
+                              platform: $0.platform, seenIn: $0.seenIn,
+                              statementCharge: $0.seenIn.contains(.csv) && $0.currencyCode != Money.home
+                                  ? $0.audAmount.map { ($0, Money.home) } : nil)
         }
 
-        if let i = Deduper.match(candidate, in: pool) {
+        // A tap abroad meets its home-currency statement line through the
+        // rates already saved on the phone; no rate, no cross-currency match.
+        let convert: Deduper.Convert = { amount, from, to, date in
+            to == Money.home ? FXService.homeValue(of: amount, currency: from, on: date, in: context) : nil
+        }
+        if let i = Deduper.match(candidate, in: pool, convert: convert) {
             let existing = nearby[i]
             merge(p, into: existing)
             if save { try commit(context) }
@@ -222,6 +229,18 @@ enum TransactionLogger {
     /// The more trusted source wins for merchant name and card; the tap keeps
     /// its exact time because bank records often only carry the date.
     private static func merge(_ p: IncomingPurchase, into t: Transaction) {
+        // Matched across currencies (a foreign tap and its home-currency
+        // statement line): keep the foreign amount and currency as the
+        // original, and the bank's home-currency amount as the row's value.
+        if p.currency != t.currencyCode {
+            if p.source == .csv {
+                t.audAmount = p.amount
+            } else {
+                t.audAmount = t.amount
+                t.amount = p.amount
+                t.currencyCode = p.currency
+            }
+        }
         // Before `markSeen`: a row that was never a tap reads its old
         // triggers from `seenIn`, which must not yet include this one.
         if let origin = p.tapOrigin { t.markOrigin(origin) }
