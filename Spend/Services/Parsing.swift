@@ -9,13 +9,20 @@ enum AmountParser {
     }
 
     // Order matters: "US$" must be checked before "S$".
+    // The signs are what the phone's own currency formatter writes (and so
+    // what a Wallet tap carries): an en_SG, en_US or en_GB phone writes
+    // "CA$12.50", "MX$12.50", "R$12.50", "₪12.50" and "JP¥12".
     private static let markers: [(String, String)] = [
         ("USD", "USD"), ("US$", "USD"),
         ("SGD", "SGD"), ("S$", "SGD"),
         ("AUD", "AUD"), ("AU$", "AUD"), ("A$", "AUD"),
         ("NZD", "NZD"), ("NZ$", "NZD"),
         ("HKD", "HKD"), ("HK$", "HKD"),
-        ("CAD", "CAD"), ("C$", "CAD"),
+        ("CAD", "CAD"), ("CA$", "CAD"), ("C$", "CAD"),
+        ("MX$", "MXN"), ("R$", "BRL"), ("₪", "ILS"),
+        // No daily rate for TWD, but NT$ is still not the local currency:
+        // the same as "TWD 300", which the ISO rule below already reads.
+        ("NT$", "TWD"),
         ("MYR", "MYR"), ("RM", "MYR"),
         ("INR", "INR"), ("₹", "INR"), ("RS.", "INR"),
         ("EUR", "EUR"), ("€", "EUR"),
@@ -25,7 +32,7 @@ enum AmountParser {
         ("KRW", "KRW"), ("₩", "KRW"),
         // "CN¥"/"RMB" before the bare ¥ rule, so yuan aren't read as yen.
         ("CNY", "CNY"), ("CN¥", "CNY"), ("RMB", "CNY"),
-        ("JPY", "JPY"), ("¥", "JPY"),
+        ("JPY", "JPY"), ("JP¥", "JPY"), ("¥", "JPY"),
         // ₫ (VND) is left out: Frankfurter/ECB has no VND rate, so a ₫
         // transaction would never get an `audValue` and would sit stuck
         // unconverted forever. Money.supported isn't extended either.
@@ -38,6 +45,9 @@ enum AmountParser {
     static func currency(in text: String) -> String? {
         let upper = text.uppercased()
         if let m = markers.first(where: { standsAlone($0.0, in: upper) }) { return m.1 }
+        // "Rs500", "Rs 500": rupees only straight before a number, so a shop
+        // called "RS Components" is not.
+        if upper.range(of: #"(?<![A-Z])RS\s?[0-9]"#, options: .regularExpression) != nil { return "INR" }
         return upper.split(whereSeparator: { !$0.isLetter })
             .first { $0.count == 3 && isoCodes.contains(String($0)) }
             .map(String.init)
@@ -68,10 +78,14 @@ enum AmountParser {
         let currency = currency(in: text)
 
         // The number itself, not every digit in the text: "Rs. 500" kept the
-        // "." from "RS." and read 0.5. Spaced thousands ("1 234,50") count.
-        guard let r = upper.range(of: #"[0-9]{1,3}(?:[ \x{00A0}][0-9]{3})+(?:[.,][0-9]{1,2})?|[0-9][0-9.,]*[0-9]|[0-9]"#,
-                                  options: .regularExpression) else { return nil }
-        let number = upper[r].filter { $0 != " " && $0 != "\u{00A0}" }
+        // "." from "RS." and read 0.5. Spaced thousands count: with a no-break
+        // space ("12 345", how a formatter writes them), or with a plain space
+        // only when cents follow ("1 234,50"). "A$45 120" is A$45 and the
+        // next number, not A$45,120.
+        let pattern = #"[0-9]{1,3}(?:[\x{00A0}\x{202F}][0-9]{3})+(?![0-9])(?:[.,][0-9]{1,2})?"#
+            + #"|[0-9]{1,3}(?: [0-9]{3})+(?![0-9])[.,][0-9]{1,2}|[0-9][0-9.,]*[0-9]|[0-9]"#
+        guard let r = upper.range(of: pattern, options: .regularExpression) else { return nil }
+        let number = upper[r].filter { $0 != " " && $0 != "\u{00A0}" && $0 != "\u{202F}" }
 
         // The last separator is the decimal point when 1–2 digits follow it
         // ("1.234,56", "4,5", "58.30"); with 3 it's thousands ("1,299").
