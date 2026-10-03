@@ -108,7 +108,19 @@ struct WorkerRevokerTests {
         let transport = TransportFake([(200, #"{"challenge":"c"}"#), (502, #"{"error":"posthog_auth"}"#)])
         let r = revoker(transport: transport)
 
-        await #expect(throws: AccountError.rejected("posthog_auth")) { try await r.deletePerson(hash: Self.hash) }
+        // The Worker's code is for the log; the user reads plain words (A2).
+        await #expect(throws: AccountError.rejected(WorkerRevoker.usageRecordNotDeleted)) { try await r.deletePerson(hash: Self.hash) }
+    }
+
+    /// X4: the example file's placeholder must never be taken as a Worker.
+    @Test func aPlaceholderWorkerURLCountsAsNoWorker() {
+        #expect(WorkerRevoker.workerURL(from: "") == nil)
+        #expect(WorkerRevoker.workerURL(from: "  \n") == nil)
+        #expect(WorkerRevoker.workerURL(from: "https:/sortd-account.workers.dev") == nil, "a URL that lost its scheme is a broken line")
+        #expect(WorkerRevoker.workerURL(from: "https://sortd-account.example.workers.dev") == nil)
+        #expect(WorkerRevoker.workerURL(from: "https://account.example") == nil)
+        #expect(WorkerRevoker.workerURL(from: "https://replace_me.workers.dev") == nil)
+        #expect(WorkerRevoker.workerURL(from: " https://sortd-account.sortd.workers.dev \n")?.host == "sortd-account.sortd.workers.dev")
     }
 
     @Test func a503IsOfflineSoTheStoreRetries() async {

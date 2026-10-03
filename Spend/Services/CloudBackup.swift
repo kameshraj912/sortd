@@ -45,6 +45,9 @@ enum CloudBackupError: Error, Equatable, LocalizedError {
     /// This phone has never backed up or restored, and iCloud already holds
     /// a backup (from the old phone). Backing up now would write over it.
     case restoreFirst
+    /// iCloud holds a backup newer than anything this phone backed up or
+    /// restored: another iPhone wrote it. Backing up now would write over it.
+    case newerInCloud
 
     /// Plain words for the status line in Settings.
     var errorDescription: String? {
@@ -61,6 +64,8 @@ enum CloudBackupError: Error, Equatable, LocalizedError {
             "Not signed in to iCloud. Sign in from the Settings app to back up."
         case .restoreFirst:
             "There's already a backup in iCloud. Restore it first, so it isn't written over."
+        case .newerInCloud:
+            "iCloud has a newer backup, made on another iPhone. Restore it first (Add What's Missing), so it isn't written over."
         }
     }
 }
@@ -93,6 +98,9 @@ final class CloudBackup {
     nonisolated static let behindKey = "cloudBackupBehind"
     /// Automatic backups run at most this often.
     nonisolated static let minimumGap: TimeInterval = 10 * 60
+    /// How much newer iCloud's copy may look than this phone's last backup
+    /// before it counts as another phone's (dates round-trip through CloudKit).
+    nonisolated static let clockSlack: TimeInterval = 2
     /// A save on the store waits this long for more saves before backing up.
     nonisolated static let debounce: Duration = .seconds(5)
 
@@ -114,7 +122,10 @@ final class CloudBackup {
     }
 
     var isEnabled: Bool {
-        didSet { defaults.set(isEnabled, forKey: Self.enabledKey) }
+        didSet {
+            defaults.set(isEnabled, forKey: Self.enabledKey)
+            if oldValue, !isEnabled { stopWaitingBackups() }
+        }
     }
     private(set) var lastBackup: Date? {
         didSet { defaults.set(lastBackup, forKey: Self.lastKey) }
@@ -196,6 +207,17 @@ final class CloudBackup {
         }
         lastAttempt = now
         try? await backUp(from: context, automatic: true)
+    }
+
+    /// The switch went off: no backup that was only waiting (the debounce
+    /// after a save, the ten-minute catch-up, iCloud's rate-limit wait) may
+    /// run afterwards. A rate-limit pause ends with its wait, so a later
+    /// switch-on is not blocked by it.
+    private func stopWaitingBackups() {
+        pending?.cancel()
+        catchUp?.cancel()
+        retry?.cancel()
+        if case .paused(.rateLimited) = status { status = .idle }
     }
 
     /// Waits for the store to go quiet, then backs up if due. Called on
@@ -281,6 +303,11 @@ final class CloudBackup {
                 status = .idle
                 return
             }
+            // The switch went off while this automatic backup was being made.
+            if automatic, !isEnabled {
+                status = .idle
+                return
+            }
             let now = clock()
             try await store.save(blob, modified: now)
             // Delete All Data started while this was uploading, and its delete
@@ -320,9 +347,21 @@ final class CloudBackup {
     /// empty, since a new key would lock the old backup for ever.
     private func usableKey() async throws -> SymmetricKey {
         let existing = try keys.load()
+        // Delete All Data wipes the saved date but not this one in memory: a
+        // phone that was wiped has never backed up, whatever it remembers.
+        if lastBackup != nil, defaults.object(forKey: Self.lastKey) == nil { lastBackup = nil }
         if lastBackup == nil || existing == nil {
             if try await store.fetch() != nil {
                 throw lastBackup == nil ? CloudBackupError.restoreFirst : CloudBackupError.noKey
+            }
+        } else if let last = lastBackup {
+            // An unreadable copy is replaced by the backup, as before.
+            let record: (blob: Data, modified: Date)?
+            do { record = try await store.fetch() } catch CloudBackupError.corrupt { record = nil }
+            if let record, record.modified > last.addingTimeInterval(Self.clockSlack) {
+                // Another iPhone backed up after this one last did: a backup
+                // now would write over its newer purchases.
+                throw CloudBackupError.newerInCloud
             }
         }
         if let existing { return existing }
@@ -411,6 +450,9 @@ final class CloudBackup {
     /// Removes the record from iCloud. The key stays: it is harmless on its
     /// own and the next backup reuses it.
     func deleteCloudCopy() async throws {
+        // A backup still uploading was started before this delete: it must
+        // not put the copy back (it takes itself out again when it lands).
+        resets += 1
         do {
             try await store.delete()
             defaults.removeObject(forKey: Self.backedUpHereKey)
@@ -507,7 +549,7 @@ final class CloudBackup {
             retry = Task { [weak self] in
                 guard let self else { return }
                 try? await self.sleep(.seconds(max(seconds, 1)))
-                guard !Task.isCancelled, self.status == .paused(known) else { return }
+                guard !Task.isCancelled, self.isEnabled, self.status == .paused(known) else { return }
                 self.status = .idle
                 self.lastAttempt = nil
                 try? await self.backUp(from: context, automatic: true)

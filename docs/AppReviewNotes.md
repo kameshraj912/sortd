@@ -3,7 +3,7 @@
 Paste the "Notes" part into App Store Connect › App Review Information › Notes. Keep it under
 4,000 characters. Placeholders in [square brackets] are the ones only Raj can fill; see the list
 at the bottom. Updated 26 Sep 2026: sign-in and iCloud backup are on, contact name and email
-filled from the repo. Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
+filled from the repo. Updated 4 Oct 2026: the ready-made shortcut (two triggers), no tip jar in this build, no session replay. Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
 Budget Ring, Today and Recent widgets added.
 
 ---
@@ -20,16 +20,18 @@ sample cards, across every screen. Tap "Clear" on the Home banner to go back to 
 
 **Every feature is free**
 Insights, Subscriptions & Bills (with local bill reminders), the receipt camera
-and category budgets: nothing is locked. Settings › About › Leave a tip offers three consumable
-tips that unlock nothing. Terms and Privacy are in Settings › Privacy & Security › Privacy.
+and category budgets: nothing is locked, and there is nothing to buy in this build. Terms and
+Privacy are in Settings › Privacy & Security › Privacy.
 
-**Logging Apple Pay taps (Shortcuts automation)**
-Sortd can't read Wallet itself; the user makes a personal automation. iOS 27: Shortcuts › + ›
-Edit › Automation › Wallet › add Sortd's "Log Wallet Tap" (App Intent) and set its field to the
-Transaction. (iOS 26: Automation tab › Wallet › Run Immediately.) Each in-store Apple Pay tap is
-then logged, even with the app closed. Guide with pictures: Settings › Purchase Sources › Apple
-Pay Logging. ▶ in Shortcuts is a test: Sortd says "connected" and saves nothing. Needs a real
-device with a Wallet card; video: [VIDEO LINK]. Purchases can always be added by hand.
+**Logging Apple Pay (Shortcuts automation)**
+Sortd can't read Wallet itself; the user adds a personal automation. Settings › Purchase Sources
+› Apple Pay Logging › Get the Shortcut imports a ready-made shortcut that calls Sortd's "Log
+Wallet Tap" App Intent. Its "When any card is tapped" trigger logs in-store Apple Pay taps, even
+with the app closed. On iOS 27 it also has a "When I receive a notification from Wallet" trigger,
+so in-app and online Apple Pay payments are logged from Wallet's notification (only the title,
+subtitle and body are passed, on the device). The user runs it once (▶, then Allow) and switches
+the automations on; the page has a picture for each step. ▶ is only a test: it saves nothing.
+Logging needs a real device with a Wallet card. Purchases can always be added by hand.
 
 **Sign-in (optional, Apple or Google)**
 Settings › Account. Only the provider's subject and, if shared, the email are kept, in the
@@ -64,6 +66,8 @@ an option to also delete all data on the device.
   Settings › Privacy. The switch starts off when the iPhone's region is in the EU/EEA, the UK
   or Switzerland, and on elsewhere. Privacy policy: https://sortd.page/privacy
 
+- This TestFlight build records no screens: session replay is not compiled in.
+
 Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
 
 ---
@@ -79,26 +83,16 @@ Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store C
 Sign-in needs no demo account: it is optional and every screen works without it, and the
 notes say so.
 
-### 1. The Shortcuts video (`[VIDEO LINK]`)
+### 1. Optional: a short setup video
 
-Screen-record on the iPhone, under 90 seconds, no voice needed. Control Centre › Screen
-Recording. Then AirDrop it to the Mac and upload it as an unlisted YouTube video or an iCloud
-Drive share link, and paste the link into the notes. Shots, in order:
-
-1. Sortd › Settings › Purchase Sources › Apple Pay Logging. Scroll the picture guide once.
-2. Tap Get the Shortcut. Shortcuts opens. Show the automation: Wallet › Sortd "Log Wallet Tap"
-   with the Transaction in its field. Tap ▶ once: Sortd shows "connected".
-3. Stop recording. Buy something small with Apple Pay at a staffed till (a coffee is fine).
-4. Start recording again within a minute: open Sortd › Activity. The purchase is on top with
-   the shop, amount and card. Tap it to show the detail. Stop.
-
-Trim the two clips together in Photos or iMovie. If the till clip is awkward, skip it and
-just show the purchase landing; the reviewer only needs to see the automation and the result.
+Not required for TestFlight. If Beta App Review asks how to test Apple Pay logging, reply with a
+screen recording (under 90 s): Apple Pay Logging page › Get the Shortcut › the automation in
+Shortcuts › a small Apple Pay purchase › the purchase in Activity.
 
 ## Before submitting
 
 - [ ] Notes are about 3,600 characters with the placeholders in (measured 2 Oct 2026). Once the
       real values are in, check it is under 4,000; cut the "Other" list first if not.
-- [ ] Record the Shortcuts setup video on a real iPhone and attach it (or link it above).
-- [x] The Apple Pay Logging page does not promise online Apple Pay from email receipts. Checked
-      2 Oct 2026: `SetupGuideView.swift` says "Add in-app and online Apple Pay by hand."
+- [ ] Optional: the setup video, only if Beta App Review asks.
+- [x] The Apple Pay Logging page promises online Apple Pay only on iOS 27, from Wallet's
+      notification (`ApplePaySetupSteps.scopeLine`), checked 4 Oct 2026.

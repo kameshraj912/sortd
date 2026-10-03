@@ -31,6 +31,17 @@ nonisolated enum TapField {
     }
 
     static func isBlank(_ value: String?) -> Bool { normalize(value).isEmpty }
+
+    /// How a field arrived, never what it said: "empty", "placeholder" (a
+    /// magic variable's own name) or its length. This is all the run log in
+    /// Settings keeps, so a shop name or an amount cannot outlive the
+    /// purchase it came from.
+    static func shape(_ value: String?) -> String {
+        let n = normalize(value).count
+        if n > 0 { return "\(n) characters" }
+        let raw = value?.trimmingCharacters(in: invisible) ?? ""
+        return raw.isEmpty ? "empty" : "placeholder"
+    }
 }
 
 /// Wallet's notification as the iOS 27 Notification trigger hands it over.
@@ -52,6 +63,12 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// Exactly what arrived, for the "needs a check" note.
     var seen: String {
         "title \u{201C}\(title ?? "")\u{201D} · subtitle \u{201C}\(subtitle ?? "")\u{201D} · body \u{201C}\(body ?? "")\u{201D}"
+    }
+
+    /// How it arrived, without the words (see `TapField.shape`): what the
+    /// run log keeps.
+    var shape: String {
+        "title \(TapField.shape(title)) · subtitle \(TapField.shape(subtitle)) · body \(TapField.shape(body))"
     }
 
     /// What one notification says.
@@ -297,16 +314,18 @@ struct LogWalletTapIntent: AppIntent {
         return result
     }
 
-    /// The raw "last tap received" line: which kind of run it was and
-    /// every field exactly as it arrived, tap fields and notification parts
-    /// both (on a notification run the tap fields are ignored, but what
-    /// they held is the thing to check on a phone).
+    /// The "last tap received" line: which kind of run it was and how each
+    /// field arrived (empty, a placeholder, or how long), tap fields and
+    /// notification parts both (on a notification run the tap fields are
+    /// ignored, but whether they were filled is the thing to check on a
+    /// phone). Never the words: the shop, the amount and the card would stay
+    /// in the app's defaults after the purchase is deleted (X5, 3 Oct 2026).
     nonisolated static func record(transaction: String?, amount: String?, merchant: String?, card: String?,
                                    notification: WalletNotification, at now: Date) -> String {
         let kind = notification.isPresent ? "notification run" : "tap run"
-        var fields = "amount \u{201C}\(amount ?? "")\u{201D} · merchant \u{201C}\(merchant ?? "")\u{201D} · card \u{201C}\(card ?? "")\u{201D}"
-        if !TapField.isBlank(transaction) { fields += " · text \u{201C}\(transaction ?? "")\u{201D}" }
-        return "\(now.formatted(date: .abbreviated, time: .standard)): \(kind) · \(fields) · \(notification.seen)"
+        var fields = "amount \(TapField.shape(amount)) · merchant \(TapField.shape(merchant)) · card \(TapField.shape(card))"
+        if !TapField.isBlank(transaction) { fields += " · text \(TapField.shape(transaction))" }
+        return "\(now.formatted(date: .abbreviated, time: .standard)): \(kind) · \(fields) · \(notification.shape)"
     }
 
     /// Nothing saved: say which kind of notification it was.
