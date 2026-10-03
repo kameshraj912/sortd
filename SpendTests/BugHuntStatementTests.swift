@@ -206,3 +206,227 @@ struct BugHuntStatementTests {
         #expect(rows.isEmpty)
     }
 }
+
+/// Bug hunt, 3 Oct 2026: statement import. New findings only; the 26 Sep
+/// ones above are still open and not repeated. Each test fails today and
+/// runs only with `scripts/test.sh --known-bugs`.
+@MainActor
+struct BugHuntStatement1003Tests {
+
+    private func store() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    private func date(_ ymd: String, _ hm: String = "12:00") -> Date {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        f.timeZone = .current
+        return f.date(from: "\(ymd) \(hm)")!
+    }
+
+    private func money(_ s: String) -> Decimal { Decimal(string: s)! }
+
+    // MARK: 1. Re-import after a tap merge
+
+    /// A statement row that merged into an Apple Pay tap is added again when
+    /// the same statement (or an overlapping one) is imported a second time:
+    /// the merged row keeps the tap's time (09:14) and now has `.csv` in
+    /// `seenIn`, so `Deduper.match` treats the new `.csv` row as "same source"
+    /// and needs the times within 10 minutes, but statement rows are at noon.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-1", "re-importing a statement doubles every row that merged with a tap"))
+    func reimportingAfterATapMergeDoesNotDouble() throws {
+        let ctx = try store()
+        let tap = IncomingPurchase(date: date("2026-09-01", "09:14"), merchant: "Seven Seeds",
+                                   amount: money("5.50"), currency: Money.home, card: .nab, source: .tap)
+        _ = try TransactionLogger.log(tap, in: ctx)
+
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Description,Amount
+        01/09/2026,SEVEN SEEDS COFFEE CARLTON,-5.50
+        """)
+        try #require(rows.count == 1)
+        let first = StatementImport.save(rows, card: .nab, in: ctx)
+        try #require(first.merged == 1)
+
+        let again = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(again.added == 0)
+        #expect(again.merged == 1)
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
+    }
+
+    // MARK: 2. A tap abroad never meets its statement line
+
+    /// A tap in Singapore on an Australian card is logged as S$5.50; the AU
+    /// statement lists the same purchase as A$6.12. `Deduper.match` needs
+    /// equal amount and equal currency, so the two never merge and the
+    /// purchase is counted twice once the statement is imported.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-2", "a foreign-currency tap never merges with the home-currency statement row"))
+    func aForeignTapMergesWithItsStatementLine() throws {
+        let ctx = try store()
+        let foreign = Money.home == "SGD" ? "AUD" : "SGD"
+        let tap = IncomingPurchase(date: date("2026-09-20", "13:05"), merchant: "Ya Kun Kaya Toast",
+                                   amount: money("5.50"), currency: foreign, card: .nab, source: .tap)
+        _ = try TransactionLogger.log(tap, in: ctx)
+
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Description,Amount
+        20/09/2026,YA KUN KAYA TOAST SINGAPORE,-6.12
+        """)
+        try #require(rows.count == 1)
+        let result = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(result.merged == 1)
+        #expect(result.added == 0)
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).count == 1)
+    }
+
+    // MARK: 3. An account line on top sends the CSV to the free-text reader
+
+    /// `ImportView.looksLikeCSV` needs 2+ separators on the first line. A CSV
+    /// with an account line on top ("Account,NAB Classic ...", one comma) is
+    /// read by `parse(text:)` instead, where an unsigned number is spending:
+    /// the $3,200 salary in the Credit column is listed as a ticked purchase.
+    /// `parse(csv:)` reads the same file correctly.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-3", "a CSV with an account line on top is read as free text; credits become purchases"))
+    func aCSVWithAnAccountLineOnTopKeepsTheSalaryOut() {
+        let csv = """
+        Account,NAB Classic Banking 084-234 12345678
+        Date,Description,Debit,Credit,Balance
+        01/09/2026,WOOLWORTHS 3342,58.30,,2451.70
+        02/09/2026,SALARY ACME PTY LTD,,3200.00,5651.70
+        """
+        // The CSV reader gets it right.
+        #expect(StatementImport.parse(csv: csv).rows.filter { $0.kind == .spend }.count == 1)
+        // What ImportView actually runs for this file (looksLikeCSV is false).
+        let spend = StatementImport.parse(text: csv).rows.filter { $0.kind == .spend }
+        #expect(!spend.contains { $0.detail.contains("SALARY") })
+        #expect(spend.reduce(Decimal(0)) { $0 + $1.amount } == money("58.30"))
+        #expect(spend.allSatisfy { !$0.detail.contains("2451.70") })
+    }
+
+    // MARK: 4. "0.00" in the unused Debit column
+
+    /// With Debit/Credit columns, `money(in:layout:)` takes the Debit cell
+    /// whenever it parses, and "0.00" parses. A salary row written as
+    /// "0.00,3200.00" becomes a ticked $0.00 purchase named SALARY, saved
+    /// to the store, and the credit is never listed as money in.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-4", "a 0.00 Debit cell wins over the Credit cell; credits become $0 purchases"))
+    func aZeroInTheUnusedColumnIsNotAPurchase() throws {
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Description,Debit,Credit,Balance
+        01/09/2026,WOOLWORTHS 3342,58.30,0.00,2451.70
+        02/09/2026,SALARY ACME PTY LTD,0.00,3200.00,5651.70
+        """)
+        #expect(rows.count == 2)
+        let salary = rows.first { $0.detail.contains("SALARY") }
+        #expect(salary?.kind == .moneyIn)
+        #expect(salary?.amount == money("3200.00"))
+
+        let ctx = try store()
+        let result = StatementImport.save(rows, card: .nab, in: ctx)
+        #expect(result.added == 1)
+        #expect(try ctx.fetch(FetchDescriptor<Transaction>()).allSatisfy { $0.amount > 0 })
+    }
+
+    // MARK: 5. Decimal commas
+
+    /// A semicolon CSV with decimal commas ("-12,50", the European format,
+    /// which is why `parseCSV` supports ";") reads no rows at all:
+    /// `signedAmount`'s pattern only knows "." for cents, so every row is
+    /// "couldn't be read".
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-5", "signedAmount does not read decimal commas, so a ; CSV imports nothing"))
+    func aSemicolonCSVWithDecimalCommasIsRead() {
+        let parsed = StatementImport.parse(csv: """
+        Date;Description;Amount
+        01/09/2026;CARREFOUR PARIS;-12,50
+        02/09/2026;MONOPRIX;-8,20
+        """)
+        #expect(parsed.rows.count == 2)
+        #expect(parsed.skipped == 0)
+        #expect(parsed.rows.first?.amount == money("12.50"))
+        #expect(parsed.rows.last?.amount == money("8.20"))
+    }
+
+    // MARK: 6. Screenshots with the date on its own line
+
+    /// "Choose a Screenshot" asks for "a picture of your bank app's list",
+    /// but `parse(text:)` only keeps a line that has a date and an amount
+    /// together. Apple Wallet's card list puts the merchant and amount on one
+    /// line and the day ("Yesterday", "26/09/2026") on a line below; bank
+    /// apps group rows under a date header. Both read as zero purchases.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-6", "screenshot import needs date and amount on one line; Wallet and bank-app lists read as nothing"))
+    func aWalletOrBankAppListIsRead() {
+        let today = date("2026-10-03")
+        let wallet = StatementImport.rows(fromText: """
+        Latest Transactions
+        Seven Seeds Coffee $5.50
+        Carlton VIC
+        Yesterday
+        Woolworths $58.30
+        Richmond VIC
+        Thursday
+        Kmart Burwood $22.00
+        Burwood VIC
+        26/09/2026
+        """, today: today)
+        #expect(wallet.count == 3)
+        #expect(wallet.map(\.amount) == [money("5.50"), money("58.30"), money("22.00")])
+
+        let bankApp = StatementImport.rows(fromText: """
+        Fri 26 Sep
+        Woolworths Richmond -$58.30
+        Seven Seeds Coffee -$5.50
+        Thu 25 Sep
+        Kmart Burwood -$22.00
+        """, today: today)
+        #expect(bankApp.count == 3)
+    }
+
+    // MARK: 7. UTF-16 files
+
+    /// Excel's "Unicode Text" export is UTF-16 with a BOM. `decodeText`
+    /// tries UTF-8, then Windows-1252, which accepts those bytes and turns
+    /// them into "ÿþD\0a\0t\0e..." So the import says nothing was found.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-7", "decodeText reads a UTF-16 file as Windows-1252 garbage"))
+    func aUTF16FileIsDecoded() throws {
+        let text = "Date,Description,Amount\n01/09/2026,WOOLWORTHS 3342,-58.30\n"
+        let data = try #require(text.data(using: .utf16))
+        let decoded = StatementReader.decodeText(data)
+        #expect(decoded?.contains("WOOLWORTHS 3342") == true)
+        #expect(StatementImport.rows(fromCSV: decoded ?? "").count == 1)
+    }
+
+    // MARK: 8. Pubs and bakeries lose their name on a receipt
+
+    /// `ReceiptScanner.merchant` skips any line containing "tel", "table",
+    /// "time", "order", "copy" and so on as substrings, so "ROYAL HOTEL"
+    /// (and "PASTEL BAKERY") is skipped and the next line ("Public Bar") is
+    /// used as the shop. Australian pubs are nearly all "... Hotel".
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1003-stmt-8", "receipt merchant skip words match inside HOTEL and PASTEL"))
+    func aHotelReceiptKeepsItsName() {
+        #expect(ReceiptScanner.merchant(in: """
+        ROYAL HOTEL
+        Public Bar
+        Tax Invoice
+        Carlton Draught  9.50
+        TOTAL $9.50
+        """) == "Royal Hotel")
+        #expect(ReceiptScanner.merchant(in: """
+        PASTEL BAKERY
+        Croissant  5.50
+        TOTAL $5.50
+        """) == "Pastel Bakery")
+    }
+}

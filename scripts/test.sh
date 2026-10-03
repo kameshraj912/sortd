@@ -22,6 +22,7 @@ while [ $# -gt 0 ]; do
     --storekit)   storekit=1 ;;
     --all)        known=1; storekit=1 ;;
     --only)       shift; only="$1" ;;
+    --sanitize)   shift; sanitize="$1" ;;   # address | thread (own build folder)
     *) die "unknown flag $1" ;;
   esac
   shift
@@ -33,13 +34,20 @@ log="$ROOT/.build/test.log"
 bundle="$ROOT/.build/Test.xcresult"
 rm -rf "$bundle"
 
+dd="$DERIVED"; [ -n "${sanitize:-}" ] && dd="$DERIVED-$sanitize"
 args=(-project "$PROJECT" -scheme "$SCHEME" -destination "id=$udid"
-      -derivedDataPath "$DERIVED" -resultBundlePath "$bundle" CODE_SIGNING_ALLOWED=NO)
+      -derivedDataPath "$dd" -resultBundlePath "$bundle" CODE_SIGNING_ALLOWED=NO)
+case "${sanitize:-}" in
+  "") ;;
+  address) args+=(-enableAddressSanitizer YES) ;;
+  thread)  args+=(-enableThreadSanitizer YES) ;;
+  *) die "--sanitize takes address or thread" ;;
+esac
 [ $storekit -eq 1 ] || args+=(-skip-testing:SpendTests/TipJarTests)
 [ -n "$only" ] && args+=(-only-testing:"SpendTests/$only")
 [ $known -eq 1 ] && export TEST_RUNNER_SORTD_KNOWN_BUGS=1
 
-extra=""; [ -n "$only" ] && extra="$extra, only $only"; [ $known -eq 1 ] && extra="$extra, with known bugs"; [ $storekit -eq 1 ] && extra="$extra, with StoreKit"
+extra=""; [ -n "$only" ] && extra="$extra, only $only"; [ $known -eq 1 ] && extra="$extra, with known bugs"; [ $storekit -eq 1 ] && extra="$extra, with StoreKit"; [ -n "${sanitize:-}" ] && extra="$extra, $sanitize sanitizer"
 say "Testing on $(sim_name) ($udid)$extra"
 xcodebuild "${args[@]}" test > "$log" 2>&1
 status=$?

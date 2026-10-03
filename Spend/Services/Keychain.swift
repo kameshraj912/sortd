@@ -12,7 +12,14 @@ nonisolated struct KeychainError: LocalizedError {
 enum Keychain {
     private static let service = "com.kameshraj.spend"
 
+    /// In a test run the real Keychain is not open to the unsigned test host
+    /// (every write fails with a missing entitlement), so the items live in
+    /// memory there, as a scratch copy of the real thing. Nil in the app.
+    private static var memory: [String: String]? =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ? [:] : nil
+
     static func set(_ value: String, for account: String) {
+        if memory != nil { memory?[account] = value; return }
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -30,6 +37,7 @@ enum Keychain {
     }
 
     static func get(_ account: String) -> String? {
+        if let memory { return memory[account] }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -45,11 +53,13 @@ enum Keychain {
 
     /// Every item Sortd stored, including ones from an earlier install.
     static func deleteAll() {
+        if memory != nil { memory = [:]; return }
         SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary)
     }
 
     /// Every stored account name that starts with `prefix`.
     static func accounts(withPrefix prefix: String) -> [String] {
+        if let memory { return memory.keys.filter { $0.hasPrefix(prefix) }.sorted() }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -63,6 +73,7 @@ enum Keychain {
     }
 
     static func delete(_ account: String) {
+        if memory != nil { memory?[account] = nil; return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

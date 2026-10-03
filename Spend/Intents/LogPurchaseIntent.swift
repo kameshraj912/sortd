@@ -112,8 +112,19 @@ struct LogPurchaseIntent: AppIntent {
         defaults.stringArray(forKey: recentRunsKey) ?? []
     }
 
-    /// Marks that Shortcuts reached Sortd, with the raw fields for Settings,
-    /// and adds the line to "Recent runs".
+    /// Builds before 3 Oct 2026 kept the shop, amount and card of every run
+    /// here. Clears those lines, once.
+    static let scrubbedKey = "tapRunsScrubbed"
+    static func scrubOldRunText(defaults: UserDefaults = reachDefaults) {
+        guard !defaults.bool(forKey: scrubbedKey) else { return }
+        defaults.removeObject(forKey: lastTapKey)
+        defaults.removeObject(forKey: recentRunsKey)
+        defaults.set(true, forKey: scrubbedKey)
+    }
+
+    /// Marks that Shortcuts reached Sortd, with how each field arrived (never
+    /// the words, see `TapField.shape`) for Settings, and adds the line to
+    /// "Recent runs".
     static func recordReach(_ record: String, at now: Date, defaults: UserDefaults = reachDefaults) {
         defaults.set(record, forKey: lastTapKey)
         defaults.set(now, forKey: lastTapAtKey)
@@ -146,9 +157,10 @@ struct LogPurchaseIntent: AppIntent {
         let parsed = amountText.isEmpty ? nil : AmountParser.parse(amountText)
         let name = TapField.normalize(merchant)
         let cardName = TapField.normalize(card)
-        // Keep exactly what arrived, for checking the setup (Settings shows it).
+        // Exactly what arrived, for the "needs a check" note on the purchase itself.
         let seen = seenOverride ?? "amount “\(amount ?? "")” · merchant “\(merchant ?? "")” · card “\(card ?? "")”"
-        recordReach(record ?? "\(now.formatted(date: .abbreviated, time: .standard)): \(seen)", at: now)
+        // The run log keeps how each field arrived, never the words (see `TapField.shape`).
+        recordReach(record ?? "\(now.formatted(date: .abbreviated, time: .standard)): amount \(TapField.shape(amount)) · merchant \(TapField.shape(merchant)) · card \(TapField.shape(card))", at: now)
         // Nothing at all came in — not even a card: a bare ▶ run in
         // Shortcuts, not a Wallet tap. Nothing is saved. A card name alone
         // (no amount, no shop) is different: that's a real automation run
