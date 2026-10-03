@@ -139,6 +139,16 @@ struct TransactionDetailView: View {
         .background(Color.page)
         .navigationTitle(transaction.merchant.isEmpty ? "Purchase" : transaction.merchant)
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            // The number pad has no Return key, so without this there was no
+            // way to put it away (same as New Purchase).
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { amountFocused = false; merchantFocused = false }
+                    .fontWeight(.semibold)
+            }
+        }
         .onAppear {
             amountText = Self.amountText(transaction.amount, currency: transaction.currencyCode)
             loadedAmountText = amountText
