@@ -221,15 +221,20 @@ enum Reminders {
     /// identifier means a second queued tap just refreshes the same pending
     /// alert instead of piling up. Respects the existing notification
     /// permission and never asks — only the aha card and Settings do that.
-    static func notifyTapQueued() async {
+    ///
+    /// `saved` false: not even the queue could take it (a full disk), so
+    /// opening Sortd won't finish it. That one says to add it by hand, under
+    /// its own identifier so a replay emptying the queue doesn't clear it.
+    static func notifyTapQueued(saved: Bool = true) async {
         let center = UNUserNotificationCenter.current()
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional || status == .ephemeral else { return }
         let content = UNMutableNotificationContent()
-        content.title = "A tap couldn't be saved"
-        content.body = "Open Sortd to finish it."
+        content.title = saved ? "A tap couldn't be saved" : "A tap wasn't saved"
+        content.body = saved ? "Open Sortd to finish it." : "Your iPhone may be full. Add the purchase in Sortd by hand."
         content.sound = .default
-        try? await center.add(UNNotificationRequest(identifier: tapQueuedID, content: content, trigger: nil))
+        try? await center.add(UNNotificationRequest(identifier: saved ? tapQueuedID : "tap-lost",
+                                                    content: content, trigger: nil))
     }
 
     /// Clears the "a tap couldn't be saved" alert once the queue is empty
