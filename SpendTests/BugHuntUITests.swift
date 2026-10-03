@@ -217,4 +217,16 @@ struct BugHuntUITests {
         #expect(WidgetBridge.recentItems(from: all, currency: Money.home).isEmpty,
                 "shown: \(WidgetBridge.recentItems(from: all, currency: Money.home).map(\.merchant))")
     }
+
+    /// U6: the "Log it now" widget's Scan button (sortd://scan) opened the
+    /// plain Add sheet, the same as its Add button.
+    @Test(.bug("U6: the widget's Scan link opens plain Add"))
+    func theScanLinkOpensTheReceiptScanner() throws {
+        let router = Router.shared
+        router.sheet = nil
+        router.follow(try #require(Router.target(for: URL(string: "sortd://scan")!)))
+        #expect(router.sheet == .scan)
+        router.sheet = nil
+        router.tab = .home
+    }
 }
