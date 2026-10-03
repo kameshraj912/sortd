@@ -39,6 +39,11 @@ struct AddTransactionView: View {
     /// history on this phone. Gone once a name is typed.
     @State private var suggestions: [Suggestions.Suggestion] = []
     @State private var suggestionTaps = 0
+    /// True while the form shows what was typed in an earlier visit.
+    @State private var draftRestored = false
+    /// False once the purchase is saved or thrown away on purpose, so the
+    /// change that closing the sheet causes cannot write the draft back.
+    @State private var draftActive = true
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
@@ -126,6 +131,25 @@ struct AddTransactionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if draftRestored {
+                    Section {
+                        HStack {
+                            Label("Draft restored", systemImage: "clock.arrow.circlepath")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Clear", action: clearDraft)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Color.ink)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(.rect)
+                                .buttonStyle(.pressable)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                }
+
                 Section {
                     amountField
                         .listRowSeparator(.hidden)
@@ -212,12 +236,12 @@ struct AddTransactionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", systemImage: "xmark") {
-                        if hasInput { confirmingDiscard = true } else { dismiss() }
+                        if hasInput { confirmingDiscard = true } else { discardDraft(); dismiss() }
                     }
                     // Anchored here, not on the sheet, so it grows out of the
                     // X instead of popping up in the middle of the screen.
                     .confirmationDialog("Discard this purchase?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-                        Button("Discard", role: .destructive) { dismiss() }
+                        Button("Discard", role: .destructive) { discardDraft(); dismiss() }
                         Button("Keep Editing", role: .cancel) {}
                     }
                 }
@@ -248,8 +272,14 @@ struct AddTransactionView: View {
             }
             .onAppear {
                 card = Card.mine.contains(lastCard) ? lastCard : (Card.mine.first ?? .other)
+                restoreDraft()
                 amountFocused = true
                 loadSuggestions()
+            }
+            // Every change is kept, so a kill loses nothing.
+            .onChange(of: currentDraft) { _, draft in
+                guard draftActive else { return }
+                PurchaseDraft.save(draft)
             }
             .feedback(.select, trigger: suggestionTaps)
             .feedback(.confirm, trigger: saved)
@@ -295,6 +325,56 @@ struct AddTransactionView: View {
         let since = Calendar.current.date(byAdding: .day, value: -90, to: .now) ?? .now
         let recent = (try? context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= since }))) ?? []
         suggestions = Suggestions.forNow(recent)
+    }
+
+    private var currentDraft: PurchaseDraft {
+        PurchaseDraft(merchant: merchant, amount: amountText, currency: currency, cardRaw: card.rawValue,
+                      categoryRaw: category.rawValue, categoryTouched: categoryTouched, date: date, note: note)
+    }
+
+    /// Puts back what was typed last time, if it is under a day old.
+    private func restoreDraft() {
+        guard !draftRestored, let draft = PurchaseDraft.load() else { return }
+        amountText = draft.amount
+        merchant = draft.merchant
+        note = draft.note
+        if Self.currencies.contains(draft.currency) { currency = draft.currency }
+        let savedCard = Card(rawValue: draft.cardRaw)
+        if Card.mine.contains(savedCard) || savedCard == .other { card = savedCard }
+        let savedCategory = SpendCategory(rawValue: draft.categoryRaw) ?? .other
+        category = savedCategory
+        categoryTouched = draft.categoryTouched
+        // A category that was only suggested stays a suggestion: tell the shop
+        // field it was already worked out, so retyping the name still updates it.
+        if !draft.categoryTouched, savedCategory != .other {
+            aiCategory = savedCategory
+            aiCategoryMerchant = draft.merchant
+        }
+        date = min(draft.date, .now)
+        draftRestored = true
+    }
+
+    /// "Clear": back to a blank form.
+    private func clearDraft() {
+        PurchaseDraft.clear()
+        withAnimation(.snappy) {
+            amountText = ""
+            merchant = ""
+            note = ""
+            currency = Self.defaultCurrency()
+            card = Card.mine.contains(lastCard) ? lastCard : (Card.mine.first ?? .other)
+            category = .other
+            categoryTouched = false
+            aiCategory = nil
+            date = .now
+            draftRestored = false
+        }
+    }
+
+    /// Cancel on purpose, or Discard: the draft goes with the sheet.
+    private func discardDraft() {
+        draftActive = false
+        PurchaseDraft.clear()
     }
 
     /// Anything typed that would be lost by closing the sheet.
@@ -448,6 +528,7 @@ struct AddTransactionView: View {
             }
             lastCard = card
             saved += 1
+            discardDraft()
             // Counts only: never the amount, shop or note.
             Analytics.shared.track(.purchaseAddedManually, ["category_changed": .bool(categoryTouched),
                                                             "has_note": .bool(!noteToSave.isEmpty)])
