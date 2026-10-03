@@ -42,6 +42,7 @@ private final class HuntTransport {
 
 private final class HuntAttester: AppAttester {
     var error: Error?
+    nonisolated init() {}
     var isSupported: Bool { true }
     func attest(clientDataHash: Data) async throws -> (keyID: String, attestation: Data) {
         if let error { throw error }
