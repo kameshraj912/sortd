@@ -10,7 +10,7 @@ import Foundation
 /// in `@State`, seeded from `IntroTour.seenKey`, and writes `seen` back to
 /// `UserDefaults` itself when it changes.
 enum IntroStep: Int, CaseIterable, Equatable, Sendable {
-    case add, insights, move
+    case add, insights, swipe
 
     /// Where the app goes while this step is on screen: `RootView` drives
     /// `tab` from this, so the tab bar really switches underneath.
@@ -18,16 +18,18 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: .home
         case .insights: .insights
-        case .move: .activity
+        case .swipe: .activity
         }
     }
 
-    /// The one line under the card. Raj's approved wording (26 Sep 2026).
+    /// The one line under the card. Raj's approved wording (26 Sep 2026;
+    /// step 3 from 3 Oct 2026, when Activity went back to one list and the
+    /// day arrows went).
     var line: String {
         switch self {
         case .add: "Tap + to add cash or anything Apple Pay missed"
         case .insights: "Insights shows where your money goes"
-        case .move: "Tap the arrows to move between days"
+        case .swipe: "Swipe a purchase to change or delete it"
         }
     }
 
@@ -37,7 +39,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: "The plus button, bottom right, adds a purchase."
         case .insights: "The Insights tab, in the tab bar."
-        case .move: "The day header, on Activity, with the arrows that change the day."
+        case .swipe: "The newest purchase, on Activity."
         }
     }
 
@@ -54,7 +56,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: return .tapTwice
         case .insights: return .ringPulse
-        case .move: return .tapOnce
+        case .swipe: return .swipeLeft
         }
     }
 
@@ -64,7 +66,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
         switch self {
         case .add: 1.5
         case .insights: 1.0
-        case .move: 1.0
+        case .swipe: 1.0
         }
     }
 
@@ -75,7 +77,7 @@ enum IntroStep: Int, CaseIterable, Equatable, Sendable {
 
 /// What plays once on a step, before it holds still.
 enum IntroMotion: Equatable, Sendable {
-    case none, tapTwice, ringPulse, tapOnce
+    case none, tapTwice, ringPulse, swipeLeft
 }
 
 /// A step's auto-advance clock: pure `Date` math, no sleeping, no timer —

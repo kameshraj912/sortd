@@ -1,6 +1,9 @@
 import Foundation
 
-/// Pure helpers for Activity's one-day-per-page mode (`TransactionsScreen.dayPages`).
+#if DEBUG
+/// Pure helpers for Activity's old one-day-per-page mode, kept in debug
+/// builds only for the DEBUG `SPEND_ACTIVITY_PAGER=1` comparison
+/// (`TransactionsScreen.showsDayPager`). The app itself shows one list.
 /// Days are newest first, so paging back in time is a higher index.
 enum DayPager {
     /// Pages built either side of the one on screen.
@@ -66,3 +69,4 @@ enum DayPager {
         return new.first
     }
 }
+#endif
