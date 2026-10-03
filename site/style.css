@@ -372,7 +372,7 @@ section { padding: 72px 0; }
 
 /* Step labels under the demo phone, lit in time with the animation */
 .demo-steps { display: flex; justify-content: center; gap: 6px; margin-top: 22px; padding: 0; list-style: none; flex-wrap: wrap; }
-.demo-steps li { font-size: 13px; font-weight: 600; color: var(--faint); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+.demo-steps li { white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--faint); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
   animation-duration: 14s; animation-iteration-count: infinite; }
 .demo-steps li:nth-child(1) { animation-name: st1; }
 .demo-steps li:nth-child(2) { animation-name: st2; }
@@ -419,16 +419,17 @@ section { padding: 72px 0; }
 .plans { display: grid; gap: 14px; max-width: 900px; margin: 0 auto; grid-template-columns: 1fr; }
 @media (min-width: 760px) { .plans { grid-template-columns: repeat(3, 1fr); align-items: stretch; } }
 @media (min-width: 760px) { .plans.two { grid-template-columns: repeat(2, 1fr); max-width: 640px; } }
+.plans.one { grid-template-columns: 1fr; max-width: 340px; }
 .plan { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 28px 24px; text-align: center; }
 .plan.best { border: 2px solid var(--ink); }
 .plan .pname { margin: 0 0 8px; font-weight: 600; color: var(--muted); }
 .plan .price { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -.03em; color: var(--ink); }
 .plan .price small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
-.plan .pnote { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+.plan .pnote { margin: 8px 0 0; font-size: 14px; color: var(--muted); text-wrap: balance; }
 .plan-includes { list-style: none; padding: 0; margin: 26px auto 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 24px; color: var(--muted); font-size: 15px; }
-.plan-includes li { display: flex; align-items: center; gap: 7px; }
+.plan-includes li { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .plan-includes svg { width: 18px; height: 18px; color: var(--green); }
-.plan-foot { text-align: center; font-size: 13px; color: var(--faint); margin: 14px 0 0; }
+.plan-foot { text-align: center; font-size: 13px; color: var(--faint); margin: 14px 0 0; text-wrap: balance; }
 
 /* Closing call to action */
 .cta-band { background: var(--invert-bg); color: var(--invert-text); border-radius: 32px; padding: 40px 28px; display: grid; gap: 24px; justify-items: center; text-align: center; position: relative; overflow: hidden; }
@@ -553,7 +554,7 @@ sup { font-size: .6em; }
   .hero { padding: 32px 0 16px; }
   .hero .wrap { gap: 36px; }
   .iphone.lg { --w: 290px; }
-  .demo-steps { flex-wrap: nowrap; gap: 4px; }
+  .demo-steps { gap: 4px; }
   .demo-steps li { font-size: 12px; padding: 5px 9px; }
 
   /* Feature tabs: one swipeable row */
@@ -733,3 +734,33 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 .early-note a { color: inherit; }
 @media (prefers-reduced-motion: no-preference) { .early[open] { animation: early-in .35s cubic-bezier(.2,.7,.2,1); } }
 @keyframes early-in { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* ---------- One layout per device ---------- */
+/* iPad landscape and small Mac windows: the hero is two columns, so the
+   headline gets a size that keeps each sentence on its own line. */
+@media (min-width: 920px) and (max-width: 1140px) { .hero h1 { font-size: 4.8vw; } }
+/* iPhone and iPad (touch): every control is at least 44pt tall, Apple's
+   minimum. A Mac with a pointer keeps the tighter sizes. */
+@media (pointer: coarse) {
+  .site-header nav a, .site-footer nav a { display: inline-flex; align-items: center; min-height: 44px; }
+  .site-header .nav-cta { min-height: 40px; padding-top: 0; padding-bottom: 0; }
+  .theme-btn { width: 44px; height: 44px; }
+  .tabs button { min-height: 44px; }
+  summary { min-height: 44px; }
+}
+/* iPad upright (and iPad split view): two columns like the Mac, sized down,
+   so the page reads as a tablet layout and not a stretched phone. */
+@media (min-width: 701px) and (max-width: 919px) {
+  .hero { padding: 56px 0 32px; }
+  .hero .wrap { grid-template-columns: 1.1fr .9fr; gap: 32px; }
+  .hero h1 { font-size: clamp(36px, 5.2vw, 46px); }
+  .hero .lead { font-size: 17px; }
+  .iphone.lg { --w: 270px; }
+  .receipt-row { grid-template-columns: 1.1fr .9fr; gap: 36px; }
+  .panel { grid-template-columns: 1.1fr .9fr; gap: 28px; padding: 36px 20px 20px; }
+  .panel-visual .iphone.sm { --w: 230px; }
+  .tabs { gap: 6px; }
+  .tabs button { font-size: 14px; padding: 8px 12px; }
+  .steps { grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .steps .iphone.sm { --w: 200px; }
+}
