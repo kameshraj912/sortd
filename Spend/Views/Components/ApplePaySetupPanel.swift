@@ -65,7 +65,7 @@ struct ApplePaySetupPanel: View {
                         .foregroundStyle(.orange)
                         .frame(minHeight: 44)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityHint("Opens Activity")
             }
             healthCheckSection

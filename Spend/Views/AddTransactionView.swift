@@ -39,6 +39,8 @@ struct AddTransactionView: View {
     /// history on this phone. Gone once a name is typed.
     @State private var suggestions: [Suggestions.Suggestion] = []
     @State private var suggestionTaps = 0
+    /// Bumped when a category or card is picked by hand, for the haptic.
+    @State private var choices = 0
     /// True while the form shows what was typed in an earlier visit.
     @State private var draftRestored = false
     /// False once the purchase is saved or thrown away on purpose, so the
@@ -73,7 +75,7 @@ struct AddTransactionView: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(.rect)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .foregroundStyle(Color.ink)
             }
         }
@@ -210,12 +212,12 @@ struct AddTransactionView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("Category, \(category.name)")
                 }
 
                 Section(bold: "Paid With") {
-                    Picker("Card", selection: $card) {
+                    Picker("Card", selection: Binding(get: { card }, set: { card = $0; choices += 1 })) {
                         ForEach(Card.mine + [.other]) { Text($0.name).tag($0) }
                     }
                     DatePicker("Date", selection: $date, in: ...Date.now)
@@ -268,6 +270,7 @@ struct AddTransactionView: View {
                 CategoryPickerSheet(selected: category, footer: CategoryPickerSheet.moveAllFooter) { picked in
                     category = picked
                     categoryTouched = true
+                    choices += 1
                 }
             }
             .onAppear {
@@ -282,6 +285,7 @@ struct AddTransactionView: View {
                 PurchaseDraft.save(draft)
             }
             .feedback(.select, trigger: suggestionTaps)
+            .feedback(.select, trigger: choices)
             .feedback(.confirm, trigger: saved)
             .feedback(.fail, trigger: saveError) { _, new in new != nil }
             .alert("Couldn't Save Purchase", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
@@ -311,7 +315,7 @@ struct AddTransactionView: View {
                     }
                     .chip(selected: false)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("\(s.merchant), \(s.category.name)")
                 .accessibilityHint("Fills in the shop and category")
             }
@@ -418,7 +422,7 @@ struct AddTransactionView: View {
             .onTapGesture { amountFocused = true }
 
             Menu {
-                Picker("Currency", selection: $currency) {
+                Picker("Currency", selection: Binding(get: { currency }, set: { currency = $0; choices += 1 })) {
                     ForEach(Self.currencies, id: \.self) { Text($0).tag($0) }
                 }
             } label: {
@@ -453,7 +457,7 @@ struct AddTransactionView: View {
                     .padding(.vertical, 9)
                     .surface(radius: 20)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
 
             if scanned {
                 Label("Filled in from your receipt. Check it before you add.", systemImage: "doc.text.viewfinder")

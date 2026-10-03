@@ -6,6 +6,7 @@ struct CardsSettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var editing: CardInfo?
     @State private var adding = false
+    @State private var removed = 0
     private var book: CardBook { .shared }
 
     var body: some View {
@@ -34,6 +35,7 @@ struct CardsSettingsView: View {
                 .onMove { book.move(from: $0, to: $1) }
                 .onDelete { offsets in
                     for i in offsets { remove(book.active[i]) }
+                    removed += 1
                 }
             } footer: {
                 Text("Cards are matched by their last 4 digits, or by their Wallet name for taps.")
@@ -78,6 +80,7 @@ struct CardsSettingsView: View {
             }
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
+        .feedback(.delete, trigger: removed)
         .sheet(item: $editing) { CardEditor(original: $0) }
         .sheet(isPresented: $adding) { CardEditor(original: nil) }
     }

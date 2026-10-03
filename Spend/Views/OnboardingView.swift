@@ -359,7 +359,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private var bottomBar: some View {
@@ -394,7 +394,7 @@ struct OnboardingView: View {
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     Text("Free. No account needed.")
                         .font(.footnote).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -882,7 +882,7 @@ struct OnboardingView: View {
             .frame(minHeight: 52)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(home == code ? .isSelected : [])
     }
 
@@ -915,7 +915,7 @@ struct OnboardingView: View {
                             .frame(minHeight: 44)
                             .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("\(rowTitle(info)), \(info.isCredit ? "credit" : "debit")")
                     .accessibilityHint("Edit nickname and type")
                     Button {
@@ -926,7 +926,7 @@ struct OnboardingView: View {
                         Image(systemName: "xmark.circle.fill").font(.footnote)
                             .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .frame(width: 44, height: 44).contentShape(.rect)
                     .accessibilityLabel("Remove \(rowTitle(info))")
                 }
@@ -956,7 +956,7 @@ struct OnboardingView: View {
                         }
                         .chip(selected: bankCountry == c)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityAddTraits(bankCountry == c ? .isSelected : [])
                 }
             }
@@ -1004,7 +1004,7 @@ struct OnboardingView: View {
                     }
                     .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel(count > 0 ? "\(bank.name), \(count) added. Add another" : "Add \(bank.name)")
             }
             // Not listed: a plain card named after the country; renamed next page.
@@ -1028,7 +1028,7 @@ struct OnboardingView: View {
                     }
                     .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 
@@ -1164,7 +1164,7 @@ struct OnboardingView: View {
                         Text(Money.format(Decimal(value), home, cents: false))
                             .chip(selected: budget == value)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(.top, 14)

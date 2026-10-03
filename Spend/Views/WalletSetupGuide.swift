@@ -108,7 +108,7 @@ struct WalletSetupGuide: View {
             }
             .font(.body.weight(.semibold))
             .foregroundStyle(Color.ink)
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 

@@ -127,7 +127,7 @@ struct InsightsView: View {
                         .padding(.vertical, 12)
                         .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
                     .accessibilityHint("Shows these purchases")
@@ -214,7 +214,7 @@ struct CategoryDetailView: View {
                     }
                     .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityHint(limit == nil ? "Set a monthly limit" : "Change or remove the monthly limit")
             }
             Section(bold: "All Purchases") {

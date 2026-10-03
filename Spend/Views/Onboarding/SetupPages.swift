@@ -109,7 +109,7 @@ struct OptionCard: View {
                 .strokeBorder(selected ? Color.ink : .clear, lineWidth: 1.5))
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .feedback(.select, trigger: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -427,7 +427,7 @@ struct SetupChecklistList: View {
                 // so the plan screen's list isn't greyed out as "disabled".
                 if let open, !task.done {
                     Button { open(task.kind) } label: { row(task) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         // Home only (the plan screen has no `open`): the tip
                         // to set up Apple Pay logging points at its row. The
                         // card sits mid-screen, so the tip goes above the row
