@@ -171,7 +171,11 @@ struct ImportView: View {
 
         Section {
             if spend.isEmpty {
-                Text("No purchases found.").foregroundStyle(.secondary)
+                EmptyState("No purchases found", symbol: "doc.text.magnifyingglass",
+                           message: moneyIn.isEmpty
+                               ? "Nothing in this file looks like a purchase."
+                               : "Only money coming in was found. Nothing here will be added.")
+                    .listRowBackground(Color.clear)
             }
             ForEach($rows) { $picked in
                 if picked.row.kind == .spend { line($picked) }

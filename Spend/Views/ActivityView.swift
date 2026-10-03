@@ -81,8 +81,13 @@ struct TransactionsScreen: View {
                     PageTitle(title: fixedCard?.name ?? "Activity")
                         .padding(.horizontal, 20)
                     EmptyState("No purchases yet", symbol: "list.bullet.rectangle.portrait",
-                               message: "Your purchases will show up here.")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                               message: "Your purchases will show up here.") {
+                        if fixedCard == nil {
+                            Button("Add a Purchase") { showingAdd = true }
+                                .buttonStyle(.glassProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if Self.dayPages {
                 dayPager
