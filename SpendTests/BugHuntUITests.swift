@@ -188,6 +188,23 @@ struct BugHuntUITests {
         #expect(t.rawMerchant == "Coles")
     }
 
+    /// U4: Siri's questions read every row, so "Last Purchase" named the
+    /// hidden "Sortd Check" row.
+    @Test(.bug("U4: Siri question intents read the hidden health-check rows"))
+    func siriLeavesOutTheHiddenCheckRows() async throws {
+        let ctx = try store()
+        let b = book()
+        _ = try await LogWalletTapIntent.handle(nil, amount: "A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                                                in: ctx, book: b, now: start)
+        _ = try await LogWalletTapIntent.handle(ApplePayHealthCheck.payloadText, in: ctx, book: b,
+                                                now: start.addingTimeInterval(7200))
+        let rows = try SpendQuestions.transactions(in: ctx)
+        #expect(!rows.contains { $0.merchant == ApplePayHealthCheck.merchant || $0.rawMerchant == ApplePayHealthCheck.merchant })
+        let text = SpendSummary.lastPurchase(rows.map(SpendSummary.Purchase.init),
+                                             now: start.addingTimeInterval(7300), calendar: melbourne)
+        #expect(text.contains("Seven Seeds"), "Siri said: \(text)")
+    }
+
     /// U5: a tap with no shop is saved as "Unknown merchant", which the
     /// Recent widget's empty-name rule did not catch.
     @Test(.bug("U5: Recent and Today widgets show taps that came with no shop"))
