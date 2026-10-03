@@ -118,8 +118,17 @@ nonisolated enum ReceiptScanner {
     /// Falls back to a "TOTAL 12.50" line with no currency sign, in the
     /// user's home currency.
     static func total(in text: String) -> (currency: String, amount: String)? {
-        let kept = text.components(separatedBy: .newlines).filter { line in
+        let lines = text.components(separatedBy: .newlines)
+        // A cash receipt that gives change: "AMOUNT PAID $50.00" is the note
+        // handed over, not the total. (On a card slip, with no change, it is.)
+        let givesChange = lines.contains { line in
             let l = line.lowercased().trimmingCharacters(in: .whitespaces)
+            return l.hasPrefix("change") && l.range(of: "[1-9]", options: .regularExpression) != nil
+        }
+        let tendered = ["amount paid", "amount tendered", "tendered", "paid", "cash"]
+        let kept = lines.filter { line in
+            let l = line.lowercased().trimmingCharacters(in: .whitespaces)
+            if givesChange, tendered.contains(where: { l.hasPrefix($0) }) { return false }
             let startsAsTotal = ["total", "grand total", "amount", "eftpos", "card"].contains { l.hasPrefix($0) }
                 && !l.hasPrefix("total gst") && !l.hasPrefix("total tax")
             let noise = ["gst", "tax", "vat", "change", "rounding", "cash", "savings", "you saved", "discount"]
@@ -128,8 +137,10 @@ nonisolated enum ReceiptScanner {
 
         if let found = GenericReceipts.total(in: kept) { return found }
 
-        // "TOTAL 12.50" / "TOTAL: 1,204.30" with no currency sign.
-        let pattern = #"(?:grand total|total due|amount due|total)\s*[:\-–]?\s*(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\b"#
+        // "TOTAL 12.50" / "TOTAL: 1,204.30" with no currency sign. A signed
+        // SUBTOTAL above it no longer wins: the labels are whole words.
+        let pattern = GenericReceipts.notInsideWord
+            + #"(?:grand total|total due|amount due|total)\s*[:\-–]?\s*(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\b"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let ns = kept as NSString
         guard let m = regex.matches(in: kept, range: NSRange(location: 0, length: ns.length)).last else { return nil }
