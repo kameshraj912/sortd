@@ -157,4 +157,19 @@ struct BugHuntUITests {
         let small = at("2026-04-05 00:30")
         #expect(widgetPolicy(small) > small, "reload date \(widgetPolicy(small)) is already in the past")
     }
+
+    // MARK: - Bug hunt 3 Oct 2026 (docs/BugHunt-2026-10-03.md)
+
+    /// U5: a tap with no shop is saved as "Unknown merchant", which the
+    /// Recent widget's empty-name rule did not catch.
+    @Test(.bug("U5: Recent and Today widgets show taps that came with no shop"))
+    func aTapWithNoShopIsLeftOutOfTheRecentWidget() async throws {
+        let ctx = try store()
+        _ = try await LogWalletTapIntent.handle(nil, amount: "A$12.00", merchant: "", card: "NAB Visa Debit",
+                                                in: ctx, book: book(), now: start)
+        let all = try ctx.fetch(FetchDescriptor<Transaction>())
+        #expect(all.count == 1)
+        #expect(WidgetBridge.recentItems(from: all, currency: Money.home).isEmpty,
+                "shown: \(WidgetBridge.recentItems(from: all, currency: Money.home).map(\.merchant))")
+    }
 }
