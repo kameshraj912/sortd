@@ -229,4 +229,16 @@ struct BugHuntUITests {
         router.sheet = nil
         router.tab = .home
     }
+
+    /// U7: "Needs a check … Tap to fix" opened the Activity list, not the
+    /// purchase that needs fixing.
+    @Test(.bug("U7: the needs-a-check notice opens Activity, not the purchase"))
+    func aNeedsACheckNoticeOpensThatPurchase() throws {
+        let id = UUID()
+        let link = LoggedNotice.link(for: .needsCheck(id: id, missingShop: false, missingAmount: true))
+        #expect(link == "sortd://purchase/\(id.uuidString)")
+        let url = try #require(URL(string: link))
+        let target = try #require(Router.target(for: url))
+        #expect(target == Router.Target(name: "purchase", id: id.uuidString))
+    }
 }
