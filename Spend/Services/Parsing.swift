@@ -2,7 +2,8 @@ import Foundation
 
 /// Turns whatever Shortcuts, an email or a CSV hands us ("A$4.50",
 /// "S$1,234.00", "SGD 12.30", "4.5") into a number and, if it says, a currency.
-enum AmountParser {
+/// Pure text work, so callable from any actor (quick entry, the Wallet reader).
+nonisolated enum AmountParser {
     struct Result: Equatable {
         var amount: Decimal
         var currency: String?
