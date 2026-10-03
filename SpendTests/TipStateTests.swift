@@ -105,6 +105,38 @@ struct TipStateTests {
         #expect(f.monthsOfData == 2)
     }
 
+    // MARK: A junk date does not make "7+ days of data" true on day one.
+
+    @Test func aPurchaseDatedYearsAgoDoesNotCountAsDaysOfData() {
+        let cal = Calendar(identifier: .gregorian)
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 4))!
+        let junk = cal.date(from: DateComponents(year: 2008, month: 1, day: 1))!
+        let f = TipState.Figures(rows: [.init(date: junk, manual: false, sample: false),
+                                        .init(date: now, manual: false, sample: false)], now: now, calendar: cal)
+        #expect(f.daysOfData == 1)
+        #expect(f.monthsOfData == 1)
+        #expect(f.purchases == 2)
+        #expect(TipRules.insights(daysOfData: f.daysOfData, chipsUsed: false, setupShowing: false) == false)
+    }
+
+    @Test func aYearOfImportedHistoryStillCounts() {
+        let cal = Calendar(identifier: .gregorian)
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 4))!
+        let lastYear = cal.date(from: DateComponents(year: 2025, month: 11, day: 1))!
+        let f = TipState.Figures(rows: [.init(date: lastYear, manual: false, sample: false)], now: now, calendar: cal)
+        #expect(f.daysOfData > 300)
+        #expect(f.monthsOfData == 1)
+    }
+
+    @Test func onlyJunkDatesMeansNoData() {
+        let cal = Calendar(identifier: .gregorian)
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 4))!
+        let junk = cal.date(from: DateComponents(year: 2008, month: 1, day: 1))!
+        let f = TipState.Figures(rows: [.init(date: junk, manual: false, sample: false)], now: now, calendar: cal)
+        #expect(f.daysOfData == 0)
+        #expect(f.monthsOfData == 0)
+    }
+
     // MARK: Visits.
 
     @Test func homeVisitsAreNotCountedWhileSetupIsShowing() {
