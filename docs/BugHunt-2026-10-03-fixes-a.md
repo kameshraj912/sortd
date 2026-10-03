@@ -63,6 +63,9 @@ Also on the branch:
 - `reimportingAfterATapMergeDoesNotDouble` (hunt-1003-stmt-1) fails and has no row in the report.
 - A PDF line like "Statement period 1 Sep 2026 to 30 Sep 2026" is read as a purchase with
   the year 2026 as its amount (`parse(text:)` first pass, unchanged by these fixes).
-- The 3 Oct reviewers' known-bug tests are not on the baseline list in
-  `docs/ux-research/baseline-2026-09-25/README.md` (23 names, other areas and S8/S9/stmt-1).
-  The list also still names `aTextTapThatIsOnlyACardNameIsNotAPurchase`, which no test has.
+- The baseline list in `docs/ux-research/baseline-2026-09-25/README.md` still names
+  `aTextTapThatIsOnlyACardNameIsNotAPurchase`, which no test has.
+- After merging main (fixes B and C, merge b0ee1ae): B's "not inside a word" rule in
+  `WalletTapText.money` stopped the bare `¥` matching in "JP¥12" (how en_GB and en_SG write
+  yen), so `everySupportedCurrencyIsReadBackAsThePhoneWritesIt` failed for those two. `JP¥` is
+  now a marker of its own. S2, S3, S4, S6 and S7 are off the 3 Oct section of the baseline list.
