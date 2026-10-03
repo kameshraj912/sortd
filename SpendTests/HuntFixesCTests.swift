@@ -34,4 +34,15 @@ struct HuntFixesCTests {
         try TransactionLogger.log(p, in: ctx)
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
+
+    // MARK: D4
+
+    /// The recovery screen's way out: the unopenable store's files are moved
+    /// aside (kept) and an empty store opens in their place. The real store
+    /// path is shared with the app, so this only checks the pure message.
+    @Test func theRestoredMessageCountsPurchasesInPlainWords() {
+        #expect(StoreRecovery.restoredMessage(1).hasPrefix("1 purchase is back."))
+        #expect(StoreRecovery.restoredMessage(214).hasPrefix("214 purchases are back."))
+        #expect(StoreRecovery.restoredMessage(0).contains("Close Sortd"))
+    }
 }
