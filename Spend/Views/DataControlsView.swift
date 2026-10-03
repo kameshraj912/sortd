@@ -65,7 +65,7 @@ enum CSVExport {
     static func data(_ transactions: [Transaction]) -> Data {
         let iso = ISO8601DateFormatter()
         var lines = ["date,merchant,amount,currency,amount_\(Money.home.lowercased()),category,card,refunded,note"]
-        for t in transactions.filter(isExported).sorted(by: { $0.date < $1.date }) {
+        for t in transactions.filter({ isExported($0) }).sorted(by: { $0.date < $1.date }) {
             let fields = [iso.string(from: t.date), t.merchant, "\(t.amount)", t.currencyCode,
                           t.audAmount.map { "\($0)" } ?? "", t.category.name, t.card.name,
                           t.refunded ? "yes" : "no", t.note]
