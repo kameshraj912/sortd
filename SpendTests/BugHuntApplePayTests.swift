@@ -3,8 +3,9 @@ import Foundation
 import SwiftData
 @testable import Spend
 
-/// Bug hunt 3 Oct 2026, area onboarding-and-applepay. Every case is a known
-/// bug: it fails today and runs only with `scripts/test.sh --known-bugs`.
+/// Bug hunt 3 Oct 2026, area onboarding-and-applepay. Each case failed on
+/// the code the hunt ran on; fixed on `fix-hunt-b`, they are regression
+/// tests now (docs/BugHunt-2026-10-03-fixes-b.md).
 /// Every call goes through the real intent path (`LogWalletTapIntent.handle`)
 /// with a pinned `now:`, on an in-memory store and its own card book.
 @MainActor
@@ -60,8 +61,7 @@ struct BugHuntApplePayTests {
     /// An online payment's notification row is taken over by a tap at a
     /// different shop for the same amount minutes later: the DoorDash row is
     /// renamed to the cafe and one purchase is gone.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("absorbNotificationRow matches on amount and card only, so a different shop's tap swallows an online payment"))
+    @Test(.bug("absorbNotificationRow matches on amount and card only, so a different shop's tap swallows an online payment"))
     func anOnlinePaymentIsNotSwallowedByALaterTapAtAnotherShop() async throws {
         let ctx = store(), b = book()
         try await notified("NAB Visa Debit", "DoorDash", "A$15.00", at: 0, ctx: ctx, book: b)
@@ -74,8 +74,7 @@ struct BugHuntApplePayTests {
 
     /// A till tap whose own notification never came (blank or missed) takes
     /// in a later online payment of the same amount at another shop.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("mergeNotification's tap match ignores the shop, so an online payment folds into an earlier tap"))
+    @Test(.bug("mergeNotification's tap match ignores the shop, so an online payment folds into an earlier tap"))
     func aLaterOnlinePaymentIsNotFoldedIntoATapAtAnotherShop() async throws {
         let ctx = store(), b = book()
         try await tap("Seven Seeds", "A$15.00", at: 0, ctx: ctx, book: b)
@@ -154,5 +153,16 @@ struct BugHuntApplePayTests {
         let queued = TapQueue.read(from: badURL)
         #expect(queued.count == 1 || !r.message.hasPrefix("Saved for later"),
                 "nothing was queued, yet the run said: \(r.message)")
+    }
+
+    // MARK: - Regression guards for the fixes above
+
+    /// The same shop spelled two ways still pairs a tap with its online
+    /// notification (the shop check P2/P3 added must not split them).
+    @Test func theSameShopSpelledTwoWaysStillPairs() async throws {
+        let ctx = store(), b = book()
+        try await notified("NAB Visa Debit", "SQ *SEVEN SEEDS CARLTON", "A$15.00", at: 0, ctx: ctx, book: b)
+        try await tap("Seven Seeds", "A$15.00", at: 300, ctx: ctx, book: b)
+        #expect(try rows(ctx).count == 1)
     }
 }
