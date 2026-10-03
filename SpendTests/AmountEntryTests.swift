@@ -52,15 +52,13 @@ struct AmountEntryTests {
     /// guess, so a Melbourne phone with SGD chosen as the main currency still
     /// opened the add sheet on AUD. It must follow `Money.home` instead.
     @Test func theAddSheetDefaultsToTheHomeCurrencyNotThePhoneLocale() {
-        let before = UserDefaults.standard.string(forKey: Money.homeKey)
-        defer {
-            if let before { UserDefaults.standard.set(before, forKey: Money.homeKey) }
-            else { UserDefaults.standard.removeObject(forKey: Money.homeKey) }
-        }
-        UserDefaults.standard.set("SGD", forKey: Money.homeKey)
-        #expect(AddTransactionView.defaultCurrency() == "SGD")
-        UserDefaults.standard.set("AUD", forKey: Money.homeKey)
-        #expect(AddTransactionView.defaultCurrency() == "AUD")
+        // A scratch suite, not `.standard`: flipping the real home currency
+        // here raced with every other test reading `Money.home` (3 Oct 2026).
+        let defaults = UserDefaults(suiteName: "amountentry-\(UUID().uuidString)")!
+        defaults.set("SGD", forKey: Money.homeKey)
+        #expect(AddTransactionView.defaultCurrency(defaults: defaults) == "SGD")
+        defaults.set("AUD", forKey: Money.homeKey)
+        #expect(AddTransactionView.defaultCurrency(defaults: defaults) == "AUD")
     }
 
     @Test func theDetailFieldsTextIsAlwaysTypeable() {
