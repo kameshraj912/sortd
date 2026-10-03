@@ -145,8 +145,11 @@ struct AccountSettingsView: View {
         // this can take a moment when the network is slow.
         working = true
         defer { working = false }
-        let problems = await store.deleteAccount()
-        if let first = problems.first {
+        let result = await store.deleteAccount()
+        // Cancel on Apple's confirmation stops everything: no message, and
+        // above all no wipe of the purchases and the iCloud copy.
+        guard !result.cancelled else { return }
+        if let first = result.problems.first {
             notice = Notice(title: "Account deleted, with one thing left", message: first)
         }
         guard alsoData else { return }

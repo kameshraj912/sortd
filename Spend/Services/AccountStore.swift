@@ -205,15 +205,26 @@ final class AccountStore {
         log.info("account: signed out")
     }
 
+    /// What `deleteAccount` did.
+    struct DeleteResult: Equatable {
+        /// The person cancelled the provider's confirmation (Apple's "sign in
+        /// once more" sheet). Nothing was deleted, here or on a server, and
+        /// the caller must not wipe anything either.
+        var cancelled = false
+        /// What could not be done for good, in words for the user.
+        var problems: [String] = []
+    }
+
     /// Resets the analytics id first (nothing may be sent under the person
     /// about to be deleted, so no `signed_out`), then asks the provider to
     /// cancel the sign-in and the Worker to delete the PostHog person, then
     /// forgets the account here. Jobs the network could not carry are
-    /// queued, hash included, and retried at the next launch. Returns what
-    /// could not be done for good, in words for the user.
+    /// queued, hash included, and retried at the next launch. A cancel on the
+    /// provider's confirmation stops it all: still signed in, nothing
+    /// deleted, nothing queued.
     @discardableResult
-    func deleteAccount() async -> [String] {
-        guard let account = current else { return [] }
+    func deleteAccount() async -> DeleteResult {
+        guard let account = current else { return DeleteResult() }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
         let subjectHash = Self.subjectHash(account.subject)
         sink.reset()
@@ -221,6 +232,11 @@ final class AccountStore {
         var problems: [String] = []
         do {
             try await revoker.revoke(account)
+        } catch AccountError.cancelled {
+            // The person said no. Put the analytics id back and stop.
+            sink.identify(hash)
+            log.notice("account: delete cancelled at the provider's confirmation, nothing deleted")
+            return DeleteResult(cancelled: true)
         } catch {
             sort(error, job: PendingDelete(kind: .revoke, provider: account.provider, subjectHash: subjectHash, hash: hash),
                  failed: &failed, problems: &problems)
@@ -235,7 +251,7 @@ final class AccountStore {
         // Behind any jobs an earlier delete left, never over them.
         queue(pending + failed)
         log.info("account: deleted, \(failed.count, privacy: .public) job(s) queued, \(problems.count, privacy: .public) dropped")
-        return problems
+        return DeleteResult(problems: problems)
     }
 
     /// Delete All Data: the PostHog person goes too, so its delete is

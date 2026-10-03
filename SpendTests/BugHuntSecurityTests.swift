@@ -79,11 +79,7 @@ struct BugHuntSecurityTests {
     /// Cancelling Apple's "sign in once more to confirm" sheet during Delete
     /// Account still deletes the usage record and signs out (and, from
     /// "Delete Account and All Data", the view then wipes every purchase).
-    /// Note: `AccountStoreReviewTests.aCancelledJobIsDroppedQuietly` pins
-    /// today's behaviour and must change with the fix.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-01", "Cancel on Apple's confirm sheet does not cancel Delete Account"))
-    func cancellingApplesConfirmSheetCancelsTheDelete() async throws {
+    @Test func cancellingApplesConfirmSheetCancelsTheDelete() async throws {
         let account = Account(provider: .apple, subject: "001234.sechunt", email: nil)
         let revoker = SecHuntRevoker()
         let store = AccountStore(keychain: SecHuntKeychain(), revoker: revoker, sink: SecHuntSink(),
