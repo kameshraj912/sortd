@@ -122,9 +122,7 @@ struct BugHuntSecurityTests {
     /// revoke then runs in an unawaited Task (60 s default timeout). If the
     /// app is closed in that window the token is gone and the Gmail grant
     /// is never cancelled (`doneKey` is already set, so it never re-runs).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-03", "Google revokes forget the token before Google confirms"))
-    func gmailCleanupKeepsTheTokenUntilGoogleConfirms() throws {
+    @Test func gmailCleanupKeepsTheTokenUntilGoogleConfirms() throws {
         let token = "sec-hunt-refresh-\(UUID().uuidString)"
         let box = SecHuntTokenBox()
         box.items["google-refresh-raj@example.com"] = token

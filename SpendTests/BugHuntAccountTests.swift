@@ -306,9 +306,7 @@ struct BugHuntAccountTests {
     /// Sign Out after Continue with Google leaves the Google token in the
     /// Keychain; the next Google sign-in overwrites it, so that grant can
     /// never be cancelled from Sortd.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("Sign Out keeps google-identity-token in the Keychain"))
-    func signOutFromGoogleForgetsTheGoogleToken() async throws {
+    @Test func signOutFromGoogleForgetsTheGoogleToken() async throws {
         let tokenKey = "google-identity-token"   // GoogleAuth.identityTokenKey (private)
         defer { Keychain.delete(tokenKey) }
         Keychain.set("1//old-google-refresh-token", for: tokenKey)
@@ -322,5 +320,7 @@ struct BugHuntAccountTests {
 
         #expect(store.current == nil)
         #expect(Keychain.get(tokenKey) == nil)
+        // Not just forgotten: the grant is on the revoke list, so Google still cancels it.
+        #expect(GoogleAuth.pendingTokens(Keychain.get("google-revoke-pending")).contains("1//old-google-refresh-token"))
     }
 }

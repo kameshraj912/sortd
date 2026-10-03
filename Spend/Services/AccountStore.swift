@@ -96,9 +96,14 @@ protocol AccountRevoker {
     /// A revoke queued earlier. The queue keeps no subject or email, only
     /// the provider and sha256(subject). Optional: a fake leaves it out.
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws
+    /// Sign Out: this phone must stop holding a token for the account.
+    /// Optional: a fake leaves it out.
+    func signedOut(_ account: Account)
 }
 
 extension AccountRevoker {
+    func signedOut(_ account: Account) {}
+
     /// For conformers without a queued path (the test fakes): the same
     /// call with a placeholder account that carries the subject hash.
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
@@ -198,8 +203,11 @@ final class AccountStore {
     /// Forgets the ID on this phone. Purchases stay. Says `signed_out`
     /// under the old id, then resets.
     func signOut() {
-        guard current != nil else { return }
+        guard let account = current else { return }
         sink.signedOut()
+        // The Google token goes to the revoke list first: forgotten here, but
+        // its grant is still cancelled with Google, never left behind.
+        revoker.signedOut(account)
         forgetLocally()
         sink.reset()
         log.info("account: signed out")
@@ -516,6 +524,10 @@ final class WorkerRevoker: AccountRevoker {
                 throw AccountError.rejected(Self.appleManualSteps)
             }
         }
+    }
+
+    func signedOut(_ account: Account) {
+        if account.provider == .google { GoogleAuth.queueIdentityRevoke() }
     }
 
     func revoke(queued provider: AccountProvider, subjectHash: String) async throws {
