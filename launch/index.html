@@ -18,8 +18,8 @@
 <meta property="og:image" content="https://soon.sortd.page/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=5">
-<script src="app.js?v=3" defer></script>
+<link rel="stylesheet" href="style.css?v=6">
+<script src="app.js?v=4" defer></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -30,7 +30,7 @@
 <main>
   <section class="hero">
     <img class="glow-icon" src="img/icon-glow.png" alt="" width="512" height="512">
-    <h1>soon.</h1>
+    <h1 class="word" aria-label="soon."><span class="ch" style="--i:0" aria-hidden="true">s</span><span class="ch" style="--i:1" aria-hidden="true">o</span><span class="ch" style="--i:2" aria-hidden="true">o</span><span class="ch" style="--i:3" aria-hidden="true">n</span><span class="ch dot" aria-hidden="true">.</span></h1>
     <div class="bars big" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <p class="lead">A free iPhone app that logs your Apple Pay taps by&nbsp;itself.</p>
     <p class="aside">(That's all we're saying. For&nbsp;now.)</p>
@@ -82,15 +82,29 @@
     </form>
 
     <div class="done" id="done" role="status" hidden>
-      <h2 tabindex="-1">You've been Sortd.</h2>
+      <div class="tapdemo" aria-hidden="true">
+        <div class="paycard">
+          <span class="pc-name">sortd</span><span class="pc-bars"><i></i><i></i><i></i><i></i></span>
+          <svg class="pc-nfc" viewBox="0 0 24 24"><path d="M8.5 8.5a5 5 0 0 1 0 7M12 6a8.5 8.5 0 0 1 0 12M15.5 3.5a12 12 0 0 1 0 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="pc-tick"><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="pc-wave"></span><span class="pc-wave"></span>
+        </div>
+        <div class="log">
+          <p class="log-day">Today</p>
+          <div class="log-new"><div class="row hot"><span class="ic" style="--c:var(--green)"></span><span class="t"><b data-type="Sortd beta">Sortd beta</b><small>Logged by itself &middot; just now</small></span><span class="amt">$0.00</span></div></div>
+          <div class="row"><span class="ic" style="--c:var(--orange)"></span><span class="t"><b>Coffee</b><small>8:12 am</small></span><span class="amt">$5.50</span></div>
+          <div class="row"><span class="ic" style="--c:var(--orange)"></span><span class="t"><b>Coffee (again)</b><small>10:40 am</small></span><span class="amt">$5.50</span></div>
+        </div>
+      </div>
+      <h2 class="title" tabindex="-1">You've been Sortd.</h2>
       <p>You're in. Your invite goes to <b id="done-email">your email</b> the day the beta opens. Not a day sooner. (We&nbsp;checked.)</p>
       <button class="share" type="button" data-share>Tell a friend who still types in their&nbsp;coffees</button>
     </div>
   </section>
 
   <section class="clues" aria-labelledby="clues-h">
-    <h2 id="clues-h">Three clues.</h2>
-    <div class="cards">
+    <h2 id="clues-h" class="reveal">Three clues.</h2>
+    <div class="cards reveal-group">
       <article><span class="n">01</span><h3>It knows about the coffee.</h3><p>Apple Pay in shops, in apps and on websites, logged by itself. (Apps and websites need iOS&nbsp;27.) Even the second&nbsp;one.</p></article>
       <article><span class="n">02</span><h3>It reads receipts. Not your inbox.</h3><p>Point the camera at a paper one and it fills in the shop and total. Nothing reads your email.</p></article>
       <article><span class="n">03</span><h3>It costs $0.</h3><p>Other money apps charge you monthly to show you where your money went. (Mostly to&nbsp;them.)</p></article>
@@ -98,14 +112,14 @@
   </section>
 
   <section class="peek" aria-labelledby="peek-h">
-    <h2 id="peek-h">Sneak peek.</h2>
-    <div class="phone"><img src="img/peek.jpg" alt="A blurred screen from the Sortd app" width="600" height="1304" loading="lazy"><span class="tag">Unblurs 9 October.</span></div>
-    <p class="aside">(Or when you get the invite. Whichever comes&nbsp;first.)</p>
+    <h2 id="peek-h" class="reveal">Sneak peek.</h2>
+    <div class="stage"><div class="phone"><img src="img/peek.jpg" alt="A blurred screen from the Sortd app" width="600" height="1304" loading="lazy"><img class="lens" src="img/peek.jpg" alt="" width="600" height="1304" loading="lazy" aria-hidden="true"><span class="ring" aria-hidden="true"></span><span class="sweep" aria-hidden="true"></span><span class="tag">Unblurs 9 October.</span></div></div>
+    <p class="aside">Drag over it for a peek. (A small&nbsp;one.)<br>The rest unblurs 9 October, or when you get the invite. Whichever comes&nbsp;first.</p>
   </section>
 </main>
 
 <footer class="foot">
-  <p class="origin">No ads. No bank login. No subscription to forget&nbsp;about.<br><b>We looked for the catch. There isn&rsquo;t&nbsp;one.</b><br>Consider it&nbsp;Sortd.</p>
+  <p class="origin reveal">No ads. No bank login. No subscription to forget&nbsp;about.<br><b>We looked for the catch. There isn&rsquo;t&nbsp;one.</b><br>Consider it&nbsp;Sortd.</p>
   <p><a href="https://sortd.page">sortd.page</a> · <a href="https://sortd.page/privacy">Privacy</a> · <a href="mailto:support@sortd.page">support@sortd.page</a></p>
   <p class="legal">© 2026 Sortd. Apple Pay and iPhone are trademarks of Apple Inc. Sortd isn't affiliated with Apple.</p>
 </footer>
