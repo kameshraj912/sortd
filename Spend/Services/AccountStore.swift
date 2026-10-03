@@ -468,6 +468,10 @@ final class WorkerRevoker: AccountRevoker {
     nonisolated static let appleManualSteps = "Apple couldn't be asked to cancel the sign-in. To stop Sortd using your Apple Account: Settings › your name › Sign in with Apple › Sortd › Stop Using."
     nonisolated static let wrongAppleAccount = "That's a different Apple Account. Sortd is signed in with another one, so nothing was cancelled."
 
+    /// What the user reads when the Worker (or App Attest) says no for good.
+    /// The Worker's own code goes to the log, never to the screen.
+    nonisolated static let usageRecordNotDeleted = "Sortd couldn't delete your usage record just now. Email support@sortd.page and we'll remove it by hand."
+
     let url: URL?
     private let deps: Dependencies
 
@@ -492,8 +496,18 @@ final class WorkerRevoker: AccountRevoker {
         case .google:
             await deps.googleRevoke()
         case .apple:
-            // A cancel in Apple's sheet passes through as `cancelled`.
-            let fresh = try await deps.appleCode(account)
+            // A cancel in Apple's sheet passes through as `cancelled`. Any
+            // other failure (offline, no iCloud) means no code, and the
+            // account is forgotten right after this, so "try again" would
+            // be a lie: give Apple's manual steps instead.
+            let fresh: AppleCode
+            do {
+                fresh = try await deps.appleCode(account)
+            } catch AccountError.cancelled {
+                throw AccountError.cancelled
+            } catch {
+                throw AccountError.rejected(Self.appleManualSteps)
+            }
             guard fresh.user == account.subject else { throw AccountError.rejected(Self.wrongAppleAccount) }
             do {
                 try await post(route: "apple/revoke", body: ["client_id": deps.clientID, "authorization_code": fresh.code])
@@ -536,10 +550,19 @@ final class WorkerRevoker: AccountRevoker {
             throw AccountError.offline
         }
 
-        let (keyID, attestation) = try await deps.attester.attest(clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
+        let attested: (keyID: String, attestation: Data)
+        do {
+            attested = try await deps.attester.attest(clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
+        } catch let error as DCError where error.code == .serverUnavailable {
+            // Apple's attest servers can't be reached: worth a retry, like any network trouble.
+            throw AccountError.offline
+        } catch let error as DCError {
+            log.error("account: App Attest failed (DCError \(error.code.rawValue, privacy: .public))")
+            throw AccountError.rejected(Self.usageRecordNotDeleted)
+        }
         let (data, response) = try await send(url.appending(path: "v1/" + route), body: bodyData, headers: [
-            "X-Attest-Key-Id": keyID,
-            "X-Attest-Object": attestation.base64EncodedString(),
+            "X-Attest-Key-Id": attested.keyID,
+            "X-Attest-Object": attested.attestation.base64EncodedString(),
             "X-Attest-Challenge": challenge,
         ])
         try Self.check(response, data: data)
@@ -567,7 +590,8 @@ final class WorkerRevoker: AccountRevoker {
         case 429, 503: throw AccountError.offline
         default:
             let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw AccountError.rejected(code ?? "http_\(response.statusCode)")
+            log.error("account: the Worker refused (HTTP \(response.statusCode, privacy: .public), \(code ?? "no code", privacy: .public))")
+            throw AccountError.rejected(usageRecordNotDeleted)
         }
     }
 }

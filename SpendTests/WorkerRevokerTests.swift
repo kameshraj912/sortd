@@ -108,7 +108,8 @@ struct WorkerRevokerTests {
         let transport = TransportFake([(200, #"{"challenge":"c"}"#), (502, #"{"error":"posthog_auth"}"#)])
         let r = revoker(transport: transport)
 
-        await #expect(throws: AccountError.rejected("posthog_auth")) { try await r.deletePerson(hash: Self.hash) }
+        // The Worker's code is for the log; the user reads plain words (A2).
+        await #expect(throws: AccountError.rejected(WorkerRevoker.usageRecordNotDeleted)) { try await r.deletePerson(hash: Self.hash) }
     }
 
     @Test func a503IsOfflineSoTheStoreRetries() async {
