@@ -368,6 +368,7 @@ struct HomeView: View {
                 .foregroundStyle(over ? Color.down : .secondary)
             }
             .buttonStyle(.pressable)
+            .minTapTarget(growsBy: 24)
             .accessibilityHint("Edit your monthly budget")
             if let day = projectedOverDay {
                 Label(Pace.line(day: day), systemImage: "gauge.with.needle")
@@ -386,6 +387,7 @@ struct HomeView: View {
                     .foregroundStyle(Color.down)
                 }
                 .buttonStyle(.pressable)
+                .minTapTarget(growsBy: 24)
                 .accessibilityHint("Shows your categories")
             }
         }
@@ -960,15 +962,15 @@ struct SpendChart: View {
                 HStack(alignment: .center) {
                     rangeTitle(point)
                     Spacer(minLength: 12)
-                    rangeChips(AnyLayout(HStackLayout(spacing: 6)))
+                    rangeChips(AnyLayout(HStackLayout(spacing: 8)))
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     rangeTitle(point)
-                    rangeChips(AnyLayout(HStackLayout(spacing: 6)))
+                    rangeChips(AnyLayout(HStackLayout(spacing: 8)))
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     rangeTitle(point)
-                    rangeChips(AnyLayout(VStackLayout(alignment: .leading, spacing: 6)))
+                    rangeChips(AnyLayout(VStackLayout(alignment: .leading, spacing: 8)))
                 }
             }
 

@@ -332,7 +332,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.onBrand)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
         }
         .buttonStyle(.glassProminent)
         .tint(Color.brand)
@@ -344,7 +344,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.ink)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
         }
         .buttonStyle(.glass)
         .controlSize(.large)

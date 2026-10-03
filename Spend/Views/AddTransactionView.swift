@@ -439,6 +439,7 @@ struct AddTransactionView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Color(.tertiarySystemFill), in: .capsule)
+                .minTapTarget(growsBy: 17)
             }
             .tint(.secondary)
             .accessibilityLabel("Currency, \(currency)")
@@ -458,6 +459,7 @@ struct AddTransactionView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
+                    .frame(minHeight: ButtonMetrics.minTap)
                     .surface(radius: 20)
             }
             .buttonStyle(.pressable)
