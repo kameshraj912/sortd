@@ -106,6 +106,22 @@ struct ApplePayOnlineSetupTests {
                 == "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts.")
     }
 
+    /// The Purchase Sources footer only mentions online payments where the
+    /// shortcut can catch them.
+    @Test func theSourcesFooterMentionsOnlineOnlyOnIOS27() {
+        #expect(ApplePaySetupSteps.sourcesFooter(notificationTrigger: true).contains("online"))
+        #expect(!ApplePaySetupSteps.sourcesFooter(notificationTrigger: false).contains("online"))
+    }
+
+    /// Get the Shortcut opens an iCloud shortcut link, which the Shortcuts
+    /// app takes over in any browser, not a file that needs Safari.
+    @Test func getTheShortcutOpensAnICloudShortcutLink() {
+        let url = ApplePaySetupSteps.shortcutURL
+        #expect(url.scheme == "https")
+        #expect(url.host() == "www.icloud.com")
+        #expect(url.path().hasPrefix("/shortcuts/"))
+    }
+
     /// Someone who added the shortcut before this change is told to get it
     /// again, until they tap Get the Shortcut once.
     @Test func theUpdateLineShowsOnlyForAnOldConnectedShortcut() {
