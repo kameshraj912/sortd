@@ -59,6 +59,27 @@
     // "Oops. You found us early." The home page is a gate until the beta opens:
     // the card covers the site completely and can't be closed. Privacy, terms and
     // support stay reachable from the card.
+    // Motion helpers: split a heading into words (and the hero into its two lines),
+    // number the bank chips, and give $0 an asterisk that falls off.
+    var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!calm) {
+      var eh = document.getElementById("early-h");
+      if (eh) {
+        eh.setAttribute("aria-label", eh.textContent.replace(/\u00a0/g, " "));
+        eh.innerHTML = eh.textContent.split(/(\s+)/).map(function (w, i) {
+          return /^\s+$/.test(w) ? w : '<span class="m-word" aria-hidden="true" style="--w:' + i / 2 + '">' + w + "</span>";
+        }).join("");
+      }
+      var h1 = document.querySelector(".hero h1");
+      if (h1 && h1.querySelector("br")) {
+        var parts = h1.innerHTML.split(/<br\s*\/?>/i);
+        h1.innerHTML = parts.map(function (t) { return '<span class="m-line">' + t + "</span>"; }).join("<br>");
+      }
+      document.querySelectorAll(".bg-chips").forEach(function (g) { Array.prototype.forEach.call(g.children, function (c, k) { c.style.setProperty("--k", k); }); });
+      var price = document.querySelector(".plans .price");
+      if (price) { var ast = document.createElement("span"); ast.className = "m-ast"; ast.setAttribute("aria-hidden", "true"); ast.textContent = "*"; price.appendChild(ast); }
+    }
+
     var early = document.getElementById("early");
     if (early && early.showModal) {
       try { early.showModal(); } catch (e) {}
