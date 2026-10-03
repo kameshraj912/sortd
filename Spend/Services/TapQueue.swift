@@ -45,43 +45,58 @@ enum TapQueue {
                                      appropriateFor: nil, create: true).appending(path: fileName)
     }
 
-    private nonisolated static func resolve(_ override: URL?) -> URL? { override ?? fileURL ?? fallbackURL }
+    /// Where the queue may be: the given file alone (a test's), or the app
+    /// group file and then `fallbackURL`. A tap is written to the second
+    /// when the first can't be written, so both are read back.
+    private nonisolated static func locations(_ override: URL?) -> [URL] {
+        if let override { return [override] }
+        var all: [URL] = []
+        for url in [fileURL, fallbackURL] { if let url, !all.contains(url) { all.append(url) } }
+        return all
+    }
 
     nonisolated static func read(from url: URL? = nil) -> [Entry] {
-        guard let target = resolve(url), let data = try? Data(contentsOf: target) else { return [] }
+        locations(url).flatMap(readFile)
+    }
+
+    private nonisolated static func readFile(_ target: URL) -> [Entry] {
+        guard let data = try? Data(contentsOf: target) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([Entry].self, from: data)) ?? []
     }
 
-    private nonisolated static func write(_ entries: [Entry], to url: URL? = nil) {
-        guard let target = resolve(url) else { return }
+    /// True when the file now holds `entries`.
+    private nonisolated static func write(_ entries: [Entry], to target: URL) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         do {
             try encoder.encode(entries).write(to: target, options: .atomic)
+            return true
         } catch {
             ErrorLog.report(error, where: "TapQueue.write")
+            return false
         }
     }
 
     private nonisolated static let lock = NSLock()
 
-    /// Every change to the queue goes through here: read, change, write
-    /// back, all under one lock. A tap and its Wallet notification can
-    /// arrive seconds apart, and a replay can be running when either does;
-    /// without the lock two of them could read the same list and the later
-    /// write would drop the other's tap. Safe to call from any thread.
-    /// Returns the queue as it now stands.
+    /// Every change to one queue file goes through here: read, change,
+    /// write back, all under one lock. A tap and its Wallet notification
+    /// can arrive seconds apart, and a replay can be running when either
+    /// does; without the lock two of them could read the same list and the
+    /// later write would drop the other's tap. Safe to call from any thread.
+    /// Returns the file's queue as it now stands, and false when the change
+    /// could not be written.
     @discardableResult
-    private nonisolated static func update(_ url: URL?, _ change: (inout [Entry]) -> Void) -> [Entry] {
+    private nonisolated static func update(_ target: URL, _ change: (inout [Entry]) -> Void) -> (entries: [Entry], written: Bool) {
         lock.lock()
         defer { lock.unlock() }
-        let before = read(from: url)
+        let before = readFile(target)
         var entries = before
         change(&entries)
-        if entries != before { write(entries, to: url) }
-        return entries
+        guard entries != before else { return (entries, true) }
+        return write(entries, to: target) ? (entries, true) : (before, false)
     }
 
     /// How many taps are waiting on the next replay (diagnostics).
@@ -96,29 +111,45 @@ enum TapQueue {
     }
 
     /// Appends one tap. A duplicate (the exact same fields at the exact
-    /// same moment already queued) is a no-op, not a second row.
+    /// same moment already queued) is a no-op, not a second row. When the
+    /// first file can't be written (a full disk, a missing folder), the
+    /// next location is tried. False when no file could take it.
     @discardableResult
     nonisolated static func enqueue(merchant: String?, amount: String?, card: String?, date: Date = .now,
-                                    trigger: TapTrigger = .tap, url: URL? = nil) -> [Entry] {
-        let entry = Entry(merchant: merchant, amount: amount, card: card, date: date,
-                          trigger: trigger == .tap ? nil : trigger.rawValue)
-        return update(url) { entries in
-            guard !entries.contains(where: { $0.key == entry.key }) else { return }
-            entries.append(entry)
-        }
+                                    trigger: TapTrigger = .tap, url: URL? = nil) -> Bool {
+        enqueue(Entry(merchant: merchant, amount: amount, card: card, date: date,
+                      trigger: trigger == .tap ? nil : trigger.rawValue),
+                into: locations(url))
     }
+
+    /// `enqueue` into the first of `all` that can be written. Tests pass
+    /// their own list.
+    nonisolated static func enqueue(_ entry: Entry, into all: [URL]) -> Bool {
+        if all.contains(where: { readFile($0).contains { $0.key == entry.key } }) { return true }
+        for target in all {
+            let result = update(target) { entries in
+                guard !entries.contains(where: { $0.key == entry.key }) else { return }
+                entries.append(entry)
+            }
+            if result.written { return true }
+        }
+        return false
+    }
+
+    static let notSavedMessage = "This tap couldn't be saved. Add it in Sortd by hand."
 
     /// Queues the tap, tells the one-per-queue local notification to fire
     /// (or refresh, if one is already pending), and returns the dialog text
     /// Shortcuts should read out — a success, from its point of view, so the
-    /// automation never shows as failed.
+    /// automation never shows as failed. "Saved for later" only when a file
+    /// really holds it; otherwise it says plainly that it was not saved.
     @MainActor
     @discardableResult
     static func saveForLater(merchant: String?, amount: String?, card: String?, date: Date = .now,
                              trigger: TapTrigger = .tap, url: URL? = nil) async -> String {
-        enqueue(merchant: merchant, amount: amount, card: card, date: date, trigger: trigger, url: url)
-        await Reminders.notifyTapQueued()
-        return "Saved for later. Sortd will finish it when it next opens."
+        let saved = enqueue(merchant: merchant, amount: amount, card: card, date: date, trigger: trigger, url: url)
+        await Reminders.notifyTapQueued(saved: saved)
+        return saved ? "Saved for later. Sortd will finish it when it next opens." : notSavedMessage
     }
 
     struct ReplayResult: Equatable {
@@ -164,9 +195,12 @@ enum TapQueue {
                                                               queueURL: url)
             if let outcome, !outcome.saveFailed { logged.insert(entry.key) }
         }
-        let remaining = update(url) { $0.removeAll { logged.contains($0.key) } }
-        if remaining.isEmpty { Reminders.clearTapQueuedNotice() }
-        let result = ReplayResult(replayed: logged.count, stillQueued: remaining.count)
+        var remaining = 0
+        for target in locations(url) {
+            remaining += update(target) { $0.removeAll { logged.contains($0.key) } }.entries.count
+        }
+        if remaining == 0 { Reminders.clearTapQueuedNotice() }
+        let result = ReplayResult(replayed: logged.count, stillQueued: remaining)
         if url == nil { UserDefaults.standard.set(result.summary, forKey: lastReplayKey) }
         return result
     }
