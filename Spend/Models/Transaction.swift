@@ -150,6 +150,17 @@ final class Transaction {
     /// either fixed it or decided it's fine.
     var needsCheck: Bool { needsReview || note.hasPrefix(Self.needsCheckTag) }
 
+    /// The name a tap with no shop is saved under (`LogPurchaseIntent`).
+    nonisolated static let unknownMerchant = "Unknown merchant"
+
+    /// A tap that came with no shop name: saved as `unknownMerchant`, or
+    /// blank in a row made some other way.
+    var lacksShop: Bool {
+        let raw = rawMerchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.isEmpty || raw == Self.unknownMerchant
+            || merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// Rows the removed "Send a Test Tap" button left behind
     /// (`LogPurchaseIntent.legacyTestMerchant`), and the Apple Pay health
     /// check's own runs (`ApplePayHealthCheck.merchant`). Old installs may
