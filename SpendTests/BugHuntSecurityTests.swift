@@ -101,9 +101,7 @@ struct BugHuntSecurityTests {
     /// which never applies `.shopNameIsPrivate()`. With "Show Amounts When
     /// Locked" on, the whole widget is `.privacySensitive(false)`, so shop
     /// names show on a locked phone (StandBy), against the widget rule.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-02", "Bills widget shows shop names while the iPhone is locked"))
-    func billsWidgetKeepsShopNamesPrivateWhileLocked() throws {
+    @Test func billsWidgetKeepsShopNamesPrivateWhileLocked() throws {
         let bridge = try source("Spend/Services/WidgetBridge.swift")
         #expect(bridge.contains("WidgetSummary.Bill(name: $0.merchant"), "premise: a bill's name is the shop")
 
