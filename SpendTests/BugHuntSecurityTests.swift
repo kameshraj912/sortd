@@ -4,8 +4,8 @@ import SwiftData
 @testable import Spend
 
 // Bug hunt 3 Oct 2026, area security-masvs (docs/testing/attacks.md).
-// Every test here documents a real, unfixed bug: it fails today, and runs
-// only with `scripts/test.sh --known-bugs`.
+// Each test was written to fail on the code of that day. All five are fixed
+// (docs/BugHunt-2026-10-03-fixes-c.md) and run in the normal suite.
 
 // MARK: - Fakes for the account store (this file's own)
 
@@ -160,10 +160,9 @@ struct BugHuntSecurityTests {
     /// UserDefaults ("lastTapReceived" and the last 10 "recentTapRuns"),
     /// and it stays there after the purchase is deleted. attacks.md
     /// STORAGE-1: only the SwiftData store may hold a shop name.
-    /// (Right behaviour not obvious: it is a setup-check aid. Raj decides.)
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-05", "shop and amount of a deleted purchase stay in UserDefaults"))
-    func aDeletedTapLeavesNoShopOrAmountInDefaults() async throws {
+    /// Fixed: the run log keeps only how each field arrived (empty, a
+    /// placeholder, a length), never the words.
+    @Test func aDeletedTapLeavesNoShopOrAmountInDefaults() async throws {
         let shop = "ZEBRACAFE\(UUID().uuidString.prefix(6))"
         let now = Date(timeIntervalSince1970: 1_790_000_000)
 

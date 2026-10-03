@@ -112,6 +112,8 @@ struct SpendApp: App {
             let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             ApplePayStatus.settleTestTap(hasRealTap: ApplePayStatus.hasRealTap(in: taps))
         }
+        // Run lines from older builds held shop names and amounts.
+        LogPurchaseIntent.scrubOldRunText()
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if env["SPEND_DEMO"] == "1" {
