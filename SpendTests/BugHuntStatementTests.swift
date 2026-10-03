@@ -395,8 +395,7 @@ struct BugHuntStatement1003Tests {
     /// Excel's "Unicode Text" export is UTF-16 with a BOM. `decodeText`
     /// tries UTF-8, then Windows-1252, which accepts those bytes and turns
     /// them into "ÿþD\0a\0t\0e..." So the import says nothing was found.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-7", "decodeText reads a UTF-16 file as Windows-1252 garbage"))
+    @Test(.bug(id: "hunt-1003-stmt-7", "decodeText reads a UTF-16 file as Windows-1252 garbage"))
     func aUTF16FileIsDecoded() throws {
         let text = "Date,Description,Amount\n01/09/2026,WOOLWORTHS 3342,-58.30\n"
         let data = try #require(text.data(using: .utf16))
