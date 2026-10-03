@@ -10,13 +10,13 @@ Every test below failed on the code of that day (the 12 hunt tests were run with
 | A2 | fixed: the Worker's code goes to the log; the alert says the usage record was not deleted and gives support@sortd.page | c724126 | `aWorkerRefusalIsShownInPlainWordsNotAsACode`, `a502IsRejectedForGoodNotRetried` |
 | A3 | fixed: a failed Apple sheet (not a cancel) gives Apple's manual steps | c724126 | `aFailedAppleConfirmSheetGivesTheManualSteps` |
 | A5 | fixed: Sign Out and a new Google sign-in move the old token to the revoke list | 79e6742 | `signOutFromGoogleForgetsTheGoogleToken` |
-| X3 | fixed: a token stays on the pending list until Google answers 200/400; 20 s timeout | None | `gmailCleanupKeepsTheTokenUntilGoogleConfirms` |
+| X3 | fixed: a token stays on the pending list until Google answers 200/400; 20 s timeout | 79e6742 | `gmailCleanupKeepsTheTokenUntilGoogleConfirms` |
 | X4 | fixed: example file value is empty; the app treats an example host or `replace_me` as no Worker | e98839d | `exampleWorkerURLIsNeverUsedAsARealWorker`, `aPlaceholderWorkerURLCountsAsNoWorker` |
 | D2 | fixed: a failed save deletes its pending row | d1d36b5 | `aFailedSaveLeavesNoRowSoARetryDoesNotSaveTwice` |
 | D3 | fixed: a backup stops with `newerInCloud` when iCloud's copy is newer than this phone's last backup; restore (Add What's Missing) clears it. Also the reviewer's `deleteAllOnARestoredPhone...` test: Delete All's wiped last-backup date now counts | 4a2ce86 | `anOlderPhoneDoesNotWriteOverANewerICloudCopy`, `deleteAllOnARestoredPhoneStillRefusesToOverwriteTheOtherPhonesBackup` |
-| A4 | fixed: Delete iCloud Copy counts as a reset, so a running upload removes its copy when it lands | None | `deleteICloudCopyDuringAnUploadLeavesNoCopy` |
-| D7 | fixed: switching off cancels the waiting retry/catch-up/debounce | None | `aRateLimitRetryDoesNotUploadOnceBackupIsSwitchedOff` |
-| A6 | fixed: same fix and test as D7 (same cause) | None | same |
+| A4 | fixed: Delete iCloud Copy counts as a reset, so a running upload removes its copy when it lands | 4a2ce86 | `deleteICloudCopyDuringAnUploadLeavesNoCopy` |
+| D7 | fixed: switching off cancels the waiting retry/catch-up/debounce | 4a2ce86 | `aRateLimitRetryDoesNotUploadOnceBackupIsSwitchedOff` |
+| A6 | fixed: same fix and test as D7 (same cause) | 4a2ce86 | same |
 | D4 | fixed: recovery screen, no `fatalError`; report via `ErrorLog`; old store moved aside, not deleted; screenshot `.build/store-recovery.png` (not committed) | b3daa30 | `theRestoredMessageCountsPurchasesInPlainWords` (the screen itself was checked by screenshot with `SPEND_STORE_FAIL=1`) |
 | X2 | fixed: bill names use `ShopName` (always private); VoiceOver says "A bill" while locked | b1c3d29 | `billsWidgetKeepsShopNamesPrivateWhileLocked` |
 | X5 | fixed: the run log keeps only empty / placeholder / length per field, in every build; old lines cleared once | 8cf6cad | `aDeletedTapLeavesNoShopOrAmountInDefaults`, `aRunLineSaysHowFieldsArrivedNotWhatTheySaid`, `runLinesFromOlderBuildsAreClearedOnce` |
