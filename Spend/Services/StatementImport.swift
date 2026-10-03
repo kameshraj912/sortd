@@ -213,12 +213,13 @@ nonisolated enum StatementImport {
         }
 
         // Separate Debit / Credit columns: whichever is filled says which way
-        // the money went, so the sign in the cell doesn't matter.
+        // the money went, so the sign in the cell doesn't matter. Some banks
+        // fill the unused one with "0.00": that is empty, not a $0 purchase.
         if layout.debit != nil || layout.credit != nil {
-            if let debit = cell(layout.debit), let parsed = signedAmount(debit) {
+            if let debit = cell(layout.debit), let parsed = signedAmount(debit), parsed.amount != 0 {
                 return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .spend)
             }
-            if let credit = cell(layout.credit), let parsed = signedAmount(credit) {
+            if let credit = cell(layout.credit), let parsed = signedAmount(credit), parsed.amount != 0 {
                 return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .moneyIn)
             }
             return nil
@@ -567,8 +568,12 @@ nonisolated enum StatementImport {
         guard !trimmed.isEmpty else { return nil }
         // Must be money and nothing else, or a description column with a
         // house number in it would be read as an amount. An ISO code may sit
-        // before or after the number ("AUD -58.30", "12.00 SGD").
-        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
+        // before or after the number ("AUD -58.30", "12.00 SGD"). Cents after
+        // a dot ("1,234.50"), or after a comma ("-12,50", "1.234,50"), the
+        // European way, which is why `parseCSV` reads ";" files at all.
+        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
+        let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*"# + number
+            + #"\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = trimmed as NSString
         guard let m = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)) else { return nil }
@@ -578,14 +583,14 @@ nonisolated enum StatementImport {
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
         // Three letters that are not a real currency are words ("KFC 12").
-        let codes = [group(1), group(6)].compactMap { $0?.uppercased() }
+        let codes = [group(1), group(8)].compactMap { $0?.uppercased() }
         guard codes.allSatisfy({ isoCurrencyCodes.contains($0) }), codes.count <= 1 else { return nil }
-        let whole = (group(3) ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group(4).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
+        let whole = (group(3) ?? group(5) ?? "0").filter(\.isNumber)
+        let cents = (group(4) ?? group(6)).map { $0.count == 1 ? $0 + "0" : $0 } ?? "00"
         guard var value = Decimal(string: "\(whole).\(cents)") else { return nil }
 
         let negative = trimmed.contains("-") || (trimmed.hasPrefix("(") && trimmed.hasSuffix(")"))
-        let suffix = group(5)?.uppercased()
+        let suffix = group(7)?.uppercased()
         if negative || suffix == "DR" { value = -value }
         if suffix == "CR" { value = abs(value) }
         return (value, codes.first ?? currency(for: group(2)))
