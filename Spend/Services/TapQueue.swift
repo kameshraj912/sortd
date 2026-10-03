@@ -13,7 +13,7 @@ enum TapQueue {
     /// Everything an intent had for one tap, so a replay reproduces exactly
     /// what would have logged at the time — including `date`, so "last tap
     /// received" reads the original moment, not when Sortd got around to it.
-    struct Entry: Codable, Equatable, Sendable {
+    nonisolated struct Entry: Codable, Equatable, Sendable {
         var merchant: String?
         var amount: String?
         var card: String?
@@ -29,32 +29,32 @@ enum TapQueue {
         var key: String { [merchant ?? "", amount ?? "", card ?? "", date.timeIntervalSince1970.description].joined(separator: "|") }
     }
 
-    static let fileName = "tap-queue.json"
+    nonisolated static let fileName = "tap-queue.json"
 
     /// The app group file when the entitlement is present. A free developer
     /// account has no App Group, so `fallbackURL` keeps the queue working
     /// (just not shared with the widget process, which never reads it).
-    static var fileURL: URL? {
+    nonisolated static var fileURL: URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: WidgetSummary.appGroup)?
             .appending(path: fileName)
     }
 
-    private static var fallbackURL: URL? {
+    private nonisolated static var fallbackURL: URL? {
         try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                      appropriateFor: nil, create: true).appending(path: fileName)
     }
 
-    private static func resolve(_ override: URL?) -> URL? { override ?? fileURL ?? fallbackURL }
+    private nonisolated static func resolve(_ override: URL?) -> URL? { override ?? fileURL ?? fallbackURL }
 
-    static func read(from url: URL? = nil) -> [Entry] {
+    nonisolated static func read(from url: URL? = nil) -> [Entry] {
         guard let target = resolve(url), let data = try? Data(contentsOf: target) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([Entry].self, from: data)) ?? []
     }
 
-    private static func write(_ entries: [Entry], to url: URL? = nil) {
+    private nonisolated static func write(_ entries: [Entry], to url: URL? = nil) {
         guard let target = resolve(url) else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -63,6 +63,25 @@ enum TapQueue {
         } catch {
             ErrorLog.report(error, where: "TapQueue.write")
         }
+    }
+
+    private nonisolated static let lock = NSLock()
+
+    /// Every change to the queue goes through here: read, change, write
+    /// back, all under one lock. A tap and its Wallet notification can
+    /// arrive seconds apart, and a replay can be running when either does;
+    /// without the lock two of them could read the same list and the later
+    /// write would drop the other's tap. Safe to call from any thread.
+    /// Returns the queue as it now stands.
+    @discardableResult
+    private nonisolated static func update(_ url: URL?, _ change: (inout [Entry]) -> Void) -> [Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        let before = read(from: url)
+        var entries = before
+        change(&entries)
+        if entries != before { write(entries, to: url) }
+        return entries
     }
 
     /// How many taps are waiting on the next replay (diagnostics).
@@ -79,15 +98,14 @@ enum TapQueue {
     /// Appends one tap. A duplicate (the exact same fields at the exact
     /// same moment already queued) is a no-op, not a second row.
     @discardableResult
-    static func enqueue(merchant: String?, amount: String?, card: String?, date: Date = .now,
-                        trigger: TapTrigger = .tap, url: URL? = nil) -> [Entry] {
-        var entries = read(from: url)
+    nonisolated static func enqueue(merchant: String?, amount: String?, card: String?, date: Date = .now,
+                                    trigger: TapTrigger = .tap, url: URL? = nil) -> [Entry] {
         let entry = Entry(merchant: merchant, amount: amount, card: card, date: date,
                           trigger: trigger == .tap ? nil : trigger.rawValue)
-        guard !entries.contains(where: { $0.key == entry.key }) else { return entries }
-        entries.append(entry)
-        write(entries, to: url)
-        return entries
+        return update(url) { entries in
+            guard !entries.contains(where: { $0.key == entry.key }) else { return }
+            entries.append(entry)
+        }
     }
 
     /// Queues the tap, tells the one-per-queue local notification to fire
@@ -114,13 +132,19 @@ enum TapQueue {
         }
     }
 
-    /// Replays every queued tap through the normal logging path and clears
-    /// the queue as each one lands. One that fails again (the store is
-    /// still unavailable) stays queued for the next try — it is never
-    /// dropped, and it is never re-queued a second time by the replay
-    /// itself: `LogPurchaseIntent.handle`'s own failure path only queues
-    /// fresh intent calls, not a replay's own retries (see its `saveFailed`
-    /// flag).
+    /// Replays every queued tap through the normal logging path and takes
+    /// each one that lands out of the queue. One that fails again (the
+    /// store is still unavailable) stays queued for the next try — it is
+    /// never dropped, and never queued twice: `LogPurchaseIntent.handle`'s
+    /// failure path queues it again into this same file, where `enqueue`
+    /// sees the same key and does nothing.
+    ///
+    /// Only the taps this replay logged are removed, at the end, under the
+    /// lock. The list read at the start is never written back: that would
+    /// wipe a tap queued while the replay was waiting on a save.
+    ///
+    /// "Last replay" in the developer menu is about the real queue, so a
+    /// replay of any other file (`url`, tests) leaves it alone.
     @MainActor
     @discardableResult
     static func replay(in context: ModelContext, book: CardBook = .shared, url: URL? = nil,
@@ -128,26 +152,22 @@ enum TapQueue {
         let entries = read(from: url)
         guard !entries.isEmpty else {
             let result = ReplayResult(replayed: 0, stillQueued: 0)
-            UserDefaults.standard.set(result.summary, forKey: lastReplayKey)
+            if url == nil { UserDefaults.standard.set(result.summary, forKey: lastReplayKey) }
             return result
         }
-        var remaining: [Entry] = []
-        var replayed = 0
+        var logged: Set<String> = []
         for entry in entries {
             let outcome = try? await LogPurchaseIntent.handle(merchant: entry.merchant, amount: entry.amount, card: entry.card,
                                                               in: context, book: book, now: entry.date,
                                                               debugForceSaveFailure: debugForceSaveFailure,
-                                                              trigger: entry.trigger.flatMap(TapTrigger.init(rawValue:)) ?? .tap)
-            if let outcome, !outcome.saveFailed {
-                replayed += 1
-            } else {
-                remaining.append(entry)
-            }
+                                                              trigger: entry.trigger.flatMap(TapTrigger.init(rawValue:)) ?? .tap,
+                                                              queueURL: url)
+            if let outcome, !outcome.saveFailed { logged.insert(entry.key) }
         }
-        write(remaining, to: url)
+        let remaining = update(url) { $0.removeAll { logged.contains($0.key) } }
         if remaining.isEmpty { Reminders.clearTapQueuedNotice() }
-        let result = ReplayResult(replayed: replayed, stillQueued: remaining.count)
-        UserDefaults.standard.set(result.summary, forKey: lastReplayKey)
+        let result = ReplayResult(replayed: logged.count, stillQueued: remaining.count)
+        if url == nil { UserDefaults.standard.set(result.summary, forKey: lastReplayKey) }
         return result
     }
 }

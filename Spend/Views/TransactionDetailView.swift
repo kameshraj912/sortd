@@ -9,6 +9,9 @@ struct TransactionDetailView: View {
     @State private var showingCategories = false
     @State private var confirmingDelete = false
     @State private var saveFailed = false
+    /// Bumped on a category change and on a delete, for the haptics.
+    @State private var recategorised = 0
+    @State private var deleted = 0
     /// The Amount field works on text and only writes back a valid amount
     /// when you leave it. Binding straight to the number saved each keystroke,
     /// so clearing "21.90" left "2" behind.
@@ -160,6 +163,8 @@ struct TransactionDetailView: View {
         // Shared with Activity: going back keeps the Undo for the rest of
         // its window.
         .recategoriseUndoToast()
+        .feedback(.select, trigger: recategorised)
+        .feedback(.delete, trigger: deleted)
         .saveFailedAlert($saveFailed)
         // An alert, like the other irreversible confirmations: a dialog on
         // this form anchored itself to the Card row at the top, nowhere near
@@ -168,6 +173,7 @@ struct TransactionDetailView: View {
             Button("Delete", role: .destructive) {
                 context.delete(transaction)
                 if context.saveReporting(where: "TransactionDetail.delete") {
+                    deleted += 1
                     dismiss()
                 } else {
                     // The delete did not reach disk: stay here and say so.
@@ -300,6 +306,7 @@ struct TransactionDetailView: View {
             saveFailed = true
             return
         }
+        recategorised += 1
         Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(category.rawValue)])
         PendingRecategorise.shared.stage(change)
         if let text = change.toastText {

@@ -33,7 +33,7 @@ struct GoogleButtonLabel: View {
         }
         .padding(.leading, 16)
         .padding(.trailing, 16)
-        .frame(maxWidth: .infinity, minHeight: 50)
+        .frame(maxWidth: .infinity, minHeight: ButtonMetrics.height)
         .background(Color(hex: dark ? 0x131314 : 0xFFFFFF), in: shape)
         .overlay(shape.strokeBorder(Color(hex: dark ? 0x8E918F : 0x747775), lineWidth: 1))
         .contentShape(shape)

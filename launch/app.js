@@ -37,8 +37,6 @@
       if (!form.elements.name.value.trim()) return fail("What should we call you? First name is\u00a0fine.", form.elements.name);
       if (!form.elements.country.value) return fail("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
       if (!form.querySelector('input[name="applepay"]:checked')) return fail("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
-      var g = form.elements.gmail.value.trim();
-      if (g && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(g)) return fail("That doesn't look like a Gmail\u00a0address.", form.elements.gmail);
       say(""); save.disabled = true; save.textContent = "Saving…";
       fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
         .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })

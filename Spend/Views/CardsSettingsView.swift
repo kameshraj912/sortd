@@ -6,6 +6,7 @@ struct CardsSettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var editing: CardInfo?
     @State private var adding = false
+    @State private var removed = 0
     private var book: CardBook { .shared }
 
     var body: some View {
@@ -34,6 +35,7 @@ struct CardsSettingsView: View {
                 .onMove { book.move(from: $0, to: $1) }
                 .onDelete { offsets in
                     for i in offsets { remove(book.active[i]) }
+                    removed += 1
                 }
             } footer: {
                 Text("Cards are matched by their last 4 digits, or by their Wallet name for taps.")
@@ -78,6 +80,7 @@ struct CardsSettingsView: View {
             }
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
+        .feedback(.delete, trigger: removed)
         .sheet(item: $editing) { CardEditor(original: $0) }
         .sheet(isPresented: $adding) { CardEditor(original: nil) }
     }
@@ -103,6 +106,9 @@ struct CardEditor: View {
     @State private var digits = ""
     @State private var payDigits = ""
     @State private var words = ""
+    /// A new card's typing is kept for a day, like a new purchase's.
+    @State private var draftRestored = false
+    @State private var draftActive = true
 
     init(original: CardInfo?) {
         self.original = original
@@ -146,9 +152,57 @@ struct CardEditor: View {
 
     private var canSave: Bool { !draft.name.trimmingCharacters(in: .whitespaces).isEmpty }
 
+    private var currentDraft: CardDraft {
+        CardDraft(info: draft, digits: digits, payDigits: payDigits, words: words)
+    }
+
+    private func restoreDraft() {
+        guard original == nil, !draftRestored, let saved = CardDraft.load() else { return }
+        draft = saved.info
+        digits = saved.digits
+        payDigits = saved.payDigits
+        words = saved.words
+        draftRestored = true
+    }
+
+    private func clearDraft() {
+        CardDraft.clear()
+        let currency = LocalCurrency.current()
+        withAnimation(.snappy) {
+            draft = CardInfo(name: "", shortName: "", currency: currency,
+                             country: Self.country(for: currency) ?? Locale.current.region?.identifier ?? "AU")
+            digits = ""
+            payDigits = ""
+            words = ""
+            draftRestored = false
+        }
+    }
+
+    private func discardDraft() {
+        draftActive = false
+        if original == nil { CardDraft.clear() }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if draftRestored {
+                    Section {
+                        HStack {
+                            Label("Draft restored", systemImage: "clock.arrow.circlepath")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Clear", action: clearDraft)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Color.ink)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(.rect)
+                                .buttonStyle(.pressable)
+                        }
+                    }
+                }
+
                 Section {
                     TextField("Name, like Everyday Debit", text: $draft.name)
                     TextField("Bank (optional)", text: $draft.bank)
@@ -212,12 +266,17 @@ struct CardEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    Button("Cancel", systemImage: "xmark") { discardDraft(); dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", systemImage: "checkmark", action: save)
                             .tint(Color.brand).disabled(!canSave).opacity(canSave ? 1 : 0.3)
                 }
+            }
+            .onAppear(perform: restoreDraft)
+            .onChange(of: currentDraft) { _, new in
+                guard original == nil, draftActive else { return }
+                CardDraft.save(new)
             }
         }
     }
@@ -236,6 +295,7 @@ struct CardEditor: View {
         info.walletWords = list
         CardBook.shared.upsert(info)
         if original == nil { Analytics.shared.track(.cardAdded) }
+        discardDraft()
         dismiss()
     }
 }

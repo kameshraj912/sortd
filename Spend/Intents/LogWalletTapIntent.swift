@@ -240,13 +240,15 @@ struct LogWalletTapIntent: AppIntent {
     /// A notification run: any of the three notification parts is set.
     /// Then only the notification is read — the tap fields may hold stray
     /// text when this trigger fired, so they are ignored entirely. All
-    /// three blank: exactly the tap behaviour from before.
+    /// three blank: exactly the tap behaviour from before. `queueURL` goes
+    /// straight to `LogPurchaseIntent.handle` (a test's own queue file).
     @MainActor
     static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
                        notificationTitle: String? = nil, notificationSubtitle: String? = nil,
                        notificationBody: String? = nil,
                        in context: ModelContext, book: CardBook,
-                       now: Date = .now, debugForceSaveFailure: Bool = false) async throws -> LogPurchaseIntent.Outcome {
+                       now: Date = .now, debugForceSaveFailure: Bool = false,
+                       queueURL: URL? = nil) async throws -> LogPurchaseIntent.Outcome {
         let notification = WalletNotification(title: notificationTitle, subtitle: notificationSubtitle, body: notificationBody)
         let record = Self.record(transaction: text, amount: amount, merchant: merchant, card: card,
                                  notification: notification, at: now)
@@ -265,14 +267,16 @@ struct LogWalletTapIntent: AppIntent {
                 result = try await LogPurchaseIntent.handle(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
                                                             in: context, book: book, now: now,
                                                             debugForceSaveFailure: debugForceSaveFailure,
-                                                            trigger: .notification, record: record, seen: notification.seen)
+                                                            trigger: .notification, record: record, seen: notification.seen,
+                                                            queueURL: queueURL)
             }
         } else {
             let resolved = resolvedFields(transaction: text, amount: amount, merchant: merchant, card: card)
             shop = resolved.merchant
             result = try await LogPurchaseIntent.handle(merchant: resolved.merchant, amount: resolved.amount,
                                                         card: resolved.card, in: context, book: book, now: now,
-                                                        debugForceSaveFailure: debugForceSaveFailure, record: record)
+                                                        debugForceSaveFailure: debugForceSaveFailure, record: record,
+                                                        queueURL: queueURL)
         }
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
         // purchase; a legacy "Send a Test Tap" row is not a real tap).

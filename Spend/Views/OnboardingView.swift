@@ -332,7 +332,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.onBrand)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
         }
         .buttonStyle(.glassProminent)
         .tint(Color.brand)
@@ -344,7 +344,7 @@ struct OnboardingView: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.ink)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
         }
         .buttonStyle(.glass)
         .controlSize(.large)
@@ -359,7 +359,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private var bottomBar: some View {
@@ -388,13 +388,19 @@ struct OnboardingView: View {
                         }
                         #endif
                     } label: {
-                        Text("More Options")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(.rect)
+                        // The menu closes the moment an item is tapped, so the
+                        // wait shows here, where the eye already is.
+                        HStack(spacing: 8) {
+                            if restoring { ProgressView() }
+                            Text(restoring ? "Restoring from iCloud…" : "More Options")
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .disabled(restoring)
+                    .buttonStyle(.pressable)
                     Text("Free. No account needed.")
                         .font(.footnote).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -882,7 +888,7 @@ struct OnboardingView: View {
             .frame(minHeight: 52)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(home == code ? .isSelected : [])
     }
 
@@ -915,7 +921,7 @@ struct OnboardingView: View {
                             .frame(minHeight: 44)
                             .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("\(rowTitle(info)), \(info.isCredit ? "credit" : "debit")")
                     .accessibilityHint("Edit nickname and type")
                     Button {
@@ -926,7 +932,7 @@ struct OnboardingView: View {
                         Image(systemName: "xmark.circle.fill").font(.footnote)
                             .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .frame(width: 44, height: 44).contentShape(.rect)
                     .accessibilityLabel("Remove \(rowTitle(info))")
                 }
@@ -940,11 +946,15 @@ struct OnboardingView: View {
     /// One country at a time, so the list stays short. "" = works anywhere.
     private var countryPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
+            // 8 pt between tabs. The flag sits closer to its name so Singapore,
+            // Australia and Malaysia fit inside the screen with room to spare
+            // (Malaysia touched the right edge and lost its border, 3 Oct 2026).
+            // Further tabs scroll in from the edge.
             HStack(spacing: 8) {
                 ForEach(allBankCountries, id: \.self) { c in
                     let picked = book.active.filter { $0.country == c && !$0.bank.isEmpty }.count
                     Button { withAnimation(.snappy) { bankCountry = c } } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 2) {
                             Text(c.isEmpty ? "🌐" : CardInfo.flag(for: c))
                             Text(c.isEmpty ? "Anywhere" : countryName(c)).font(.subheadline.weight(.medium))
                             if picked > 0 {
@@ -956,7 +966,7 @@ struct OnboardingView: View {
                         }
                         .chip(selected: bankCountry == c)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityAddTraits(bankCountry == c ? .isSelected : [])
                 }
             }
@@ -1004,7 +1014,7 @@ struct OnboardingView: View {
                     }
                     .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel(count > 0 ? "\(bank.name), \(count) added. Add another" : "Add \(bank.name)")
             }
             // Not listed: a plain card named after the country; renamed next page.
@@ -1028,7 +1038,7 @@ struct OnboardingView: View {
                     }
                     .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 
@@ -1164,7 +1174,7 @@ struct OnboardingView: View {
                         Text(Money.format(Decimal(value), home, cents: false))
                             .chip(selected: budget == value)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(.top, 14)

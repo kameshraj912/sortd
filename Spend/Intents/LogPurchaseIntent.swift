@@ -61,6 +61,19 @@ struct LogPurchaseIntent: AppIntent {
     /// activation, suggestions and the Apple Pay status.
     nonisolated static let legacyTestMerchant = "Sortd Test"
 
+    /// Where "last tap received", the reached flag and "Recent runs" are
+    /// kept: the app's own defaults. SpendTests hosts inside Sortd.app, so
+    /// there it is a scratch suite, emptied at the start of each run —
+    /// otherwise every test tap shows up in the real app's developer menu
+    /// and flips its setup status.
+    static let reachDefaults: UserDefaults = {
+        let scratch = "sortd-tests-reach"
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil,
+              let defaults = UserDefaults(suiteName: scratch) else { return .standard }
+        defaults.removePersistentDomain(forName: scratch)
+        return defaults
+    }()
+
     static let lastTapKey = "lastTapReceived"
 
     /// When Shortcuts last reached Sortd at all — including a ▶ test run that
@@ -71,12 +84,12 @@ struct LogPurchaseIntent: AppIntent {
 
     /// True once Shortcuts has reached the app, whether or not it logged.
     static var shortcutHasReachedApp: Bool {
-        UserDefaults.standard.object(forKey: lastTapAtKey) != nil
+        reachDefaults.object(forKey: lastTapAtKey) != nil
     }
 
     /// When Shortcuts last reached the app, for the Apple Pay status line.
     static var lastTapReceivedAt: Date? {
-        UserDefaults.standard.object(forKey: lastTapAtKey) as? Date
+        reachDefaults.object(forKey: lastTapAtKey) as? Date
     }
 
     /// A tap counts as the first auto-logged purchase only when it was
@@ -95,13 +108,13 @@ struct LogPurchaseIntent: AppIntent {
         Array(([line] + runs).prefix(recentRunsCap))
     }
 
-    static func recentRuns(_ defaults: UserDefaults = .standard) -> [String] {
+    static func recentRuns(_ defaults: UserDefaults = reachDefaults) -> [String] {
         defaults.stringArray(forKey: recentRunsKey) ?? []
     }
 
     /// Marks that Shortcuts reached Sortd, with the raw fields for Settings,
     /// and adds the line to "Recent runs".
-    static func recordReach(_ record: String, at now: Date, defaults: UserDefaults = .standard) {
+    static func recordReach(_ record: String, at now: Date, defaults: UserDefaults = reachDefaults) {
         defaults.set(record, forKey: lastTapKey)
         defaults.set(now, forKey: lastTapAtKey)
         defaults.set(appending(record, to: recentRuns(defaults)), forKey: recentRunsKey)
@@ -114,13 +127,15 @@ struct LogPurchaseIntent: AppIntent {
     /// notification (`LogWalletTapIntent`), which changes how it is matched
     /// to a tap of the same purchase (see `mergeNotification`). `record`
     /// and `seen` replace the default raw text kept for Settings and for a
-    /// "needs a check" note.
+    /// "needs a check" note. `queueURL` is where a tap that can't be saved
+    /// is queued: nil is the real queue; a test passes its own temp file so
+    /// it never shares one with the app or with another test.
     @MainActor
     static func handle(merchant: String?, amount: String?, card: String?,
                        in context: ModelContext, book: CardBook, now: Date = .now,
                        debugForceSaveFailure: Bool = false,
                        trigger: TapTrigger = .tap, record: String? = nil,
-                       seen seenOverride: String? = nil) async throws -> Outcome {
+                       seen seenOverride: String? = nil, queueURL: URL? = nil) async throws -> Outcome {
         // Shortcuts sometimes hands intents an empty merchant or amount
         // (developer.apple.com/forums/thread/797233), or — a blank
         // Notification-trigger run, failsafe #13 — a magic variable's own
@@ -292,7 +307,8 @@ struct LogPurchaseIntent: AppIntent {
                 return Outcome(message: "\(money) at \(t.merchant) was already logged", transaction: t, merged: true)
             }
         } catch {
-            let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now, trigger: trigger)
+            let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now,
+                                                      trigger: trigger, url: queueURL)
             return Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
         }
     }
