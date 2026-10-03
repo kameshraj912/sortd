@@ -159,9 +159,13 @@ enum TransactionLogger {
     /// `commit` is how a save reaches disk; only a test changes it, to make
     /// the save fail.
     @discardableResult
-    static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = [],
+    static func log(_ incoming: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = [],
                     learned known: [String: SpendCategory]? = nil, save: Bool = true,
                     commit: (ModelContext) throws -> Void = { try $0.save() }) throws -> Outcome {
+        // Every source's shop name is cut to 80 characters, quietly: the
+        // field and the parsers both end up here.
+        var p = incoming
+        p.merchant = MerchantName.limited(incoming.merchant)
         let learned = try known ?? learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 

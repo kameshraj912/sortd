@@ -66,6 +66,7 @@ struct HomeView: View {
                 if transactions.isEmpty {
                     emptyState
                 } else {
+                    ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             header
@@ -81,10 +82,10 @@ struct HomeView: View {
                             }
                             if demo && !Self.hideDemoBanner { demoBanner }
                             budgetCard
-                            cards
+                            cards.id("home-cards")
                             UpcomingSection(recurring: recurring)
-                            categories
-                            recent
+                            categories.id("home-categories")
+                            recent.id("home-recent")
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
@@ -100,6 +101,15 @@ struct HomeView: View {
                         withAnimation(.snappy) { refreshing = true }
                         refreshNote = await RefreshNote.run(in: context)
                         withAnimation(.snappy) { refreshing = false }
+                    }
+                    #if DEBUG
+                    // Screenshots: SPEND_HOME_SCROLL=cards|categories|recent.
+                    .task {
+                        guard let target = ProcessInfo.processInfo.environment["SPEND_HOME_SCROLL"] else { return }
+                        try? await Task.sleep(for: .milliseconds(800))
+                        proxy.scrollTo("home-\(target)", anchor: .top)
+                    }
+                    #endif
                     }
                 }
             }
@@ -275,7 +285,11 @@ struct HomeView: View {
 
     /// A card takes a bit over half the screen, so the next one peeks the
     /// same amount on an SE and a Pro Max (216pt was right only for 402pt).
-    static func cardWidth(_ screen: CGFloat) -> CGFloat { min(screen * 0.54, 300) }
+    /// At accessibility sizes the text needs the room, so a card takes most
+    /// of the width and the next one only peeks.
+    static func cardWidth(_ screen: CGFloat, accessibility: Bool = false) -> CGFloat {
+        accessibility ? min(screen * 0.86, 360) : min(screen * 0.54, 300)
+    }
 
     // MARK: Header
 
@@ -508,14 +522,14 @@ struct HomeView: View {
                 HStack(spacing: 10) {
                     Button { tab = .activity } label: {
                         WalletCard(card: nil, transactions: monthItems)
-                            .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w) }
+                            .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w, accessibility: typeSize.isAccessibilitySize) }
                     }
                     .buttonStyle(CardPressStyle())
                     .id("all")
                     ForEach(ranked, id: \.0) { card, items in
                         NavigationLink(value: card) {
                             WalletCard(card: card, transactions: items)
-                                .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w) }
+                                .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w, accessibility: typeSize.isAccessibilitySize) }
                         }
                         .buttonStyle(CardPressStyle())
                         .matchedTransitionSource(id: card, in: zoom)
@@ -566,34 +580,69 @@ struct HomeView: View {
                 SectionHeader(title: title("Where It Went")) { tab = .insights }
                 VStack(spacing: 0) {
                     ForEach(rows, id: \.category) { row in
-                        HStack(spacing: 14) {
-                            CategoryIcon(category: row.category, size: 40)
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(row.category.name)
-                                        .font(.body)
-                                    Spacer()
-                                    Text(Money.format(row.total, Money.home))
-                                        .font(.body)
-                                        .monospacedDigit()
-                                }
-                                SegmentedBar(segments: [.init(id: "v", value: row.total.double, color: row.category.color)],
-                                             total: top, height: 5)
-                                Text(row.count == 1 ? "1 purchase" : "\(row.count) purchases")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home)), \(row.count == 1 ? "1 purchase" : "\(row.count) purchases")")
+                        categoryRow(row, top: top)
                     }
                 }
                 .padding(.vertical, 4)
                 .surface()
             }
         }
+    }
+
+    /// One "Where It Went" row. At accessibility sizes the name and the
+    /// amount each get a whole line: side by side, a name like "Food
+    /// Delivery" broke mid-word and "$73.55" split in two.
+    @ViewBuilder
+    private func categoryRow(_ row: (category: SpendCategory, total: Decimal, count: Int), top: Double) -> some View {
+        let amount = Money.format(row.total, Money.home)
+        let count = row.count == 1 ? "1 purchase" : "\(row.count) purchases"
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    CategoryIcon(category: row.category, size: 40)
+                    Text(row.category.name)
+                        .font(.body)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(amount)
+                        .font(.body)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
+                    SegmentedBar(segments: [.init(id: "v", value: row.total.double, color: row.category.color)],
+                                 total: top, height: 5)
+                    Text(count)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: 14) {
+                    CategoryIcon(category: row.category, size: 40)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(row.category.name)
+                                .font(.body)
+                            Spacer()
+                            Text(amount)
+                                .font(.body)
+                                .monospacedDigit()
+                        }
+                        SegmentedBar(segments: [.init(id: "v", value: row.total.double, color: row.category.color)],
+                                     total: top, height: 5)
+                        Text(count)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home)), \(count)")
     }
 
     // MARK: Recent (Budgeta-style dated list)
@@ -782,7 +831,8 @@ struct WalletCard: View {
                     Image(systemName: "square.stack.fill")
                 }
                 Text(name)
-                    .lineLimit(1)
+                    .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                 Spacer(minLength: 6)
                 if let card, !typeSize.isAccessibilitySize,
                    !card.shortLabel.localizedCaseInsensitiveContains(card.isCredit ? "credit" : "debit") {
@@ -804,7 +854,8 @@ struct WalletCard: View {
             Text(subtitle)
                 .font(.caption.weight(.medium))
                 .opacity(0.85)
-                .lineLimit(1)
+                .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
         }
         .foregroundStyle(style.systemFace ? Color.primary
                          : style.lightFace ? Color(white: 0.1)
