@@ -23,6 +23,9 @@ struct ApplePaySetupPanel: View {
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
+    /// Set when no app (Shortcuts) took the link: the page opens here, not in
+    /// the default browser.
+    @State private var safariPage: SafariPage?
     /// A long-press on the status card reveals what Apple Pay last sent, in
     /// plain text — support staff point people to it. Kept out of the way
     /// so the page itself stays short (router feel check, 26 Sep 2026).
@@ -189,6 +192,9 @@ struct ApplePaySetupPanel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status.accessibilityLabel)
+        .sheet(item: $safariPage) { page in
+            SafariSheet(url: page.url).ignoresSafeArea()
+        }
         .alert("Last Tap Received", isPresented: $showingRawTap) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -202,8 +208,8 @@ struct ApplePaySetupPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
             Button {
-                openURL(ApplePaySetupSteps.shortcutURL)
                 shortcutOpened = true
+                Task { safariPage = await ShortcutLink.fallback(for: ApplePaySetupSteps.shortcutURL) }
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
