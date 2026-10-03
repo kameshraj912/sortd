@@ -57,4 +57,12 @@ struct FounderNoteTests {
         FounderNote.markSeen(defaults: d, now: later)
         #expect(d.double(forKey: FounderNote.seenAtKey) == first.timeIntervalSince1970)
     }
+
+    // MARK: the opening line depends on where the note was opened
+
+    @Test func tapLineOnlyRightAfterTheFirstAutoLoggedTap() {
+        #expect(FounderNote.opening(for: .aha).contains("That tap you just made"))
+        #expect(!FounderNote.opening(for: .about).contains("tap"))
+        #expect(FounderNote.opening(for: .about).hasPrefix("Thank you for trusting Sortd."))
+    }
 }
