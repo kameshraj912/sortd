@@ -39,9 +39,6 @@ struct ApplePaySetupPanel: View {
     /// mismatching it against `@AppStorage`'s own numeric representation.
     @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
     @State private var nudgeDismissed = false
-    /// Get the Shortcut was tapped in a build whose shortcut also logs
-    /// online payments (`ApplePaySetupSteps.showsUpdateLine`).
-    @AppStorage(ApplePaySetupSteps.gotOnlineShortcutKey) private var gotOnlineShortcut = false
 
     /// iOS 27 has Wallet's Notification trigger, so the shortcut has two
     /// automations; earlier iOS only the tap.
@@ -204,16 +201,9 @@ struct ApplePaySetupPanel: View {
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
-            if hasNotificationTrigger, ApplePaySetupSteps.showsUpdateLine(status: status, gotNewShortcut: gotOnlineShortcut) {
-                Label(ApplePaySetupSteps.updateLine, systemImage: "arrow.down.circle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             Button {
                 openURL(ApplePaySetupSteps.shortcutURL)
                 shortcutOpened = true
-                gotOnlineShortcut = true
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
