@@ -490,13 +490,25 @@ final class WorkerRevoker: AccountRevoker {
 
     /// `ACCOUNT_WORKER_URL` from Info.plist (Config.xcconfig / Secrets.xcconfig).
     static func fromBundle() -> WorkerRevoker {
-        let text = (Bundle.main.object(forInfoDictionaryKey: "ACCOUNT_WORKER_URL") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        // "//" is a comment in an xcconfig, so a URL that lost its scheme is
-        // a broken line, not a Worker.
-        let url = text.contains("://") ? URL(string: text) : nil
+        let url = workerURL(from: Bundle.main.object(forInfoDictionaryKey: "ACCOUNT_WORKER_URL") as? String ?? "")
         if url == nil { log.notice("account: no Worker URL (ACCOUNT_WORKER_URL is empty), deletes are queued") }
         return WorkerRevoker(url: url)
+    }
+
+    /// The Worker's URL from the build setting, or nil when it is not a
+    /// real one: empty, a line that lost its scheme ("//" is a comment in an
+    /// xcconfig, so that is a broken line, not a Worker), or the placeholder
+    /// the example file once carried (an `.example` host, `example.workers.dev`,
+    /// "replace_me"), like the Sentry and PostHog placeholders.
+    nonisolated static func workerURL(from setting: String) -> URL? {
+        let text = setting.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.contains("://"), !text.contains("replace_me"),
+              let url = URL(string: text), let host = url.host?.lowercased() else { return nil }
+        if host == "example.workers.dev" || host.hasSuffix(".example.workers.dev")
+            || host == "example" || host.hasSuffix(".example") || host.hasSuffix(".example.com") || host == "example.com" {
+            return nil
+        }
+        return url
     }
 
     func revoke(_ account: Account) async throws {
