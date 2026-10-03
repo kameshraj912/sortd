@@ -44,14 +44,15 @@ enum LoggedNotice {
 
     /// The run's result in the notice's terms. Nil when nothing was saved
     /// or merged: a ▶ test run, a declined payment, a notification with no
-    /// amount, a save that failed and was queued, a refund, or a legacy
-    /// "Sortd Test" row.
+    /// amount, a save that failed and was queued, a refund, a legacy
+    /// "Sortd Test" row, or a "Check the Shortcut" run.
     @MainActor
     static func saved(from outcome: LogPurchaseIntent.Outcome) -> Saved? {
         guard !outcome.saveFailed, !outcome.refund, let t = outcome.transaction,
-              t.rawMerchant != LogPurchaseIntent.legacyTestMerchant, !t.refunded else { return nil }
+              t.rawMerchant != LogPurchaseIntent.legacyTestMerchant, t.rawMerchant != ApplePayHealthCheck.merchant,
+              !t.refunded else { return nil }
         let missingAmount = t.amount <= 0
-        let missingShop = t.rawMerchant.isEmpty || t.rawMerchant == "Unknown merchant"
+        let missingShop = t.lacksShop
         if missingAmount || missingShop || t.note.hasPrefix(Transaction.needsCheckTag) {
             return .needsCheck(id: t.id, missingShop: missingShop, missingAmount: missingAmount)
         }

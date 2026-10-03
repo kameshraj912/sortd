@@ -165,8 +165,11 @@ struct LogPurchaseIntent: AppIntent {
         // A notification names the card in its own words. Match it to a card
         // the person has, but only make a new card once this is sure to be
         // its own row: a purchase the tap already logged must not leave a
-        // stray second card behind.
-        var cardID = trigger == .notification
+        // stray second card behind. "Check the Shortcut" sends a made-up
+        // card ("Test Card"): never saved to the person's cards.
+        let healthCheck = name == ApplePayHealthCheck.merchant
+        var cardID = healthCheck ? .other
+            : trigger == .notification
             ? (cardName.isEmpty ? .other : book.match(card))
             : book.matchOrCreate(cardName.isEmpty ? nil : card)
         // No currency in the text: a tap takes where the phone is; a
@@ -274,7 +277,7 @@ struct LogPurchaseIntent: AppIntent {
                 note = refund ? "Refund to your card" : ""
             }
             // Its own row now, so a card the notification named is kept.
-            if trigger == .notification, cardID == .other, !cardName.isEmpty { cardID = book.matchOrCreate(card) }
+            if trigger == .notification, cardID == .other, !cardName.isEmpty, !healthCheck { cardID = book.matchOrCreate(card) }
             let purchase = IncomingPurchase(
                 date: now,
                 merchant: name.isEmpty ? "Unknown merchant" : name,
