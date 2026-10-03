@@ -114,9 +114,7 @@ struct StoreRecoveryView: View {
 
     /// A backup file, or the text of one.
     private static var backupTypes: [UTType] {
-        var types: [UTType] = [.json, .plainText]
-        if let backup = UTType(filenameExtension: "sortdbackup") { types.insert(backup, at: 0) }
-        return types
+        [Backup.fileType, .json, .plainText]
     }
 
     /// An email to support that says what failed (the error's type, never

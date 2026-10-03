@@ -173,7 +173,7 @@ nonisolated enum StatementReader {
     /// statements in all of these.
     static var readableTypes: [UTType] {
         var types: [UTType] = [.commaSeparatedText, .tabSeparatedText, .plainText, .pdf, .image]
-        if let backup = UTType(filenameExtension: "sortdbackup") { types.append(backup) }
+        types.append(Backup.fileType)
         types.append(.json)
         return types
     }
