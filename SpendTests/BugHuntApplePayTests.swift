@@ -45,8 +45,7 @@ struct BugHuntApplePayTests {
     /// A partial refund at the till fires both the tap trigger and Wallet's
     /// refund notification, and each one takes the refund off again, so a
     /// A$20 refund lowers a A$45 purchase to A$5.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a till refund is applied twice: once by the tap, once by its Wallet notification"))
+    @Test(.bug("a till refund is applied twice: once by the tap, once by its Wallet notification"))
     func aTillRefundAndItsNotificationTakeTheRefundOffOnce() async throws {
         let ctx = store(), b = book()
         try await tap("Coles", "A$45.00", at: -86_400, ctx: ctx, book: b)
@@ -156,6 +155,30 @@ struct BugHuntApplePayTests {
     }
 
     // MARK: - Regression guards for the fixes above
+
+    /// P1's guard must not swallow a real second refund: two A$20 refunds
+    /// reported by the same trigger are two refunds.
+    @Test func twoRefundsFromOneTriggerBothCount() async throws {
+        let ctx = store(), b = book()
+        try await tap("Coles", "A$45.00", at: -86_400, ctx: ctx, book: b)
+        try await tap("Coles", "-A$20.00", at: 0, ctx: ctx, book: b)
+        try await tap("Coles", "-A$20.00", at: 60, ctx: ctx, book: b)
+        let purchase = try #require(try rows(ctx).first { !$0.refunded })
+        #expect(purchase.amount == Decimal(string: "5.00"))
+    }
+
+    /// A whole refund reported by both triggers marks one of two same-amount
+    /// purchases, not both.
+    @Test func aWholeRefundAndItsNotificationRefundOnePurchase() async throws {
+        let ctx = store(), b = book()
+        try await tap("Coles", "A$20.00", at: -2 * 86_400, ctx: ctx, book: b)
+        try await tap("Coles", "A$20.00", at: -86_400, ctx: ctx, book: b)
+        try await tap("Coles", "-A$20.00", at: 0, ctx: ctx, book: b)
+        try await notified("NAB Visa Debit", "Coles", "Refund A$20.00", at: 3, ctx: ctx, book: b)
+        let all = try rows(ctx)
+        #expect(all.count == 2)
+        #expect(all.filter(\.refunded).count == 1)
+    }
 
     /// The same shop spelled two ways still pairs a tap with its online
     /// notification (the shop check P2/P3 added must not split them).

@@ -229,9 +229,21 @@ struct LogPurchaseIntent: AppIntent {
             // total goes down. Refunds can take weeks, so look back 60 days.
             if refund, let p = parsed, p.amount > 0 {
                 let currency = p.currency ?? fallbackCurrency(cardID)
-                if Refunds.markRefunded(amount: p.amount, currency: currency, card: cardID, merchant: name,
-                                          platform: nil, before: now, lookbackDays: 60, in: context) {
+                // A till refund fires both triggers: the second report of
+                // one refund is not taken off again.
+                if let earlier = try Self.sameRefund(amount: p.amount, currency: currency, card: cardID, merchant: name,
+                                                     trigger: trigger, now: now, in: context) {
+                    return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) was already noted",
+                                   transaction: earlier, merged: true, refund: true)
+                }
+                func noted(_ t: Transaction) {
+                    Self.recordRefund(RefundReport(row: t.id, amount: p.amount, currency: currency,
+                                                   date: now, trigger: trigger.rawValue))
+                }
+                if let whole = Refunds.markRefundedPurchase(amount: p.amount, currency: currency, card: cardID, merchant: name,
+                                                            platform: nil, before: now, lookbackDays: 60, in: context) {
                     try context.save()
+                    noted(whole)
                     return Outcome(message: "Refund of \(Money.format(p.amount, currency)) from \(name.isEmpty ? "the shop" : name) noted — the purchase no longer counts",
                                    transaction: nil, merged: true, refund: true)
                 }
@@ -241,6 +253,7 @@ struct LogPurchaseIntent: AppIntent {
                                                                  merchant: name, platform: nil, before: now,
                                                                  lookbackDays: 60, in: context) {
                     try context.save()
+                    noted(reduced)
                     await FXService.backfill(in: context)
                     let shop = reduced.merchant.isEmpty ? (name.isEmpty ? "the shop" : name) : reduced.merchant
                     return Outcome(message: "\(Money.format(p.amount, currency)) refund on \(shop) noted",
@@ -281,6 +294,8 @@ struct LogPurchaseIntent: AppIntent {
             if refund, !t.refunded {
                 t.refunded = true
                 try context.save()
+                Self.recordRefund(RefundReport(row: t.id, amount: t.amount, currency: t.currencyCode,
+                                               date: now, trigger: trigger.rawValue))
                 return Outcome(message: "Refund of \(Money.format(t.amount, t.currencyCode)) from \(t.merchant) noted", transaction: t, merged: false, refund: true)
             }
             // The first purchase the app logged on its own (once per install).
@@ -434,6 +449,66 @@ struct LogPurchaseIntent: AppIntent {
 
     /// An unknown card on either side never disagrees; two known cards must match.
     private static func cardsAgree(_ a: Card, _ b: Card) -> Bool { a == .other || b == .other || a == b }
+
+    // MARK: - One refund, two triggers (bug hunt 3 Oct 2026, P1)
+
+    /// A refund one trigger has already taken off. A refund at the till
+    /// fires the tap trigger and Wallet's refund notification, seconds
+    /// apart; the purchase it changed carries no time of the change, so this
+    /// short list is how the second report knows it is the same refund. No
+    /// shop or card name is kept here: those are read from the row itself.
+    nonisolated struct RefundReport: Codable, Equatable, Sendable {
+        /// The purchase it marked or lowered, or its own refunded row.
+        var row: UUID
+        var amount: Decimal
+        var currency: String
+        var date: Date
+        /// `TapTrigger` raw value of the run that applied it.
+        var trigger: String
+    }
+
+    static let refundReportsKey = "recentRefundReports"
+    nonisolated static let refundReportsCap = 50
+
+    static func refundReports(_ defaults: UserDefaults = reachDefaults) -> [RefundReport] {
+        guard let data = defaults.data(forKey: refundReportsKey) else { return [] }
+        return (try? JSONDecoder().decode([RefundReport].self, from: data)) ?? []
+    }
+
+    private static func saveRefundReports(_ reports: [RefundReport], _ defaults: UserDefaults = reachDefaults) {
+        guard let data = try? JSONEncoder().encode(Array(reports.prefix(refundReportsCap))) else { return }
+        defaults.set(data, forKey: refundReportsKey)
+    }
+
+    static func recordRefund(_ report: RefundReport, defaults: UserDefaults = reachDefaults) {
+        saveRefundReports([report] + refundReports(defaults), defaults)
+    }
+
+    /// The row an earlier report of this same refund already changed: the
+    /// other trigger, within `triggerPairWindow`, same amount and currency,
+    /// and the row still in this store with its card and shop agreeing (the
+    /// same loose shop rule `Refunds` used to pick it). Each report pairs
+    /// once, so two real refunds of one amount each count.
+    @MainActor
+    static func sameRefund(amount: Decimal, currency: String, card: Card, merchant: String,
+                           trigger: TapTrigger, now: Date, in context: ModelContext,
+                           defaults: UserDefaults = reachDefaults) throws -> Transaction? {
+        var reports = refundReports(defaults)
+        for (i, r) in reports.enumerated() {
+            guard r.trigger != trigger.rawValue, abs(r.date.timeIntervalSince(now)) <= triggerPairWindow,
+                  r.amount == amount, r.currency == currency else { continue }
+            let id = r.row
+            guard let t = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })).first,
+                  cardsAgree(t.card, card),
+                  merchant.isEmpty || lacksShop(t) || Deduper.similarity(t.rawMerchant, merchant) >= 0.3
+                      || Deduper.similarity(t.merchant, merchant) >= 0.3
+            else { continue }
+            reports.remove(at: i)
+            saveRefundReports(reports, defaults)
+            return t
+        }
+        return nil
+    }
 
     private static func setShop(_ t: Transaction, to name: String, recategorise: Bool, in context: ModelContext) throws {
         t.rawMerchant = name
