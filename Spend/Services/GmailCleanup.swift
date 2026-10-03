@@ -33,7 +33,13 @@ enum GmailCleanup {
         var found: [String] = []
         for prefix in keychainPrefixes {
             for account in tokens.accounts(prefix) {
-                if prefix == "google-refresh-", let token = tokens.get(account) { found.append(token) }
+                if prefix == "google-refresh-", let token = tokens.get(account) {
+                    // On the revoke list before the item goes: the list keeps
+                    // it until Google confirms, so an app closed mid-request
+                    // does not leave the grant on for good.
+                    GoogleAuth.addPending(token)
+                    found.append(token)
+                }
                 tokens.delete(account)
             }
         }
