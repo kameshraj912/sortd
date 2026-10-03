@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>soon. – Sortd</title>
-<meta name="description" content="Sortd is a free iPhone app that logs your Apple Pay taps by itself. The beta opens 9 October. Get on the list.">
+<meta name="description" content="Tap to pay. Sortd writes it down. A free iPhone app that logs your Apple Pay purchases by itself. The beta opens 9 October. Get on the list.">
 <link rel="canonical" href="https://soon.sortd.page/">
 <meta name="theme-color" content="#141416">
 <meta name="color-scheme" content="dark">
@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css?v=4">
-<script src="app.js?v=2" defer></script>
+<script src="app.js?v=3" defer></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -71,13 +71,8 @@
             <label><input type="radio" name="applepay" value="no"> No</label>
             <label><input type="radio" name="applepay" value="not sure"> Not sure</label>
           </div>
-          <p class="hint">Sortd logs every tap by itself. Yes, even the 2am Uber&nbsp;Eats.</p>
+          <p class="hint">Sortd logs your taps by itself. Yes, even the 2am&nbsp;takeaway.</p>
         </fieldset>
-        <div class="f">
-          <label for="gmail">Gmail address <span class="opt">optional</span></label>
-          <input id="gmail" name="gmail" type="email" autocomplete="off" inputmode="email" maxlength="254">
-          <p class="hint">Only if you want Sortd to find your receipts. Google is still reviewing Sortd, so we'll add you as a tester&nbsp;first.</p>
-        </div>
         <button class="save" type="submit">Save my spot</button>
       </div>
       <div class="hp" aria-hidden="true"><label for="website">Leave this empty</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
@@ -87,8 +82,8 @@
     </form>
 
     <div class="done" id="done" role="status" hidden>
-      <h2 tabindex="-1">You're in.</h2>
-      <p>Your invite goes to <b id="done-email">your email</b> the day the beta opens. Not a day sooner. (We&nbsp;checked.)</p>
+      <h2 tabindex="-1">You've been Sortd.</h2>
+      <p>You're in. Your invite goes to <b id="done-email">your email</b> the day the beta opens. Not a day sooner. (We&nbsp;checked.)</p>
       <button class="share" type="button" data-share>Tell a friend who still types in their&nbsp;coffees</button>
     </div>
   </section>
@@ -96,8 +91,8 @@
   <section class="clues" aria-labelledby="clues-h">
     <h2 id="clues-h">Three clues.</h2>
     <div class="cards">
-      <article><span class="n">01</span><h3>It knows about the coffee.</h3><p>Every Apple Pay tap, logged by itself. All of them. Even the second one.</p></article>
-      <article><span class="n">02</span><h3>It reads receipts. Not your texts.</h3><p>Online orders come in from Gmail, read-only, on your phone. Paper ones from the camera.</p></article>
+      <article><span class="n">01</span><h3>It knows about the coffee.</h3><p>Apple Pay in shops, in apps and on websites, logged by itself. (Apps and websites need iOS&nbsp;27.) Even the second&nbsp;one.</p></article>
+      <article><span class="n">02</span><h3>It reads receipts. Not your inbox.</h3><p>Point the camera at a paper one and it fills in the shop and total. Nothing reads your email.</p></article>
       <article><span class="n">03</span><h3>It costs $0.</h3><p>Other money apps charge you monthly to show you where your money went. (Mostly to&nbsp;them.)</p></article>
     </div>
   </section>
@@ -110,9 +105,9 @@
 </main>
 
 <footer class="foot">
-  <p class="origin">No ads. No bank login. No subscription to forget&nbsp;about.<br><b>We looked for the catch. There isn&rsquo;t&nbsp;one.</b></p>
+  <p class="origin">No ads. No bank login. No subscription to forget&nbsp;about.<br><b>We looked for the catch. There isn&rsquo;t&nbsp;one.</b><br>Consider it&nbsp;Sortd.</p>
   <p><a href="https://sortd.page">sortd.page</a> · <a href="https://sortd.page/privacy">Privacy</a> · <a href="mailto:support@sortd.page">support@sortd.page</a></p>
-  <p class="legal">© 2026 Sortd. Apple Pay and iPhone are trademarks of Apple Inc. Gmail is a trademark of Google LLC. Sortd isn't affiliated with Apple or Google.</p>
+  <p class="legal">© 2026 Sortd. Apple Pay and iPhone are trademarks of Apple Inc. Sortd isn't affiliated with Apple.</p>
 </footer>
 </body>
 </html>
