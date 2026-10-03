@@ -106,9 +106,12 @@ enum TransactionLogger {
     /// Bulk imports pass `learned` (read once) and `save: false`, then save
     /// once at the end: one disk write and one screen refresh, not hundreds.
     /// Unsaved purchases still count for matching (fetches include them).
+    /// `commit` is how a save reaches disk; only a test changes it, to make
+    /// the save fail.
     @discardableResult
     static func log(_ p: IncomingPurchase, in context: ModelContext, excluding: Set<UUID> = [],
-                    learned known: [String: SpendCategory]? = nil, save: Bool = true) throws -> Outcome {
+                    learned known: [String: SpendCategory]? = nil, save: Bool = true,
+                    commit: (ModelContext) throws -> Void = { try $0.save() }) throws -> Outcome {
         let learned = try known ?? learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
@@ -130,7 +133,7 @@ enum TransactionLogger {
         if let i = Deduper.match(candidate, in: pool) {
             let existing = nearby[i]
             merge(p, into: existing)
-            if save { try context.save() }
+            if save { try commit(context) }
             return .merged(existing)
         }
 
@@ -148,7 +151,17 @@ enum TransactionLogger {
         txn.platform = p.platform
         txn.tapOrigins = p.tapOrigin?.rawValue
         context.insert(txn)
-        if save { try context.save() }
+        if save {
+            do {
+                try commit(context)
+            } catch {
+                // A save that failed leaves the row pending in the context. Take
+                // it out, or the person's retry adds a second one and the next
+                // save that works writes both (hand-typed rows never de-dupe).
+                context.delete(txn)
+                throw error
+            }
+        }
         return .added(txn)
     }
 
