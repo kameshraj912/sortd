@@ -127,8 +127,7 @@ struct BugHuntApplePayTests {
 
     /// "Check the Shortcut" sends "Sortd Check A$0.01 Test Card"; its row
     /// is hidden, but the card is saved to the person's card list for good.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("the Apple Pay health check saves a 'Test Card' card"))
+    @Test(.bug("the Apple Pay health check saves a 'Test Card' card"))
     func theHealthCheckDoesNotSaveATestCard() async throws {
         let ctx = store(), b = book()
         _ = try await LogWalletTapIntent.handle(ApplePayHealthCheck.payloadText, in: ctx, book: b, now: now)
