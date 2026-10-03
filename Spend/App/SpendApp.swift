@@ -36,6 +36,14 @@ struct SpendApp: App {
     init() {
         let launch = Perf.begin("launch.init")
         defer { launch.end() }
+        // SpendTests hosts inside Sortd.app and shares its defaults. A few
+        // tests set the home currency to AUD for as long as they run, while
+        // others read `Money.home` before and after a slow await, so they saw
+        // it change (3 Oct 2026). Pinned here, before any test runs, the
+        // value never moves. Never set outside a test run.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            UserDefaults.standard.set("AUD", forKey: Money.homeKey)
+        }
         CrashReporting.start()
         // Finish any tip left unfinished, listen for new ones, load prices.
         TipJar.shared.start()

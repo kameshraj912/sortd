@@ -1,16 +1,18 @@
 # Sortd Money
 
-> Sortd Money is an iPhone spending tracker. Apple Pay taps log themselves through one Shortcuts automation, and receipts can come from Gmail (read-only) or the camera. Purchases are stored on the iPhone, with optional encrypted iCloud backup to the user's own iCloud. No ads, no tracking across apps, no bank passwords. Anonymous usage counts and crash reports (never amounts, shops or card digits) can be turned off in Settings. Signing in with Apple or Google is optional.
+> Sortd Money is an iPhone spending tracker. Apple Pay purchases log themselves through one Shortcuts automation: taps in shops from the tap, and payments in apps and on websites from Wallet's notification (iOS 27 or later, if the card sends one). Paper receipts come in with the camera, and past spending from a bank statement import. Purchases stay on the iPhone, with optional encrypted iCloud backup to the user's own iCloud. No ads, no tracking across apps, no bank passwords, no email access. Usage counts and crash reports (never amounts, shops or card digits) can be turned off in Settings. Signing in with Apple or Google is optional; Google sign-in only says who you are.
 
 - Platform: iPhone, iOS 26 or later
-- Price: free. Every feature, including Gmail receipts, the receipt camera, Insights, subscriptions and bills, and budgets. An optional tip jar unlocks nothing.
+- Price: free. Every feature, including the receipt camera, Insights, subscriptions and bills, and budgets.
 - Currencies: 30+ currencies, converted at that day's European Central Bank rate.
+- Limits: Apple's Wallet trigger can miss a payment. Cash and cards that are not in Apple Pay are added by hand, with the camera or from a statement.
 - Status: not released yet. The TestFlight beta is planned to open around 9 October 2026; sign up to get the link.
+- Sign-off: Consider it Sortd.
 
 ## Pages
 
 - [Home](https://sortd.page/): what Sortd does and how the Apple Pay logging works
-- [Help and support](https://sortd.page/support): setup, Gmail, card digits, currencies, iCloud backup, accounts, deleting data
+- [Help and support](https://sortd.page/support): setup, card digits, currencies, iCloud backup, accounts, deleting data
 - [Privacy policy](https://sortd.page/privacy): what data exists, where it stays, and what usage data is sent
 - [Terms of use](https://sortd.page/terms)
 - [Join the beta](https://sortd.page/beta)

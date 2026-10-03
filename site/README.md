@@ -4,7 +4,7 @@ Seven static pages, one stylesheet and one small script. No build step, no exter
 external script is Cloudflare Turnstile on the beta form.
 
 - `index.html` — home
-- `privacy.html` — privacy policy (includes Google's Limited Use sentence)
+- `privacy.html` — privacy policy (Gmail receipts were removed 2 Oct 2026; Google sign-in is identity only, so no Limited Use sentence)
 - `support.html` — FAQ and contact
 - `terms.html` — terms of use
 - `beta.html`, `beta-thanks.html` — beta sign-up form and thank-you page
@@ -19,6 +19,8 @@ support@sortd.page. That address needs email forwarding set up at the domain reg
 (free at most registrars) so it reaches your inbox. Update "Last updated" when the policy changes.
 
 If the app's behaviour changes (new data, new services it talks to), update `privacy.html` first.
+Every page's footer carries the sign-off "Consider it Sortd." ("You've been Sortd." is only for the sign-up
+thank-you screens.) `img/gmail-light.jpg` and `img/gmail-dark.jpg` are no longer used by any page.
 
 ## Publishing
 
@@ -34,5 +36,5 @@ fetch the new copy. Email to support@sortd.page is forwarded by Cloudflare Email
 
 `index.html` opens with the "Oops. You found us early." card (`#early`), which covers the whole home page
 and links to soon.sortd.page. `site.js` adds the `gate` class on `/` only; other pages are not gated.
-Keep the card's one-line description and the privacy link: Google's Gmail verification checks the home page.
+Keep the card's one-line description and the privacy link: the card is all a visitor sees while the gate is up.
 To lift the gate: delete the `<dialog id="early">` block and the gate lines in `site.js`.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Help and Support – Sortd Money</title>
-<meta name="description" content="How to set up Apple Pay auto-logging, connect Gmail, add card digits, handle currencies and delete your data in Sortd Money.">
+<meta name="description" content="How to set up Apple Pay auto-logging, add card digits, handle currencies, back up and delete your data in Sortd Money.">
 <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/png" href="img/favicon.png">
@@ -13,12 +13,12 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sortd Money">
 <meta property="og:title" content="Help and Support – Sortd Money">
-<meta property="og:description" content="How to set up Apple Pay auto-logging, connect Gmail, add card digits, handle currencies and delete your data in Sortd Money.">
+<meta property="og:description" content="How to set up Apple Pay auto-logging, add card digits, handle currencies, back up and delete your data in Sortd Money.">
 <meta property="og:url" content="https://sortd.page/support">
 <meta property="og:image" content="https://sortd.page/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="style.css?v=35">
-<script src="site.js?v=34"></script>
+<link rel="stylesheet" href="style.css?v=37">
+<script src="site.js?v=36"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -43,16 +43,15 @@
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
   <p>Answers to common questions. If yours isn't here, email <a href="mailto:support@sortd.page">support@sortd.page</a>.</p>
 
-  <h2 id="apple-pay">How do I log Apple Pay taps automatically?</h2>
+  <h2 id="apple-pay">How do I log Apple Pay automatically?</h2>
   <p>You set up one automation in Apple's Shortcuts app. It takes about a minute, and Sortd's setup shows a picture of every step. You can also find it later in Settings › Purchase Sources › Apple Pay Logging.</p>
   <h3>The quick way</h3>
   <ol>
-    <li><a href="/apple-pay.shortcut"><strong>Get the ready-made shortcut</strong></a> on your iPhone, then tap the download, then <strong>Add Shortcut</strong>. It already knows which part of the tap is the amount, the shop and the card.</li>
-    <li>In Shortcuts, open <strong>Automation</strong> and tap <strong>+</strong>.</li>
-    <li>Choose <strong>Wallet</strong>, pick the cards you pay with, choose <strong>Run Immediately</strong>, and turn <strong>Notify When Run</strong> off.</li>
-    <li>Add the action <strong>Run Shortcut</strong>, choose <strong>Log Apple Pay in Sortd</strong>, and set its input to <strong>Shortcut Input</strong>.</li>
-    <li>Tap back to save. Pay with Apple Pay in a shop and it shows up in Sortd.</li>
+    <li><strong>Get the shortcut.</strong> <a href="/apple-pay.shortcut"><strong>Get the ready&#8209;made shortcut</strong></a> on your iPhone, then tap <strong>Add Shortcut</strong>. It already knows which part of the payment is the amount, the shop and the card.</li>
+    <li><strong>Run it once and tap Allow.</strong> Press ▶ in the shortcut and tap <strong>Allow</strong>. Then come back to Sortd.</li>
+    <li><strong>Turn the automation on.</strong> In the shortcut, tap <strong>&rsaquo;</strong> next to "tapped", then switch on <strong>Automation</strong>. On iOS 27 or later the shortcut has two "When…" lines (the tap and Wallet's notification). Turn both automations on: tap <strong>&rsaquo;</strong> next to each line and switch on <strong>Automation</strong>.</li>
   </ol>
+  <p>That's it. Pay with Apple Pay and it shows up in Sortd.</p>
   <h3>By hand</h3>
   <ol>
     <li>Open Shortcuts and tap <strong>+</strong> at the bottom. On the next screen tap <strong>Edit</strong> at the top right.</li>
@@ -62,37 +61,24 @@
     <li>Do the same for <strong>Shop</strong> (choose Merchant). Tap <strong>&rsaquo;</strong> to show <strong>Card</strong> and choose <strong>Card or Pass</strong>.</li>
     <li>Tap back to save. That's it.</li>
   </ol>
-  <p class="note">Pressing ▶ in Shortcuts is only a test: it has no purchase in it, so Sortd replies "connected" and saves nothing. Pay with Apple Pay in a shop to log a real one. Only in-store taps trigger the automation. Online and in-app purchases come in from email receipts if you connect Gmail.</p>
+  <p class="note">Pressing ▶ in Shortcuts is only a test. It has no purchase in it, so nothing is saved. Pay with Apple Pay to log a real one. Taps in shops log from the tap. On iOS 27 or later, payments in apps and on websites log from Wallet's notification, if your card sends one. Before iOS 27, only taps in shops are logged.</p>
 
   <h3>A tap shows the wrong shop, amount or card</h3>
-  <p>Open Settings › Purchase Sources › Apple Pay Logging in Sortd. Under <strong>Last Tap Received</strong> you'll see exactly what Apple Pay sent. If Apple Pay sent no amount, Sortd still saves the purchase and marks it so you can add the amount.</p>
+  <p>Open Settings › Purchase Sources › Apple Pay Logging in Sortd and press and hold the status card at the top. <strong>Last Tap Received</strong> shows exactly what Apple Pay sent. If the shop or amount came in blank, Sortd still saves the purchase and marks it <strong>Needs a check</strong>, so you can fix it in Activity.</p>
 
-  <h2>How do I connect Gmail?</h2>
-  <p>Gmail is optional. In Sortd, go to Settings › Purchase Sources › Connect Gmail, read the short explanation, and tap "Continue with Google". Sign in and allow Sortd to read your email. Sortd can only read; it can't send, delete or change anything.</p>
-  <p>Sortd then searches for receipts and bank alerts from the last 120 days and adds them. After that it checks for new ones when you open the app, or when you tap Sync Now.</p>
-
-  <h3>Google says the app isn't verified</h3>
-  <p>While Sortd is being reviewed by Google, Google shows a warning that the app hasn't been verified. During this testing period:</p>
+  <h2 id="missed">Why wasn't a purchase logged?</h2>
   <ul>
-    <li>Only Gmail accounts added as testers can connect.</li>
-    <li>To continue past the warning, tap "Advanced", then the link to go on to Sortd.</li>
-    <li>Google may end access after 7 days. If Sortd says Google access has ended, disconnect that Gmail and connect it again.</li>
+    <li><strong>Apple's trigger missed it.</strong> Apple's Wallet trigger sometimes misses a payment, most often at vending machines, transport gates and parking. Sortd sees when a payment arrives, not your automation.</li>
+    <li><strong>It was in an app or on a website.</strong> Those need iOS 27 or later, both automations switched on, and a card that shows a Wallet notification. If your bank doesn't send one, there is nothing for Sortd to read.</li>
+    <li><strong>It wasn't Apple Pay.</strong> Cash, and cards that aren't in Apple Pay, are never seen.</li>
   </ul>
-
-  <h2>Why was a receipt missed?</h2>
-  <ul>
-    <li><strong>No amount in the email.</strong> Sortd only adds a purchase when it can find the total in the email text. It never guesses an amount.</li>
-    <li><strong>The receipt is only a link.</strong> Some emails just say "view your receipt" and link to a website. Sortd reads the email itself, not linked pages, so there's nothing to read.</li>
-    <li><strong>It didn't look like a receipt.</strong> Sortd searches for emails Gmail files under Purchases, or with subjects like "receipt", "invoice", "order confirmation", "payment received" or "refund". Emails in Gmail's Promotions or Social tabs, and marketing subjects (sales, discounts, newsletters), are skipped.</li>
-    <li><strong>It's too old.</strong> The first sync looks back 120 days.</li>
-  </ul>
-  <p>You can always add a purchase by hand.</p>
+  <p>You can always add the purchase by hand (the + button), scan the receipt with the camera, or import a statement in Settings › Backup &amp; Data › Import.</p>
 
   <h2 id="digits">Which last 4 digits should I enter for a card?</h2>
   <p>Sortd matches purchases to your cards by their last 4 digits. A card can have two numbers:</p>
   <ul>
-    <li><strong>Card number:</strong> the last 4 digits printed on your card or shown in your bank's app. Bank emails usually show this one.</li>
-    <li><strong>Apple Pay number (Device&nbsp;Account Number):</strong> Apple Pay pays with its own number, so Apple Pay receipts and taps often show this instead. Find it in Wallet › your card › ••• › Card Details › Device Account Number. Your Apple Watch has a different one from your iPhone; Sortd usually learns it the first time you pay with the Watch.</li>
+    <li><strong>Card number:</strong> the last 4 digits printed on your card or shown in your bank's app. Receipts and statements usually show this one.</li>
+    <li><strong>Apple Pay number (Device&nbsp;Account Number):</strong> Apple Pay pays with its own number, so Apple Pay receipts and taps often show this instead. Find it in Wallet › your card › ••• › Card Details › Device Account Number.</li>
   </ul>
   <p>If you have two cards from the same bank, Sortd asks for the Apple Pay number of each, because that's the only way to tell them apart when you tap. Sortd only ever asks for the last 4 digits, never the full number.</p>
 
@@ -104,33 +90,44 @@
   </ul>
   <p>Converted amounts are estimates. Your bank's rate and fees may differ.</p>
 
-  <h2 id="check-in">How do I change my check-in or setup answers?</h2>
+  <h2 id="check-in">How do I change my check&#8209;in or setup answers?</h2>
   <ul>
-    <li><strong>Check-in:</strong> Settings › Bills &amp; Reminders › Check-in. Pick Each morning, Each evening, Sunday recap, or Only when it matters (no regular check-ins). It never shows amounts.</li>
+    <li><strong>Check&#8209;in:</strong> Settings › Bills &amp; Reminders › Check&#8209;In. Pick Each morning, Each evening, Sunday recap, or Off. It never shows amounts.</li>
     <li><strong>Setup answers:</strong> Settings › Help &amp; Feedback › Run Setup Again. Your purchases and cards stay as they are.</li>
   </ul>
-  <p>If the check-in never arrives, notifications may be off for Sortd. Turn them on in your iPhone's Settings › Notifications › Sortd.</p>
+  <p>If the check&#8209;in never arrives, notifications may be off for Sortd. Turn them on in your iPhone's Settings › Notifications › Sortd.</p>
 
   <h2>How do I delete my data?</h2>
   <ul>
-    <li><strong>Everything:</strong> Settings › Backup &amp; Data › Delete All Data. This removes every purchase, card, budget, setting and setup answer from your iPhone, turns off your check-in and reminders, and disconnects Gmail. If iCloud backup is on, the iCloud copy goes too, and if you're signed in, you're signed out. It can't be undone.</li>
-    <li><strong>One Gmail account:</strong> Settings › Purchase Sources, find the account under Email Receipts, then tap Disconnect. You can also delete the purchases only that account added.</li>
+    <li><strong>Everything:</strong> Settings › Backup &amp; Data › Delete All Data. This removes every purchase, card, budget, setting and setup answer from your iPhone, and turns off your check&#8209;in and reminders. If iCloud backup is on, the iCloud copy goes too, and if you're signed in, you're signed out. It can't be undone.</li>
     <li><strong>A copy first:</strong> Settings › Backup &amp; Data › Save a Backup, or Export as Spreadsheet.</li>
   </ul>
   <p>Your purchases are only on your iPhone (and in your own iCloud, if you turned on iCloud backup), so we can't delete them for you, and we can't restore them after you delete them.</p>
 
-  <h2 id="icloud">How do I back up to iCloud, or move to a new iPhone?</h2>
+  <h2 id="icloud-backup">How do I back up to iCloud, or move to a new iPhone?</h2>
   <ul>
     <li><strong>Turn it on:</strong> Settings › Backup &amp; Data › Back up to iCloud. Sortd encrypts your purchases on your iPhone first, and keeps them up to date by itself. Tap Back Up Now to save straight away.</li>
     <li><strong>On a new iPhone:</strong> sign in to the same Apple Account with iCloud Keychain on, open Sortd, and tap Restore from iCloud. Choose Add What's Missing or Replace Everything.</li>
     <li><strong>Turn it off:</strong> switch it off and choose whether to delete the iCloud copy or keep it.</li>
   </ul>
 
+  <h2 id="app-lock">How does App Lock work?</h2>
+  <p>Settings › Privacy &amp; Security › Require Face ID. Sortd then asks for Face ID (or Touch ID) when you open it, and takes your iPhone passcode if that fails. You choose how soon it locks again after you leave: straight away, or after a short while.</p>
+  <ul>
+    <li><strong>Nothing extra to remember:</strong> it uses the Face ID and passcode already on your iPhone. iOS does the check and only tells Sortd yes or no.</li>
+    <li><strong>Logging keeps working:</strong> Apple Pay purchases are still logged while Sortd is locked.</li>
+    <li><strong>Widgets:</strong> shop names are hidden while your iPhone is locked. Amounts follow Show Amounts When Locked.</li>
+  </ul>
+
+  <h2 id="stays-on-iphone">What stays on my iPhone?</h2>
+  <p>Your purchases, cards, budgets and settings. So do your setup answers, the notifications Sortd makes, the receipt reading, and the summary your widgets show. None of it is sent to us.</p>
+  <p>What can leave: an encrypted copy to your own iCloud, if you turn on iCloud backup, and usage counts and crash reports, which never include what you bought. The <a href="privacy">privacy policy</a> has the full list.</p>
+
   <h2 id="account">Do I need an account?</h2>
   <p>No. Every feature works without one. If you want, Settings › Account lets you sign in with Apple or Google. It helps us find you if you ask for help. Your purchases stay on your iPhone either way, and signing in with Google doesn't give Sortd your Gmail.</p>
   <ul>
     <li><strong>Sign out:</strong> Settings › Account › Sign Out. Your purchases stay.</li>
-    <li><strong>Delete your account:</strong> Settings › Account › Delete Account. Sortd asks Apple or Google to cancel the sign-in and deletes your usage record. Choose Delete Account and All Data to wipe the app too.</li>
+    <li><strong>Delete your account:</strong> Settings › Account › Delete Account. Sortd asks Apple or Google to cancel the sign&#8209;in and deletes your usage record. Choose Delete Account and All Data to wipe the app too.</li>
   </ul>
 
   <h2 id="usage">How do I turn off usage data?</h2>
@@ -138,6 +135,11 @@
 
   <h2 id="free">Is Sortd really free?</h2>
   <p>Yes. Every feature is free, for everyone. No subscription, no trial, no ads. If you paid for something in the app and want a refund, ask Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</p>
+
+  <h2 id="whats-new">What's new?</h2>
+  <ul>
+    <li><strong>1.0 (beta):</strong> the first TestFlight build. Apple Pay logging, the receipt camera, statement import, budgets, subscriptions and bills, Insights, widgets, App Lock and iCloud backup.</li>
+  </ul>
 
   <h2>Contact</h2>
   <p>Email <a href="mailto:support@sortd.page">support@sortd.page</a>. Please say which iPhone and iOS version you have. Don't send screenshots showing full card numbers or bank details.</p>
@@ -147,6 +149,7 @@
     <div class="foot-top">
       <div class="foot-brand">
         <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
+        <p class="footer-joke">Consider it Sortd.</p>
       </div>
       <nav aria-label="Footer">
       <a href="privacy">Privacy Policy</a>
@@ -157,7 +160,7 @@
     </div>
     <div class="foot-legal">
       <p class="foot-copy">© 2026 Sortd</p>
-      <p>Apple, Apple Pay, Apple Watch, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google and Gmail are trademarks of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
+      <p>Apple, Apple Pay, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google is a trademark of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
     </div>
   </div>
 </footer>
