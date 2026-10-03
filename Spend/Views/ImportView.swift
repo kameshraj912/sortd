@@ -316,9 +316,7 @@ struct ImportView: View {
                     backup = Data(reading.text.utf8)
                     stage = .backup
                 } else {
-                    let parsed = reading.wasScanned || !looksLikeCSV(reading.text)
-                        ? StatementImport.parse(text: reading.text)
-                        : StatementImport.parse(csv: reading.text)
+                    let parsed = StatementImport.parse(statement: reading.text, wasScanned: reading.wasScanned)
                     let found = parsed.rows
                     guard !found.isEmpty else {
                         foundNothing = true
@@ -340,19 +338,6 @@ struct ImportView: View {
             busy = false
             photo = nil
         }
-    }
-
-    /// A CSV has the same number of separators on most lines. Text pulled
-    /// out of a PDF does not.
-    private func looksLikeCSV(_ text: String) -> Bool {
-        let lines = text.split(whereSeparator: \.isNewline).prefix(10)
-        guard lines.count >= 2 else { return false }
-        let counts = lines.map { line in
-            max(line.filter { $0 == "," }.count,
-                max(line.filter { $0 == ";" }.count, line.filter { $0 == "\t" }.count))
-        }
-        guard let first = counts.first, first >= 2 else { return false }
-        return counts.filter { $0 == first }.count >= counts.count - 1
     }
 
     private func reset() {
