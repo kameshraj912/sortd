@@ -23,11 +23,14 @@ nonisolated enum Backup {
     /// anything about *this* device or a live login stays behind. A backup
     /// made while Gmail still existed may carry Gmail-era settings; they are
     /// not in this list, so a restore ignores them.
+    /// `AppLock.enabledKey`, spelt out: `AppLock` is main-actor bound.
+    static let appLockKey = "appLockEnabled"
+
     static let settingKeys = [
         "monthlyBudget",
         Money.homeKey,
         "cardStyle",
-        "appLockEnabled",
+        appLockKey,
         CategoryBudgets.key,
         "paymentReminders",
         "recurring.cancelled",
@@ -73,6 +76,9 @@ nonisolated enum Backup {
             var sourceAccount: String?
             /// `Transaction.tapOrigins`. Optional: older backups have none.
             var tapOrigins: String? = nil
+            /// Card digits that matched none of the cards, so "Which card?"
+            /// can find the purchase. Optional: older backups have none.
+            var unmatchedLast4: String? = nil
         }
 
         struct Imported: Codable {
@@ -147,7 +153,8 @@ nonisolated enum Backup {
                 seenIn: t.seenInRaw, note: t.note, createdAt: t.createdAt,
                 platform: t.platform, refunded: t.refunded, renewsOn: t.renewsOn,
                 billingPeriod: t.billingPeriod, sourceAccount: t.sourceAccount,
-                tapOrigins: t.tapOrigins
+                tapOrigins: t.tapOrigins,
+                unmatchedLast4: t.unmatchedLast4
             )
         }
 
@@ -203,6 +210,8 @@ nonisolated enum Backup {
     struct Result {
         var added = 0
         var skipped = 0
+        /// Rows left out because their date can't be real (see `plausible`).
+        var badDates = 0
         var rules = 0
         var cards = 0
         var settings = 0
@@ -210,10 +219,25 @@ nonisolated enum Backup {
         var summary: String {
             var parts = ["\(added) purchase\(added == 1 ? "" : "s") added"]
             if skipped > 0 { parts.append("\(skipped) already here") }
+            if badDates > 0 { parts.append(Backup.badDatesNote(badDates)) }
             if rules > 0 { parts.append("\(rules) category rule\(rules == 1 ? "" : "s")") }
             if cards > 0 { parts.append("\(cards) card\(cards == 1 ? "" : "s")") }
             return parts.joined(separator: " · ")
         }
+    }
+
+    /// 1 Jan 2000, UTC. Nothing Sortd logs is older.
+    static let earliestDate = Date(timeIntervalSince1970: 946_684_800)
+
+    /// Whether a restored purchase's date could be real: from 2000 to a year
+    /// from now (a bill can be dated ahead, never by years).
+    static func plausible(_ date: Date, now: Date = .now) -> Bool {
+        date >= earliestDate && date <= now.addingTimeInterval(366 * 24 * 60 * 60)
+    }
+
+    /// "2 rows skipped (dates that can't be right)", for the restore message.
+    static func badDatesNote(_ count: Int) -> String {
+        "\(count) row\(count == 1 ? "" : "s") skipped (dates that can't be right)"
     }
 
     static func decode(_ data: Data) throws -> Snapshot {
@@ -275,9 +299,13 @@ nonisolated enum Backup {
             if let setting = snapshot.settings[key] {
                 // On merge, don't stomp a setting the user has already chosen here.
                 if mode == .merge, defaults.object(forKey: key) != nil { continue }
+                // A restore never switches App Lock off, whatever the backup
+                // says: once it is on here, the backup can't change it. A
+                // backup may still switch it on, as it always could.
+                if key == appLockKey, defaults.bool(forKey: key) { continue }
                 defaults.set(setting.value, forKey: key)
                 result.settings += 1
-            } else if mode == .replace, key != "appLockEnabled" {
+            } else if mode == .replace, key != appLockKey {
                 // The backup phone never set this, so it had the default. Keep
                 // this phone's value and a budget or limit set here in one
                 // currency would be read in the backup's. The app lock is the
@@ -359,9 +387,15 @@ nonisolated enum Backup {
         let existing: Set<UUID> = mode == .replace ? [] : Set(mine.map(\.id))
         for row in snapshot.transactions {
             guard !existing.contains(row.id) else { result.skipped += 1; continue }
+            // A date no real purchase has (1900, 2200) only comes from a
+            // hand-edited file. It would sit outside every month for ever.
+            guard plausible(row.date) else { result.badDates += 1; continue }
+            // " aud " from a hand-edited file matches no rate and would count
+            // as zero in every total.
+            let currency = row.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             let t = Transaction(
                 date: row.date, merchant: row.merchant, rawMerchant: row.rawMerchant,
-                amount: row.amount, currencyCode: row.currencyCode,
+                amount: row.amount, currencyCode: currency,
                 card: Card(rawValue: row.card),
                 category: SpendCategory(rawValue: row.category) ?? .other,
                 source: TxnSource(rawValue: row.source) ?? .manual,
@@ -371,7 +405,7 @@ nonisolated enum Backup {
             // Converted in another currency: keep it only if it's already in this
             // one; otherwise leave it empty for FXService.backfill to convert.
             t.audAmount = (backupHome ?? homeAfter) == homeAfter ? row.homeAmount
-                : (row.currencyCode == homeAfter ? row.amount : nil)
+                : (currency == homeAfter ? row.amount : nil)
             t.seenInRaw = row.seenIn
             t.createdAt = row.createdAt
             t.platform = row.platform
@@ -380,6 +414,7 @@ nonisolated enum Backup {
             t.billingPeriod = row.billingPeriod
             t.sourceAccount = row.sourceAccount
             t.tapOrigins = row.tapOrigins
+            t.unmatchedLast4 = row.unmatchedLast4
             context.insert(t)
             result.added += 1
         }

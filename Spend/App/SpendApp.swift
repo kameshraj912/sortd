@@ -56,6 +56,9 @@ struct SpendApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         let context = Perf.measure("launch.container") { SpendStore.container.mainContext }
         WidgetBridge.watchSaves()
+        // Back online: the pending iCloud backup, FX rates and queued account
+        // deletes each try again (see `RootView`).
+        Connectivity.shared.start()
         #if SORTD_ICLOUD
         CloudBackup.watchSaves()
         #endif
@@ -364,6 +367,11 @@ struct RootView: View {
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
             #endif
         }
+        // Offline to online: the work that waited for a connection carries on.
+        .onChange(of: Connectivity.shared.isOnline) { old, new in
+            guard Connectivity.isReconnect(from: old, to: new), scenePhase == .active else { return }
+            Task { await Connectivity.catchUp(in: context) }
+        }
         // A tap on a widget opens the app at what the widget was showing.
         .onOpenURL { url in
             router.open(url)
@@ -465,7 +473,11 @@ struct RootView: View {
             #endif
             // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()
-            Perf.measure("launch.recategorise") { try? TransactionLogger.refreshUncategorised(in: context) }
+            Perf.measure("launch.recategorise") {
+                do { try TransactionLogger.refreshUncategorised(in: context) } catch {
+                    ErrorLog.report(error, where: "Launch.recategorise")
+                }
+            }
             // A tap Sortd couldn't save last time (spec 2026-09-26, failsafe
             // #8/#9): replay it now, at launch and every time the app comes
             // back to the foreground, not just once.

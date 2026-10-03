@@ -8,6 +8,7 @@ struct TransactionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingCategories = false
     @State private var confirmingDelete = false
+    @State private var saveFailed = false
     /// The Amount field works on text and only writes back a valid amount
     /// when you leave it. Binding straight to the number saved each keystroke,
     /// so clearing "21.90" left "2" behind.
@@ -149,6 +150,8 @@ struct TransactionDetailView: View {
         }
         .onChange(of: transaction.amount) { _, _ in refreshAUD() }
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
+        // A corrected date has its own day's rate.
+        .onChange(of: transaction.date) { _, _ in refreshAUD() }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
                 recategorise(to: category)
@@ -157,14 +160,19 @@ struct TransactionDetailView: View {
         // Shared with Activity: going back keeps the Undo for the rest of
         // its window.
         .recategoriseUndoToast()
+        .saveFailedAlert($saveFailed)
         // An alert, like the other irreversible confirmations: a dialog on
         // this form anchored itself to the Card row at the top, nowhere near
         // the Delete button (UI pass, 25 Sep).
         .alert("Delete this purchase?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) {
                 context.delete(transaction)
-                try? context.save()
-                dismiss()
+                if context.saveReporting(where: "TransactionDetail.delete") {
+                    dismiss()
+                } else {
+                    // The delete did not reach disk: stay here and say so.
+                    saveFailed = true
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -284,7 +292,14 @@ struct TransactionDetailView: View {
     /// Moves the shop and, when others moved too, offers Undo for a while.
     private func recategorise(to category: SpendCategory) {
         let from = transaction.category
-        guard let change = try? TransactionLogger.recategorise(transaction, to: category, in: context) else { return }
+        let change: RecategoriseChange
+        do {
+            change = try TransactionLogger.recategorise(transaction, to: category, in: context)
+        } catch {
+            ErrorLog.report(error, where: "TransactionDetail.recategorise")
+            saveFailed = true
+            return
+        }
         Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(category.rawValue)])
         PendingRecategorise.shared.stage(change)
         if let text = change.toastText {
@@ -294,7 +309,7 @@ struct TransactionDetailView: View {
 
     private func refreshAUD() {
         transaction.audAmount = transaction.currencyCode == Money.home ? transaction.amount : nil
-        try? context.save()
+        context.saveReporting(where: "TransactionDetail.refreshAUD")
         Task { await FXService.backfill(in: context) }
     }
 }

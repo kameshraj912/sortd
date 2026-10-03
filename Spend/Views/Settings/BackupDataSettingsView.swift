@@ -16,6 +16,7 @@ struct BackupDataSettingsView: View {
 
     #if SORTD_ICLOUD
     @State private var cloud = CloudBackup.shared
+    @State private var connectivity = Connectivity.shared
     @State private var confirmingSwitchOff = false
     @State private var confirmingRestore = false
     @State private var confirmingReplace = false
@@ -37,8 +38,10 @@ struct BackupDataSettingsView: View {
                             Text("Back up to iCloud")
                             // Redrawn each minute so "2 min ago" stays true.
                             TimelineView(.everyMinute) { tl in
-                                Text(cloud.status.message ?? Self.lastCloudText(cloud.lastBackup, now: tl.date))
-                                    .accessibilityLabel(cloud.status.message
+                                let line = CloudBackup.statusLine(status: cloud.status, isEnabled: cloud.isEnabled,
+                                                                  isBehind: cloud.behind, isOnline: connectivity.isOnline)
+                                Text(line ?? Self.lastCloudText(cloud.lastBackup, now: tl.date))
+                                    .accessibilityLabel(line
                                                         ?? Self.lastCloudText(cloud.lastBackup, now: tl.date, spoken: true))
                             }
                             .font(.footnote).foregroundStyle(.secondary)
@@ -328,8 +331,13 @@ extension BackupDataSettingsView {
                     return
                 }
                 Task { await FXService.backfill(in: context) }
-                restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
-                    : "\(added) purchase\(added == 1 ? "" : "s") added."
+                let badDates = cloud.lastRestoreBadDates
+                if badDates > 0 {
+                    restored = "\(added) purchase\(added == 1 ? "" : "s") added. \(Backup.badDatesNote(badDates))."
+                } else {
+                    restored = added == 0 ? "Nothing new to add. Everything in the backup is already here."
+                        : "\(added) purchase\(added == 1 ? "" : "s") added."
+                }
                 AccessibilityNotification.Announcement(restored ?? "").post()
             } catch {
                 cloudFailure = error.localizedDescription

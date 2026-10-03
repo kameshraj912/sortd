@@ -10,6 +10,7 @@ struct DeveloperMenuView: View {
     @State private var sentEvent = 0
     @State private var sentReport = 0
     @State private var confirmingCrash = false
+    @State private var recentErrors = ErrorLog.recent()
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—" }
@@ -85,6 +86,37 @@ struct DeveloperMenuView: View {
                     }
                 } header: {
                     BoldHeader("Recent Runs")
+                }
+
+                Section {
+                    if recentErrors.isEmpty {
+                        Text("None")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(recentErrors.enumerated()), id: \.offset) { _, item in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(item.place): \(item.type)")
+                                    .font(.footnote.weight(.semibold))
+                                if !item.message.isEmpty {
+                                    Text(item.message)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(item.date.formatted(date: .abbreviated, time: .standard))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                        Button("Clear", role: .destructive) {
+                            ErrorLog.clear()
+                            recentErrors = []
+                        }
+                    }
+                } header: {
+                    BoldHeader("Recent Errors")
+                } footer: {
+                    Text("The last 20 failures on this phone. Only the error type and place reach Sentry, never this text.")
                 }
             }
             .navigationTitle("Developer")

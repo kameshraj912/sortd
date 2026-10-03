@@ -22,6 +22,7 @@ struct TransactionsScreen: View {
     private var transactions: [Transaction]
 
     @State private var search = ""
+    @State private var saveFailed = false
     @State private var cardFilter: Card?
     @State private var categoryFilter: SpendCategory?
     @State private var showingAdd = false
@@ -164,8 +165,13 @@ struct TransactionsScreen: View {
                 // Nobody else moves: nothing to offer Undo for.
                 PendingRecategorise.shared.dismiss()
                 let from = change.transaction.category
-                _ = try? TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
-                                                        applyToOthers: false)
+                do {
+                    _ = try TransactionLogger.recategorise(change.transaction, to: change.category, in: context,
+                                                           applyToOthers: false)
+                } catch {
+                    ErrorLog.report(error, where: "Activity.recategorise")
+                    saveFailed = true
+                }
                 Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(change.category.rawValue)])
             }
             Button("Cancel", role: .cancel) {}
@@ -173,6 +179,7 @@ struct TransactionsScreen: View {
             Text("\"All\" also puts new \(change.transaction.merchant) purchases in \(change.category.name).")
         }
         .feedback(.delete, trigger: deleted)
+        .saveFailedAlert($saveFailed)
         .feedback(.undo, trigger: undone)
         .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
@@ -274,8 +281,15 @@ struct TransactionsScreen: View {
     /// (the shared `PendingRecategorise` window).
     private func recategorise(_ t: Transaction, to category: SpendCategory) {
         let from = t.category
-        guard let change = try? TransactionLogger.recategorise(t, to: category, in: context,
-                                                               excluding: pendingDeleteIDs) else { return }
+        let change: RecategoriseChange
+        do {
+            change = try TransactionLogger.recategorise(t, to: category, in: context,
+                                                        excluding: pendingDeleteIDs)
+        } catch {
+            ErrorLog.report(error, where: "Activity.recategorise")
+            saveFailed = true
+            return
+        }
         Analytics.shared.track(.categoryChanged, ["from": .string(from.rawValue), "to": .string(category.rawValue)])
         PendingRecategorise.shared.stage(change)
         if let text = change.toastText {

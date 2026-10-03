@@ -135,3 +135,9 @@ replaceRestoreMustNotKeepEmailIdsForPurchasesItDeleted, theFirstAmountInTheAlert
 
 ## Added 2 Oct 2026 (budgets and bills hunt, FullBudget*Tests)
 - aRaisedLimitCanAlertAgain (product decision: should raising a category limit re-arm its near/over alerts for the month?)
+
+## Added 2 Oct 2026 (full-data backup hunt)
+- aPurchaseTimeKeepsItsFractionOfASecond (backup dates are written with `.iso8601`, whole seconds only. Changing the date format risks older backups no longer reading, so it stays until Raj decides sub-second times matter)
+
+## Added 2 Oct 2026 (safety-net polish)
+- anUnconvertedForeignPurchaseIsNotMissingFromTheMonth (abuse-30: a foreign purchase with no exchange rate yet counts as zero in the widget's month total. Fails only on a machine with no cached rates, so it comes and goes between runs)
