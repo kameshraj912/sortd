@@ -17,8 +17,8 @@
 <meta property="og:url" content="https://sortd.page/beta">
 <meta property="og:image" content="https://sortd.page/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="style.css?v=35">
-<script src="site.js?v=34"></script>
+<link rel="stylesheet" href="style.css?v=37">
+<script src="site.js?v=36"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -69,18 +69,13 @@
     </div>
     <fieldset class="field">
       <legend>Do you pay with Apple Pay?</legend>
-      <p class="hint">Sortd logs every tap by itself. Yes, even the 2am Uber&nbsp;Eats.</p>
+      <p class="hint">Sortd logs your taps by itself. Yes, even the 2am takeaway.</p>
       <div class="choices">
         <label><input type="radio" name="applepay" value="yes" required> Yes</label>
         <label><input type="radio" name="applepay" value="no"> No</label>
         <label><input type="radio" name="applepay" value="not sure"> Not sure</label>
       </div>
     </fieldset>
-    <div class="field">
-      <label for="f-gmail">Gmail address <span class="opt">optional</span></label>
-      <input id="f-gmail" name="gmail" type="email" autocomplete="off" inputmode="email" maxlength="254" aria-describedby="f-gmail-hint">
-      <p class="hint" id="f-gmail-hint">Only if you want Sortd to find your receipts. They're in there somewhere, under 400 newsletters. Google is still reviewing Sortd, so we'll add you as a tester&nbsp;first.</p>
-    </div>
     <div class="hp" aria-hidden="true">
       <label for="f-website">Leave this empty</label>
       <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off">
@@ -96,9 +91,9 @@
 
   <div class="beta-done" id="beta-done" role="status" hidden>
     <svg class="done-tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="24"/><path d="M14 24.5l7 7 13-14" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <h2 class="as-h1">Got it. You're on the&nbsp;list.</h2>
+    <h2 class="as-h1">You've been Sortd.</h2>
     <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <p>We'll send the TestFlight link to <strong id="beta-done-email">your email</strong> the day the beta opens. Until then, try not to open your banking app. We'll deal with it&nbsp;soon.</p>
+    <p>You're on the list. We'll send the TestFlight link to <strong id="beta-done-email">your email</strong> the day the beta opens. Until then, try not to open your banking app. We'll deal with it&nbsp;soon.</p>
     <p class="muted">One email. No newsletters. No "we noticed you haven't opened the app"&nbsp;guilt&nbsp;trips.</p>
     <a class="btn btn-primary" href="/">OK, back to doomscrolling</a>
   </div>
@@ -110,6 +105,7 @@
     <div class="foot-top">
       <div class="foot-brand">
         <a class="brand" href="/"><img src="img/favicon.png" alt="" width="30" height="30"><b>sortd</b><small>money</small></a>
+        <p class="footer-joke">Consider it Sortd.</p>
       </div>
       <nav aria-label="Footer">
       <a href="privacy">Privacy Policy</a>
@@ -120,7 +116,7 @@
     </div>
     <div class="foot-legal">
       <p class="foot-copy">© 2026 Sortd</p>
-      <p>Apple, Apple Pay, Apple Watch, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google and Gmail are trademarks of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
+      <p>Apple, Apple Pay, Apple Intelligence, iPhone and App Store are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Google is a trademark of Google LLC. Sortd isn't affiliated with or endorsed by Apple or Google, or by the shops and banks named on this site.</p>
     </div>
   </div>
 </footer>
