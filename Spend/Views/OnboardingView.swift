@@ -750,7 +750,7 @@ struct OnboardingView: View {
             // so the page carries its weight instead of floating three buttons.
             VStack(alignment: .leading, spacing: 14) {
                 feature("person.crop.circle.badge.checkmark", "Help that knows you", "Ask a question and Sortd knows which install is yours.", Color.brandPalette[0])
-                feature("icloud", "Your iCloud copy, tied to you", "Restore on a new iPhone with one tap.", Color.brandPalette[2])
+                feature("trash", "Delete it any time", "Delete your account in Settings and your usage record goes with it.", Color.brandPalette[2])
                 feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Signing in doesn't change that.", Color.brandPalette[3])
             }
             .setupCard()
