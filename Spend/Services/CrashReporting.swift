@@ -124,6 +124,28 @@ enum CrashReporting {
         log.info("developer test report: sent")
     }
 
+    /// The exception type a non-fatal carries: the place in the code and the
+    /// error's type name. `scrub` drops an event's message and tags, so the
+    /// type is the one field that survives. Never put an error description
+    /// here; it can hold a merchant or an amount.
+    nonisolated static func nonFatalType(where place: String, errorType: String) -> String {
+        "\(place): \(errorType)"
+    }
+
+    nonisolated static func nonFatalEvent(where place: String, errorType: String) -> Event {
+        let event = Event(level: .warning)
+        event.exceptions = [Exception(value: "", type: nonFatalType(where: place, errorType: errorType))]
+        return event
+    }
+
+    /// One handled failure (`ErrorLog.report`). Only when the SDK is running,
+    /// which already means Release, a DSN and consent. The event goes through
+    /// `beforeSend`, so `scrub` has the last word on it like any crash.
+    static func captureNonFatal(where place: String, errorType: String) {
+        guard SentrySDK.isEnabled else { return }
+        SentrySDK.capture(event: nonFatalEvent(where: place, errorType: errorType))
+    }
+
     /// Context keys Sentry needs to group and show a crash: the device
     /// model, the OS and the app version. Nothing typed in the app lands
     /// there. Everything else in `context` goes; in particular the crash

@@ -77,17 +77,27 @@ struct CategorizerTests {
     }
 }
 
+@MainActor
 struct CardTests {
+    /// Its own book with the starter cards. `CardBook.shared` is one object
+    /// for the whole test run, and other suites add cards to it in parallel.
+    private func book() -> CardBook {
+        let defaults = UserDefaults(suiteName: "CardTests.\(UUID().uuidString)")!
+        defaults.set(try? JSONEncoder().encode(CardInfo.legacy), forKey: "cards.v1")
+        return CardBook(defaults: defaults)
+    }
+
     @Test func matchesWalletNames() {
-        #expect(Card.match("NAB Visa Debit") == .nab)
-        #expect(Card.match("Standard Chartered Journey") == .stanchart)
-        #expect(Card.match("SC Smart Card") == .stanchart)
-        #expect(Card.match("Standard Chartered Jumpstart Debit") == .scDebit)
-        #expect(Card.match("SC Debit Mastercard") == .scDebit)
-        #expect(Card.match("YouTrip Mastercard") == .youtrip)
-        #expect(Card.match("Maybank Platinum Debit") == .maybank)
-        #expect(Card.match(nil) == .other)
-        #expect(Card.match("Myki") == .other)
+        let book = book()
+        #expect(book.match("NAB Visa Debit") == .nab)
+        #expect(book.match("Standard Chartered Journey") == .stanchart)
+        #expect(book.match("SC Smart Card") == .stanchart)
+        #expect(book.match("Standard Chartered Jumpstart Debit") == .scDebit)
+        #expect(book.match("SC Debit Mastercard") == .scDebit)
+        #expect(book.match("YouTrip Mastercard") == .youtrip)
+        #expect(book.match("Maybank Platinum Debit") == .maybank)
+        #expect(book.match(nil) == .other)
+        #expect(book.match("Myki") == .other)
     }
 }
 

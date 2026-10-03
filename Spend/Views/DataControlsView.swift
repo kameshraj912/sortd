@@ -92,11 +92,15 @@ enum DataReset {
         let deletesCloudCopy = cloud.deletesCloudCopyOnReset
         cloud.isEnabled = false
         #endif
-        try? context.delete(model: Transaction.self)
-        try? context.delete(model: MerchantRule.self)
-        try? context.delete(model: ImportedRecord.self)
-        try? context.delete(model: FXRate.self)
-        try? context.save()
+        do {
+            try context.delete(model: Transaction.self)
+            try context.delete(model: MerchantRule.self)
+            try context.delete(model: ImportedRecord.self)
+            try context.delete(model: FXRate.self)
+        } catch {
+            ErrorLog.report(error, where: "DataReset.delete")
+        }
+        context.saveReporting(where: "DataReset.save")
         // Picks up Google revokes that failed earlier, which the wipe below
         // would otherwise lose.
         GoogleAuth.revokePending()

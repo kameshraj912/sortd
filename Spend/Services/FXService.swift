@@ -83,7 +83,7 @@ enum FXService {
         for t in (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] {
             t.audAmount = t.currencyCode == home ? t.amount : nil
         }
-        try? context.save()
+        context.saveReporting(where: "FXService.rebase")
         await backfill(in: context)
     }
 
@@ -202,6 +202,7 @@ enum FXService {
         if let failure {
             log.error("FX backfill failed: \(failure.localizedDescription)")
             let offline = (failure as? URLError).map { [.notConnectedToInternet, .networkConnectionLost, .timedOut, .dataNotAllowed].contains($0.code) } ?? false
+            if !Connectivity.isNetworkDown(failure) { ErrorLog.report(failure, where: "FXService.backfill") }
             return .failed(offline: offline)
         }
         return converted == 0 ? .nothingToDo : .updated(converted)
