@@ -312,10 +312,10 @@ struct RootView: View {
             }
         }
             .tint(Color.brand)
-            // Cheap the rest of the time: `ActivityView`'s day header only
+            // Cheap the rest of the time: `ActivityView`'s first row only
             // spends a `GeometryReader` measuring itself for the intro's
-            // `.move` cutout while this is true.
-            .environment(\.introWatchingDayHeader, intro.step == .move)
+            // `.swipe` cutout while this is true.
+            .environment(\.introWatchingFirstRow, intro.step == .swipe)
             .tabBarMinimizeBehavior(.onScrollDown)
             .modifier(RootSearch(enabled: layout.rootSearch, query: $searchQuery))
             .overlay(alignment: .bottomTrailing) {
@@ -428,10 +428,6 @@ struct RootView: View {
             if let step = new.step {
                 if tab != step.tab { tab = step.tab }
                 if old.step == nil { Analytics.shared.track(.introShown) }
-                // The `.move` step's motion is a real day change: only
-                // `ActivityView` knows whether a second day of data exists,
-                // so it decides whether `stepDay(1)` actually runs.
-                if step == .move, old.step != .move { router.pendingIntroDayTap = true }
             }
             if new.finished, !old.finished {
                 // Done or Skip both end back on Home — the tour's own
@@ -439,21 +435,19 @@ struct RootView: View {
                 // nothing above sets this view's real `tab` back to it.
                 tab = .home
                 Analytics.shared.track(.introFinished, ["skipped": .bool(new.skipped),
-                                                         "step": .int((old.step ?? .move).rawValue),
+                                                         "step": .int((old.step ?? .swipe).rawValue),
                                                          "auto": .bool(new.auto)])
             }
         }
         // Everything behind the intro is unreachable while it's up; the
         // overlay itself carries its own accessibility elements.
         .accessibilityHidden(introShowing)
-        // The day header's frame, and the "Older Day" chevron's own,
-        // separately — both come from `ActivityView.pagerHeader`, well
-        // below this in a `List` + `ScrollViewReader` — read here via
-        // `.overlayPreferenceValue` rather than `.overlay`, the only way
-        // either reaches this level.
-        .overlayPreferenceValue(IntroDayHeaderKey.self) { dayFrames in
+        // Activity's first row's frame comes from `ActivityView.row`, well
+        // below this in a `List` — read here via `.overlayPreferenceValue`
+        // rather than `.overlay`, the only way it reaches this level.
+        .overlayPreferenceValue(IntroFirstRowKey.self) { firstRow in
             if introShowing {
-                IntroOverlay(tour: $intro, dayHeaderFrame: dayFrames.header, dayChevronFrame: dayFrames.chevron,
+                IntroOverlay(tour: $intro, firstRowFrame: firstRow,
                              onNext: { intro.next() },
                              onTimeout: { intro.advanceOnTimeout() },
                              onSkip: { intro.skip() })

@@ -2,10 +2,12 @@ import Testing
 import Foundation
 @testable import Spend
 
-/// Spec 5's day pager (the default; `SPEND_ACTIVITY_LIST=1` shows the old
-/// list in DEBUG): the day index from a date, paging back across a month
-/// edge, the built window, where the pager lands when the day on screen
-/// goes, and that one swipe is one day.
+// The pager is debug-only now (spec 2026-10-03): so are its tests.
+#if DEBUG
+/// Spec 5's day pager (DEBUG `SPEND_ACTIVITY_PAGER=1` only since 3 Oct
+/// 2026): the day index from a date, paging back across a month edge, the
+/// built window, where the pager lands when the day on screen goes, and
+/// that one swipe is one day.
 @Suite("DayPager")
 struct DayPagerTests {
     let cal = Calendar(identifier: .gregorian)
@@ -95,3 +97,4 @@ struct DayPagerTests {
         #expect(DayPager.position(0, of: 1).text == "1 of 1")
     }
 }
+#endif

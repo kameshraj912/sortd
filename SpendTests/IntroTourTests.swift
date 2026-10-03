@@ -8,8 +8,8 @@ struct IntroTourTests {
 
     // MARK: Steps
 
-    @Test func stepsAreAddInsightsMoveInOrder() {
-        #expect(IntroTour.steps == [.add, .insights, .move])
+    @Test func stepsAreAddInsightsSwipeInOrder() {
+        #expect(IntroTour.steps == [.add, .insights, .swipe])
     }
 
     @Test func startMovesToStepZero() {
@@ -18,12 +18,12 @@ struct IntroTourTests {
         #expect(tour.step == .add)
     }
 
-    @Test func nextTwiceReachesMove() {
+    @Test func nextTwiceReachesSwipe() {
         var tour = IntroTour()
         tour.start()
         tour.next()
         tour.next()
-        #expect(tour.step == .move)
+        #expect(tour.step == .swipe)
     }
 
     @Test func nextOnTheLastStepFinishesUnskipped() {
@@ -140,19 +140,28 @@ struct IntroTourTests {
     @Test func voiceOverLabelsNameTheirControl() {
         #expect(IntroStep.add.accessibilityLabel.localizedCaseInsensitiveContains("plus"))
         #expect(IntroStep.insights.accessibilityLabel.localizedCaseInsensitiveContains("insights"))
-        #expect(IntroStep.move.accessibilityLabel.localizedCaseInsensitiveContains("day header"))
-        #expect(IntroStep.move.accessibilityLabel.localizedCaseInsensitiveContains("arrows"))
+        #expect(IntroStep.swipe.accessibilityLabel.localizedCaseInsensitiveContains("purchase"))
+        #expect(IntroStep.swipe.accessibilityLabel.localizedCaseInsensitiveContains("Activity"))
     }
 
     @Test func voiceOverLabelsCarryTheStepPosition() {
         #expect(IntroStep.add.accessibilityLabel.hasPrefix("Step 1 of 3."))
         #expect(IntroStep.insights.accessibilityLabel.hasPrefix("Step 2 of 3."))
-        #expect(IntroStep.move.accessibilityLabel.hasPrefix("Step 3 of 3."))
+        #expect(IntroStep.swipe.accessibilityLabel.hasPrefix("Step 3 of 3."))
     }
 
-    @Test func moveLineDoesNotMentionSwipe() {
-        #expect(!IntroStep.move.line.localizedCaseInsensitiveContains("swipe"))
-        #expect(IntroStep.move.line == "Tap the arrows to move between days")
+    /// Activity is one list again (spec 2026-10-03): there are no day
+    /// arrows to point at, so step 3 teaches the row swipe instead.
+    @Test func swipeStepTeachesTheRowSwipeNotArrows() {
+        #expect(IntroStep.swipe.line == "Swipe a purchase to change or delete it")
+        #expect(!IntroStep.swipe.line.localizedCaseInsensitiveContains("arrow"))
+        #expect(!IntroStep.swipe.voiceOverTarget.localizedCaseInsensitiveContains("arrow"))
+        #expect(IntroStep.swipe.tab == .activity)
+    }
+
+    @Test func swipeStepSlidesAFingerUnlessReduceMotion() {
+        #expect(IntroStep.swipe.motion(reduceMotion: false) == .swipeLeft)
+        #expect(IntroStep.swipe.motion(reduceMotion: true) == .none)
     }
 
     // MARK: Auto flag

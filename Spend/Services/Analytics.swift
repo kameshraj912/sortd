@@ -60,7 +60,6 @@ final class Analytics {
         /// `category` is the `SpendCategory` name only, never the limit amount.
         case categoryLimitSet = "category_limit_set"
         case insightsRangeChanged = "insights_range_changed"
-        case dayStepped = "day_stepped"
         case purchaseEdited = "purchase_edited"
         /// `from` and `to` are `SpendCategory` names.
         case categoryChanged = "category_changed"
