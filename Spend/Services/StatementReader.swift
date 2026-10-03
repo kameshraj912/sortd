@@ -75,9 +75,27 @@ nonisolated enum StatementReader {
     /// Banks export in whatever encoding they feel like. UTF-8 first, then
     /// the usual Windows fallback, so pounds and accents don't turn to mush.
     static func decodeText(_ data: Data) -> String? {
+        // Excel's "Unicode Text" is UTF-16. Checked first: Windows-1252
+        // accepts any byte and turned it into "ÿþD\0a\0t\0e…", and UTF-8
+        // accepts the zero bytes of one with no byte-order mark.
+        if let utf16 = utf16Encoding(of: data), let s = String(data: data, encoding: utf16) { return s }
         if let s = String(data: data, encoding: .utf8) { return s }
         if let s = String(data: data, encoding: .windowsCP1252) { return s }
         if let s = String(data: data, encoding: .isoLatin1) { return s }
+        return nil
+    }
+
+    /// UTF-16 when the file starts with its byte-order mark, or when it has
+    /// none but every other byte is zero (plain-letter text in UTF-16).
+    private static func utf16Encoding(of data: Data) -> String.Encoding? {
+        let head = [UInt8](data.prefix(512))
+        if head.starts(with: [0xFF, 0xFE]) || head.starts(with: [0xFE, 0xFF]) { return .utf16 }
+        guard head.count >= 8 else { return nil }
+        let even = stride(from: 0, to: head.count, by: 2).filter { head[$0] == 0 }.count
+        let odd = stride(from: 1, to: head.count, by: 2).filter { head[$0] == 0 }.count
+        let pairs = head.count / 2
+        if odd * 2 > pairs, even * 8 < odd { return .utf16LittleEndian }
+        if even * 2 > pairs, odd * 8 < even { return .utf16BigEndian }
         return nil
     }
 
