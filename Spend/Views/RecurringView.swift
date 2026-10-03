@@ -265,7 +265,7 @@ struct UpcomingSection: View {
                             .accessibilityLabel("See all, coming up")
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
 
                 VStack(spacing: 0) {
                     ForEach(soon) { r in

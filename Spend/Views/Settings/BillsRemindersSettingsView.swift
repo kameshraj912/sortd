@@ -9,6 +9,10 @@ struct BillsRemindersSettingsView: View {
     @AppStorage(Reminders.paceAlertKey) private var paceAlert = true
     @AppStorage(SetupProfile.checkInKey) private var checkIn = SetupProfile.CheckIn.needed.rawValue
     @State private var notificationsBlocked = false
+    /// What iOS allows now. Assumed yes until checked, so the switch does not
+    /// flick off and on while the answer comes back.
+    @State private var notificationsAllowed = true
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -61,25 +65,44 @@ struct BillsRemindersSettingsView: View {
                 Text("A notification at 9 am the day before each subscription or bill.")
             }
             Section {
-                Toggle(isOn: $paceAlert) {
+                Toggle(isOn: Binding(
+                    get: { Reminders.paceAlertShownOn(stored: paceAlert, notificationsAllowed: notificationsAllowed) },
+                    set: { on in
+                        paceAlert = on
+                        guard on else { return }
+                        // The same ask as Remind Me the Day Before.
+                        Task {
+                            let allowed = await Reminders.requestPermission()
+                            notificationsAllowed = allowed
+                            if !allowed { notificationsBlocked = true }
+                        }
+                    })) {
                     Label("Budget Pace Alert", systemImage: "gauge.with.needle")
                 }
             } header: {
                 BoldHeader("Budget")
             } footer: {
-                Text("One alert a month if you're on track to pass your budget.")
+                if notificationsAllowed {
+                    Text("One alert a month if you're on track to pass your budget.")
+                } else {
+                    Text("Turn on notifications for Sortd in Settings to get this alert.")
+                }
             }
         }
         .scrollContentBackground(.hidden)
         .background(Color.page)
         .brandedTitle("Bills & Reminders")
+        // Back from the Settings app: the answer may have changed.
+        .task(id: scenePhase) {
+            if scenePhase == .active { notificationsAllowed = await Reminders.notificationsAllowed() }
+        }
         .alert("Notifications are off for Sortd", isPresented: $notificationsBlocked) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
             }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("Turn them on in the Settings app to get your check-in.")
+            Text("Turn them on in the Settings app to get your reminders and alerts.")
         }
     }
 }

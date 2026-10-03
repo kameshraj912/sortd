@@ -10,6 +10,7 @@ struct InsightsView: View {
     private var transactions: [Transaction]
     @State private var selectedCategory: SpendCategory?
     @State private var limits: [SpendCategory: Double] = [:]
+    @State private var showingAdd = false
 
     private var thisMonth: [Transaction] {
         let start = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
@@ -21,8 +22,11 @@ struct InsightsView: View {
             Group {
                 if transactions.isEmpty {
                     EmptyState("No insights yet", symbol: "chart.bar.xaxis",
-                               message: "After a few purchases, you'll see where your money goes.")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                               message: "After a few purchases, you'll see where your money goes.") {
+                        Button("Add a Purchase") { showingAdd = true }
+                            .buttonStyle(.glassProminent).tint(Color.brand).foregroundStyle(Color.onBrand)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
@@ -51,6 +55,7 @@ struct InsightsView: View {
             .navigationDestination(item: $selectedCategory) { category in
                 CategoryDetailView(category: category)
             }
+            .sheet(isPresented: $showingAdd) { AddTransactionView() }
         }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
@@ -122,7 +127,7 @@ struct InsightsView: View {
                         .padding(.vertical, 12)
                         .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(row.category.name), \(Money.spoken(row.total, Money.home))\(progress.map { ", " + (limitNote($0) ?? "") } ?? ""), \(row.count) \(row.count == 1 ? "purchase" : "purchases")")
                     .accessibilityHint("Shows these purchases")
@@ -209,10 +214,17 @@ struct CategoryDetailView: View {
                     }
                     .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityHint(limit == nil ? "Set a monthly limit" : "Change or remove the monthly limit")
             }
             Section(bold: "All Purchases") {
+                if items.isEmpty {
+                    Text("Nothing in \(category.name) yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .listRowBackground(Color.clear)
+                }
                 ForEach(items) { t in
                     NavigationLink {
                         TransactionDetailView(transaction: t)

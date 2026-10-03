@@ -72,6 +72,23 @@ enum Reminders {
         }
     }
 
+    /// Whether iOS lets Sortd send notifications right now. Never asks.
+    static func notificationsAllowed() async -> Bool {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return allows(status)
+    }
+
+    nonisolated static func allows(_ status: UNAuthorizationStatus) -> Bool {
+        status == .authorized || status == .provisional || status == .ephemeral
+    }
+
+    /// What the Budget Pace Alert switch shows. The stored choice is kept as it
+    /// is; while iOS blocks notifications the switch reads off, because the
+    /// alert can never arrive (it only sends when notifications are allowed).
+    nonisolated static func paceAlertShownOn(stored: Bool, notificationsAllowed: Bool) -> Bool {
+        stored && notificationsAllowed
+    }
+
     /// The aha card's "Yes": asks iOS, then schedules the check-in that was
     /// saved during setup. Not allowed: any old check-in is cleared and
     /// nothing is scheduled. Returns whether it was allowed.
