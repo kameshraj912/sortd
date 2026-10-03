@@ -160,6 +160,34 @@ struct BugHuntUITests {
 
     // MARK: - Bug hunt 3 Oct 2026 (docs/BugHunt-2026-10-03.md)
 
+    /// U1: an all-caps shop word that is also a currency code, followed by a
+    /// number ("TOP 10 PIZZA"), was read as the amount, so the real A$23.50
+    /// in the body was lost.
+    @Test(.bug("U1: a currency code in the shop name beats the real amount"))
+    func aShopNameThatStartsWithACurrencyCodeIsNotTheAmount() async throws {
+        let ctx = try store()
+        let r = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "",
+                                                    notificationTitle: "TOP 10 PIZZA", notificationSubtitle: "",
+                                                    notificationBody: "A$23.50 with NAB Visa Debit",
+                                                    in: ctx, book: book(), now: start)
+        let t = try #require(r.transaction)
+        #expect(t.amount == Decimal(string: "23.50"))
+        #expect(t.currencyCode == "AUD")
+        #expect(t.rawMerchant == "TOP 10 PIZZA")
+    }
+
+    /// U2: one-line tap text with a clock time in it was skipped whole as a
+    /// date line, so nothing was logged.
+    @Test(.bug("U2: one-line tap text with a time is thrown away"))
+    func aOneLineTapWithATimeIsStillLogged() async throws {
+        let ctx = try store()
+        let r = try await LogWalletTapIntent.handle("Coles A$23.50 9:41 am NAB Visa Debit",
+                                                    in: ctx, book: book(), now: start)
+        let t = try #require(r.transaction, "nothing logged: \(r.message)")
+        #expect(t.amount == Decimal(string: "23.50"))
+        #expect(t.rawMerchant == "Coles")
+    }
+
     /// U5: a tap with no shop is saved as "Unknown merchant", which the
     /// Recent widget's empty-name rule did not catch.
     @Test(.bug("U5: Recent and Today widgets show taps that came with no shop"))
