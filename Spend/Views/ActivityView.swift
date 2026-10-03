@@ -664,7 +664,9 @@ struct TransactionsScreen: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
-                Text(title)
+                // One whole line: the row scrolls sideways, so a long name
+                // never needs cutting or wrapping at big text sizes.
+                Text(title).lineLimit(1).fixedSize()
             }
             .chip(selected: selected)
         }
