@@ -65,6 +65,8 @@ struct DebugScreenHost: View {
             case "import": Color.page.sheet(isPresented: .constant(true)) { ImportView() }
             case "widgets": WidgetsGuideView()
             case "card": CardDetailView(card: Card.mine.first ?? .other)
+            // A card's own purchase list (Home › card › See All), at the root.
+            case "card-list": TransactionsScreen(fixedCard: Card.mine.first ?? .other)
             case "category": CategoryDetailView(category: .housing)
             case "txn":
                 if let t = transactions.first(where: { $0.platform == "doordash" }) ?? transactions.first {

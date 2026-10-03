@@ -41,10 +41,6 @@ final class Router {
     /// Help › "Show the Intro Again" was tapped: the intro starts once
     /// Settings has closed.
     var pendingIntroReplay = false
-    /// Set by `RootView` when the intro's `.move` step starts: `ActivityView`
-    /// clears it, and calls its own `stepDay(1)` first if a second day of
-    /// data exists (only it knows that).
-    var pendingIntroDayTap = false
 
     private init() {
         #if DEBUG

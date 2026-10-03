@@ -29,7 +29,16 @@ struct TransactionsScreen: View {
     @State private var recategorising: Transaction?
     @State private var deleted = 0
     @State private var undone = 0
-    /// The day on screen in the day pager (`dayPages`).
+    /// "Go to Date…" from the filter menu: the picker sheet is up.
+    @State private var goingToDate = false
+    /// The date picked in that sheet, waiting for the sheet to close.
+    @State private var pickedDate: Date?
+    /// The day the list should scroll to next (`ActivityDays.target`).
+    @State private var jumpTarget: Date?
+    /// Jumps made with "Go to Date…", for the haptic.
+    @State private var jumps = 0
+    #if DEBUG
+    /// The day on screen in the old day pager (`showsDayPager`).
     @State private var dayPage: Date?
     /// Chevron taps that changed the day. The haptic plays on these, not
     /// when the pager picks a day itself (first show, a filter, a delete).
@@ -37,6 +46,7 @@ struct TransactionsScreen: View {
     /// Which way the last day change went, for the slide.
     @State private var dayDirection: Motion.Direction = .forward
     @Environment(\.crossFades) private var crossFades
+    #endif
     /// Swiped away but kept for a few seconds so Undo can bring them back.
     /// Each new delete restarts the timer; Undo brings back all of them.
     @State private var pending = PendingDeletes()
@@ -52,26 +62,24 @@ struct TransactionsScreen: View {
     @State private var router = Router.shared
     /// The purchase a widget row linked to, pushed as its detail.
     @State private var linked: Transaction?
-    /// True only while the intro's `.move` step is on screen: gates whether
-    /// `pagerHeader` spends a `GeometryReader` reporting its frame for the
+    /// True only while the intro's `.swipe` step is on screen: gates whether
+    /// the first row spends a `GeometryReader` reporting its frame for the
     /// intro's cutout.
-    @Environment(\.introWatchingDayHeader) private var introWatchingDayHeader
+    @Environment(\.introWatchingFirstRow) private var introWatchingFirstRow
     /// A category picked in the sheet, waiting for the sheet to close.
     @State private var stagedChange: CategoryChange?
     /// Asks "Change all N … purchases?" when other purchases share the shop.
     @State private var confirmingChange: CategoryChange?
 
-    /// One day per page, swiping between days (the TeuxDeux reference in
-    /// spec 5): the default since 25 Sep 2026. Debug builds show the old
-    /// single list with SPEND_ACTIVITY_LIST=1.
     #if DEBUG
-    static let dayPages = ProcessInfo.processInfo.environment["SPEND_ACTIVITY_LIST"] != "1"
-    /// Screenshots: SPEND_SCROLL_END=1 opens each day scrolled to its end,
-    /// to show the bar and search field in their scrolled state.
+    /// One scrolling list of every day is Activity again (spec
+    /// 2026-10-03, option B). The one-day-per-page pager it replaced (25 Sep
+    /// to 3 Oct 2026) stays in debug builds only, for one side-by-side look
+    /// on the phone: SPEND_ACTIVITY_PAGER=1.
+    static let showsDayPager = ProcessInfo.processInfo.environment["SPEND_ACTIVITY_PAGER"] == "1"
+    /// Screenshots: SPEND_SCROLL_END=1 opens the list (or the pager's day)
+    /// scrolled to its end, to show the last row against the tab bar.
     static let startScrolled = ProcessInfo.processInfo.environment["SPEND_SCROLL_END"] == "1"
-    #else
-    static let dayPages = true
-    static let startScrolled = false
     #endif
 
     var body: some View {
@@ -89,12 +97,14 @@ struct TransactionsScreen: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else if Self.dayPages {
-                dayPager
             } else {
-                // The list always shows (title, search box, chips), with a
-                // "nothing matches" message inside it, so a search can be cleared.
+                // The list always shows (title, chips), with a "nothing
+                // matches" message inside it, so a search can be cleared.
+                #if DEBUG
+                if Self.showsDayPager { dayPager } else { list }
+                #else
                 list
+                #endif
             }
         }
         .background(Color.page)
@@ -114,14 +124,6 @@ struct TransactionsScreen: View {
                 TipState.searchUsed()
                 Analytics.shared.trackOncePerSession(.searchUsed)
             }
-        }
-        // The intro's `.move` step: a real day change alongside its finger
-        // tap, if there's a second day to move to (fresh, empty demo data
-        // has only one). Only this view knows that.
-        .onChange(of: router.pendingIntroDayTap, initial: true) { _, pending in
-            guard pending, fixedCard == nil else { return }
-            router.pendingIntroDayTap = false
-            if days.count > 1 { stepDay(1) }
         }
         // A Recent widget row ("sortd://purchase/<id>"): open that purchase.
         // Deleted or merged since the widget was drawn: do nothing, so the
@@ -149,6 +151,15 @@ struct TransactionsScreen: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddTransactionView() }
+        .sheet(isPresented: $goingToDate, onDismiss: {
+            // Scroll once the sheet is gone, so the move is seen.
+            guard let picked = pickedDate else { return }
+            pickedDate = nil
+            jumpTarget = ActivityDays.target(for: picked, in: days.map(\.date))
+        }) {
+            GoToDateSheet(start: days.first?.date ?? .now, range: pickableDates) { pickedDate = $0 }
+        }
+        .feedback(.select, trigger: jumps)
         .sheet(item: $recategorising, onDismiss: {
             // The question waits until the sheet is gone, or it can't show.
             confirmingChange = stagedChange
@@ -304,66 +315,119 @@ struct TransactionsScreen: View {
 
     // MARK: List
 
+    /// Every day in one scrolling list, newest first: a rounded card per
+    /// day under its name and total. Search, the chips and the card filter
+    /// cover every day at once; "Go to Date…" scrolls to a day. It is one
+    /// List, the direct content of the navigation stack, so the bar and the
+    /// tab bar track it.
     private var list: some View {
         let days = days
-        // The swipe tip points at the first row of the main list.
+        // The swipe tip, and the intro's swipe step, point at the first row
+        // of the main list.
         let firstRow = fixedCard == nil ? days.first?.items.first?.persistentModelID : nil
-        return List {
-            ListPageTitle(title: fixedCard?.name ?? "Activity")
-            chips
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            if fixedCard == nil, NavOption.current.searchInActivity {
-                // The search field is the system's own, so the tip sits
-                // under it as a card rather than pointing at it.
-                SortdTipView(tip: SearchTip())
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-
-            if filtered.isEmpty {
-                Section {
-                    noMatches
+        return ScrollViewReader { proxy in
+            List {
+                // The same small title and brand bar as Home and Insights, so
+                // the three tabs line up (Raj, 27 Sep).
+                ListPageTitle(title: fixedCard?.name ?? "Activity")
+                // Its own section, margins zeroed: an inset-grouped List
+                // otherwise clips the row to the section's card, cutting the
+                // chips off short of the real screen edge.
+                Section { chipsRow }
+                    .listSectionMargins(.horizontal, 0)
+                if fixedCard == nil, NavOption.current.searchInActivity {
+                    // Search is a bar button, so the tip sits under the
+                    // chips as a card rather than pointing at it.
+                    SortdTipView(tip: SearchTip())
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+                if days.isEmpty {
+                    Section { noMatches.listRowBackground(Color.clear) }
+                }
+                ForEach(days) { day in
+                    // The day's name and total as a real row in a section of
+                    // its own, not a section header: a List only scrolls to
+                    // rows (an id on a header lands on the row under it), and
+                    // "Go to Date…" has to bring the day's name into view.
+                    Section {
+                        dayHeader(day)
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .id(day.date)
+                    }
+                    .listSectionSpacing(0)
+                    Section {
+                        ForEach(day.items) { t in
+                            row(t, introTarget: t.persistentModelID == firstRow)
+                                .sortdTip(t.persistentModelID == firstRow ? SwipeTip() : nil, arrowEdge: .top)
+                        }
+                    }
                 }
             }
-            ForEach(days, id: \.date) { day in
-                Section {
-                    ForEach(day.items) { t in
-                        row(t).sortdTip(t.persistentModelID == firstRow ? SwipeTip() : nil, arrowEdge: .top)
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            // No 44pt floor on row height: the day rows sit as close to
+            // their card as a section header did, and the title row comes
+            // out at the same height as Home's and Insights' (measured on
+            // screenshots, 3 Oct 2026; with the floor it sat 2pt lower).
+            .environment(\.defaultMinListRowHeight, 0)
+            // At the end of the list the last card clears the floating tab
+            // bar and the + circle with a little air, instead of touching it.
+            .contentMargins(.bottom, 20, for: .scrollContent)
+            // A short list (a filter or a search with few matches) can leave
+            // this List's scroll offset a hair off zero after a push and pop
+            // of the detail page, which the Liquid Glass tab bar reads as
+            // "scrolled down" and never un-minimises (only Activity uses a
+            // List here; Home's ScrollView never showed this). Pinning the
+            // anchor to the top keeps the offset at a clean zero, so popping
+            // back always reports "at the top" to the tab bar.
+            .defaultScrollAnchor(.top)
+            // "Go to Date…": the day's name lands just under the bar.
+            .onChange(of: jumpTarget) { _, target in
+                guard let target else { return }
+                jumpTarget = nil
+                withAnimation(.snappy) { proxy.scrollTo(target, anchor: .top) }
+                jumps += 1
+                AccessibilityNotification.Announcement("Showing \(dayTitle(target))").post()
+            }
+            .task {
+                #if DEBUG
+                // Screenshots: SPEND_GOTO_DATE=2026-09-20 jumps there the way
+                // "Go to Date…" does; SPEND_GOTO_DATE=sheet opens its picker.
+                if let goto = ProcessInfo.processInfo.environment["SPEND_GOTO_DATE"] {
+                    try? await Task.sleep(for: .seconds(1))
+                    if goto == "sheet" {
+                        goingToDate = true
+                    } else if let date = try? Date(goto, strategy: .iso8601.year().month().day()) {
+                        jumpTarget = ActivityDays.target(for: date, in: days.map(\.date))
                     }
-                } header: {
-                    dayHeader(day)
                 }
+                // `.top` on the last row runs into the end of the list, so it
+                // stops where a person's own scroll would (bottom margin and
+                // all); `.bottom` would stop short of the margin.
+                guard Self.startScrolled, let last = days.last?.items.last else { return }
+                try? await Task.sleep(for: .seconds(1))
+                withAnimation { proxy.scrollTo(last.id, anchor: .top) }
+                #endif
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .background(Color.page)
     }
 
-    /// One day at a time, newest first: tap the chevrons in the day's header
-    /// to move a day. Rows keep the sideways swipe for their own actions
-    /// (leading = Category, trailing = Delete, the iOS convention), so
-    /// paging the day never fights a swipe on a row. It is one List, the
-    /// direct content of the navigation stack, so the bar tracks it:
-    /// scrolling up folds the large title into the bar and hides the search
-    /// field, and a pull down at the top brings them back. (Each day in a
-    /// paging TabView had its own list, and the bar tracked none of them.)
+    #if DEBUG
+    /// The old pager (DEBUG `SPEND_ACTIVITY_PAGER=1` only, for one
+    /// comparison with the list): one day at a time, newest first, moved
+    /// with the chevrons in the day's header. Not wired to the intro or
+    /// analytics; it goes once Raj has compared the two on his phone.
     private var dayPager: some View {
         let all = days
         let index = dayPage.flatMap { DayPager.dayIndex(for: $0, in: all.map(\.date)) } ?? 0
         return ScrollViewReader { proxy in
             List {
-                // The same small title and brand bar as Home and Insights, so
-                // the three tabs line up (Raj, 27 Sep; the large system title
-                // sat higher and bigger than the other two).
                 ListPageTitle(title: fixedCard?.name ?? "Activity")
-                // Its own section, margins zeroed: an inset-grouped List
-                // otherwise clips the row to the section's card, cutting the
-                // chips off short of the real screen edge.
                 Section { chipsRow }
                     .listSectionMargins(.horizontal, 0)
                 if all.isEmpty {
@@ -381,20 +445,11 @@ struct TransactionsScreen: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            // A short day (its content shorter than the screen) can leave
-            // this List's scroll offset a hair off zero after a push and
-            // pop of the detail page, which the Liquid Glass tab bar reads
-            // as "scrolled down" and never un-minimises (only Activity uses
-            // a List here; Home's ScrollView never showed this). Pinning
-            // the anchor to the top keeps the offset at a clean zero, so
-            // popping back always reports "at the top" to the tab bar.
             .defaultScrollAnchor(.top)
             .task(id: dayPage) {
-                #if DEBUG
                 guard Self.startScrolled, let last = all.indices.contains(index) ? all[index].items.last : nil else { return }
                 try? await Task.sleep(for: .seconds(1))
                 withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                #endif
             }
         }
         // Paging to another day is a choice, like the card carousel.
@@ -413,7 +468,7 @@ struct TransactionsScreen: View {
             let day = all[i]
             AccessibilityNotification.Announcement(
                 "\(dayTitle(day.date)), \(DayPager.position(i, of: all.count).spoken), "
-                + Money.spoken(day.items.audTotal, Money.home)).post()
+                + Money.spoken(day.total, Money.home)).post()
         }
         .background(Color.page)
     }
@@ -429,81 +484,39 @@ struct TransactionsScreen: View {
         dayChanges += 1
     }
 
-    /// The day's header with a chevron either side: the only way to move a
-    /// day (rows keep sideways swipe for their own actions), and the way in
-    /// for VoiceOver and Switch Control. Each chevron gets a 44x44pt tap
-    /// target, grown around the glyph rather than by scaling it up.
-    private func pagerHeader(_ day: (date: Date, items: [Transaction]), position: DayPager.Position) -> some View {
-        // The 44pt frame sits inside the label, so the whole square takes
-        // the tap; outside it, only the glyph would.
-        let newer = Button {
-            stepDay(-1)
-            Analytics.shared.track(.dayStepped, ["direction": .string("newer")])
-        } label: {
+    /// The day's header with a chevron either side, each a 44x44pt target.
+    private func pagerHeader(_ day: ActivityDays.Day, position: DayPager.Position) -> some View {
+        let newer = Button { stepDay(-1) } label: {
             Label("Newer Day", systemImage: "chevron.left")
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .disabled(position.index == 0)
-        let older = Button {
-            stepDay(1)
-            Analytics.shared.track(.dayStepped, ["direction": .string("older")])
-        } label: {
+        let older = Button { stepDay(1) } label: {
             Label("Older Day", systemImage: "chevron.right")
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .disabled(position.index + 1 >= position.count)
-        // The intro's `.move` step points its finger at this button's own
-        // frame, not the header row's — the row's measured frame doesn't
-        // line up with the chevron's 44pt square (it hangs out past the
-        // row's own bounds, the `.padding(.horizontal, -14)` below).
-        .background {
-            if introWatchingDayHeader {
-                GeometryReader { proxy in
-                    Color.clear.preference(key: IntroDayHeaderKey.self,
-                                            value: IntroDayFrames(chevron: proxy.frame(in: .global)))
-                }
-            }
-        }
-        // At the largest sizes the chevrons get their own row, so the day
-        // keeps the full width.
         return Group {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 4) {
-                    dayHeader(day, position: position)
+                    dayHeader(day, position: (position.text, position.spoken))
                     HStack { newer; Spacer(); older }
                 }
             } else {
-                // The squares hang out past the header's inset, so the
-                // glyphs sit where the small chevrons did and the day keeps
-                // one line.
-                HStack(spacing: 0) { newer; dayHeader(day, position: position); older }
+                HStack(spacing: 0) { newer; dayHeader(day, position: (position.text, position.spoken)); older }
                     .padding(.horizontal, -14)
             }
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
-        .font(.footnote.weight(.semibold))
         .textCase(nil)
-        // The intro's `.move` step needs this row's real frame for its
-        // cutout — only measured while it's actually on screen for that
-        // (docs/specs/2026-09-26-app-intro-v2.md), a plain `PreferenceKey`
-        // read at `RootView` via `.overlayPreferenceValue`, since this sits
-        // inside a `List` well below that level.
-        .background {
-            if introWatchingDayHeader {
-                GeometryReader { proxy in
-                    Color.clear.preference(key: IntroDayHeaderKey.self,
-                                            value: IntroDayFrames(header: proxy.frame(in: .global)))
-                }
-            }
-        }
     }
+    #endif
 
-    /// The chips as a list row, a section gap under the title and search
-    /// field. Its section has its margins zeroed (`dayPager`), so the chips
-    /// need their own inset (matching the search field's, 20pt) to still
-    /// line up on the leading edge; the rest scroll out to the real screen
-    /// edge instead of stopping at the card's margin.
+    /// The chips as a list row, a section gap under the title. Its section
+    /// has its margins zeroed, so the chips need their own inset (20pt, the
+    /// title's) to still line up on the leading edge; the rest scroll out
+    /// to the real screen edge instead of stopping at the card's margin.
     private var chipsRow: some View {
         chips(inset: 20)
             .scrollClipDisabled()
@@ -511,9 +524,6 @@ struct TransactionsScreen: View {
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
     }
-
-    /// Category chips, like the reference's outlined pills.
-    private var chips: some View { chips(inset: 20) }
 
     private func chips(inset: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -549,7 +559,9 @@ struct TransactionsScreen: View {
         .padding(.vertical, 8)
     }
 
-    private func row(_ t: Transaction) -> some View {
+    /// `introTarget`: the main list's first row, which the intro's
+    /// `.swipe` step lights up.
+    private func row(_ t: Transaction, introTarget: Bool = false) -> some View {
         ZStack {
             // Hidden link so the row has no chevron.
             NavigationLink {
@@ -558,6 +570,17 @@ struct TransactionsScreen: View {
             } label: { EmptyView() }
                 .opacity(0)
             TransactionRow(transaction: t)
+        }
+        // The intro's `.swipe` step needs this row's real frame for its
+        // cutout, measured only while that step is on screen and read at
+        // `RootView` via `.overlayPreferenceValue` (this sits inside a List
+        // well below that level).
+        .background {
+            if introTarget, introWatchingFirstRow {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: IntroFirstRowKey.self, value: proxy.frame(in: .global))
+                }
+            }
         }
         // The detail grows out of the row you tapped instead
         // of sliding in from the side.
@@ -580,32 +603,40 @@ struct TransactionsScreen: View {
         }
     }
 
-    /// The page draws its own title everywhere now (see `dayPager`); the
-    /// large system title is kept as an option but off.
+    /// The page draws its own title (`ListPageTitle`, as Home and Insights
+    /// do); the large system title is kept as an option but off.
     private var largeTitle: Bool { false }
 
-    /// `position` (the pager only) adds "· 2 of 14" after the day.
-    private func dayHeader(_ day: (date: Date, items: [Transaction]),
-                           position: DayPager.Position? = nil) -> some View {
+    /// "Today" on the left, the day's total on the right. The day reads in
+    /// the primary colour and the total in secondary, both `.subheadline`,
+    /// so the headers aren't faint (the old grey footnote was). `position`
+    /// (the DEBUG pager only) adds "· 2 of 14" after the day.
+    private func dayHeader(_ day: ActivityDays.Day,
+                           position: (text: String, spoken: String)? = nil) -> some View {
         // At the largest text sizes the day gets its own line, so
         // "September" isn't broken in the middle.
         let big = typeSize.isAccessibilitySize
         let layout = big ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-                         : AnyLayout(HStackLayout())
+                         : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
         let title = dayTitle(day.date)
         return layout {
             Text(position.map { "\(title) · \($0.text)" } ?? title)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
                 .lineLimit(big ? nil : 1)
                 .minimumScaleFactor(big ? 1 : 0.85)
-                .accessibilityLabel(position.map { "\(title), \($0.spoken)" } ?? title)
-            if !big { Spacer() }
-            Text(Money.format(day.items.audTotal, Money.home))
+            if !big { Spacer(minLength: 12) }
+            Text(Money.format(day.total, Money.home))
                 .monospacedDigit()
-                .accessibilityLabel(Money.spoken(day.items.audTotal, Money.home))
+                .foregroundStyle(.secondary)
         }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
+        .font(.subheadline)
         .textCase(nil)
+        // One stop for VoiceOver: "Today, 45 dollars 60", as a heading so
+        // the rotor can move day by day.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(position.map { "\(title), \($0.spoken)" } ?? title), \(Money.spoken(day.total, Money.home))")
+        .accessibilityAddTraits(.isHeader)
     }
 
     private var usedCategories: [SpendCategory] {
@@ -640,6 +671,9 @@ struct TransactionsScreen: View {
                     categoryFilter = nil
                 }
             }
+            Divider()
+            Button("Go to Date…", systemImage: "calendar") { goingToDate = true }
+                .disabled(days.isEmpty)
         } label: {
             Label("Filter", systemImage: isFiltering
                   ? "line.3.horizontal.decrease.circle.fill"
@@ -651,21 +685,19 @@ struct TransactionsScreen: View {
 
     private var isFiltering: Bool { cardFilter != nil || categoryFilter != nil }
 
-    private var filtered: [Transaction] {
-        let matchesSearch = SearchText.matcher(for: search)
-        let hidden = Set(pending.items.map(\.persistentModelID))
-        return transactions.filter { t in
-            !hidden.contains(t.persistentModelID)
-            && (fixedCard == nil || t.card == fixedCard)
-            && (cardFilter == nil || t.card == cardFilter)
-            && (categoryFilter == nil || t.category == categoryFilter)
-            && matchesSearch(t)
-        }
+    /// What the list shows: every day at once, through the search, the
+    /// chips and the card filter, without rows waiting on Undo.
+    private var days: [ActivityDays.Day] {
+        ActivityDays.group(ActivityDays.visible(transactions, fixedCard: fixedCard, card: cardFilter,
+                                                category: categoryFilter, search: search,
+                                                hidden: Set(pending.items.map(\.persistentModelID))))
     }
 
-    private var days: [(date: Date, items: [Transaction])] {
-        let groups = Dictionary(grouping: filtered) { Calendar.current.startOfDay(for: $0.date) }
-        return groups.keys.sorted(by: >).map { ($0, groups[$0] ?? []) }
+    /// "Go to Date…" offers the days from the oldest purchase to today.
+    private var pickableDates: ClosedRange<Date> {
+        let all = days.map(\.date)
+        let newest = max(Date.now, all.first ?? .now)
+        return min(all.last ?? newest, newest)...newest
     }
 
     private func dayTitle(_ date: Date) -> String {
@@ -834,10 +866,16 @@ private struct ActivitySearch: ViewModifier {
                 .autocorrectionDisabled()
                 .task {
                     #if DEBUG
-                    // Screenshots: SPEND_SEARCH=1 opens with the field active.
-                    if ProcessInfo.processInfo.environment["SPEND_SEARCH"] == "1" {
+                    // Screenshots: SPEND_SEARCH=1 asks for the field's focus;
+                    // SPEND_SEARCH_TEXT=uber also sets a query. (With the
+                    // field minimised into the bar button, focus alone does
+                    // not open it in the simulator: the results show, the
+                    // field stays a button.)
+                    let env = ProcessInfo.processInfo.environment
+                    if env["SPEND_SEARCH"] == "1" || env["SPEND_SEARCH_TEXT"] != nil {
                         try? await Task.sleep(for: .milliseconds(600))
                         focused = true
+                        if let query = env["SPEND_SEARCH_TEXT"] { text = query }
                     }
                     #endif
                 }
@@ -847,10 +885,55 @@ private struct ActivitySearch: ViewModifier {
     }
 }
 
-/// The navigation title. The day pager uses the system's large title, which
-/// shrinks into the bar as the list scrolls and carries the search field
-/// under it. Everywhere else the page draws its own title and the bar keeps
-/// it for Back and VoiceOver only.
+/// "Go to Date…" from Activity's filter menu: a calendar. Tapping a day
+/// picks it and closes at once (as Calendar's own Go to Date does); Go picks
+/// the day already selected. The list then scrolls to that day, or the
+/// nearest older one with purchases (`ActivityDays.target`).
+struct GoToDateSheet: View {
+    let range: ClosedRange<Date>
+    let onPick: (Date) -> Void
+    @State private var date: Date
+    @Environment(\.dismiss) private var dismiss
+
+    init(start: Date, range: ClosedRange<Date>, onPick: @escaping (Date) -> Void) {
+        self.range = range
+        self.onPick = onPick
+        _date = State(initialValue: min(max(start, range.lowerBound), range.upperBound))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                DatePicker("Date", selection: $date, in: range, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .tint(Color.brand)
+                    .padding(.horizontal)
+            }
+            .navigationTitle("Go to Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Go") { pick(date) }
+                }
+            }
+            .onChange(of: date) { _, new in pick(new) }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func pick(_ day: Date) {
+        onPick(day)
+        dismiss()
+    }
+}
+
+/// The navigation title. The page draws its own title (`ListPageTitle`, as
+/// Home and Insights do) and the bar keeps it for Back and VoiceOver only;
+/// the system's large title stays here as an option (`largeTitle`, off).
 private struct ActivityTitle: ViewModifier {
     let title: String
     let large: Bool
