@@ -152,16 +152,21 @@ nonisolated enum ReceiptScanner {
     /// The shop name: usually the first real line at the top of the receipt.
     /// Skips "Tax Invoice", ABN/phone/address lines, dates and amounts.
     static func merchant(in text: String) -> String? {
-        let skip = ["tax invoice", "invoice", "receipt", "abn", "gst", "welcome", "thank", "www", "http", "@", ".com",
-                    "tel", "phone", "ph:", "order", "table", "date", "time", "cashier", "server", "store", "copy",
-                    "merchant", "terminal", "eftpos", "street", " st ", " rd ", " ave "]
+        // Whole words: "tel" inside HOTEL or PASTEL, "table" inside
+        // VEGETABLES, are part of a shop's name.
+        let skipWords = ["tax invoice", "invoice", "receipt", "abn", "gst", "welcome", "tel", "phone", "order",
+                         "table", "date", "time", "cashier", "server", "store", "copy", "merchant", "terminal",
+                         "eftpos", "street"]
+        let skipBits = ["thank", "www", "http", "@", ".com", "ph:", " st ", " rd ", " ave "]
         for raw in text.components(separatedBy: .newlines).prefix(8) {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "*-=#:")))
             let lower = " " + line.lowercased() + " "
             let letters = line.filter(\.isLetter).count
             let digits = line.filter(\.isNumber).count
             guard letters >= 3, digits <= 2, letters * 2 > line.count,
-                  !skip.contains(where: { lower.contains($0) }) else { continue }
+                  !skipBits.contains(where: { lower.contains($0) }),
+                  !skipWords.contains(where: { lower.range(of: #"\b"# + $0 + #"\b"#, options: .regularExpression) != nil })
+            else { continue }
             // "WOOLWORTHS METRO" → "Woolworths Metro"; leave "McDonald's" alone.
             let name = line == line.uppercased() ? line.capitalized : line
             return String(name.prefix(40))

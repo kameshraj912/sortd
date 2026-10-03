@@ -413,8 +413,7 @@ struct BugHuntStatement1003Tests {
     /// "time", "order", "copy" and so on as substrings, so "ROYAL HOTEL"
     /// (and "PASTEL BAKERY") is skipped and the next line ("Public Bar") is
     /// used as the shop. Australian pubs are nearly all "... Hotel".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1003-stmt-8", "receipt merchant skip words match inside HOTEL and PASTEL"))
+    @Test(.bug(id: "hunt-1003-stmt-8", "receipt merchant skip words match inside HOTEL and PASTEL"))
     func aHotelReceiptKeepsItsName() {
         #expect(ReceiptScanner.merchant(in: """
         ROYAL HOTEL
