@@ -40,7 +40,11 @@ struct PurchaseSourcesSettingsView: View {
             } header: {
                 BoldHeader("Apple Pay")
             } footer: {
-                Text("Logs in-store Apple Pay taps the moment you pay.")
+                if #available(iOS 27.0, *) {
+                    Text(ApplePaySetupSteps.sourcesFooter(notificationTrigger: true))
+                } else {
+                    Text(ApplePaySetupSteps.sourcesFooter(notificationTrigger: false))
+                }
             }
         }
         .scrollContentBackground(.hidden)

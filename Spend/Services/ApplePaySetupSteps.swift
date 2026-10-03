@@ -58,12 +58,28 @@ extension ApplePaySetupSteps {
             : "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts."
     }
 
+    /// The footer under Apple Pay in Settings › Purchase Sources.
+    static func sourcesFooter(notificationTrigger: Bool) -> String {
+        notificationTrigger
+            ? "Logs Apple Pay taps in shops the moment you pay, and online payments when Wallet sends a notification."
+            : "Logs in-store Apple Pay taps the moment you pay."
+    }
+
     /// The footer under the panel: what still needs adding by hand.
     static func byHandLine(notificationTrigger: Bool) -> String {
         notificationTrigger
             ? "Anything the shortcut misses, add by hand with +."
             : "Add in-app and online Apple Pay by hand."
     }
+
+    /// Where Get the Shortcut goes: the iCloud link to the same signed
+    /// shortcut as `sortd.page/apple-pay.shortcut`. The Shortcuts app opens
+    /// this link itself, whatever the default browser is. A plain file link
+    /// opened in Chrome showed a blank page, and in Safari it needed a
+    /// download first (checked on an iPhone 17 Pro, iOS 27, 4 Oct 2026).
+    /// When the shortcut is rebuilt, share the new one from Shortcuts and
+    /// put its iCloud link here and on `site/support.html`.
+    static let shortcutURL = URL(string: "https://www.icloud.com/shortcuts/e8269fbf559d4369b96fe88ba0d60ec6")!
 
     /// Set the first time Get the Shortcut is tapped in a build whose
     /// shortcut carries the notification trigger.
