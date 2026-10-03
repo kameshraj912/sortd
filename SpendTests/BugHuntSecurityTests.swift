@@ -1,0 +1,196 @@
+import Testing
+import Foundation
+import SwiftData
+@testable import Spend
+
+// Bug hunt 3 Oct 2026, area security-masvs (docs/testing/attacks.md).
+// Every test here documents a real, unfixed bug: it fails today, and runs
+// only with `scripts/test.sh --known-bugs`.
+
+// MARK: - Fakes for the account store (this file's own)
+
+@MainActor
+private final class SecHuntKeychain: AccountKeychain {
+    var stored: Account?
+    func load() throws -> Account? { stored }
+    func save(_ account: Account) throws { stored = account }
+    func delete() throws { stored = nil }
+}
+
+/// `revoke` throws `revokeError` when set (Apple's sheet cancelled is
+/// `.cancelled`); `deletePerson` always works and counts.
+@MainActor
+private final class SecHuntRevoker: AccountRevoker {
+    var revokeError: AccountError?
+    var personDeletes = 0
+    func revoke(_ account: Account) async throws {
+        if let revokeError { throw revokeError }
+    }
+    func deletePerson(hash: String) async throws { personDeletes += 1 }
+}
+
+@MainActor
+private final class SecHuntSink: IdentitySink {
+    func identify(_ hash: String) {}
+    func reset() {}
+}
+
+@MainActor
+private final class SecHuntChecker: CredentialStateChecker {
+    func isRevoked(_ account: Account) async -> Bool { false }
+}
+
+@MainActor
+private final class SecHuntProvider: IdentityProvider {
+    let account: Account
+    init(_ account: Account) { self.account = account }
+    func signIn() async throws -> Account { account }
+}
+
+/// A stand-in Keychain for `GmailCleanup.run`.
+private final class SecHuntTokenBox {
+    var items: [String: String] = [:]
+}
+
+@MainActor
+struct BugHuntSecurityTests {
+    let context: ModelContext
+
+    init() throws {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        context = ModelContext(container)
+    }
+
+    private func source(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    private func freshDefaults(_ name: String) -> UserDefaults {
+        let suite = "sec-hunt-\(name)"
+        let d = UserDefaults(suiteName: suite)!
+        d.removePersistentDomain(forName: suite)
+        return d
+    }
+
+    // MARK: sec-01
+
+    /// Cancelling Apple's "sign in once more to confirm" sheet during Delete
+    /// Account still deletes the usage record and signs out (and, from
+    /// "Delete Account and All Data", the view then wipes every purchase).
+    /// Note: `AccountStoreReviewTests.aCancelledJobIsDroppedQuietly` pins
+    /// today's behaviour and must change with the fix.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "sec-01", "Cancel on Apple's confirm sheet does not cancel Delete Account"))
+    func cancellingApplesConfirmSheetCancelsTheDelete() async throws {
+        let account = Account(provider: .apple, subject: "001234.sechunt", email: nil)
+        let revoker = SecHuntRevoker()
+        let store = AccountStore(keychain: SecHuntKeychain(), revoker: revoker, sink: SecHuntSink(),
+                                 checker: SecHuntChecker(), defaults: freshDefaults(#function), salt: "sec-hunt")
+        try await store.signIn(with: SecHuntProvider(account))
+
+        // The user taps Cancel on Apple's sheet (AppleIdentityProvider.error(from:) -> .cancelled).
+        revoker.revokeError = .cancelled
+        _ = await store.deleteAccount()
+
+        #expect(store.current == account, "a cancelled confirmation signed the user out anyway")
+        #expect(revoker.personDeletes == 0, "the usage record was deleted after the user cancelled")
+    }
+
+    // MARK: sec-02
+
+    /// The Bills widget draws each bill's name (the shop, from
+    /// `WidgetBridge`'s `Bill(name: $0.merchant ...)`) through `MoneyRow`,
+    /// which never applies `.shopNameIsPrivate()`. With "Show Amounts When
+    /// Locked" on, the whole widget is `.privacySensitive(false)`, so shop
+    /// names show on a locked phone (StandBy), against the widget rule.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "sec-02", "Bills widget shows shop names while the iPhone is locked"))
+    func billsWidgetKeepsShopNamesPrivateWhileLocked() throws {
+        let bridge = try source("Spend/Services/WidgetBridge.swift")
+        #expect(bridge.contains("WidgetSummary.Bill(name: $0.merchant"), "premise: a bill's name is the shop")
+
+        let widget = try source("SortdWidget/SortdWidget.swift")
+        let start = try #require(widget.range(of: "struct BillsView"))
+        let end = try #require(widget.range(of: "struct SortdBillsWidget", range: start.upperBound..<widget.endIndex))
+        let bills = String(widget[start.upperBound..<end.lowerBound])
+        #expect(bills.contains("ShopName(") || bills.contains(".shopNameIsPrivate()"),
+                "BillsView draws bill.name without the always-private shop name rule")
+    }
+
+    // MARK: sec-03
+
+    /// The Gmail clean-up deletes each old Google refresh token before
+    /// Google has confirmed the revoke, and keeps it nowhere else; the
+    /// revoke then runs in an unawaited Task (60 s default timeout). If the
+    /// app is closed in that window the token is gone and the Gmail grant
+    /// is never cancelled (`doneKey` is already set, so it never re-runs).
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "sec-03", "Google revokes forget the token before Google confirms"))
+    func gmailCleanupKeepsTheTokenUntilGoogleConfirms() throws {
+        let token = "sec-hunt-refresh-\(UUID().uuidString)"
+        let box = SecHuntTokenBox()
+        box.items["google-refresh-raj@example.com"] = token
+        let tokens = GmailCleanup.KeychainTokens(
+            accounts: { prefix in box.items.keys.filter { $0.hasPrefix(prefix) } },
+            get: { box.items[$0] },
+            delete: { box.items[$0] = nil })
+
+        let found = GmailCleanup.run(defaults: freshDefaults(#function), tokens: tokens)
+        #expect(found == [token])
+
+        let pending = GoogleAuth.pendingTokens(Keychain.get("google-revoke-pending"))
+        #expect(box.items.values.contains(token) || pending.contains(token),
+                "the refresh token was deleted before any revoke was attempted, and is kept nowhere")
+    }
+
+    // MARK: sec-04
+
+    /// Secrets.xcconfig.example says to leave ACCOUNT_WORKER_URL empty until
+    /// the Worker is deployed, but it ships a live-looking URL, and unlike
+    /// the Sentry and PostHog placeholders ("replace_me") the app accepts
+    /// it: a copied example sends Delete Account calls to
+    /// sortd-account.example.workers.dev, a host Sortd does not own.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "sec-04", "example Worker URL is used as a real Worker"))
+    func exampleWorkerURLIsNeverUsedAsARealWorker() throws {
+        let example = try source("Secrets.xcconfig.example")
+        let line = try #require(example.split(separator: "\n").first { $0.hasPrefix("ACCOUNT_WORKER_URL") })
+        let value = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            .last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        let store = try source("Spend/Services/AccountStore.swift")
+        #expect(value.isEmpty || store.contains("example.workers.dev"),
+                "example value \(value) would be read by WorkerRevoker.fromBundle as a real Worker")
+    }
+
+    // MARK: sec-05
+
+    /// Every Apple Pay run keeps the raw shop, amount and card text in
+    /// UserDefaults ("lastTapReceived" and the last 10 "recentTapRuns"),
+    /// and it stays there after the purchase is deleted. attacks.md
+    /// STORAGE-1: only the SwiftData store may hold a shop name.
+    /// (Right behaviour not obvious: it is a setup-check aid. Raj decides.)
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "sec-05", "shop and amount of a deleted purchase stay in UserDefaults"))
+    func aDeletedTapLeavesNoShopOrAmountInDefaults() async throws {
+        let shop = "ZEBRACAFE\(UUID().uuidString.prefix(6))"
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+        // The exact line `recordReach` stores for a Wallet run.
+        let line = LogWalletTapIntent.record(transaction: nil, amount: "A$12.34", merchant: shop,
+                                             card: "NAB Visa Debit", notification: WalletNotification(), at: now)
+        #expect(!line.contains(shop), "the stored run line holds the shop name")
+        #expect(!line.contains("12.34"), "the stored run line holds the amount")
+
+        // Through the real path: log, then delete the purchase.
+        let book = CardBook(defaults: UserDefaults(suiteName: "sec-hunt-card-\(UUID().uuidString)")!)
+        let r = try await LogPurchaseIntent.handle(merchant: shop, amount: "A$12.34", card: "NAB Visa Debit",
+                                                   in: context, book: book, now: now)
+        let t = try #require(r.transaction)
+        context.delete(t)
+        try context.save()
+        let kept = LogPurchaseIntent.recentRuns() + [LogPurchaseIntent.reachDefaults.string(forKey: LogPurchaseIntent.lastTapKey) ?? ""]
+        #expect(!kept.contains { $0.contains(shop) }, "the deleted purchase's shop is still in UserDefaults")
+    }
+}
