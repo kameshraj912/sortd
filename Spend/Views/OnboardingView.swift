@@ -174,7 +174,7 @@ struct OnboardingView: View {
             if let was = budgetAtImport, was != budget { budgetMemory.adopt(current: budget) }
             budgetAtImport = nil
         }) {
-            NavigationStack { ImportView() }
+            NavigationStack { ImportSheetContent() }
         }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
@@ -1369,5 +1369,20 @@ struct CardDetailForm: View {
         let bankWords = Set(BankPreset.match(info.bank)?.words ?? [])
         c.walletWords.removeAll { $0 == info.name.lowercased() && !bankWords.contains($0) }
         CardBook.shared.upsert(c)
+    }
+}
+
+/// Import, opened as a sheet from the first screen. A sheet needs its own way
+/// out; the same screen pushed from Settings has the back button.
+private struct ImportSheetContent: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ImportView()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                }
+            }
     }
 }
