@@ -35,6 +35,32 @@ struct HuntFixesCTests {
         #expect(try ctx.fetchCount(FetchDescriptor<Transaction>()) == 1)
     }
 
+    // MARK: X5
+
+    @Test func aRunLineSaysHowFieldsArrivedNotWhatTheySaid() {
+        let line = LogWalletTapIntent.record(transaction: nil, amount: "A$12.34", merchant: "", card: "Merchant",
+                                             notification: WalletNotification(), at: Date(timeIntervalSince1970: 1_790_000_000))
+        #expect(line.contains("amount 7 characters"))
+        #expect(line.contains("merchant empty"))
+        #expect(line.contains("card placeholder"))
+        #expect(!line.contains("12.34"))
+    }
+
+    @Test func runLinesFromOlderBuildsAreClearedOnce() {
+        let d = UserDefaults(suiteName: "hunt-fix-c-\(UUID().uuidString)")!
+        d.set("amount “A$12.34” · merchant “ZEBRA”", forKey: LogPurchaseIntent.lastTapKey)
+        d.set(["merchant “ZEBRA”"], forKey: LogPurchaseIntent.recentRunsKey)
+
+        LogPurchaseIntent.scrubOldRunText(defaults: d)
+        #expect(d.string(forKey: LogPurchaseIntent.lastTapKey) == nil)
+        #expect(LogPurchaseIntent.recentRuns(d).isEmpty)
+
+        // New lines written after the clean-up are kept.
+        LogPurchaseIntent.recordReach("tap run · amount 7 characters", at: .now, defaults: d)
+        LogPurchaseIntent.scrubOldRunText(defaults: d)
+        #expect(LogPurchaseIntent.recentRuns(d).count == 1)
+    }
+
     // MARK: D4
 
     /// The recovery screen's way out: the unopenable store's files are moved
