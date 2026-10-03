@@ -254,7 +254,7 @@ struct BugHuntAccountTests {
         let store = accountStore(revoker(transport, attester: attester), defaults: defaults)
         try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
 
-        let problems = await store.deleteAccount()
+        let problems = await store.deleteAccount().problems
 
         #expect((defaults.array(forKey: AccountStore.pendingDeletesKey) as? [String] ?? []).count == 1)
         #expect(problems.isEmpty)
@@ -270,7 +270,7 @@ struct BugHuntAccountTests {
         let store = accountStore(revoker(transport), defaults: defaults)
         try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
 
-        let problems = await store.deleteAccount()
+        let problems = await store.deleteAccount().problems
 
         #expect(problems.count == 1)
         #expect(problems.allSatisfy { !$0.contains("_") && $0.contains(" ") })

@@ -208,25 +208,31 @@ struct AccountStoreReviewTests {
         let s = store(revoker: revoker, sink: LoggingSink(CallLog()), defaults: defaults)
         try await s.signIn(with: ProviderFake(Self.account))
 
-        let problems = await s.deleteAccount()
+        let problems = await s.deleteAccount().problems
 
         #expect(s.current == nil)
         #expect(queued(defaults).isEmpty)
         #expect(problems == ["Apple said no.", "Apple said no."])
     }
 
-    @Test func aCancelledJobIsDroppedQuietly() async throws {
+    /// A cancel on the provider's confirmation (Apple's "sign in once more")
+    /// stops the delete: still signed in, no server call, nothing queued, and
+    /// the analytics id is put back (X1, 3 Oct 2026 hunt).
+    @Test func aCancelledConfirmationStopsTheDelete() async throws {
         let defaults = defaults(#function)
-        let revoker = RevokerFake()
+        let calls = CallLog()
+        let revoker = RevokerFake(log: calls)
         revoker.error = .cancelled
-        let s = store(revoker: revoker, sink: LoggingSink(CallLog()), defaults: defaults)
+        let s = store(revoker: revoker, sink: LoggingSink(calls), defaults: defaults)
         try await s.signIn(with: ProviderFake(Self.account))
 
-        let problems = await s.deleteAccount()
+        let result = await s.deleteAccount()
 
-        #expect(s.current == nil)
+        #expect(result == AccountStore.DeleteResult(cancelled: true, problems: []))
+        #expect(s.current == Self.account)
         #expect(queued(defaults).isEmpty)
-        #expect(problems.isEmpty)
+        #expect(revoker.deletePersonCount == 0)
+        #expect(calls.calls.suffix(2) == ["reset", "identify"])
     }
 
     // MARK: (8) a retry in flight does not overwrite a new delete's jobs
