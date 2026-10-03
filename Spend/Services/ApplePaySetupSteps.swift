@@ -80,16 +80,4 @@ extension ApplePaySetupSteps {
     /// When the shortcut is rebuilt, share the new one from Shortcuts and
     /// put its iCloud link here and on `site/support.html`.
     static let shortcutURL = URL(string: "https://www.icloud.com/shortcuts/e8269fbf559d4369b96fe88ba0d60ec6")!
-
-    /// Set the first time Get the Shortcut is tapped in a build whose
-    /// shortcut carries the notification trigger.
-    static let gotOnlineShortcutKey = "applePayGotOnlineShortcut"
-
-    static let updateLine = "Updated 2 Oct: get it again to log online payments too."
-
-    /// A shortcut added before 2 Oct only has the tap trigger. Once it is
-    /// connected, say so under step 1 until Get the Shortcut is tapped again.
-    static func showsUpdateLine(status: ApplePayStatus, gotNewShortcut: Bool) -> Bool {
-        status.isConnected && !gotNewShortcut
-    }
 }

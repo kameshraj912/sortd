@@ -122,17 +122,6 @@ struct ApplePayOnlineSetupTests {
         #expect(url.path().hasPrefix("/shortcuts/"))
     }
 
-    /// Someone who added the shortcut before this change is told to get it
-    /// again, until they tap Get the Shortcut once.
-    @Test func theUpdateLineShowsOnlyForAnOldConnectedShortcut() {
-        let reached = ApplePayStatus.shortcutReached(now)
-        #expect(ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: false))
-        #expect(!ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: true))
-        #expect(!ApplePaySetupSteps.showsUpdateLine(status: .notConnected, gotNewShortcut: false))
-        #expect(ApplePaySetupSteps.showsUpdateLine(status: .tapNeedsCheck(date: now), gotNewShortcut: false))
-        #expect(ApplePaySetupSteps.updateLine == "Updated 2 Oct: get it again to log online payments too.")
-    }
-
     // MARK: - tapOrigins
 
     @Test func originsAreAlwaysWrittenTapThenNotification() {
