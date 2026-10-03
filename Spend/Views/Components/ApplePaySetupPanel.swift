@@ -23,8 +23,8 @@ struct ApplePaySetupPanel: View {
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
-    /// Set when no app (Shortcuts) took the link: the page opens here, not in
-    /// the default browser.
+    /// The shortcut file opens here, in Sortd's own Safari sheet, never the
+    /// default browser.
     @State private var safariPage: SafariPage?
     /// A long-press on the status card reveals what Apple Pay last sent, in
     /// plain text — support staff point people to it. Kept out of the way
@@ -209,7 +209,7 @@ struct ApplePaySetupPanel: View {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
             Button {
                 shortcutOpened = true
-                Task { safariPage = await ShortcutLink.fallback(for: ApplePaySetupSteps.shortcutURL) }
+                safariPage = SafariPage(url: ApplePaySetupSteps.shortcutURL)
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
@@ -219,6 +219,13 @@ struct ApplePaySetupPanel: View {
             .buttonStyle(.glassProminent)
             .tint(Color.brand)
             .controlSize(.large)
+
+            // What the Safari sheet shows for the file (checked on the iOS 27
+            // simulator, 4 Oct 2026): a file card with "Open in Shortcuts".
+            Text("A page opens. Tap Open in \u{201C}Shortcuts\u{201D}.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
 

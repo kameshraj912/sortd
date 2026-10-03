@@ -113,13 +113,15 @@ struct ApplePayOnlineSetupTests {
         #expect(!ApplePaySetupSteps.sourcesFooter(notificationTrigger: false).contains("online"))
     }
 
-    /// Get the Shortcut opens an iCloud shortcut link, which the Shortcuts
-    /// app takes over in any browser, not a file that needs Safari.
-    @Test func getTheShortcutOpensAnICloudShortcutLink() {
+    /// Get the Shortcut opens our own signed file on sortd.page, in the
+    /// in-app Safari sheet: a web link the sheet can show, no personal iCloud.
+    @Test func getTheShortcutOpensTheHostedFileInTheSafariSheet() {
         let url = ApplePaySetupSteps.shortcutURL
+        #expect(url.absoluteString == "https://sortd.page/apple-pay.shortcut")
         #expect(url.scheme == "https")
-        #expect(url.host() == "www.icloud.com")
-        #expect(url.path().hasPrefix("/shortcuts/"))
+        #expect(url.host() == "sortd.page")
+        #expect(url.pathExtension == "shortcut")
+        #expect(SafariPage(url: url).url == url)
     }
 
     // MARK: - tapOrigins
