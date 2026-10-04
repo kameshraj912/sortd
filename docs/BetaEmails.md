@@ -14,7 +14,6 @@ The form asks for:
 - First name (optional)
 - Country (optional: Australia, Singapore, Malaysia, Other)
 - Apple Pay: yes / no / not sure (optional)
-- Gmail address (optional, only for Gmail receipts)
 
 Cloudflare can only email verified addresses, so the form can't send people a confirmation
 email. They see "You're on the list" on the page instead.
@@ -26,10 +25,12 @@ Setup (once): Email Routing on for sortd.page, the destination address verified,
 
 1. App Store Connect → TestFlight → External testers → add their email, or create a public
    link (limit it to iOS 26 and later) and send that instead.
-2. If they gave a Gmail address and Google hasn't verified Sortd yet, add it in
-   Google Cloud → Google Auth Platform → Audience → Test users (limit 100).
-3. Reply with one of the emails below.
-4. Log them somewhere (name, Apple ID, Gmail, date) so you can clear the list when the beta ends.
+2. Reply with one of the emails below.
+3. Log them somewhere (name, Apple ID, date) so you can clear the list when the beta ends.
+
+On 4 Oct 2026 the external group "Beta" exists in App Store Connect with no testers, and build
+1.0 (4) is with Beta App Review. Nobody can install until that passes. About 30 sign-up emails
+are in Gmail (label them; several from 21 Sep look like form tests).
 
 ## Reply: you're in (friendly)
 
@@ -42,11 +43,8 @@ Subject: You're in the Sortd beta
 > You'll get an email from Apple TestFlight in the next day or two. Tap "View in TestFlight",
 > install TestFlight if you don't have it, then install Sortd.
 >
-> A few things while it's a beta:
-> - Gmail receipts: Google is still reviewing Sortd, so Google will show a warning that the app
->   isn't verified. Tap "Advanced", then "Go to Sortd". It's safe; Sortd can only read, and only
->   on your phone.
-> - If something looks wrong, take a screenshot and reply to this email. Please hide card numbers.
+> One thing while it's a beta: if something looks wrong, take a screenshot and reply to this
+> email. Please hide card numbers.
 >
 > Thanks for helping.
 >
@@ -61,9 +59,6 @@ Subject: Sortd beta invite
 >
 > You're in. Look out for a TestFlight email from Apple in the next day or two, then install
 > Sortd from it.
->
-> If you connect Gmail, Google will warn that Sortd isn't verified yet. Tap "Advanced" then
-> "Go to Sortd".
 >
 > Reply here with any bugs.
 >
