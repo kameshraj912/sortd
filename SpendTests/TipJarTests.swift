@@ -31,9 +31,9 @@ import StoreKit
 @Suite(.serialized)
 struct TipJarTests {
     private static let ids = [
-        "com.kameshraj.spend.tip.small",
-        "com.kameshraj.spend.tip.medium",
-        "com.kameshraj.spend.tip.large",
+        "com.kameshraj.sortd.tip.small",
+        "com.kameshraj.sortd.tip.medium",
+        "com.kameshraj.sortd.tip.large",
     ]
 
     private static func session() throws -> SKTestSession {
@@ -64,7 +64,7 @@ struct TipJarTests {
         let s = try Self.session()
         let jar = TipJar()
         await jar.load()
-        let small = try #require(jar.products.first { $0.id == "com.kameshraj.spend.tip.small" })
+        let small = try #require(jar.products.first { $0.id == "com.kameshraj.sortd.tip.small" })
 
         let outcome = await jar.tip(small)
         expectThanked(outcome)
@@ -93,7 +93,7 @@ struct TipJarTests {
         defer { s.failTransactionsEnabled = false }
         let jar = TipJar()
         await jar.load()
-        let small = try #require(jar.products.first { $0.id == "com.kameshraj.spend.tip.small" })
+        let small = try #require(jar.products.first { $0.id == "com.kameshraj.sortd.tip.small" })
 
         let outcome = await jar.tip(small)
 
@@ -115,7 +115,7 @@ struct TipJarTests {
         let s = try Self.session()
         let jar = TipJar()
         await jar.load()
-        let small = try #require(jar.products.first { $0.id == "com.kameshraj.spend.tip.small" })
+        let small = try #require(jar.products.first { $0.id == "com.kameshraj.sortd.tip.small" })
 
         expectThanked(await jar.tip(small))
         expectThanked(await jar.tip(small))

@@ -65,11 +65,11 @@ All three together must be 16 KB or less. The key is used once, then thrown away
 Send exactly one of the two:
 
 ```json
-{"client_id": "com.kameshraj.spend", "authorization_code": "<fresh code from ASAuthorizationAppleIDCredential>"}
+{"client_id": "com.kameshraj.sortd", "authorization_code": "<fresh code from ASAuthorizationAppleIDCredential>"}
 ```
 
 ```json
-{"client_id": "com.kameshraj.spend", "refresh_token": "<refresh token>"}
+{"client_id": "com.kameshraj.sortd", "refresh_token": "<refresh token>"}
 ```
 
 - `client_id` must equal the `APPLE_CLIENT_ID` secret, or you get 400 `wrong_client`.
@@ -136,7 +136,7 @@ Secrets never go in `wrangler.jsonc` or git. Set each one yourself. Wrangler ask
 ```sh
 cd worker
 npx wrangler secret put APPLE_TEAM_ID          # 10-char Team ID
-npx wrangler secret put APPLE_CLIENT_ID        # com.kameshraj.spend
+npx wrangler secret put APPLE_CLIENT_ID        # com.kameshraj.sortd
 npx wrangler secret put APPLE_KEY_ID           # 10-char Key ID of the Sign in with Apple key
 npx wrangler secret put APPLE_PRIVATE_KEY < ~/path/to/AuthKey_XXXXXXXXXX.p8
 npx wrangler secret put POSTHOG_API_KEY        # phx_... personal key
@@ -195,9 +195,9 @@ CI: `.github/workflows/worker.yml` runs install, type-check and tests on Linux f
 
 **Apple Developer account** (needs the paid membership):
 
-1. **Keys** → new key → tick **Sign in with Apple** → configure it for the primary App ID `com.kameshraj.spend`. Download the `.p8`. You can only download it once. Note the **Key ID**.
+1. **Keys** → new key → tick **Sign in with Apple** → configure it for the primary App ID `com.kameshraj.sortd`. Download the `.p8`. You can only download it once. Note the **Key ID**.
 2. Your **Team ID**, from Membership details.
-3. On the App ID `com.kameshraj.spend`, turn on **App Attest**. Then add the App Attest entitlement to the app. That belongs to sub-spec 4, not to this folder.
+3. On the App ID `com.kameshraj.sortd`, turn on **App Attest**. Then add the App Attest entitlement to the app. That belongs to sub-spec 4, not to this folder.
 4. Run the `wrangler secret put` commands above.
 
 **PostHog:**

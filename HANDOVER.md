@@ -74,7 +74,7 @@ Nine sub-specs planned in `docs/specs/2026-09-25-free-app-overhaul-overview.md` 
 | `ACCOUNT_WORKER_URL` | Account deletes are queued on the phone (hash only) and retried at the next launch, instead of calling the Worker immediately. |
 
 **Worker secrets** (`worker/README.md`, `cd worker && npx wrangler secret put <NAME>`, repeat with `--env dev` for the dev environment — secrets are not shared between environments):
-`APPLE_TEAM_ID`, `APPLE_CLIENT_ID` (`com.kameshraj.spend`), `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (piped in from the `.p8`), `POSTHOG_API_KEY` (the personal `phx_...` key, not the app's `phc_...` one), `POSTHOG_PROJECT_ID`, `CHALLENGE_KEY` (random, `openssl rand -base64 32`). Dev only: `DEV_BYPASS_TOKEN`, which also has to go in the app's DEBUG xcconfig and must never reach the prod Worker.
+`APPLE_TEAM_ID`, `APPLE_CLIENT_ID` (`com.kameshraj.sortd`), `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (piped in from the `.p8`), `POSTHOG_API_KEY` (the personal `phx_...` key, not the app's `phc_...` one), `POSTHOG_PROJECT_ID`, `CHALLENGE_KEY` (random, `openssl rand -base64 32`). Dev only: `DEV_BYPASS_TOKEN`, which also has to go in the app's DEBUG xcconfig and must never reach the prod Worker.
 
 **Compile flags** (Xcode → Spend target → Build Settings → Active Compilation Conditions). As of 26 Sep 2026, `project.pbxproj` has:
 
@@ -90,7 +90,7 @@ Nine sub-specs planned in `docs/specs/2026-09-25-free-app-overhaul-overview.md` 
 3. **Sentry DSN**: done, DSN in `Secrets.xcconfig` on Raj's Mac (26 Sep). Still to check: **Prevent storing IP addresses** (Settings › Security & Privacy) so the server side matches the app's `sendDefaultPii = false`.
 4. **App Store Connect**: create the three tip consumables (sub-spec 1's gate needs these before any store build).
 5. ~~Paid Apple Developer enrolment and the App ID capabilities~~ — done 26 Sep 2026 (team `7CLGYQ9P3L`).
-6. **A Sign in with Apple key (.p8)** and the **account Worker deploy**: Apple Developer → Keys → new key → Sign in with Apple, configured for `com.kameshraj.spend`. Downloads once — save it outside the repo (`*.p8` is gitignored). Note the Key ID and Team ID. Then run the `wrangler secret put` list in §3 and deploy from `worker/`.
+6. **A Sign in with Apple key (.p8)** and the **account Worker deploy**: Apple Developer → Keys → new key → Sign in with Apple, configured for `com.kameshraj.sortd`. Downloads once — save it outside the repo (`*.p8` is gitignored). Note the Key ID and Team ID. Then run the `wrangler secret put` list in §3 and deploy from `worker/`.
 9. **App Review contact phone, the Shortcuts video and the test Gmail account** for `docs/AppReviewNotes.md`, and the TestFlight text from `docs/TestFlightWhatToTest.md` into App Store Connect.
 7. **Approve the icon renders** for sub-spec 9 (still in progress — no PR yet).
 8. **Retest Apple Pay at a staffed till** (carried over from the last handover — the vending-machine test used the pre-fix shortcut; nobody has retested the fixed one on a real device). Steps unchanged: Sortd → Apple Pay step → Get the Shortcut → Replace → buy something small on a Visa at a staffed till, not a vending machine → check Settings → Purchase Sources → Apple Pay Logging → Last Tap Received.

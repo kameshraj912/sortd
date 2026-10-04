@@ -15,9 +15,9 @@ final class TipJar {
     static let shared = TipJar()
 
     enum ID {
-        static let small = "com.kameshraj.spend.tip.small"
-        static let medium = "com.kameshraj.spend.tip.medium"
-        static let large = "com.kameshraj.spend.tip.large"
+        static let small = "com.kameshraj.sortd.tip.small"
+        static let medium = "com.kameshraj.sortd.tip.medium"
+        static let large = "com.kameshraj.sortd.tip.large"
         static let all = [small, medium, large]
     }
 
@@ -92,7 +92,7 @@ final class TipJar {
         }
     }
 
-    /// The last part of a tip's product id ("com.kameshraj.spend.tip.small"
+    /// The last part of a tip's product id ("com.kameshraj.sortd.tip.small"
     /// gives "small"). For analytics; the price never goes anywhere.
     nonisolated static func size(of productID: String) -> String {
         String(productID.split(separator: ".").last ?? "unknown")

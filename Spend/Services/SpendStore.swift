@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import OSLog
 
-let log = Logger(subsystem: "com.kameshraj.spend", category: "app")
+let log = Logger(subsystem: "com.kameshraj.sortd", category: "app")
 
 /// The database layout as it shipped in 1.0.
 ///

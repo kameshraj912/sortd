@@ -469,7 +469,7 @@ final class WorkerRevoker: AccountRevoker {
                     return AppleCode(user: auth.account.subject, code: code)
                 },
                 googleRevoke: { await GoogleAuth.revokeIdentity() },
-                clientID: Bundle.main.bundleIdentifier ?? "com.kameshraj.spend")
+                clientID: Bundle.main.bundleIdentifier ?? "com.kameshraj.sortd")
         }
     }
 
