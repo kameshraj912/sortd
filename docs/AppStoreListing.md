@@ -7,7 +7,7 @@ checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 - **Name** (30): Sortd: Spending Tracker
   ("Sortd" alone is taken on the App Store by a Sydney shopping app. Raj picked this on 4 Oct 2026;
-  the app record uses it. The name under the icon stays "Sortd". The site still says "Sortd Money".)
+  the app record uses it. The name under the icon stays "Sortd". The site uses the same name since 4 Oct 2026.)
 - **Subtitle** (30): Spending that logs itself
   (Open, 4 Oct 2026: "Spending" now repeats the name, which wastes search words. Candidate:
   "Expenses that log themselves", 28. Raj to decide before the App Store listing.)
