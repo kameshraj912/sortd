@@ -23,8 +23,9 @@
   "routes": [{ "pattern": "account.sortd.page", "custom_domain": true }],
   "vars": {
     "ENV": "prod",
-    // PostHog's API host, not the ingest host (eu.i.posthog.com). Not verified with a real key yet.
-    "POSTHOG_API_HOST": "https://eu.posthog.com"
+    // PostHog's API host, not the ingest host (us.i.posthog.com). The Sortd project is on the
+    // US cloud. Not verified with a real key yet.
+    "POSTHOG_API_HOST": "https://us.posthog.com"
   },
   // Flood guards, same binding as site/wrangler.jsonc (BETA_LIMIT, namespace 1001).
   // Counters live at the edge and are approximate; nothing is stored.
@@ -46,7 +47,7 @@
       "observability": { "enabled": false },
       "vars": {
         "ENV": "dev",
-        "POSTHOG_API_HOST": "https://eu.posthog.com"
+        "POSTHOG_API_HOST": "https://us.posthog.com"
       },
       "ratelimits": [
         { "name": "IP_LIMIT", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
