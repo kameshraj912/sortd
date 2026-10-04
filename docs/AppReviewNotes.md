@@ -5,71 +5,42 @@ Paste the "Notes" part into App Store Connect › App Review Information › Not
 at the bottom. Updated 26 Sep 2026: sign-in and iCloud backup are on, contact name and email
 filled from the repo. Updated 4 Oct 2026: the ready-made shortcut (two triggers), no tip jar in this build, no session replay, the diagnostics menu line (rule 2.3.1). Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
 Budget Ring, Today and Recent widgets added.
+Rewritten 4 Oct 2026 (saved in App Store Connect that day): cut from a feature tour to what a
+reviewer cannot find by tapping, per Apple's App Review page. 1,812 bytes. Plain text, no markdown:
+the box shows asterisks as typed.
 
 ---
 
 ## Notes
 
-Sortd is a personal spending tracker. It doesn't move, hold or manage money, doesn't connect to
-any bank and never asks for bank logins. Purchases are stored on the device only. Sign-in is
-optional and nothing needs it.
+```
+Thanks for reviewing Sortd.
 
-**Quickest way to review**
-On the first screen tap "Look around with sample data": about two months of purchases on two
-sample cards, across every screen. Tap "Clear" on the Home banner to go back to setup.
+WHAT IT IS
+Sortd is a personal spending tracker. It does not hold, move or manage money. It does not connect to a bank and never asks for a bank login. Purchases are stored on the iPhone.
 
-**Every feature is free**
-Insights, Subscriptions & Bills (with local bill reminders), the receipt camera
-and category budgets: nothing is locked, and there is nothing to buy in this build. Terms and
-Privacy are in Settings › Privacy & Security › Privacy.
+FASTEST WAY TO TEST
+1. Open the app. On the first screen tap "Look Around With Sample Data". This loads about two months of sample purchases, so every screen has something in it.
+2. To go back to an empty app, tap "Clear" on the banner at the top of Home.
 
-**Logging Apple Pay (Shortcuts automation)**
-Sortd can't read Wallet itself; the user adds a personal automation. Settings › Purchase Sources
-› Apple Pay Logging › Get the Shortcut imports a ready-made shortcut that calls Sortd's "Log
-Wallet Tap" App Intent. Its "When any card is tapped" trigger logs in-store Apple Pay taps, even
-with the app closed. On iOS 27 it also has a "When I receive a notification from Wallet" trigger,
-so in-app and online Apple Pay payments are logged from Wallet's notification (only the title,
-subtitle and body are passed, on the device). The user runs it once (▶, then Allow) and switches
-the automations on; the page has a picture for each step. ▶ is only a test: it saves nothing.
-Logging needs a real device with a Wallet card. Purchases can always be added by hand.
+NO ACCOUNT NEEDED
+Every screen works without signing in, so there is no demo account. Sign in with Apple or Google is optional and lives in Settings > Account. Delete Account is on the same screen.
 
-**Sign-in (optional, Apple or Google)**
-Settings › Account. Only the provider's subject and, if shared, the email are kept, in the
-Keychain on the device; no Sortd server holds user data. Sign Out forgets the identity. Delete
-Account asks the provider to cancel the sign-in and removes the usage record (5.1.1(v)), with
-an option to also delete all data on the device.
+APPLE PAY LOGGING NEEDS A REAL CARD
+Sortd cannot read Wallet. The user adds a Shortcuts automation instead: Settings > Purchase Sources > Apple Pay Logging > Get the Shortcut. When a card is tapped, the automation runs Sortd's "Log Wallet Tap" action and the purchase appears in the app. This only fires on a real iPhone with a card in Wallet, so it may not work in your test setup. Purchases can also be added by hand, scanned from a receipt, or imported from a statement. I can send a short screen recording of a real tap if that helps.
 
-**Setup questions, check-in, typing a purchase**
-- Setup asks optional questions (goals, how they pay, check-in time, spending abroad), stored
-  only on the device. Change: Settings › Help & Feedback › Run Setup Again. Delete All Data
-  removes them.
-- Check-in: a repeating local notification (8 am, 8 pm or Sunday 6 pm), fixed text, no amounts,
-  no marketing. iOS's permission alert appears only after the user picks a time. Settings ›
-  Bills & Reminders › Check-in. All notifications are local; no push server.
-- Add › the top line ("coffee 5.50 yesterday") is read by Apple's on-device model where Apple
-  Intelligence is on, otherwise by plain rules. Nothing leaves the device.
-- Home › "Finish setup" checks for a Sortd widget with WidgetKit, on the device.
-- Widgets: Budget Ring, Today and Recent show the budget left, today's total and the last three
-  purchases, read on the device. Shop names and amounts are hidden while
-  the iPhone is locked.
+NOTHING TO BUY
+Every feature is free. There are no in-app purchases in this build.
 
-**Other**
-- Exchange rates: frankfurter.dev (ECB data); only currency codes and a date are sent.
-- Scan Receipt: camera or one photo, read on the device. Not stored or sent; the user checks
-  the result before saving.
-- Cards: only the last 4 digits of the card and its Apple Pay number.
-- Settings › Backup & Data: Back up to iCloud (encrypted on the device, the user's own iCloud
-  private database), Save a Backup, Import, Export as Spreadsheet, Delete All Data. Files are
-  only made when the user taps.
-- No tracking or ads. Usage analytics (PostHog) and crash reports (Sentry) are linked to a
-  salted hash, scrubbed of purchases, merchants, emails and IP, and share one switch in
-  Settings › Privacy. The switch starts off when the iPhone's region is in the EU/EEA, the UK
-  or Switzerland, and on elsewhere. Privacy policy: https://sortd.page/privacy
+ONE HIDDEN MENU
+Settings > About: tapping the version number 7 times opens a diagnostics menu (send a test event, send a test crash report). It is there for beta support only.
 
-- This TestFlight build records no screens: session replay is not compiled in.
-- Settings › About: 7 taps on the version open a beta diagnostics menu (test event, test crash).
+DATA
+No ads and no tracking. Usage counts and crash reports never include purchases, shop names or amounts. They can be turned off in Settings > Privacy & Security > Privacy, and they start off in the EU/EEA, UK and Switzerland. This build does not record the screen.
 
-Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
+CONTACT
+Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
+```
 
 ---
 
@@ -92,8 +63,7 @@ Shortcuts › a small Apple Pay purchase › the purchase in Activity.
 
 ## Before submitting
 
-- [ ] Notes are about 3,600 characters with the placeholders in (measured 2 Oct 2026). Once the
-      real values are in, check it is under 4,000; cut the "Other" list first if not.
+- [x] Notes are 1,812 bytes (limit 4,000), measured in the form on 4 Oct 2026.
 - [ ] Optional: the setup video, only if Beta App Review asks.
 - [x] The Apple Pay Logging page promises online Apple Pay only on iOS 27, from Wallet's
       notification (`ApplePaySetupSteps.scopeLine`), checked 4 Oct 2026.

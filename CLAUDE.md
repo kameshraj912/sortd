@@ -5,7 +5,10 @@ money goes. Multi-currency (AUD, SGD and others) with on-device FX. Purchases st
 phone. What leaves it: opt-out usage counts and crash reports (off by default in the EU/UK),
 the optional iCloud copy, and the account Worker (`worker/`) that only deletes accounts.
 
-**Status (2 Oct 2026):** heading for TestFlight. The paid Apple Developer account is active
+**Status (4 Oct 2026):** the TestFlight build is 1.0 (2) (build 1 was refused at processing: an App
+Intent description said "Apple Pay", ITMS-90626); the App Store Connect record is
+"Sortd: Spending Tracker" (bundle ID `com.kameshraj.sortd`, SKU `sortd-ios`). The account Worker is live
+at `account.sortd.page`. The paid Apple Developer account is active
 (team 7CLGYQ9P3L) with iCloud, Sign in with Apple and App Attest on the App ID. Site is live at sortd.page.
 The app is free since 25 Sep 2026. Gmail receipts were removed on 2 Oct 2026 (Google wants a paid yearly
 security assessment for the Gmail scope); "Continue with Google" stays as an optional sign-in.
@@ -13,7 +16,7 @@ security assessment for the Gmail scope); "Continue with Google" stays as an opt
 - Store readiness: `docs/AppStoreChecklist.md` (read the top section before any App Store build)
 - Listing copy: `docs/AppStoreListing.md` · Review notes: `docs/AppReviewNotes.md`
 - Google (withdrawn): `docs/GoogleVerification.md` · Brand and trademark: `Brand/README.md`
-- Before any upload: `scripts/preflight.sh` (add `--appstore` for a store build)
+- Before any upload: `scripts/preflight.sh` (add `--appstore` for a store build), then `scripts/check-archive.sh <archive>` on the archive
 
 ## Several Claude sessions at once — read before editing
 
@@ -108,6 +111,7 @@ stays in the app only for that.
 - Every source goes through `TransactionLogger.log(_:in:)`. It categorises and de-duplicates. Never insert a `Transaction` directly (only `DemoData` and `Backup.restore` do; restore puts back rows the logger already checked).
 - The SwiftData store stays `cloudKitDatabase: .none`. With the iCloud entitlement, the default would mirror the store to CloudKit and crash at launch on the unique keys. Backup is `CloudBackup`'s own record.
 - The bundle ID is `com.kameshraj.sortd` (widget `.widget`, tips `.tip.small/.medium/.large`), renamed from `…spend` on 4 Oct 2026 before the App Store record existed. The iCloud container (`iCloud.com.kameshraj.spend`), app group (`group.com.kameshraj.spend`), Keychain services and the backup file type (`com.kameshraj.spend.backup`) keep the old name on purpose: users never see them and CloudKit Production is already deployed there. Don't "fix" them.
+- App Intent text (titles, descriptions, parameter text, Siri phrases) never says "Apple", so no "Apple Pay" there: write "Wallet" or "tap to pay". App Store Connect refuses the binary at processing (ITMS-90626; build 1.0 (1), 4 Oct 2026). `scripts/preflight.sh` checks the source and `scripts/check-archive.sh <archive>` checks the built metadata; run both before any upload.
 - Enums are stored as raw strings (`cardRaw`, `categoryRaw`, `sourceRaw`) so SwiftData predicates work.
 - Totals use `audValue` (AUD). Keep the original amount and currency too.
 - UI uses system components first (Apple HIG, Liquid Glass): SF Symbols, `.monospacedDigit()` on money, Dynamic Type, a VoiceOver label on every amount and chart.

@@ -6,7 +6,7 @@ import SwiftData
 struct LogPurchaseIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Purchase"
     static let description = IntentDescription(
-        "Adds a purchase to Sortd. Use it in a Wallet automation so every Apple Pay tap is logged.",
+        "Adds a purchase to Sortd. Use it in a Wallet automation so every tap to pay is logged.",
         categoryName: "Spending"
     )
     static let openAppWhenRun = false

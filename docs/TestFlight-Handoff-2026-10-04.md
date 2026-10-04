@@ -55,3 +55,32 @@ that merges `fix-phone-run`.
 5. Internal group with Raj first. Install from TestFlight and repeat the in-person checks.
 6. External group → submit for Beta App Review (first build: plan for 1–6 days).
 7. After upload: bump `CURRENT_PROJECT_VERSION` before any next upload.
+
+## Done on 4 Oct 2026 (afternoon)
+
+- Bundle ID renamed to `com.kameshraj.sortd` (#125). The iCloud container, app group, Keychain
+  services and backup file type keep the `spend` names on purpose.
+- Apple portal: App IDs for the app and widget registered by Xcode with iCloud, Sign in with
+  Apple, App Attest and the app group. Sign in with Apple key `QVS789RTDF` made for the new ID.
+- Google Cloud: the "Sortd iOS" OAuth client's bundle ID changed to `com.kameshraj.sortd`.
+- Account Worker deployed to `account.sortd.page` with PostHog on the US host (#124); seven
+  secrets set by Raj. `ACCOUNT_WORKER_URL` is set in the main folder's `Secrets.xcconfig`.
+- Site deployed with the re-signed shortcut (action `com.kameshraj.sortd.LogWalletTapIntent`).
+- App record created: **Sortd: Spending Tracker** ("Sortd" alone is taken), English (Australia),
+  SKU `sortd-ios`, Apple ID 6818929574.
+- Archive checked (IDs, version, flags, entitlements, privacy manifest, US PostHog host, Worker
+  URL) and build 1 uploaded at 14:10. **Apple refused build 1 at processing** (ITMS-90626: two
+  App Intent descriptions said "Apple Pay"; that text "cannot contain 'apple'"). Fixed in build 2;
+  `scripts/preflight.sh` now fails on it. Test Information saved: description, feedback email, URLs, review
+  contact, sign-in not required, review notes (rewritten, 1,812 bytes).
+
+## Still to do
+
+1. Upload build 1.0 (2) and wait for processing. Check for "Missing Compliance" (should not show).
+2. Internal group with Raj. Install from TestFlight.
+3. Raj's checks on that build: Face ID, a real shop tap, an online Apple Pay payment, restore
+   from iCloud with a real backup, the feel check, VoiceOver by ear. New: shortcut import with
+   the new ID, Sign in with Apple then Delete Account (first real test of the Worker), Google
+   sign-in after the bundle ID change, one crash from the diagnostics menu showing in Sentry.
+4. External group, What to Test from `docs/TestFlightWhatToTest.md`, submit for Beta App Review.
+5. Build number goes to 3 before any next upload.
