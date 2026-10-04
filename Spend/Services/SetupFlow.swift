@@ -27,6 +27,14 @@ struct SetupFlow: Equatable {
         }
     }
 
+    /// What the `.account` step's bottom bar holds. Signed in must always
+    /// offer a way forward: an empty bar there left setup stuck.
+    enum AccountBar: Equatable { case signIn, continueOn }
+
+    static func accountBar(signedIn: Bool) -> AccountBar {
+        signedIn ? .continueOn : .signIn
+    }
+
     /// The next step this person will see, going forward or back. Going back
     /// never lands on the "building" pause (it would move on by itself).
     func neighbour(of s: Step, _ delta: Int) -> Step? {

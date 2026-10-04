@@ -426,13 +426,21 @@ struct OnboardingView: View {
                     // Same spot as Continue on every other step (Raj, 27 Sep).
                     // Once signed in, the page shows the confirmation and the
                     // bar empties for the moment before it moves on.
-                    if accountConfirmed == nil {
+                    // Signed in: always a way forward. The step still moves
+                    // on by itself a moment after a sign-in, but on TestFlight
+                    // 1.0 (2) that move never came after Sign in with Apple
+                    // (cause not found), and coming back with Back had no
+                    // button at all: the bar was empty and setup was stuck.
+                    switch SetupFlow.accountBar(signedIn: accountSignedInAs != nil) {
+                    case .signIn:
                         SignInButtons(onSignedIn: accountSignedIn) { accountError = $0 }
                         tertiaryButton("Continue as guest", action: continueAsGuest)
                         Text("You can sign in later in Settings › Account.")
                             .font(.footnote).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.top, -2)
+                    case .continueOn:
+                        primaryButton("Continue") { go(1) }
                     }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
@@ -754,10 +762,10 @@ struct OnboardingView: View {
                 feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Signing in doesn't change that.", Color.brandPalette[3])
             }
             .setupCard()
-            if let accountConfirmed {
+            if let accountSignedInAs {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Color.up)
-                    Text("Signed in as \(accountConfirmed)").font(.body.weight(.medium)).foregroundStyle(Color.ink)
+                    Text("Signed in as \(accountSignedInAs)").font(.body.weight(.medium)).foregroundStyle(Color.ink)
                 }
                 .setupCard()
                 .transition(.opacity)
@@ -770,6 +778,15 @@ struct OnboardingView: View {
         } message: {
             Text(accountError ?? "")
         }
+    }
+
+    /// Who the `.account` step shows as signed in: the sign-in that just
+    /// happened here, or the account Sortd already holds (signed in earlier,
+    /// then Back, or Run Setup Again). Nil shows the sign-in buttons. Signing
+    /// out or deleting the account in Settings clears it.
+    private var accountSignedInAs: String? {
+        guard let account = AccountStore.shared.current else { return nil }
+        return accountConfirmed ?? account.email ?? account.provider.name
     }
 
     /// Apple or Google succeeded: a brief haptic, "Signed in as …" for a
