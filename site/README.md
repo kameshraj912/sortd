@@ -30,6 +30,7 @@ Live at https://sortd.page (Cloudflare Workers static assets, free). Settings ar
     cd site && npx wrangler deploy
 
 After changing `style.css` or `site.js`, bump the `?v=` number in every page's links so browsers
-fetch the new copy. Email to support@sortd.page is forwarded by Cloudflare Email Routing.
+fetch the new copy. The same goes for the logo images (`favicon.png`, `apple-touch-icon.png`,
+`icon-256.png`, `og.png`): images are cached for 7 days, so a changed logo needs a new `?v=` too. Email to support@sortd.page is forwarded by Cloudflare Email Routing.
 
 The old launch page soon.sortd.page now sends everyone here (see `../launch/README.md`).
