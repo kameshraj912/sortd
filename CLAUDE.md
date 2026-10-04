@@ -5,8 +5,9 @@ money goes. Multi-currency (AUD, SGD and others) with on-device FX. Purchases st
 phone. What leaves it: opt-out usage counts and crash reports (off by default in the EU/UK),
 the optional iCloud copy, and the account Worker (`worker/`) that only deletes accounts.
 
-**Status (4 Oct 2026):** the TestFlight build is 1.0 (2) (build 1 was refused at processing: an App
-Intent description said "Apple Pay", ITMS-90626); the App Store Connect record is
+**Status (4 Oct 2026):** the TestFlight build is 1.0 (4) (build 1 was refused at processing: an App
+Intent description said "Apple Pay", ITMS-90626; builds 3 and 4 fix what the first phone run on
+TestFlight found, see `docs/TestFlight-Handoff-2026-10-04.md`); the App Store Connect record is
 "Sortd: Spending Tracker" (bundle ID `com.kameshraj.sortd`, SKU `sortd-ios`). The account Worker is live
 at `account.sortd.page`. The paid Apple Developer account is active
 (team 7CLGYQ9P3L) with iCloud, Sign in with Apple and App Attest on the App ID. Site is live at sortd.page.

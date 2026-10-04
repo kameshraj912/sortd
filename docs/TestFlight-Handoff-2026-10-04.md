@@ -74,13 +74,50 @@ that merges `fix-phone-run`.
   `scripts/preflight.sh` now fails on it. Test Information saved: description, feedback email, URLs, review
   contact, sign-in not required, review notes (rewritten, 1,812 bytes).
 
+## TestFlight phone run and builds 2 to 4 (4 Oct, afternoon)
+
+Build 2 passed processing and went to the internal group ("Internal", Raj only). Checked on Raj's
+iPhone 17 Pro through iPhone Mirroring, plus what Raj did by hand.
+
+Worked on build 2: install from TestFlight, Sign in with Apple with the new app ID, **Delete
+Account end to end** (Raj did the Face ID step; no "couldn't be asked" message, so the Worker's
+Apple revoke works with production App Attest), sample data, Home, Settings, Account, About.
+
+Bugs found and fixed:
+
+| Bug | Fix | Build |
+|---|---|---|
+| Setup's sign-in step had an empty bar once signed in: after Sign in with Apple it never moved on (Google did), and Back to the step had no way forward | #127: `SetupFlow.accountBar`, Continue always shows when signed in. Why Apple's auto-advance fails was not found | 3 |
+| About › "Rate on the App Store" did nothing in a TestFlight build | #128: the row shows only for an App Store copy (`Distribution.isAppStore`) | 4 |
+
+Not a bug in the build, but it looked like one: **the imported shortcut said "Unknown Action"**.
+The live file is right (unpacked: `com.kameshraj.sortd.LogWalletTapIntent`) and the App Store-signed
+app carries `Metadata.appintents` unchanged. The phone's Shortcuts index was stale after the old
+`com.kameshraj.spend` build was deleted and the new app installed minutes apart: the action list
+still showed the deleted app's "Log Wallet Tap" (old description) and nothing from the new app,
+even after updating to build 3. **A restart of the iPhone fixed it**: the action then read
+"Log Amount at Merchant in Sortd" and the test run gave no error. If a tester who had an older
+build reports "Unknown Action", the answer is restart, then Get the Shortcut again.
+
+Other facts:
+- GitHub Actions ran out of minutes during #128 ("spending limit needs to be increased"), so CI
+  did not start. #128 was gated with `scripts/check.sh --all`: 38 known-bug tests failed as
+  expected, and 3 `TipJarTests` failed in the full run but pass alone
+  (`scripts/test.sh --storekit --only TipJarTests`), which is test interference.
+- iPhone Mirroring is a poor test driver: frames go stale and typing gets lost unless the window
+  is frontmost, and Face ID or passcode prompts cannot be answered ("Use iPhone to continue").
+- External group "Beta" exists with no testers. **Build 1.0 (4) was submitted for Beta App Review
+  at 15:41 on 4 Oct 2026** with the What to Test text ("Waiting for Review"; sign-in not required).
+
 ## Still to do
 
-1. Upload build 1.0 (2) and wait for processing. Check for "Missing Compliance" (should not show).
-2. Internal group with Raj. Install from TestFlight.
-3. Raj's checks on that build: Face ID, a real shop tap, an online Apple Pay payment, restore
-   from iCloud with a real backup, the feel check, VoiceOver by ear. New: shortcut import with
-   the new ID, Sign in with Apple then Delete Account (first real test of the Worker), Google
-   sign-in after the bundle ID change, one crash from the diagnostics menu showing in Sentry.
-4. External group, What to Test from `docs/TestFlightWhatToTest.md`, submit for Beta App Review.
-5. Build number goes to 3 before any next upload.
+1. Wait for Beta App Review on build 4 (plan 1 to 6 days). When it passes, add testers or
+   switch on the public link (iOS 26 and later) and send the invites in `docs/BetaEmails.md`.
+2. Raj on the phone, on build 4: Sign in with Apple inside setup (should move on or show
+   Continue), Google sign-in, a real shop tap, an online Apple Pay payment, iCloud backup and
+   restore, Face ID App Lock, VoiceOver by ear, the feel check, one crash from the diagnostics
+   menu showing in Sentry.
+3. On Raj's phone, delete the broken shortcut "Log Apple Pay in Sortd" and rename "…Sortd 2"
+   to drop the " 2" (Check the Shortcut looks for the exact name).
+4. GitHub Actions spending limit: Raj's call.
+5. Build number goes to 5 before any next upload.
