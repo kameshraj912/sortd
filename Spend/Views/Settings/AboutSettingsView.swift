@@ -68,8 +68,12 @@ struct AboutSettingsView: View {
                 Button { showingFounderNote = true } label: {
                     Label("A Note from the Founder", systemImage: "envelope.open")
                 }
-                Button { requestReview() } label: {
-                    Label("Rate on the App Store", systemImage: "star")
+                // Only a copy from the App Store can be rated: in a TestFlight
+                // build the system shows nothing, so the row looked broken.
+                if Distribution.isAppStore {
+                    Button { requestReview() } label: {
+                        Label("Rate on the App Store", systemImage: "star")
+                    }
                 }
                 Link(destination: URL(string: "https://sortd.page/support#whats-new")!) {
                     Label("What's New", systemImage: "sparkles")
