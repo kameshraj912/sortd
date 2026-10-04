@@ -44,7 +44,7 @@ that merges `fix-phone-run`.
 1. **Raj:** App Store Connect → accept the Terms of Service ("Agree"). It was waiting on
    4 Oct. Check Business › Agreements is clear.
 2. Create the app record: iOS, name **Sortd** (if taken, Raj picks), primary language
-   English (Australia), bundle ID `com.kameshraj.spend`, SKU `sortd-ios`. Bundle ID and SKU
+   English (Australia), bundle ID `com.kameshraj.sortd`, SKU `sortd-ios`. Bundle ID and SKU
    can't change later. Needs Raj's OK.
 3. Archive Release 1.0 (1) from a clean worktree at `main`, Validate, then upload. Do not tick
    "TestFlight Internal Testing Only".

@@ -90,11 +90,11 @@ def notification_part(name: str) -> dict:
 
 
 log = {
-    "WFWorkflowActionIdentifier": "com.kameshraj.spend.LogWalletTapIntent",
+    "WFWorkflowActionIdentifier": "com.kameshraj.sortd.LogWalletTapIntent",
     "WFWorkflowActionParameters": {
         "AppIntentDescriptor": {
             "AppIntentIdentifier": "LogWalletTapIntent",
-            "BundleIdentifier": "com.kameshraj.spend",
+            "BundleIdentifier": "com.kameshraj.sortd",
             "Name": "Sortd",
             "TeamIdentifier": "7CLGYQ9P3L",
         },

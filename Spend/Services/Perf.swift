@@ -5,13 +5,13 @@ import OSLog
 /// exchange rates, the widget and statement imports.
 ///
 /// Signposts show up in Instruments (Points of Interest / os_signpost,
-/// subsystem `com.kameshraj.spend`, category `perf`). The same durations go
+/// subsystem `com.kameshraj.sortd`, category `perf`). The same durations go
 /// to the unified log at debug level, which costs next to nothing when no
 /// one is watching:
-/// `log stream --level debug --predicate 'subsystem == "com.kameshraj.spend" && category == "perf"'`
+/// `log stream --level debug --predicate 'subsystem == "com.kameshraj.sortd" && category == "perf"'`
 nonisolated enum Perf {
-    static let signposter = OSSignposter(subsystem: "com.kameshraj.spend", category: "perf")
-    static let logger = Logger(subsystem: "com.kameshraj.spend", category: "perf")
+    static let signposter = OSSignposter(subsystem: "com.kameshraj.sortd", category: "perf")
+    static let logger = Logger(subsystem: "com.kameshraj.sortd", category: "perf")
 
     /// When the process started, for "launch to first frame".
     static let processStart: Date = {

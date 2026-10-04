@@ -27,7 +27,7 @@ enum ErrorLog {
     nonisolated static let key = "errorLog.recent"
 
     private nonisolated static let lock = NSLock()
-    private nonisolated static let logger = Logger(subsystem: "com.kameshraj.spend", category: "errors")
+    private nonisolated static let logger = Logger(subsystem: "com.kameshraj.sortd", category: "errors")
 
     // MARK: - Pure helpers
 
