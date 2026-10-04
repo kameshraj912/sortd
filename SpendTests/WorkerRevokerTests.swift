@@ -57,7 +57,7 @@ struct WorkerRevokerTests {
                 return WorkerRevoker.AppleCode(user: appleUser, code: try appleCode.get())
             },
             googleRevoke: { counter.googleRevokes += 1 },
-            clientID: "com.kameshraj.spend"))
+            clientID: "com.kameshraj.sortd"))
     }
 
     private func json(_ request: URLRequest) -> [String: String] {
@@ -167,7 +167,7 @@ struct WorkerRevokerTests {
 
         #expect(counter.appleCodes == 1)
         #expect(transport.requests[1].url?.path == "/v1/apple/revoke")
-        #expect(json(transport.requests[1]) == ["client_id": "com.kameshraj.spend", "authorization_code": "code-1"])
+        #expect(json(transport.requests[1]) == ["client_id": "com.kameshraj.sortd", "authorization_code": "code-1"])
         #expect(json(transport.requests[0])["route"] == "apple/revoke")
     }
 

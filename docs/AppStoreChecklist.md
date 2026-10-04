@@ -11,8 +11,8 @@ OAuth docs. "Done" means built and tested in the simulator.
       Done in #114 (3 Oct 2026); checked 4 Oct: the Release line reads
       `SORTD_SIGNIN SORTD_ICLOUD $(inherited)`. It is still in Debug only.
 - [ ] Create the three tip consumables in App Store Connect and get them to "Ready to Submit":
-      `com.kameshraj.spend.tip.small`, `com.kameshraj.spend.tip.medium`,
-      `com.kameshraj.spend.tip.large`. Raj sets the prices. Each needs one review screenshot
+      `com.kameshraj.sortd.tip.small`, `com.kameshraj.sortd.tip.medium`,
+      `com.kameshraj.sortd.tip.large`. Raj sets the prices. Each needs one review screenshot
       of the tip sheet; attach all three to the version. Review note: tips unlock nothing.
 
 ## Money settings in App Store Connect (added 21 Sep 2026)

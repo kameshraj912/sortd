@@ -122,7 +122,7 @@ struct BugHuntAccountTests {
             attester: attester ?? HuntAttester(),
             appleCode: appleCode,
             googleRevoke: {},
-            clientID: "com.kameshraj.spend"))
+            clientID: "com.kameshraj.sortd"))
     }
 
     private func accountStore(_ revoker: AccountRevoker, defaults: UserDefaults) -> AccountStore {
