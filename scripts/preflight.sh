@@ -137,6 +137,17 @@ if [ -n "$flagfile" ]; then
   fi
 fi
 
+# 5. App Intent descriptions must not say "Apple". App Store Connect refuses the
+#    binary at processing (ITMS-90626 "Invalid Siri Support ... cannot contain
+#    'apple'"): build 1.0 (1) was turned away for "Apple Pay" on 4 Oct 2026.
+siri=$(grep -rniE -A2 'IntentDescription\(' Spend SortdWidget 2>/dev/null | grep -i 'apple' || true)
+if [ -n "$siri" ]; then
+  bad "an App Intent description says \"Apple\" (ITMS-90626); reword it:"
+  printf '%s\n' "$siri" | while IFS= read -r line; do say "      $line"; done
+else
+  ok "no App Intent description says \"Apple\" (ITMS-90626)."
+fi
+
 say ""
 if [ "$fail" -eq 0 ]; then say "Ready."; else say "Not ready."; fi
 exit "$fail"
