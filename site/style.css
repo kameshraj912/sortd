@@ -1,4 +1,4 @@
-/* Sortd Money website. Flat black and white; colour only from the four brand bars. */
+/* Sortd website. Flat black and white; colour only from the four brand bars. */
 
 /* ---------- Theme: follows the device, or the switch in the header ---------- */
 :root {
@@ -64,7 +64,7 @@ a { color: var(--ink); text-underline-offset: 3px; }
 .brand { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand img { width: 30px; height: 30px; border-radius: 7px; box-shadow: 0 0 0 1px var(--line); align-self: center; }
 .brand b { font-size: 22px; font-weight: 800; letter-spacing: -0.04em; }
-.brand small { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: -5px; }
+.brand small { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: -5px; white-space: nowrap; }
 .site-header nav { display: flex; align-items: center; gap: 22px; font-size: 15px; }
 .site-header nav a { text-decoration: none; color: var(--muted); }
 .site-header nav a:hover, .site-header nav a[aria-current] { color: var(--ink); }
@@ -75,6 +75,8 @@ a { color: var(--ink); text-underline-offset: 3px; }
 .theme-btn svg { width: 17px; height: 17px; display: none; }
 .theme-btn[data-mode="light"] .i-sun, .theme-btn[data-mode="dark"] .i-moon, .theme-btn[data-mode="system"] .i-auto { display: block; }
 @media (max-width: 560px) { .site-header nav .hide-sm { display: none; } .site-header nav { gap: 14px; } }
+/* Phones: no room for "spending tracker" next to the buttons, so the header shows just "sortd". */
+@media (max-width: 460px) { .site-header .brand small { display: none; } }
 
 /* ---------- Buttons & type ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 22px; border-radius: 999px; font-weight: 600; font-size: 16px; text-decoration: none; }
