@@ -78,10 +78,10 @@ Nine sub-specs planned in `docs/specs/2026-09-25-free-app-overhaul-overview.md` 
 
 **Compile flags** (Xcode → Spend target → Build Settings → Active Compilation Conditions). As of 26 Sep 2026, `project.pbxproj` has:
 
-- Debug: `DEBUG SORTD_SIGNIN SORTD_ICLOUD`
-- Release: `SORTD_GMAIL SORTD_SIGNIN SORTD_ICLOUD`
+- Debug: `DEBUG SORTD_SIGNIN SORTD_ICLOUD SORTD_REPLAY`
+- Release: `SORTD_SIGNIN SORTD_ICLOUD` (checked 4 Oct 2026; `SORTD_GMAIL` went with Gmail on 2 Oct, `SORTD_REPLAY` left Release in #114)
 
-`SORTD_ICLOUD` and `SORTD_SIGNIN` went on in PR #69 once the paid account and the App ID capabilities were in place. `SORTD_GMAIL` is Release-only and unrelated to the overhaul. Nothing is blocked on enrolment any more.
+`SORTD_ICLOUD` and `SORTD_SIGNIN` went on in PR #69 once the paid account and the App ID capabilities were in place. Nothing is blocked on enrolment any more.
 
 ## 4. Only Raj can do these
 

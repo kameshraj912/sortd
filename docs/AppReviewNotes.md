@@ -3,7 +3,7 @@
 Paste the "Notes" part into App Store Connect › App Review Information › Notes. Keep it under
 4,000 characters. Placeholders in [square brackets] are the ones only Raj can fill; see the list
 at the bottom. Updated 26 Sep 2026: sign-in and iCloud backup are on, contact name and email
-filled from the repo. Updated 4 Oct 2026: the ready-made shortcut (two triggers), no tip jar in this build, no session replay. Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
+filled from the repo. Updated 4 Oct 2026: the ready-made shortcut (two triggers), no tip jar in this build, no session replay, the diagnostics menu line (rule 2.3.1). Updated 2 Oct 2026: Gmail removed (no Gmail steps or test account any more);
 Budget Ring, Today and Recent widgets added.
 
 ---
@@ -67,6 +67,7 @@ an option to also delete all data on the device.
   or Switzerland, and on elsewhere. Privacy policy: https://sortd.page/privacy
 
 - This TestFlight build records no screens: session replay is not compiled in.
+- Settings › About: 7 taps on the version open a beta diagnostics menu (test event, test crash).
 
 Contact: Kameshraj Gnanaprakasam, support@sortd.page (phone given in App Store Connect only)
 
