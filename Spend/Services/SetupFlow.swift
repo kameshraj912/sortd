@@ -104,3 +104,33 @@ extension SetupFlow {
         #endif
     }
 }
+
+/// The monthly limit as it stood before setup started, so un-ticking "Spend
+/// less" undoes a limit set a moment ago without wiping one set weeks ago.
+///
+/// The value is taken when setup opens. A limit that arrives from outside
+/// setup afterwards (a backup restored from the first screen) must be adopted,
+/// or the undo at the end would put the old, empty value back over it.
+struct SetupBudgetMemory: Equatable {
+    private(set) var before: Double?
+
+    /// First call wins: setup opening again must not forget the real start.
+    mutating func begin(current: Double) {
+        if before == nil { before = current }
+    }
+
+    /// The limit changed outside setup's own controls. It is the new starting point.
+    mutating func adopt(current: Double) {
+        before = current
+    }
+
+    /// Keeps the budget in step with a currency change.
+    mutating func set(_ value: Double?) {
+        before = value
+    }
+
+    /// The limit in place when setup ends.
+    func final(current: Double, spendLess: Bool) -> Double {
+        spendLess ? current : (before ?? current)
+    }
+}

@@ -61,7 +61,11 @@ struct OnboardingView: View {
     @State private var scroll = ScrollPosition(edge: .top)
     /// The budget before setup started, so un-ticking "Spend less" undoes
     /// a limit set a moment ago without wiping one set weeks ago.
-    @State private var budgetBefore: Double?
+    @State private var budgetMemory = SetupBudgetMemory()
+    private var budgetBefore: Double? {
+        get { budgetMemory.before }
+        nonmutating set { budgetMemory.set(newValue) }
+    }
     /// For analytics: how many steps this run showed, and whether Skip was
     /// used. Never what was answered.
     @State private var stepsSeen = 0
@@ -83,6 +87,9 @@ struct OnboardingView: View {
     @Environment(\.crossFades) private var crossFade
 
     @State private var showingImport = false
+    /// The limit when the Import sheet opened: if it differs when the sheet
+    /// closes, a backup brought its own.
+    @State private var budgetAtImport: Double?
     @State private var forward = true
     @State private var customBudget = ""
     @State private var bankCountry: String = Locale.current.region?.identifier ?? "AU"
@@ -127,7 +134,7 @@ struct OnboardingView: View {
         .safeAreaBar(edge: .top, spacing: 0) { topBar }
         .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
         .onAppear {
-            if budgetBefore == nil { budgetBefore = budget }
+            budgetMemory.begin(current: budget)
             // Once per run of setup (a re-run from Settings counts as a run).
             if stepsSeen == 0 {
                 stepsSeen = 1
@@ -161,7 +168,14 @@ struct OnboardingView: View {
                     }
             }
         }
-        .sheet(isPresented: $showingImport) { NavigationStack { ImportView() } }
+        // A backup restored here brings its own limit. Take it as the starting
+        // point, so finishing setup doesn't undo it back to nothing.
+        .sheet(isPresented: $showingImport, onDismiss: {
+            if let was = budgetAtImport, was != budget { budgetMemory.adopt(current: budget) }
+            budgetAtImport = nil
+        }) {
+            NavigationStack { ImportSheetContent() }
+        }
         #if SORTD_ICLOUD
         .alert("Restore from iCloud", isPresented: Binding(get: { restoreNote != nil }, set: { if !$0 { restoreNote = nil } })) {
             Button("OK", role: .cancel) {}
@@ -380,7 +394,10 @@ struct OnboardingView: View {
                     // so it opens next to it (a dialog on the page anchored
                     // top-left, Raj, 27 Sep).
                     Menu {
-                        Button("Bring in past spending", systemImage: "square.and.arrow.down") { showingImport = true }
+                        Button("Bring in past spending", systemImage: "square.and.arrow.down") {
+                            budgetAtImport = budget
+                            showingImport = true
+                        }
                         #if SORTD_ICLOUD
                         if transactions.isEmpty, !rerun {
                             Button(restoring ? "Restoring…" : "Restore from iCloud", systemImage: "icloud.and.arrow.down") { restoreFromCloud() }
@@ -562,7 +579,7 @@ struct OnboardingView: View {
             checkInRaw = (newFlow ? SetupFlow.defaults(locale: .current).checkIn : .needed).rawValue
         }
         // A limit set a moment ago, then "Spend less" un-ticked: undo it.
-        if !goals.contains(.spendLess), let before = budgetBefore { budget = before }
+        budget = budgetMemory.final(current: budget, spendLess: goals.contains(.spendLess))
         let choice = checkIn
         let keepUnscheduled = newFlow
         Task {
@@ -601,6 +618,8 @@ struct OnboardingView: View {
                     return
                 }
                 Task { await FXService.backfill(in: context) }
+                // The backup may bring its own limit; keep it through setup.
+                budgetMemory.adopt(current: UserDefaults.standard.double(forKey: FXService.budgetKey))
                 let badDates = CloudBackup.shared.lastRestoreBadDates
                 if badDates > 0 {
                     restoreNote = "\(added) purchase\(added == 1 ? "" : "s") back. \(Backup.badDatesNote(badDates)). Carry on with setup."
@@ -731,7 +750,7 @@ struct OnboardingView: View {
             // so the page carries its weight instead of floating three buttons.
             VStack(alignment: .leading, spacing: 14) {
                 feature("person.crop.circle.badge.checkmark", "Help that knows you", "Ask a question and Sortd knows which install is yours.", Color.brandPalette[0])
-                feature("icloud", "Your iCloud copy, tied to you", "Restore on a new iPhone with one tap.", Color.brandPalette[2])
+                feature("trash", "Delete it any time", "Delete your account in Settings and your usage record goes with it.", Color.brandPalette[2])
                 feature("lock", "Nothing else changes", "Your purchases stay on this iPhone. Signing in doesn't change that.", Color.brandPalette[3])
             }
             .setupCard()
@@ -1350,5 +1369,20 @@ struct CardDetailForm: View {
         let bankWords = Set(BankPreset.match(info.bank)?.words ?? [])
         c.walletWords.removeAll { $0 == info.name.lowercased() && !bankWords.contains($0) }
         CardBook.shared.upsert(c)
+    }
+}
+
+/// Import, opened as a sheet from the first screen. A sheet needs its own way
+/// out; the same screen pushed from Settings has the back button.
+private struct ImportSheetContent: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ImportView()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                }
+            }
     }
 }

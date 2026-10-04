@@ -453,12 +453,13 @@ struct HomeView: View {
         let b = Money.format(Decimal(budget), Money.home, cents: false)
         if left < 0 { return "\(Money.format(Decimal(-left), Money.home, cents: false)) over your \(b) budget" }
         guard isCurrentMonth else { return "\(Money.format(Decimal(left), Money.home, cents: false)) under your \(b) budget" }
-        let daysLeft = max(1, (cal.range(of: .day, in: .month, for: .now)?.count ?? 30) - cal.component(.day, from: .now) + 1)
         let monthEnd = cal.dateInterval(of: .month, for: .now)?.end ?? .now
         // Every time a bill still falls this month (a weekly one can be 4-5 times).
-        let bills = recurring.stillToCharge(before: monthEnd, calendar: cal).double
-        let perDay = max(0, left - bills) / Double(daysLeft)
-        return "\(Money.format(Decimal(left), Money.home, cents: false)) left of \(b) · \(Money.format(Decimal(perDay), Money.home, cents: false)) a day"
+        let bills = recurring.stillToCharge(before: monthEnd, calendar: cal)
+        // The widget's "a day" comes from the same function.
+        let perDay = WidgetSummary.perDay(budget: Decimal(budget), spent: Decimal(spent), billsToCome: bills,
+                                          now: .now, calendar: cal)
+        return "\(Money.format(Decimal(left), Money.home, cents: false)) left of \(b) · \(Money.format(perDay, Money.home, cents: false)) a day"
     }
 
     // MARK: Budget card

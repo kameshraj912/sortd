@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UniformTypeIdentifiers
 
 /// A full copy of everything Sortd holds, as one file you keep.
 ///
@@ -15,6 +16,14 @@ import SwiftData
 /// Exchange rates are left out on purpose: they are a cache that rebuilds
 /// itself from frankfurter.dev, and including them would double the file.
 nonisolated enum Backup {
+
+    /// The `.sortdbackup` file type. Declared in `Spend-Info.plist`
+    /// (UTExportedTypeDeclarations), so Files, the share sheet and the picker
+    /// all know the extension. Without it iOS treats the name as having no
+    /// extension and "Keep Both" gave "... .sortdbackup 2".
+    static let typeIdentifier = "com.kameshraj.spend.backup"
+    static let fileExtension = "sortdbackup"
+    static let fileType = UTType(exportedAs: typeIdentifier)
 
     static let formatName = "sortd.backup"
     static let formatVersion = 1
