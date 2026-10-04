@@ -152,7 +152,7 @@ openssl rand -base64 24 | npx wrangler secret put DEV_BYPASS_TOKEN --env dev
 
 Put the same token in the app's DEBUG xcconfig. Never put it in the prod Worker.
 
-Vars in `wrangler.jsonc` (these are not secret): `ENV` (`prod`/`dev`) and `POSTHOG_API_HOST` (`https://eu.posthog.com`, **not verified**).
+Vars in `wrangler.jsonc` (these are not secret): `ENV` (`prod`/`dev`) and `POSTHOG_API_HOST` (`https://us.posthog.com`: the Sortd project is on the US cloud; **not verified** with a real key).
 
 For local `wrangler dev`, pass test values with `--var NAME:value`. Or put them in `worker/.env`, which is gitignored. Don't use `.dev.vars`: it is **not** in `.gitignore`.
 

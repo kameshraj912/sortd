@@ -229,6 +229,11 @@ needs a backend, and isn't worth one until there's revenue to protect.
 ## When charging money
 - [ ] In-App Purchase only; subscription terms and Terms of Use + privacy links in the app and listing
 
+## Needed since sign-in went on (26 Sep 2026)
+- Account deletion in the app (5.1.1(v)): Settings › Account › Delete Account. The Apple revoke and
+  the usage-record delete need the account Worker live and `ACCOUNT_WORKER_URL` set in the build.
+- Sign in with Apple beside Google (4.8): done, `SignInButtons.swift`.
+
 ## Not needed for this app
-- Account deletion (no Sortd accounts), Sign in with Apple (sign-in is optional; nothing needs it), report/moderation (no content shared between users), App Tracking Transparency
+- Report/moderation (no content shared between users), App Tracking Transparency
   (no tracking), "must be a bank" rules 3.2.1(viii) / 5.1.1(ix) (Sortd doesn't move or manage money).
