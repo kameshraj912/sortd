@@ -1,6 +1,6 @@
 # Sortd brand (locked 19 Sep 2026)
 
-- **Name:** Sortd. Planned App Store name "Sortd Money" / "Sortd: Money Tracker".
+- **Name:** Sortd. App Store and website name: "Sortd: Spending Tracker" (since 4 Oct 2026; it was "Sortd Money" on the site before).
   Trademark note: "Get Sortd" is a registered AU mark (no. 2306484, classes 9/35/38) and there is a
   "Sortd – Shopping Wishlist" app in the AU store. Get a trademark opinion before launch. US (USPTO)
   and Singapore (IPOS) registers not yet checked. Domain: sortd.page (bought 19 Sep 2026, Cloudflare).

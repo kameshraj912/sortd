@@ -1,6 +1,6 @@
-# Sortd Money
+# Sortd: Spending Tracker
 
-> Sortd Money is an iPhone spending tracker. Apple Pay purchases log themselves through one Shortcuts automation: taps in shops from the tap, and payments in apps and on websites from Wallet's notification (iOS 27 or later, if the card sends one). Paper receipts come in with the camera, and past spending from a bank statement import. Purchases stay on the iPhone, with optional encrypted iCloud backup to the user's own iCloud. No ads, no tracking across apps, no bank passwords, no email access. Usage counts and crash reports (never amounts, shops or card digits) can be turned off in Settings. Signing in with Apple or Google is optional; Google sign-in only says who you are.
+> Sortd is an iPhone spending tracker. Apple Pay purchases log themselves through one Shortcuts automation: taps in shops from the tap, and payments in apps and on websites from Wallet's notification (iOS 27 or later, if the card sends one). Paper receipts come in with the camera, and past spending from a bank statement import. Purchases stay on the iPhone, with optional encrypted iCloud backup to the user's own iCloud. No ads, no tracking across apps, no bank passwords, no email access. Usage counts and crash reports (never amounts, shops or card digits) can be turned off in Settings. Signing in with Apple or Google is optional; Google sign-in only says who you are.
 
 - Platform: iPhone, iOS 26 or later
 - Price: free. Every feature, including the receipt camera, Insights, subscriptions and bills, and budgets.
