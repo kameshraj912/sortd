@@ -77,6 +77,16 @@ confirmed on an Apple page it says "not verified". None of this is legal advice.
 - **Review notes** were rewritten to what a reviewer cannot find by tapping (Apple: "specific
   settings, user account information, or special instructions").
 
+## Found on the first TestFlight phone run (4 Oct)
+
+- **2.1 completeness.** Setup's sign-in step could strand a signed-in person with no button
+  (fixed, build 3), and "Rate on the App Store" did nothing in a beta (fixed, build 4).
+- **Shortcut "Unknown Action".** Not a build fault: a stale Shortcuts index on a phone that had the
+  old `com.kameshraj.spend` build. Restarting the phone fixed it. A fresh tester never has the old
+  app. Details in `docs/TestFlight-Handoff-2026-10-04.md`.
+- **Account deletion (5.1.1(v)) is proven** on a TestFlight build: Sign in with Apple, then
+  Delete Account, with the Worker revoking the Apple sign-in.
+
 ## TestFlight facts used
 
 - Internal testers: up to 100 App Store Connect users, no review.
