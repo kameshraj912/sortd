@@ -1,9 +1,8 @@
 {
-  // soon.sortd.page: the launch (hype) site. Static files only; no Worker code.
-  // The sign-up form posts to https://sortd.page/api/beta (site/worker/index.js).
+  // soon.sortd.page: only a redirect to https://sortd.page (see redirect.js).
   // Deploy from this folder: npx wrangler deploy
   "name": "sortd-soon",
+  "main": "redirect.js",
   "compatibility_date": "2026-09-18",
-  "assets": { "directory": ".", "not_found_handling": "404-page", "html_handling": "auto-trailing-slash" },
   "routes": [{ "pattern": "soon.sortd.page", "custom_domain": true }]
 }

@@ -35,4 +35,4 @@ Mild:  The icon's picked, thanks to everyone who voted. The app's almost ready. 
 
 5. BIO (150 characters max)
 free iPhone app that logs your spending by itself. no ads. no bank login. beta soon ↓
-Link: soon.sortd.page
+Link: sortd.page/beta
