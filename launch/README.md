@@ -1,20 +1,12 @@
-# soon.sortd.page — launch site
+# soon.sortd.page — redirect only
 
-A separate one-page hype site for the beta, in the Instagram look (dark, Inter Tight, the four bars).
-It is not sortd.page: that full site lives in `../site` and is deployed separately.
+This was the separate beta hype page (countdown and sign-up). On 4 Oct 2026 it was merged into
+sortd.page: the full site in `../site` is the only site, and sign-ups go through sortd.page/beta.
 
-- `index.html`, `style.css`, `app.js` — the page, countdown and sign-up.
-- The countdown date is `BETA_OPENS` in `app.js` (one line). The sneak-peek screen unblurs at the same time.
-- The form posts to `https://sortd.page/api/beta` with `source=soon`; that Worker (`../site/worker/index.js`)
-  allows this origin, checks Turnstile and emails the sign-up. Nothing is stored. The form asks for email,
-  first name, country and Apple Pay (no Gmail field since 3 Oct 2026). Success state: "You've been Sortd."
-  The footer line is "Consider it Sortd."
-- Inter Tight is self-hosted in `fonts/` (SIL Open Font License), so no request goes to Google.
+What is left here is a tiny Worker (`redirect.js`) that sends every soon.sortd.page address to
+https://sortd.page, so old links (the Instagram bio, shared posts) keep working.
+The old page is in git history (last full version: commit `d4074eb`).
 
 ## Deploy (one session at a time, from a clean tree)
 
     cd launch && npx wrangler deploy
-
-First time only, in Cloudflare:
-1. Turnstile › the Sortd widget › Hostnames: add `soon.sortd.page`.
-2. Deploy `../site` too (its Worker must allow the new origin before this form works).
