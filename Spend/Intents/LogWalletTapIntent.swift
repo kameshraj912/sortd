@@ -128,7 +128,7 @@ nonisolated struct WalletNotification: Equatable, Sendable {
 struct LogWalletTapIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Wallet Tap"
     static let description = IntentDescription(
-        "Logs an Apple Pay tap in Sortd. In a Wallet automation, set Transaction to the Shortcut Input.",
+        "Logs a Wallet tap in Sortd. In a Wallet automation, set Transaction to the Shortcut Input.",
         categoryName: "Spending"
     )
     static let openAppWhenRun = false

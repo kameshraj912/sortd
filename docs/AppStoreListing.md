@@ -1,12 +1,16 @@
-# App Store listing — Sortd Money
+# App Store listing — Sortd: Spending Tracker
 
 Paste into App Store Connect › App Information and the version page. Character counts are
 checked by `docs/check_listing.py` (Apple's limits in brackets).
 
 ## App information
 
-- **Name** (30): Sortd Money
+- **Name** (30): Sortd: Spending Tracker
+  ("Sortd" alone is taken on the App Store by a Sydney shopping app. Raj picked this on 4 Oct 2026;
+  the app record uses it. The name under the icon stays "Sortd". The site still says "Sortd Money".)
 - **Subtitle** (30): Spending that logs itself
+  (Open, 4 Oct 2026: "Spending" now repeats the name, which wastes search words. Candidate:
+  "Expenses that log themselves", 28. Raj to decide before the App Store listing.)
   (Not "Apple Pay": Apple's rules (5.2.1, Apple Pay marketing guidelines) keep its marks out of names and subtitles. The description can still say Apple Pay.)
 - **Primary category**: Finance
 - **Secondary category**: Productivity

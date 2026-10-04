@@ -20,8 +20,10 @@ Everything below was verified, not assumed — where I could not verify somethin
   analytics and crash reports off. Reported by the pipeline session, not verified from this
   checkout: the PostHog project is on the **US** cloud, so `POSTHOG_HOST` in `Secrets.xcconfig`
   must override the EU default in `Config.xcconfig`.
-- **The account Worker is not deployed** and its secrets are not set. Until it is, account
-  deletes queue on the phone (hash only) and retry at the next launch. `*.p8` is now gitignored.
+- **The account Worker is live** at `account.sortd.page` since 4 Oct 2026, with all seven secrets
+  set (Sign in with Apple key ID `QVS789RTDF`, primary App ID `com.kameshraj.sortd`). `/v1/challenge`
+  answers 200. The Apple revoke and the PostHog delete are **not verified**: they need a TestFlight
+  build (production App Attest). `*.p8` is gitignored; the key file is in Raj's Downloads.
 - **TestFlight text** is in `docs/TestFlightWhatToTest.md`. `docs/AppReviewNotes.md` has the
   contact name and email filled; phone, video link and the test Gmail account are still Raj's.
 - **GitHub Actions minutes are exhausted until 1 Oct** (reported by the pipeline session), so CI

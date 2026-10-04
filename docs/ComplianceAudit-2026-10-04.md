@@ -57,6 +57,26 @@ confirmed on an Apple page it says "not verified". None of this is legal advice.
 | 19 | Trademark check on "Sortd" ("Get Sortd" is registered in Australia) | `Brand/README.md` |
 | 20 | US state age laws (Texas, Utah, Louisiana): whether a 4+ tracker must use the Declared Age Range API is not verified | Apple news 2026 |
 
+## Added later on 4 Oct
+
+- **Bundle ID** is now `com.kameshraj.sortd`. Raj wanted "sortd", and it cannot change once the
+  record exists.
+- **Store name.** "Sortd" alone is taken (Sortd | Shopping Wishlist App, Sydney). The record is
+  "Sortd: Spending Tracker". Research notes: the name carries the most search weight (ASO firms,
+  not Apple); each word should appear once across name, subtitle and keywords; Apple marks stay
+  out of the name. No public search-volume numbers were found for "spending tracker".
+- **"Sorted" in finance.** An Australian finance app "Sorted" exists and its owner holds the marks
+  "SORTED BUSINESS" (AU 1820139) and "SORTED SERVICES" (AU 1818579). The registers were not
+  searched live. Check before the public launch. Not legal advice.
+- **Site vs store name.** sortd.page titles say "Sortd Money". Raj to decide whether to change them.
+- **`SortdTips.storekit` ships inside the app bundle.** Harmless test data; take it out of the
+  target before the App Store build.
+- **ITMS-90626.** App Store Connect refused build 1 because two App Intent descriptions said
+  "Apple Pay". Intent titles, descriptions and phrases must not contain "apple". Reworded; preflight
+  checks it now.
+- **Review notes** were rewritten to what a reviewer cannot find by tapping (Apple: "specific
+  settings, user account information, or special instructions").
+
 ## TestFlight facts used
 
 - Internal testers: up to 100 App Store Connect users, no review.
