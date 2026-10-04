@@ -49,6 +49,11 @@ struct FinishSetupCard: View {
                     }
                 }
                 SetupChecklistList(tasks: tasks) { opening = $0 }
+                // The Apple Pay tip sits under the list as a card. As a popover on
+                // the row it came loose and covered the row below (4 Oct 2026).
+                if tasks.contains(where: { $0.kind == .applePay && !$0.done }) {
+                    SortdTipView(tip: ApplePayTip())
+                }
             }
             .task { await checkWidget() }
             .sheet(item: $opening, onDismiss: { refresh += 1; Task { await checkWidget() } }) { kind in

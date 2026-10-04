@@ -48,7 +48,7 @@ enum Exports {
 /// The backup, built from the live store only when the user shares it.
 nonisolated struct BackupExport: Transferable {
     static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(exportedContentType: .data) { _ in
+        FileRepresentation(exportedContentType: Backup.fileType) { _ in
             let data = try await MainActor.run { try Backup.data(in: SpendStore.container.mainContext) }
             return SentTransferredFile(try Exports.write(data, named: Exports.dated("Sortd backup", "sortdbackup")))
         }

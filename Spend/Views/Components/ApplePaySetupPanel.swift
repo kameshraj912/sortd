@@ -23,6 +23,13 @@ struct ApplePaySetupPanel: View {
 
     @Environment(\.openURL) private var openURL
     @State private var shortcutOpened = false
+    /// One state each, so a tap on one never opens the other (seen on
+    /// iOS 26.4 with no state of their own).
+    @State private var showingHow = false
+    @State private var showingByHand = false
+    /// The shortcut file opens here, in Sortd's own Safari sheet, never the
+    /// default browser.
+    @State private var safariPage: SafariPage?
     /// A long-press on the status card reveals what Apple Pay last sent, in
     /// plain text — support staff point people to it. Kept out of the way
     /// so the page itself stays short (router feel check, 26 Sep 2026).
@@ -39,9 +46,6 @@ struct ApplePaySetupPanel: View {
     /// mismatching it against `@AppStorage`'s own numeric representation.
     @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
     @State private var nudgeDismissed = false
-    /// Get the Shortcut was tapped in a build whose shortcut also logs
-    /// online payments (`ApplePaySetupSteps.showsUpdateLine`).
-    @AppStorage(ApplePaySetupSteps.gotOnlineShortcutKey) private var gotOnlineShortcut = false
 
     /// iOS 27 has Wallet's Notification trigger, so the shortcut has two
     /// automations; earlier iOS only the tap.
@@ -192,6 +196,9 @@ struct ApplePaySetupPanel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status.accessibilityLabel)
+        .sheet(item: $safariPage) { page in
+            SafariSheet(url: page.url).ignoresSafeArea()
+        }
         .alert("Last Tap Received", isPresented: $showingRawTap) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -204,16 +211,9 @@ struct ApplePaySetupPanel: View {
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
-            if hasNotificationTrigger, ApplePaySetupSteps.showsUpdateLine(status: status, gotNewShortcut: gotOnlineShortcut) {
-                Label(ApplePaySetupSteps.updateLine, systemImage: "arrow.down.circle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             Button {
-                openURL(ApplePaySetupSteps.shortcutURL)
                 shortcutOpened = true
-                gotOnlineShortcut = true
+                safariPage = SafariPage(url: ApplePaySetupSteps.shortcutURL)
             } label: {
                 Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
                     .font(.headline)
@@ -223,6 +223,13 @@ struct ApplePaySetupPanel: View {
             .buttonStyle(.glassProminent)
             .tint(Color.brand)
             .controlSize(.large)
+
+            // What the Safari sheet shows for the file (checked on the iOS 27
+            // simulator, 4 Oct 2026): a file card with "Open in Shortcuts".
+            Text("A page opens. Tap Open in \u{201C}Shortcuts\u{201D}.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
 
@@ -243,7 +250,7 @@ struct ApplePaySetupPanel: View {
             let automation = ApplePaySetupSteps.automationStep(notificationTrigger: hasNotificationTrigger)
             stepRow(3, ticked.turnOnAutomation, automation.title, automation.detail)
 
-            DisclosureGroup("Show me how") {
+            DisclosureGroup("Show me how", isExpanded: $showingHow) {
                 Group {
                     if #available(iOS 27.0, *) {
                         WalletSetupGuide(route: .quick)
@@ -256,7 +263,7 @@ struct ApplePaySetupPanel: View {
             .font(.subheadline.weight(.semibold))
             .tint(Color.ink)
 
-            DisclosureGroup("Build it by hand instead") {
+            DisclosureGroup("Build it by hand instead", isExpanded: $showingByHand) {
                 WalletSetupGuide(route: .byHand)
                     .padding(.top, 8)
             }

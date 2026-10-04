@@ -93,7 +93,8 @@ Checked in code, not on a device. Not legal advice; items marked "lawyer" need o
 - [ ] The in-app Privacy page (`PrivacyView` in `Views/DataControlsView.swift`) doesn't mention
       setup answers, notifications or Apple Intelligence yet. Settings › Privacy & Security now has
       a short section for them; fold it into PrivacyView when that file is free.
-- [ ] Help & Feedback links `https://sortd.page/support.html`; use `https://sortd.page/support`.
+- [x] Help & Feedback links `https://sortd.page/support.html`; use `https://sortd.page/support`.
+      Checked 4 Oct 2026: no `support.html` link left in `Spend/`.
 - [ ] Notification permission (4.5.4): asked only after the user picks a check-in or bill
       reminders, with "Not now" beside it. Keep check-ins free of promotions (no "try Pro" text),
       or 4.5.4 needs separate opt-in consent.

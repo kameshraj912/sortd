@@ -113,24 +113,15 @@ struct ApplePayOnlineSetupTests {
         #expect(!ApplePaySetupSteps.sourcesFooter(notificationTrigger: false).contains("online"))
     }
 
-    /// Get the Shortcut opens an iCloud shortcut link, which the Shortcuts
-    /// app takes over in any browser, not a file that needs Safari.
-    @Test func getTheShortcutOpensAnICloudShortcutLink() {
+    /// Get the Shortcut opens our own signed file on sortd.page, in the
+    /// in-app Safari sheet: a web link the sheet can show, no personal iCloud.
+    @Test func getTheShortcutOpensTheHostedFileInTheSafariSheet() {
         let url = ApplePaySetupSteps.shortcutURL
+        #expect(url.absoluteString == "https://sortd.page/apple-pay.shortcut")
         #expect(url.scheme == "https")
-        #expect(url.host() == "www.icloud.com")
-        #expect(url.path().hasPrefix("/shortcuts/"))
-    }
-
-    /// Someone who added the shortcut before this change is told to get it
-    /// again, until they tap Get the Shortcut once.
-    @Test func theUpdateLineShowsOnlyForAnOldConnectedShortcut() {
-        let reached = ApplePayStatus.shortcutReached(now)
-        #expect(ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: false))
-        #expect(!ApplePaySetupSteps.showsUpdateLine(status: reached, gotNewShortcut: true))
-        #expect(!ApplePaySetupSteps.showsUpdateLine(status: .notConnected, gotNewShortcut: false))
-        #expect(ApplePaySetupSteps.showsUpdateLine(status: .tapNeedsCheck(date: now), gotNewShortcut: false))
-        #expect(ApplePaySetupSteps.updateLine == "Updated 2 Oct: get it again to log online payments too.")
+        #expect(url.host() == "sortd.page")
+        #expect(url.pathExtension == "shortcut")
+        #expect(SafariPage(url: url).url == url)
     }
 
     // MARK: - tapOrigins

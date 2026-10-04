@@ -91,17 +91,11 @@ enum WidgetBridge {
         if budget > 0 {
             let left = Decimal(budget) - out.month
             out.leftThisMonth = left
-            if left > 0 {
-                let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
-                let daysLeft = max(1, daysInMonth - calendar.component(.day, from: now) + 1)
-                // Bills still to charge this month are already spoken for.
-                let monthEnd = month?.end ?? now
-                let bills = transactions.recurring(now: now).stillToCharge(before: monthEnd, calendar: calendar)
-                let spendable = max(0, left - bills)
-                out.perDay = spendable / Decimal(daysLeft)
-            } else {
-                out.perDay = 0
-            }
+            // Bills still to charge this month are already spoken for.
+            let monthEnd = month?.end ?? now
+            let bills = transactions.recurring(now: now).stillToCharge(before: monthEnd, calendar: calendar)
+            out.perDay = WidgetSummary.perDay(budget: Decimal(budget), spent: out.month, billsToCome: bills,
+                                              now: now, calendar: calendar)
         }
 
         out.budget = budget > 0 ? Decimal(budget) : nil
@@ -114,11 +108,9 @@ enum WidgetBridge {
             out.week = live.filter { week.contains($0.date) }.audTotal
         }
 
-        // What one day is worth, so "today" can be shown against a limit.
-        if budget > 0 {
-            let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
-            out.dayAllowance = Decimal(budget) / Decimal(daysInMonth)
-        }
+        // What one day is worth, so "today" can be shown against a limit. The
+        // same figure Home shows as "a day", not the budget over the whole month.
+        out.dayAllowance = out.perDay
 
         // Biggest categories this month, for the breakdown widget.
         var totals: [SpendCategory: Decimal] = [:]
