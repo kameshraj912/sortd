@@ -9,7 +9,7 @@ const subtle = crypto.subtle;
 const enc = new TextEncoder();
 
 export const TEAM_ID = "TEAMID1234";
-export const CLIENT_ID = "com.kameshraj.spend";
+export const CLIENT_ID = "com.kameshraj.sortd";
 export const KEY_ID = "KEYID56789";
 export const CHALLENGE_KEY = "test-challenge-key-0123456789abcdef0123456789";
 export const DEV_BYPASS_TOKEN = "dev-bypass-token-for-tests";

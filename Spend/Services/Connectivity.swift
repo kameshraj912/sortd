@@ -38,7 +38,7 @@ final class Connectivity {
             let online = path.status == .satisfied
             Task { @MainActor in self?.set(isOnline: online) }
         }
-        monitor.start(queue: DispatchQueue(label: "com.kameshraj.spend.connectivity", qos: .utility))
+        monitor.start(queue: DispatchQueue(label: "com.kameshraj.sortd.connectivity", qos: .utility))
         self.monitor = monitor
     }
 

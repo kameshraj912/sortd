@@ -25,7 +25,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.kameshraj.spend.tip.small",
+      "productID" : "com.kameshraj.sortd.tip.small",
       "referenceName" : "Small tip",
       "type" : "Consumable"
     },
@@ -40,7 +40,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.kameshraj.spend.tip.medium",
+      "productID" : "com.kameshraj.sortd.tip.medium",
       "referenceName" : "Medium tip",
       "type" : "Consumable"
     },
@@ -55,7 +55,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.kameshraj.spend.tip.large",
+      "productID" : "com.kameshraj.sortd.tip.large",
       "referenceName" : "Large tip",
       "type" : "Consumable"
     }
