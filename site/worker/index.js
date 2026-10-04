@@ -17,17 +17,12 @@
 //       npx wrangler secret put TURNSTILE_SECRET
 import { EmailMessage } from "cloudflare:email";
 
-// Shown next to both sign-up buttons. Quoted in each sign-up email as the consent record.
-const CONSENT = "We'll email you your TestFlight invite, and once when Sortd launches. That's it. Unsubscribe any time.";
-
 const FROM = "beta@sortd.page";
 const COUNTRIES = ["Australia", "Singapore", "Malaysia", "Other"];
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
 // Turnstile: the token must come from this form on these hosts.
 const TURNSTILE_ACTION = "beta-signup";
-// soon.sortd.page is the separate launch (hype) site in launch/; its form posts here.
-const TURNSTILE_HOSTS = ["sortd.page", "www.sortd.page", "soon.sortd.page"];
-const FORM_ORIGINS = ["https://sortd.page", "https://soon.sortd.page"];
+const TURNSTILE_HOSTS = ["sortd.page", "www.sortd.page"];
 
 export default {
   async fetch(request, env) {
@@ -49,10 +44,8 @@ export default {
 
 async function handleBeta(request, env) {
   const wantsJSON = (request.headers.get("accept") || "").includes("application/json");
-  // The launch site is another origin, so its script needs this header to read the reply.
-  const cors = FORM_ORIGINS.includes(request.headers.get("origin")) ? { "access-control-allow-origin": request.headers.get("origin"), "vary": "origin" } : {};
   const reply = (ok, error, status) => wantsJSON
-    ? json(ok ? { ok: true } : { ok: false, error }, status || (ok ? 200 : 400), cors)
+    ? json(ok ? { ok: true } : { ok: false, error }, status || (ok ? 200 : 400))
     : Response.redirect(new URL(ok ? "/beta-thanks" : "/beta?error=1", request.url), 303);
 
   // Only accept the form from our own pages.
@@ -61,7 +54,7 @@ async function handleBeta(request, env) {
   if (origin) {
     let host = "";
     try { host = new URL(origin).host; } catch {}
-    if (host !== new URL(request.url).host && !FORM_ORIGINS.includes(origin)) return reply(false, "Please use the form on sortd.page.");
+    if (host !== new URL(request.url).host) return reply(false, "Please use the form on sortd.page.");
   }
 
   // Flood guard: one IP can't script the form to bomb the inbox. 5/min, then 429.
@@ -92,8 +85,6 @@ async function handleBeta(request, env) {
   const applePay = ["yes", "no", "not sure"].includes(field("applepay", 10)) ? field("applepay", 10) : "";
 
   if (!EMAIL_RE.test(email)) return reply(false, "That's not an email. Even your spam folder would reject it.");
-  // Which form it came from: sortd.page/beta or the launch site (soon.sortd.page).
-  const source = field("source", 20) === "soon" ? "soon" : "beta";
   if (!name) return reply(false, "What should we call you? First name is fine.");
   if (!country) return reply(false, "Pick where you live. \"Other\" counts.");
   if (!applePay) return reply(false, "Pick an Apple Pay answer. \"Not sure\" is allowed.");
@@ -108,8 +99,7 @@ async function handleBeta(request, env) {
     `Country:    ${country || "-"}`,
     `Apple Pay:  ${applePay || "-"}`,
     "",
-    `Form:       ${source === "soon" ? "soon.sortd.page (launch site)" : "sortd.page/beta"}`,
-    ...(source === "soon" ? [`Consent:    agreed to "${CONSENT}"`] : []),
+    "Form:       sortd.page/beta",
     `Sent:       ${when}`,
     `From:       ${request.headers.get("cf-ipcountry") || "?"} (Cloudflare's guess)`,
     "",
@@ -163,8 +153,8 @@ function clean(v, max) {
   return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, max);
 }
 
-function json(body, status = 200, extra = {}) {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...extra } });
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
 function b64(s) {

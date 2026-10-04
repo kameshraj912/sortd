@@ -32,9 +32,4 @@ Live at https://sortd.page (Cloudflare Workers static assets, free). Settings ar
 After changing `style.css` or `site.js`, bump the `?v=` number in every page's links so browsers
 fetch the new copy. Email to support@sortd.page is forwarded by Cloudflare Email Routing.
 
-## Home page gate (until the beta opens)
-
-`index.html` opens with the "Oops. You found us early." card (`#early`), which covers the whole home page
-and links to soon.sortd.page. `site.js` adds the `gate` class on `/` only; other pages are not gated.
-Keep the card's one-line description and the privacy link: the card is all a visitor sees while the gate is up.
-To lift the gate: delete the `<dialog id="early">` block and the gate lines in `site.js`.
+The old launch page soon.sortd.page now sends everyone here (see `../launch/README.md`).

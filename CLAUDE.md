@@ -57,7 +57,7 @@ Full design: `docs/AgentPipeline.md`.
   edits**. Deploy only when `git status site/` is clean and matches the pushed branch.
 - One session deploys at a time.
 - The account Worker deploys from `worker/` (`cd worker && npx wrangler deploy`), separately from the site. See `worker/README.md`.
-- The launch (hype) site soon.sortd.page deploys from `launch/` (`cd launch && npx wrangler deploy`). Its form posts to sortd.page/api/beta, so deploy `site/` first. See `launch/README.md`.
+- soon.sortd.page (the old launch page, merged into sortd.page on 4 Oct 2026) is only a redirect to sortd.page. It deploys from `launch/` (`cd launch && npx wrangler deploy`). See `launch/README.md`.
 
 **6. Finish, and clean up at once.** Every task costs about 11.5 GB while it exists
 (4.5 GB build folder + 7 GB simulator). Twenty left behind filled the disk on 2 Oct 2026
