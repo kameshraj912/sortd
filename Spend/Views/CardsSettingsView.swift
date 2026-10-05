@@ -112,7 +112,7 @@ struct CardEditor: View {
 
     init(original: CardInfo?) {
         self.original = original
-        let currency = LocalCurrency.current()
+        let currency = LocalCurrency.forNewCard()
         let start = original ?? CardInfo(name: "", shortName: "", currency: currency,
                                          country: Self.country(for: currency) ?? Locale.current.region?.identifier ?? "AU")
         _draft = State(initialValue: start)
@@ -167,7 +167,7 @@ struct CardEditor: View {
 
     private func clearDraft() {
         CardDraft.clear()
-        let currency = LocalCurrency.current()
+        let currency = LocalCurrency.forNewCard()
         withAnimation(.snappy) {
             draft = CardInfo(name: "", shortName: "", currency: currency,
                              country: Self.country(for: currency) ?? Locale.current.region?.identifier ?? "AU")

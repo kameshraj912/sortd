@@ -168,7 +168,7 @@ extension CardBook {
         var info = CardInfo(
             name: label, shortName: String(label.prefix(18)), bank: bank?.name ?? "",
             isCredit: lower.contains("credit"),
-            currency: (bank?.currency).flatMap { $0.isEmpty ? nil : $0 } ?? LocalCurrency.current(),
+            currency: (bank?.currency).flatMap { $0.isEmpty ? nil : $0 } ?? LocalCurrency.forNewCard(),
             country: (bank?.country).flatMap { $0.isEmpty ? nil : $0 } ?? (Locale.current.region?.identifier ?? "AU"),
             walletWords: [lower] + (bank?.words ?? []))
         if let d = digits.last { info.applePayLast4 = [d] }
