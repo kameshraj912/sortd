@@ -81,13 +81,36 @@ struct ApplePayAutomationRouteTests {
         }
     }
 
-    /// The first run is not enough on either iOS: step 3 is the one that
-    /// makes logging automatic, and the person has to say it is done.
-    @Test func stepThreeIsNeededOnBothRoutes() {
-        for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
-            #expect(!ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: route, saysBuilt: false))
-            #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: route, saysBuilt: true))
-        }
+    /// iOS 27: the first run is not enough. Step 3 is the one that makes
+    /// logging automatic, and the person has to say it is done.
+    @Test func stepThreeIsNeededOnIOS27() {
+        #expect(!ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .shortcut, saysBuilt: false))
+        #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .shortcut, saysBuilt: true))
+    }
+
+    /// iOS 26: steps 1 and 2 let the person into the app (6 Oct 2026). Its
+    /// step 3 is the hard one, and being stuck there must not lock the app.
+    @Test func iOS26GoesOnAfterStepsOneAndTwo() {
+        #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .automation, saysBuilt: false))
+        #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .automation, saysBuilt: true))
+    }
+
+    /// Step 3 is put off, not dropped: Home keeps saying it is left until the
+    /// person says the automation is on, or a real tap lands.
+    @Test func stepThreeStaysLeftUntilItIsDone() {
+        #expect(ApplePaySetupSteps.stepThreeLeft(status: .shortcutReached(when), saysBuilt: false))
+        #expect(!ApplePaySetupSteps.stepThreeLeft(status: .shortcutReached(when), saysBuilt: true))
+        #expect(!ApplePaySetupSteps.stepThreeLeft(status: .notConnected, saysBuilt: false))
+        let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds",
+                                           amount: Decimal(string: "4.50")!, currency: "AUD")
+        #expect(!ApplePaySetupSteps.stepThreeLeft(status: tap, saysBuilt: false))
+        #expect(!ApplePaySetupSteps.stepThreeLeft(status: .tapNeedsCheck(date: when), saysBuilt: false))
+    }
+
+    /// The search trap: the keyboard's "Wallet" suggestion adds a space and
+    /// Shortcuts shows nothing. The first page says how to get out of it.
+    @Test func firstAutomationPageWarnsAboutTheEmptyList() {
+        #expect(ApplePaySetupSteps.automationSteps[0].note?.contains("Delete the space after Wallet") == true)
     }
 
     /// A real tap proves everything, whatever was or wasn't ticked off.

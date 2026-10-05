@@ -13,6 +13,7 @@ struct FinishSetupCard: View {
     @AppStorage(SetupProfile.goalsKey) private var goalsRaw = ""
     @AppStorage(SetupProfile.paymentKey) private var paymentRaw = ""
     @AppStorage(SetupChecklist.hiddenKey) private var hidden = false
+    @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
     /// Read so the card re-checks when the app comes back (the widget may
     /// have been added from the Home Screen meanwhile).
     @Environment(\.scenePhase) private var scenePhase
@@ -23,11 +24,13 @@ struct FinishSetupCard: View {
     private var tasks: [SetupTask] {
         let flow = SetupFlow(goals: SetupProfile.goals(goalsRaw), payment: SetupProfile.Payment(rawValue: paymentRaw),
                              hasCards: !CardBook.shared.active.isEmpty)
+        let status = ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
         return SetupChecklist.tasks(flow: flow, hasCards: flow.hasCards,
-                                    // A finished setup counts even before the first shop tap:
-                                    // Shortcuts reaching the app at all is the proof.
-                                    tapped: ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt,
-                                                                   taps: transactions).isConnected,
+                                    // A finished setup counts even before the first shop tap, but
+                                    // only with all three steps done: the shortcut reaching the app
+                                    // is steps 1 and 2, and step 3 is the one that logs.
+                                    tapped: status.isConnected
+                                        && !ApplePaySetupSteps.stepThreeLeft(status: status, saysBuilt: automationBuilt),
                                     widgetAdded: widgetAdded)
     }
 

@@ -91,7 +91,7 @@ struct ApplePayOnlineSetupTests {
     @Test func stepTwoSaysComeBackHereAndTheGuideMatches() {
         let step = ApplePaySetupSteps.runStep
         #expect(step.title == "Run it once and tap Allow")
-        #expect(step.detail == "Press ▶ in the shortcut and tap Allow. Then come back here.")
+        #expect(step.detail == "In Shortcuts, tap Log Apple Pay in Sortd to run it (or press ▶ if it is open). Tap Allow, then come back here.")
         #expect(WalletSetupGuide.quickPages[1].title == step.title)
         #expect(WalletSetupGuide.quickPages[1].detail == step.detail)
         for page in WalletSetupGuide.quickPages + WalletSetupGuide.byHandPages {
