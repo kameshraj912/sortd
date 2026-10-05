@@ -92,8 +92,8 @@ h3 { font-size: 19px; line-height: 1.3; margin: 0 0 6px; color: var(--ink); lett
 .kicker { font-size: 14px; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .kicker::before { content: ""; width: 16px; height: 4px; border-radius: 2px; background: var(--c); }
 .small-note { font-size: 14px; color: var(--muted); margin: 0; }
-[data-countdown] { font-variant-numeric: tabular-nums; }
-.cta-band [data-countdown] { color: inherit; }
+.beta-note { margin-bottom: 6px; }
+.beta-note b { color: var(--ink); }
 
 /* ---------- iPhone 18 Pro Max ----------
    Real proportions: 6.9" screen at 1320 x 2868, thin black border, titanium edge,

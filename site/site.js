@@ -71,7 +71,7 @@
     // Share after signing up: the phone's share sheet, or copy the link.
     document.querySelectorAll("[data-share]").forEach(function (b) {
       b.addEventListener("click", function () {
-        var data = { title: "Sortd", text: "Found an app that logs your Apple Pay taps by itself. Free beta soon:", url: "https://sortd.page" };
+        var data = { title: "Sortd", text: "Found an app that logs your Apple Pay taps by itself. The free beta is open:", url: "https://sortd.page" };
         if (navigator.share) { navigator.share(data).catch(function () {}); return; }
         try { navigator.clipboard.writeText(data.url); b.textContent = "Link copied"; } catch (e) {}
       });
@@ -194,22 +194,6 @@
         bottomSaid = true; toast("You made it to the bottom. More commitment than a\u00a0gym\u00a0membership.");
       }
     }, { passive: true });
-
-    // Countdown to the TestFlight beta. Change the date here and nowhere else.
-    // If the date passes before the beta is really open, it says so instead of "0 days".
-    var BETA_OPENS = new Date("2026-10-09T09:00:00+11:00"); // 9 am Melbourne
-    var counters = document.querySelectorAll("[data-countdown]");
-    function plural(n, word) { return n + "\u00a0" + word + (n === 1 ? "" : "s"); }
-    function tick() {
-      var left = BETA_OPENS - Date.now(), text;
-      var d = Math.floor(left / 864e5), h = Math.floor(left / 36e5) % 24, m = Math.floor(left / 6e4) % 60;
-      if (left <= 0) text = "any day now. (We said that last time\u00a0too.)";
-      else if (d > 0) text = "in " + plural(d, "day") + " and " + plural(h, "hour") + ".";
-      else if (h > 0) text = "in " + plural(h, "hour") + " and " + plural(m, "minute") + ".";
-      else text = "in " + plural(Math.max(m, 1), "minute") + ". Refreshing won't make it\u00a0faster.";
-      counters.forEach(function (el) { el.textContent = text; });
-    }
-    if (counters.length) { tick(); setInterval(tick, 30000); }
 
     // Scroll-in for sections marked .reveal.
     //

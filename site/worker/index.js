@@ -104,7 +104,7 @@ async function handleBeta(request, env) {
     `From:       ${request.headers.get("cf-ipcountry") || "?"} (Cloudflare's guess)`,
     "",
     "Reply to this email to write to them directly.",
-    "When the beta opens, send them the TestFlight link (see docs/BetaEmails.md).",
+    "The beta is open: send them the TestFlight link (see docs/BetaEmails.md).",
   ];
   const subject = `Beta sign-up: ${name || email}${country ? " (" + country + ")" : ""}`;
 
