@@ -60,3 +60,22 @@ Two fixes in this build.
    with Apple Pay and check the currency in Activity.
 
 Everything else is as before: Apple Pay logging, receipts, statements, iCloud backup.
+
+## What to Test (build 1.0 (8), 6 Oct 2026)
+
+This build is for iPhones on iOS 26. Setup there was too hard, and people got stuck.
+
+1. Setup no longer locks you out. After you add the shortcut and run it once (steps 1 and 2),
+   you can go into the app. Home shows "Apple Pay isn't logging yet" with a button back to
+   step 3 until it is done.
+
+2. Step 2 now says what you see: in Shortcuts, tap Log Apple Pay in Sortd to run it.
+
+3. Step 3, in Shortcuts: if you type Wallet and the list goes empty, delete the space after
+   the word. The guide now says so.
+
+4. Coming back from Shortcuts lands on the steps, not on the file page.
+
+If you are on iOS 26 and step 3 still beats you, record your screen and send it with
+TestFlight's feedback button. That is the most useful thing you can send us.
+

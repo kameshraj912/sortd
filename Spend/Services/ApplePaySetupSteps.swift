@@ -37,8 +37,13 @@ extension ApplePaySetupSteps {
     /// Step 2's words. The shortcut runs with "Show When Run" off, so
     /// nothing appears in Shortcuts after ▶: the person comes back here and
     /// the step ticks itself from `ApplePayStatus`.
+    ///
+    /// After Add Shortcut the person lands in the Shortcuts library, where
+    /// there is no ▶ (it is inside the shortcut, behind ···). Tapping the
+    /// shortcut there runs it, so that is what the words say (6 Oct 2026,
+    /// a full run on the iOS 26.5 simulator).
     static let runStep = (title: "Run it once and tap Allow",
-                          detail: "Press ▶ in the shortcut and tap Allow. Then come back here.")
+                          detail: "In Shortcuts, tap Log Apple Pay in Sortd to run it (or press ▶ if it is open). Tap Allow, then come back here.")
 
     /// Step 3's words. With iOS 27's Notification trigger the shortcut has
     /// two "When…" lines (the tap and Wallet's notification), each with its
@@ -146,7 +151,9 @@ extension ApplePaySetupSteps {
         AutomationStep(id: 0, title: "Find Wallet",
                        taps: ["Tap the Search box at the bottom. Type the word Wallet.",
                               "Tap Wallet in the list."],
-                       note: "Don't see a Search box? Tap Automation at the bottom, then New Automation."),
+                       // The keyboard's own "Wallet" suggestion adds a space, and
+                       // Shortcuts then shows an empty list (iOS 26.5, 6 Oct 2026).
+                       note: "List went empty? Delete the space after Wallet.\nDon't see a Search box? Tap Automation at the bottom, then New Automation."),
         AutomationStep(id: 1, title: "Choose your cards",
                        taps: ["Tap each card you pay with. A tick shows beside it.",
                               "Tap Run Immediately.",
@@ -191,19 +198,40 @@ extension ApplePaySetupSteps {
     /// back (or a relaunch) lands where the person was.
     static let automationPageKey = "applePayAutomationPage"
 
-    /// Whether setup may move on from the Apple Pay step. All three steps are
-    /// required (Raj, 5 Oct 2026: people tapped Continue past them, and step
-    /// 3 is the one that makes logging automatic). Steps 1 and 2 show as the
-    /// shortcut reaching Sortd. Step 3 can't be seen, so the person says so:
-    /// "I'm Done" on the iOS 26 pages, "I Switched Both On" on iOS 27. A real
-    /// tap proves all three.
+    /// Whether setup may move on from the Apple Pay step. Steps 1 and 2 show
+    /// as the shortcut reaching Sortd. Step 3 can't be seen, so the person
+    /// says so: "I'm Done" on the iOS 26 pages, "I Switched Both On" on iOS
+    /// 27. A real tap proves all three.
+    ///
+    /// iOS 27 needs all three (Raj, 5 Oct 2026: people tapped Continue past
+    /// them, and step 3 is the one that makes logging automatic; there it is
+    /// two switches). iOS 26 lets people in after steps 1 and 2 (Raj, 6 Oct
+    /// 2026): its step 3 is about seven taps in Shortcuts, from memory, and
+    /// testers who got stuck there were locked out of the whole app. Step 3
+    /// is not dropped: `stepThreeLeft` keeps it on Home until it is done.
     static func isReady(status: ApplePayStatus, route: Route, saysBuilt: Bool) -> Bool {
         switch status {
         case .notConnected: false
-        case .shortcutReached: saysBuilt
+        case .shortcutReached: route == .automation || saysBuilt
         case .tapLogged, .tapNeedsCheck: true
         }
     }
+
+    /// Steps 1 and 2 are done and step 3 is not: the shortcut has reached
+    /// Sortd, no real tap has landed, and the person hasn't said the
+    /// automation is on. Until it is, no tap is written down.
+    static func stepThreeLeft(status: ApplePayStatus, saysBuilt: Bool) -> Bool {
+        if case .shortcutReached = status { return !saysBuilt }
+        return false
+    }
+
+    /// The status card on the setup page while step 3 is left. "Now pay in a
+    /// shop" would be a lie there: nothing logs until the automation exists.
+    static let stepThreeLeftStatusLine = "Steps 1 and 2 are done. Step 3 is left, and it is the one that logs your taps."
+
+    /// The Home card for `stepThreeLeft`.
+    static let stepThreeLeftTitle = "Apple Pay isn't logging yet"
+    static let stepThreeLeftLine = "One step is left in Shortcuts. Until it's done, your taps aren't written down."
 
     /// Under step 3 once the walk-through is finished and no tap has landed.
     static let automationTestLine = "Now pay with Apple Pay in a shop. The purchase shows up in Sortd by itself."

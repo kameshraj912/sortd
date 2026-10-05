@@ -28,6 +28,7 @@ struct ApplePaySetupPanel: View {
     var needsCheckCount: Int = 0
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var shortcutOpened = false
     /// One state each, so a tap on one never opens the other (seen on
     /// iOS 26.4 with no state of their own).
@@ -215,7 +216,9 @@ struct ApplePaySetupPanel: View {
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 2) {
                 Text(status.title).font(.headline)
-                Text(status.detail).font(.subheadline).foregroundStyle(.secondary)
+                Text(ApplePaySetupSteps.stepThreeLeft(status: status, saysBuilt: automationBuilt)
+                     ? ApplePaySetupSteps.stepThreeLeftStatusLine : status.detail)
+                    .font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -234,6 +237,12 @@ struct ApplePaySetupPanel: View {
         .accessibilityLabel(status.accessibilityLabel)
         .sheet(item: $safariPage) { page in
             SafariSheet(url: page.url).ignoresSafeArea()
+        }
+        // "Open in Shortcuts" leaves Sortd with the file page still up, and
+        // coming back landed on it, not on the steps (6 Oct 2026). Leaving
+        // the app is the sign the page has done its job.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { safariPage = nil }
         }
         .alert("Last Tap Received", isPresented: $showingRawTap) {
             Button("OK", role: .cancel) {}

@@ -77,6 +77,7 @@ struct HomeView: View {
                                 // The aha: the first purchase logged by itself,
                                 // then the one notification ask.
                                 ActivationCard()
+                                ApplePayStepLeftCard()
                                 FinishSetupCard()
                                 ApplePayNudgeCard()
                             }
@@ -700,6 +701,7 @@ struct HomeView: View {
                     BrandBar(width: 14, height: 3)
                     Text("Your purchases show up here.").font(.body).foregroundStyle(.secondary)
                 }
+                ApplePayStepLeftCard()
                 FinishSetupCard(canHide: false)
                 Button { showingAdd = true } label: {
                     HStack(spacing: 12) {

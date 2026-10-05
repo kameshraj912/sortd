@@ -134,8 +134,19 @@ struct OnboardingView: View {
         // Glass controls float over the page, and the page scrolls under them.
         // Bars (not plain insets) so the page blurs softly under them as it
         // scrolls, instead of text running into the buttons.
-        .safeAreaBar(edge: .top, spacing: 0) { topBar }
-        .safeAreaBar(edge: .bottom, spacing: 0) { if step != .building, !typeSize.isAccessibilitySize { bottomBar } }
+        .safeAreaBar(edge: .top, spacing: 0) { topBar.background(alignment: .top) { topBarBackdrop } }
+        // The bar stays in place through the "building" step, only hidden:
+        // taking it out and putting it back for the plan left it 13 points
+        // right of centre on the plan, cards and Apple Pay pages (iOS 26.5,
+        // 6 Oct 2026).
+        .safeAreaBar(edge: .bottom, spacing: 0) {
+            if !typeSize.isAccessibilitySize {
+                bottomBar
+                    .opacity(step == .building ? 0 : 1)
+                    .allowsHitTesting(step != .building)
+                    .accessibilityHidden(step == .building)
+            }
+        }
         .onAppear {
             budgetMemory.begin(current: budget)
             // Once per run of setup (a re-run from Settings counts as a run).
@@ -276,6 +287,23 @@ struct OnboardingView: View {
     private var progress: Double { flow.progress(at: step) }
     private var questionSteps: [Step] { flow.questionSteps }
     private func counter(_ s: Step) -> String { flow.counter(s) ?? "" }
+
+    /// Page colour behind Back and the progress bar, fading out just under
+    /// them. The soft scroll edge alone left scrolled text readable through
+    /// the bar on iOS 26, on top of the progress line (6 Oct 2026). Not on
+    /// the pages that show the coloured aura: it would paint over it.
+    @ViewBuilder
+    private var topBarBackdrop: some View {
+        if step != .welcome, step != .building, step != .plan {
+            LinearGradient(stops: [.init(color: Color.page, location: 0),
+                                   .init(color: Color.page, location: 0.72),
+                                   .init(color: Color.page.opacity(0), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .padding(.bottom, -14)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
+    }
 
     private var topBar: some View {
         HStack(spacing: 12) {
@@ -461,6 +489,10 @@ struct OnboardingView: View {
                     lockedButton("Add a Card to Continue")
                 case .applePay where newFlow && !applePayReady:
                     lockedButton(applePayRequirement)
+                // Step 3 is still the filled button on the page ("Show Me
+                // How"). This one is quieter and says what is being put off.
+                case .applePay where newFlow && applePayStepThreeLeft:
+                    secondaryButton("Do Step 3 Later", action: primaryAction)
                 case .applePay where !tapConnected && !shortcutReached && !newFlow:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
@@ -516,10 +548,16 @@ struct OnboardingView: View {
         ApplePaySetupSteps.isReady(status: applePayStatus, route: ApplePaySetupSteps.route, saysBuilt: automationBuilt)
     }
 
-    /// All three steps are needed. Steps 1 and 2 tick themselves once the
-    /// shortcut has run, and then only step 3 is left.
+    /// Steps 1 and 2 tick themselves once the shortcut has run. iOS 27 then
+    /// needs step 3 too; iOS 26 may go on without it (`isReady`).
     private var applePayRequirement: String {
-        applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 to 3 to Continue"
+        if ApplePaySetupSteps.route == .automation { return "Do Steps 1 and 2 to Continue" }
+        return applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 to 3 to Continue"
+    }
+
+    /// Allowed on, with step 3 still to do (iOS 26 only).
+    private var applePayStepThreeLeft: Bool {
+        applePayReady && ApplePaySetupSteps.stepThreeLeft(status: applePayStatus, saysBuilt: automationBuilt)
     }
 
     private var primaryTitle: String {
@@ -749,7 +787,9 @@ struct OnboardingView: View {
 
     private var setupTasks: [SetupTask] {
         SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty,
-                             tapped: applePayStatus.isConnected,
+                             // Ticked only with all three steps done, the same as Home.
+                             tapped: applePayStatus.isConnected
+                                 && !ApplePaySetupSteps.stepThreeLeft(status: applePayStatus, saysBuilt: automationBuilt),
                              widgetAdded: false)
     }
 
