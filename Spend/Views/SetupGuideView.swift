@@ -16,10 +16,8 @@ struct SetupGuideView: View {
     @State private var notificationsAllowed = false
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
-    private var hasNotificationTrigger: Bool {
-        if #available(iOS 27.0, *) { return true }
-        return false
-    }
+    /// Only the ready-made shortcut (iOS 27) carries Wallet's Notification trigger.
+    private var hasNotificationTrigger: Bool { ApplePaySetupSteps.route == .shortcut }
 
     private var status: ApplePayStatus {
         ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)

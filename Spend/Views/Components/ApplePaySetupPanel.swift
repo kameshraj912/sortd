@@ -14,6 +14,11 @@ import SwiftUI
 /// that's left by hand is running the shortcut once (so iOS can ask
 /// permission) and switching its own automation on. The by-hand build stays
 /// as a smaller, collapsed fallback for when the download fails.
+///
+/// 5 Oct 2026: that is the iOS 27 route. On iOS 26 the shortcut can't work
+/// (`ApplePaySetupSteps.Route`), so the panel shows the steps for the iOS it
+/// is running on and nothing from the other route: there, one card that
+/// opens the walk-through (`ApplePayAutomationGuide`).
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
     /// How many logged taps still need a look (spec 2026-09-26, failsafes
@@ -47,15 +52,24 @@ struct ApplePaySetupPanel: View {
     @State private var nudgeLastShownAt: Date? = ApplePayNudge.lastShown()
     @State private var nudgeDismissed = false
 
+    private let route = ApplePaySetupSteps.route
+
     /// iOS 27 has Wallet's Notification trigger, so the shortcut has two
     /// automations; earlier iOS only the tap.
-    private var hasNotificationTrigger: Bool {
-        if #available(iOS 27.0, *) { return true }
-        return false
+    private var hasNotificationTrigger: Bool { route == .shortcut }
+
+    @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
+    @State private var showingAutomationGuide = false
+
+    /// The card's words: the status's own, except while nothing is connected
+    /// on the iOS 26 route (`ApplePaySetupSteps.card`).
+    private var card: (title: String, detail: String) {
+        ApplePaySetupSteps.card(for: status, route: route, saysBuilt: automationBuilt)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            versionChip
             statusCard
             if let line = ApplePayStatus.needsCheckLine(count: needsCheckCount) {
                 // Opens Activity, where the flagged rows carry a "Needs a
@@ -72,11 +86,77 @@ struct ApplePaySetupPanel: View {
                 .buttonStyle(.pressable)
                 .accessibilityHint("Opens Activity")
             }
-            healthCheckSection
-            steps
+            switch route {
+            case .shortcut:
+                healthCheckSection
+                steps
+            case .automation:
+                automationCard
+            }
             scopeNote
             nudgeLine
         }
+        .sheet(isPresented: $showingAutomationGuide) {
+            ApplePayAutomationGuide()
+        }
+    }
+
+    // MARK: - Which iOS these steps are for
+
+    private var versionChip: some View {
+        Label(ApplePaySetupSteps.versionLine(), systemImage: "checkmark")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(Color.up)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.up.opacity(0.12), in: .capsule)
+    }
+
+    // MARK: - iOS 26: one card, and the walk-through behind it
+
+    private var automationCard: some View {
+        let allDone = ApplePaySetupSteps.ticked(for: status).turnOnAutomation
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("You set this up in Shortcuts")
+                    .font(.headline)
+                Text("On this iOS there is no shortcut to download. You make one small automation yourself. We show you every tap.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(ApplePaySetupSteps.automationSteps) { step in
+                    HStack(spacing: 12) {
+                        stepBadge(step.id + 1, done: allDone)
+                        Text(step.title).font(.subheadline)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Step \(step.id + 1): \(step.title)\(allDone ? ". Done." : "")")
+                }
+            }
+
+            // Done once, the button steps back: the card above is what to watch.
+            Group {
+                if automationBuilt {
+                    guideButton.buttonStyle(.glass)
+                } else {
+                    guideButton.buttonStyle(.glassProminent).tint(Color.brand)
+                }
+            }
+            .controlSize(.large)
+
+            if automationBuilt, !status.isConnected {
+                Text(ApplePaySetupSteps.automationTestLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .setupCard()
     }
 
     // MARK: - 14-day nudge (spec 2026-09-26, failsafes #1/#3)
@@ -178,8 +258,8 @@ struct ApplePaySetupPanel: View {
                 .symbolEffect(.bounce, value: status.isConnected)
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 2) {
-                Text(status.title).font(.headline)
-                Text(status.detail).font(.subheadline).foregroundStyle(.secondary)
+                Text(card.title).font(.headline)
+                Text(card.detail).font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -195,7 +275,7 @@ struct ApplePaySetupPanel: View {
             showingRawTap = true
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(status.accessibilityLabel)
+        .accessibilityLabel(status == .notConnected ? "\(card.title). \(card.detail)" : status.accessibilityLabel)
         .sheet(item: $safariPage) { page in
             SafariSheet(url: page.url).ignoresSafeArea()
         }
@@ -295,17 +375,7 @@ struct ApplePaySetupPanel: View {
     /// decides which ones light up for the current status.
     private func stepRow(_ n: Int, _ done: Bool, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Group {
-                if done {
-                    Image(systemName: "checkmark").font(.subheadline.weight(.bold))
-                } else {
-                    Text("\(n)").font(.subheadline.weight(.bold))
-                }
-            }
-            .foregroundStyle(Color.onBrand)
-            .frame(width: 26, height: 26)
-            .background(done ? Color.up : Color.ink, in: .circle)
-            .accessibilityHidden(true)
+            stepBadge(n, done: done)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
@@ -315,6 +385,33 @@ struct ApplePaySetupPanel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(n): \(title). \(detail)\(done ? ". Done." : "")")
+    }
+
+    private var guideButton: some View {
+        Button {
+            showingAutomationGuide = true
+        } label: {
+            Label(automationBuilt ? "Go Through the Steps Again" : "Show Me Step by Step",
+                  systemImage: "list.number")
+                .font(.headline)
+                .foregroundStyle(automationBuilt ? Color.ink : Color.onBrand)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+        }
+    }
+
+    /// The number in its circle, or a green tick once the step is done.
+    private func stepBadge(_ n: Int, done: Bool) -> some View {
+        Group {
+            if done {
+                Image(systemName: "checkmark").font(.subheadline.weight(.bold))
+            } else {
+                Text("\(n)").font(.subheadline.weight(.bold))
+            }
+        }
+        .foregroundStyle(Color.onBrand)
+        .frame(width: 26, height: 26)
+        .background(done ? Color.up : Color.ink, in: .circle)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Scope

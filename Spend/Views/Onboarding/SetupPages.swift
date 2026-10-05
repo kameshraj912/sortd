@@ -147,9 +147,13 @@ struct SetupHeader: View {
 /// don't announce); the old lines stay for the DEBUG old-flow escape.
 /// Titles are the same in both.
 enum SetupCopy {
-    static func line(_ step: SetupFlow.Step) -> String? {
-        SetupFlow.usesNewFlow ? new[step] : old[step]
+    static func line(_ step: SetupFlow.Step, route: ApplePaySetupSteps.Route = ApplePaySetupSteps.route) -> String? {
+        // iOS 26 builds the automation by hand: twice the time, said honestly.
+        if step == .applePay, route == .automation, SetupFlow.usesNewFlow { return applePayByHand }
+        return SetupFlow.usesNewFlow ? new[step] : old[step]
     }
+
+    static let applePayByHand = "About 2 minutes, once. Or do it later from Home."
 
     /// The currency step once a currency other than the phone's is picked
     /// (the default line would then be untrue). Nil in the old flow.
