@@ -23,11 +23,55 @@
       var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
       var show = function (msg, field) {
         err.textContent = msg; err.hidden = !msg;
-        [email, form.elements.name, form.elements.country].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
+        [email, form.elements.name, form.elements.country, form.elements.iphone].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
       // Turnstile tokens are single-use: after a failed submit, clear it so the next try gets a fresh one.
       var resetCaptcha = function () { try { if (window.turnstile) window.turnstile.reset(); } catch (e) {} };
+      // Screen size in points and pixel ratio, e.g. "393x852@3". Sent with the form, and used for the guess below.
+      var screenSize = function () {
+        try { return Math.min(screen.width, screen.height) + "x" + Math.max(screen.width, screen.height) + "@" + (window.devicePixelRatio || 1); } catch (e) { return ""; }
+      };
+      // "Which iPhone?": the browser never says the model, so the iPhones that share this screen
+      // size go to the top of the list. Instagram's and Facebook's in-app browsers do name the
+      // exact model; only then is it picked for them, so nobody is left on a wrong guess.
+      // Keep the two tables in step with SCREENS and IPHONES in worker/index.js.
+      var pick = form.elements.iphone;
+      if (pick && /iPhone/.test(navigator.userAgent)) {
+        var GROUPS = {
+          "375x667@2": ["iPhone SE (3rd generation)", "iPhone SE (2nd generation)"],
+          "414x896@2": ["iPhone 11"],
+          "375x812@3": ["iPhone 13 mini", "iPhone 12 mini", "iPhone 11 Pro"],
+          "414x896@3": ["iPhone 11 Pro Max"],
+          "390x844@3": ["iPhone 17e", "iPhone 16e", "iPhone 14", "iPhone 13 Pro", "iPhone 13", "iPhone 12 Pro", "iPhone 12"],
+          "428x926@3": ["iPhone 14 Plus", "iPhone 13 Pro Max", "iPhone 12 Pro Max"],
+          "393x852@3": ["iPhone 16", "iPhone 15 Pro", "iPhone 15", "iPhone 14 Pro"],
+          "430x932@3": ["iPhone 16 Plus", "iPhone 15 Pro Max", "iPhone 15 Plus", "iPhone 14 Pro Max"],
+          "402x874@3": ["iPhone 18 Pro", "iPhone 17 Pro", "iPhone 17", "iPhone 16 Pro"],
+          "440x956@3": ["iPhone 18 Pro Max", "iPhone 17 Pro Max", "iPhone 16 Pro Max"],
+          "420x912@3": ["iPhone Air"]
+        };
+        var CODES = {
+          "iPhone12,1": "iPhone 11", "iPhone12,3": "iPhone 11 Pro", "iPhone12,5": "iPhone 11 Pro Max", "iPhone12,8": "iPhone SE (2nd generation)",
+          "iPhone13,1": "iPhone 12 mini", "iPhone13,2": "iPhone 12", "iPhone13,3": "iPhone 12 Pro", "iPhone13,4": "iPhone 12 Pro Max",
+          "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13", "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+          "iPhone14,6": "iPhone SE (3rd generation)", "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
+          "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max", "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
+          "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+          "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus", "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max", "iPhone17,5": "iPhone 16e",
+          "iPhone18,3": "iPhone 17", "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max", "iPhone18,4": "iPhone Air"
+        };
+        var code = navigator.userAgent.match(/Instagram [\d.]+ \((\w+,\d+);/) || navigator.userAgent.match(/FBDV\/(\w+,\d+)/);
+        var exact = (code && CODES[code[1]]) || "";
+        var likely = exact ? [exact] : (GROUPS[screenSize()] || []);
+        if (likely.length) {
+          var first = document.createElement("optgroup"), rest = document.createElement("optgroup");
+          first.label = exact ? "Your iPhone" : "Looks like yours"; rest.label = "All iPhones";
+          [].slice.call(pick.options).forEach(function (o) { if (o.value) (likely.indexOf(o.value) >= 0 ? first : rest).appendChild(o); });
+          pick.appendChild(first); pick.appendChild(rest);
+          if (exact) { pick.value = exact; document.getElementById("f-iphone-hint").textContent = "We filled this in from your phone. Change it if it's\u00a0wrong."; }
+        }
+      }
       if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try\u00a0again.");
       form.addEventListener("submit", function (e) {
         e.preventDefault();
@@ -35,9 +79,12 @@
         // The home page waitlist only asks for an email; the /beta form asks the rest.
         if (form.elements.name && !form.elements.name.value.trim()) return show("What should we call you? First name is\u00a0fine.", form.elements.name);
         if (form.elements.country && !form.elements.country.value) return show("Pick where you live. \"Other\"\u00a0counts.", form.elements.country);
+        if (form.elements.iphone && !form.elements.iphone.value) return show("Pick your iPhone. \"Not sure\"\u00a0counts.", form.elements.iphone);
         if (form.querySelector('input[name="applepay"]') && !form.querySelector('input[name="applepay"]:checked')) return show("Pick an Apple Pay answer. \"Not sure\" is\u00a0allowed.", form.querySelector('input[name="applepay"]'));
         show(""); submit.disabled = true; submit.textContent = "Sending…";
-        fetch(form.action, { method: "POST", body: new FormData(form), headers: { Accept: "application/json" } })
+        var data = new FormData(form);
+        if (screenSize()) data.append("screen", screenSize());
+        fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" } })
           .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
           .then(function (res) {
             if (res.ok) {
