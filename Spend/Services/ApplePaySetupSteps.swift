@@ -79,20 +79,20 @@ extension ApplePaySetupSteps {
     static let shortcutURL = URL(string: "https://sortd.page/apple-pay.shortcut")!
 }
 
-// MARK: - iOS 26: the automation is built by hand (5 Oct 2026)
+// MARK: - iOS 26: the person makes the automation (5 Oct 2026)
 
 extension ApplePaySetupSteps {
     /// How this iPhone connects Apple Pay. The setup screen shows one route
     /// only, picked from the iOS it is running on.
     enum Route: Equatable {
-        /// iOS 27: the ready-made shortcut carries its own triggers.
+        /// iOS 27: the ready-made shortcut carries its own triggers; the
+        /// person switches them on.
         case shortcut
-        /// iOS 26: a shared shortcut can't carry a Wallet trigger, and on
-        /// import it loses its Amount and Merchant mappings (a library
-        /// shortcut can't take a Transaction as input; checked on the 26.5
-        /// simulator, 5 Oct 2026). So the person makes a personal automation
-        /// in Shortcuts, and Get the Shortcut and Check the Shortcut, which
-        /// can never work there, are not offered.
+        /// iOS 26: a shortcut can't bring an automation with it. The person
+        /// adds the iOS 26 shortcut (`shortcutURL(for:)`), runs it once, then
+        /// makes a Wallet automation and picks that shortcut in it. Check the
+        /// Shortcut, which sends text, is not offered: this shortcut only
+        /// takes a Wallet transaction.
         case automation
     }
 
@@ -113,28 +113,56 @@ extension ApplePaySetupSteps {
         "Steps for iOS \(major), the iOS on this iPhone"
     }
 
-    /// One page of the iOS 26 walk-through.
+    /// The file Get the Shortcut opens. iOS 26 has its own: no triggers, and
+    /// its input typed as a Wallet transaction so Amount, Merchant and Card
+    /// survive the import (`scripts/build-apple-pay-shortcut.py --ios26`).
+    static func shortcutURL(for route: Route) -> URL {
+        #if DEBUG
+        // A local copy, for simulator runs before the site has the file.
+        if let forced = ProcessInfo.processInfo.environment["SPEND_SHORTCUT_URL"], let url = URL(string: forced) { return url }
+        #endif
+        return route == .shortcut ? shortcutURL : URL(string: "https://sortd.page/apple-pay-26.shortcut")!
+    }
+
+    /// Step 3 on iOS 26.
+    static let makeAutomationStep = (title: "Tell Shortcuts when to run it",
+                                     detail: "Make one automation, so it runs each time you pay. We show you every tap.")
+
+    /// One page of a walk-through.
     struct AutomationStep: Identifiable, Equatable {
         let id: Int
         let title: String
         /// One thing to do per line, in order. The numbers match the rings
-        /// in the page's drawing (`ShortcutsMock`, route `.automation`).
+        /// in the page's drawing (`ShortcutsMock`).
         let taps: [String]
         var note: String?
     }
 
-    /// The walk-through, in the words iOS 26 itself uses (read from the
-    /// 26.0, 26.4 and 26.5 simulators' Shortcuts on 5 Oct 2026: the row is
-    /// "Create New Shortcut", not "New Blank Automation").
+    /// The iOS 26 walk-through: the automation that runs the downloaded
+    /// shortcut. Words are iOS 26's own, read from the 26.0, 26.4 and 26.5
+    /// simulators' Shortcuts on 5 Oct 2026. Short lines, one tap each:
+    /// written for someone who has never opened Shortcuts.
     static let automationSteps: [AutomationStep] = [
-        AutomationStep(id: 0, title: "Choose Wallet",
-                       taps: ["Tap Search at the bottom and type Wallet.",
-                              "Tap Wallet."],
-                       note: "See your shortcuts instead? Tap Automation at the bottom, then New Automation."),
-        AutomationStep(id: 1, title: "Tick your cards",
-                       taps: ["Tick every card you pay with.",
+        AutomationStep(id: 0, title: "Find Wallet",
+                       taps: ["Tap the Search box at the bottom. Type the word Wallet.",
+                              "Tap Wallet in the list."],
+                       note: "Don't see a Search box? Tap Automation at the bottom, then New Automation."),
+        AutomationStep(id: 1, title: "Choose your cards",
+                       taps: ["Tap each card you pay with. A tick shows beside it.",
                               "Tap Run Immediately.",
-                              "Tap Next."]),
+                              "Tap Next at the top right."]),
+        AutomationStep(id: 2, title: "Pick the Sortd shortcut",
+                       taps: ["Find the words My Shortcuts.",
+                              "Under them, tap Log Apple Pay in Sortd."],
+                       note: "That is all. Nothing to type."),
+    ]
+
+    /// The long way on iOS 26, for when the downloaded shortcut doesn't log
+    /// a tap: the action is added and filled in by hand. This is the route
+    /// Raj's own printed guide walks through.
+    static let byHandAutomationSteps: [AutomationStep] = [
+        automationSteps[0],
+        automationSteps[1],
         AutomationStep(id: 2, title: "Add Sortd's action",
                        taps: ["Tap Create New Shortcut.",
                               "Scroll down and tap Sortd.",
@@ -157,22 +185,26 @@ extension ApplePaySetupSteps {
     static let shortcutsURL = URL(string: "shortcuts://")!
 
     /// Set when the person taps "I'm Done" on the last page. Nothing tells
-    /// Sortd an automation exists, so this is only ever worded as waiting.
+    /// Sortd an automation exists, so this only ever means "they say so".
     static let automationBuiltKey = "applePayAutomationBuilt"
     /// The page the walk-through was left on, so a trip to Shortcuts and
     /// back (or a relaunch) lands where the person was.
     static let automationPageKey = "applePayAutomationPage"
 
-    /// The status card's two lines. Only "not connected" differs by route:
-    /// on iOS 26 there is no shortcut to get, and after "I'm Done" the card
-    /// waits for a real tap rather than claiming anything.
-    static func card(for status: ApplePayStatus, route: Route, saysBuilt: Bool) -> (title: String, detail: String) {
-        guard status == .notConnected, route == .automation else { return (status.title, status.detail) }
-        return saysBuilt
-            ? ("Waiting for your first tap", "Pay with Apple Pay in a shop. It shows up here and in Activity.")
-            : ("Not connected yet", "Make one small automation in Shortcuts. About 2 minutes.")
+    /// Whether setup may move on from the Apple Pay step. All three steps are
+    /// required (Raj, 5 Oct 2026: people tapped Continue past them, and step
+    /// 3 is the one that makes logging automatic). Steps 1 and 2 show as the
+    /// shortcut reaching Sortd. Step 3 can't be seen, so the person says so:
+    /// "I'm Done" on the iOS 26 pages, "I Switched Both On" on iOS 27. A real
+    /// tap proves all three.
+    static func isReady(status: ApplePayStatus, route: Route, saysBuilt: Bool) -> Bool {
+        switch status {
+        case .notConnected: false
+        case .shortcutReached: saysBuilt
+        case .tapLogged, .tapNeedsCheck: true
+        }
     }
 
-    /// Under the walk-through button once it has been finished.
-    static let automationTestLine = "The ▶ button in Shortcuts can't test this. A real tap in a shop is the test."
+    /// Under step 3 once the walk-through is finished and no tap has landed.
+    static let automationTestLine = "Now pay with Apple Pay in a shop. The purchase shows up in Sortd by itself."
 }

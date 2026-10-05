@@ -153,7 +153,7 @@ enum SetupCopy {
         return SetupFlow.usesNewFlow ? new[step] : old[step]
     }
 
-    static let applePayByHand = "About 2 minutes, once. Or do it later from Home."
+    static let applePayByHand = "About 2 minutes, once."
 
     /// The currency step once a currency other than the phone's is picked
     /// (the default line would then be untrue). Nil in the old flow.
@@ -179,8 +179,8 @@ enum SetupCopy {
         .budget: "Leave it empty if you're not sure yet.",
         .checkIn: "One short note. We'll ask about notifications later, not now.",
         .plan: "All set from your answers. Consider it Sortd.",
-        .cards: "Tap each bank you pay with. Fine to skip for now.",
-        .applePay: "About a minute, once. Or do it later from Home.",
+        .cards: "Tap each bank you pay with. Not listed? Tap Other bank.",
+        .applePay: "About a minute, once.",
     ]
 
     // MARK: Privacy lines

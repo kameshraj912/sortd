@@ -9,11 +9,12 @@ struct WalletSetupGuide: View {
     /// automation already built (the Wallet trigger and Sortd's action, both
     /// filled in) — so its three pages are just the three steps on
     /// `ApplePaySetupPanel`, drawn. `byHand` builds the whole thing from
-    /// nothing, for anyone the download doesn't work for. `automation` is the
-    /// iOS 26 personal automation (`ApplePaySetupSteps.automationSteps`),
-    /// drawn from the iOS 26.5 Shortcuts screens (5 Oct 2026); its pages are
-    /// shown by `ApplePayAutomationGuide`, not by this pager.
-    enum Route { case quick, byHand, automation }
+    /// nothing, for anyone the download doesn't work for. `automation` and
+    /// `automationByHand` are the two iOS 26 walk-throughs
+    /// (`ApplePaySetupSteps.automationSteps` / `.byHandAutomationSteps`),
+    /// drawn from the iOS 26.5 Shortcuts screens (5 Oct 2026); their pages
+    /// are shown by `ApplePayAutomationGuide`, not by this pager.
+    enum Route { case quick, byHand, automation, automationByHand }
 
     var route: Route = .quick
 
@@ -55,16 +56,17 @@ struct WalletSetupGuide: View {
              detail: "It saves by itself. Now pay with Apple Pay in a shop. The ▶ button only runs a test."),
     ]
 
-    /// The iOS 26 walk-through as pager pages, for the DEBUG screen host.
-    static let automationPages: [Page] = ApplePaySetupSteps.automationSteps.map {
-        Page(id: $0.id, title: $0.title, detail: $0.taps.joined(separator: " "))
+    /// An iOS 26 walk-through as pager pages, for the DEBUG screen host.
+    static func pages(for steps: [ApplePaySetupSteps.AutomationStep]) -> [Page] {
+        steps.map { Page(id: $0.id, title: $0.title, detail: $0.taps.joined(separator: " ")) }
     }
 
     var pages: [Page] {
         switch route {
         case .quick: Self.quickPages
         case .byHand: Self.byHandPages
-        case .automation: Self.automationPages
+        case .automation: Self.pages(for: ApplePaySetupSteps.automationSteps)
+        case .automationByHand: Self.pages(for: ApplePaySetupSteps.byHandAutomationSteps)
         }
     }
 
@@ -187,6 +189,12 @@ struct ShortcutsMock: View {
             switch step {
             case 0: walletSearch
             case 1: cardsAndRun
+            default: pickShortcut
+            }
+        case .automationByHand:
+            switch step {
+            case 0: walletSearch
+            case 1: cardsAndRun
             case 2: createAndPick
             case 3: threeBoxes
             default: showWhenRunOff
@@ -194,7 +202,24 @@ struct ShortcutsMock: View {
         }
     }
 
-    // MARK: iOS 26 route (the personal automation, built by hand)
+    // MARK: iOS 26 routes (the personal automation)
+
+    /// (3, short way) The list after Next: the downloaded shortcut sits
+    /// under "My Shortcuts".
+    private var pickShortcut: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(icon: "plus.square.on.square", iconColor: Self.blue, title: "Create New Shortcut", subtitle: nil)
+                .opacity(0.45)
+            Text("My Shortcuts")
+                .font(.subheadline.weight(.bold))
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .tapRing(ring, label: "1")
+                .padding(.top, 4)
+            row(brand: true, title: "Log Apple Pay in Sortd", subtitle: nil)
+                .tapRing(ring, label: "2")
+            Spacer(minLength: 0)
+        }
+    }
 
     /// (1) The "new automation" list, with Wallet searched for.
     private var walletSearch: some View {

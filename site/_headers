@@ -14,3 +14,8 @@
   Content-Type: application/octet-stream
   Content-Disposition: attachment; filename="Log Apple Pay in Sortd.shortcut"
   Cache-Control: public, max-age=3600
+
+/apple-pay-26.shortcut
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment; filename="Log Apple Pay in Sortd.shortcut"
+  Cache-Control: public, max-age=3600

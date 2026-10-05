@@ -15,10 +15,11 @@ import SwiftUI
 /// permission) and switching its own automation on. The by-hand build stays
 /// as a smaller, collapsed fallback for when the download fails.
 ///
-/// 5 Oct 2026: that is the iOS 27 route. On iOS 26 the shortcut can't work
-/// (`ApplePaySetupSteps.Route`), so the panel shows the steps for the iOS it
-/// is running on and nothing from the other route: there, one card that
-/// opens the walk-through (`ApplePayAutomationGuide`).
+/// 5 Oct 2026: that is the iOS 27 route. iOS 26 can't import an automation,
+/// so there the same three steps end differently (`ApplePaySetupSteps.Route`):
+/// its own shortcut file, the same first run, then a picture walk-through of
+/// making the automation (`ApplePayAutomationGuide`). The panel shows the
+/// steps for the iOS it is running on and says which.
 struct ApplePaySetupPanel: View {
     let status: ApplePayStatus
     /// How many logged taps still need a look (spec 2026-09-26, failsafes
@@ -59,12 +60,12 @@ struct ApplePaySetupPanel: View {
     private var hasNotificationTrigger: Bool { route == .shortcut }
 
     @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
-    @State private var showingAutomationGuide = false
+    /// Which walk-through is open: the short one, or the by-hand fallback.
+    @State private var guide: Guide?
 
-    /// The card's words: the status's own, except while nothing is connected
-    /// on the iOS 26 route (`ApplePaySetupSteps.card`).
-    private var card: (title: String, detail: String) {
-        ApplePaySetupSteps.card(for: status, route: route, saysBuilt: automationBuilt)
+    private enum Guide: String, Identifiable {
+        case pickShortcut, byHand
+        var id: String { rawValue }
     }
 
     var body: some View {
@@ -86,18 +87,20 @@ struct ApplePaySetupPanel: View {
                 .buttonStyle(.pressable)
                 .accessibilityHint("Opens Activity")
             }
-            switch route {
-            case .shortcut:
-                healthCheckSection
-                steps
-            case .automation:
-                automationCard
-            }
+            // Check the Shortcut sends text; the iOS 26 shortcut only takes
+            // a Wallet transaction, so the check would always say "nothing".
+            if route == .shortcut { healthCheckSection }
+            steps
             scopeNote
             nudgeLine
         }
-        .sheet(isPresented: $showingAutomationGuide) {
-            ApplePayAutomationGuide()
+        .sheet(item: $guide) { which in
+            switch which {
+            case .pickShortcut:
+                ApplePayAutomationGuide(steps: ApplePaySetupSteps.automationSteps, drawing: .automation)
+            case .byHand:
+                ApplePayAutomationGuide(steps: ApplePaySetupSteps.byHandAutomationSteps, drawing: .automationByHand)
+            }
         }
     }
 
@@ -110,53 +113,6 @@ struct ApplePaySetupPanel: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(Color.up.opacity(0.12), in: .capsule)
-    }
-
-    // MARK: - iOS 26: one card, and the walk-through behind it
-
-    private var automationCard: some View {
-        let allDone = ApplePaySetupSteps.ticked(for: status).turnOnAutomation
-        return VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("You set this up in Shortcuts")
-                    .font(.headline)
-                Text("On this iOS there is no shortcut to download. You make one small automation yourself. We show you every tap.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(ApplePaySetupSteps.automationSteps) { step in
-                    HStack(spacing: 12) {
-                        stepBadge(step.id + 1, done: allDone)
-                        Text(step.title).font(.subheadline)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Step \(step.id + 1): \(step.title)\(allDone ? ". Done." : "")")
-                }
-            }
-
-            // Done once, the button steps back: the card above is what to watch.
-            Group {
-                if automationBuilt {
-                    guideButton.buttonStyle(.glass)
-                } else {
-                    guideButton.buttonStyle(.glassProminent).tint(Color.brand)
-                }
-            }
-            .controlSize(.large)
-
-            if automationBuilt, !status.isConnected {
-                Text(ApplePaySetupSteps.automationTestLine)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .setupCard()
     }
 
     // MARK: - 14-day nudge (spec 2026-09-26, failsafes #1/#3)
@@ -258,8 +214,8 @@ struct ApplePaySetupPanel: View {
                 .symbolEffect(.bounce, value: status.isConnected)
                 .contentTransition(.symbolEffect(.replace))
             VStack(alignment: .leading, spacing: 2) {
-                Text(card.title).font(.headline)
-                Text(card.detail).font(.subheadline).foregroundStyle(.secondary)
+                Text(status.title).font(.headline)
+                Text(status.detail).font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -275,7 +231,7 @@ struct ApplePaySetupPanel: View {
             showingRawTap = true
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(status == .notConnected ? "\(card.title). \(card.detail)" : status.accessibilityLabel)
+        .accessibilityLabel(status.accessibilityLabel)
         .sheet(item: $safariPage) { page in
             SafariSheet(url: page.url).ignoresSafeArea()
         }
@@ -288,24 +244,22 @@ struct ApplePaySetupPanel: View {
 
     // MARK: - The three steps
 
+    /// Step 3 is the one that makes logging automatic. Sortd can't see it
+    /// happen, so it counts as done when a real tap lands or the person says so.
+    private var step3Done: Bool { ticked.turnOnAutomation || automationBuilt }
+
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepRow(1, ticked.addShortcut, "Add the shortcut", "Opens Shortcuts. Tap Add Shortcut.")
-            Button {
+            // The filled button is always the step to do next.
+            actionButton(shortcutOpened || ticked.addShortcut ? "Get It Again" : "Get the Shortcut",
+                         symbol: "square.and.arrow.down", bold: !ticked.addShortcut) {
                 shortcutOpened = true
-                safariPage = SafariPage(url: ApplePaySetupSteps.shortcutURL)
-            } label: {
-                Label(shortcutOpened ? "Get It Again" : "Get the Shortcut", systemImage: "square.and.arrow.down")
-                    .font(.headline)
-                    .foregroundStyle(Color.onBrand)
-                    .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+                safariPage = SafariPage(url: ApplePaySetupSteps.shortcutURL(for: route))
             }
-            .buttonStyle(.glassProminent)
-            .tint(Color.brand)
-            .controlSize(.large)
 
             // What the Safari sheet shows for the file (checked on the iOS 27
-            // simulator, 4 Oct 2026): a file card with "Open in Shortcuts".
+            // and 26.5 simulators): a file card with "Open in Shortcuts".
             Text("A page opens. Tap Open in \u{201C}Shortcuts\u{201D}.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -314,61 +268,84 @@ struct ApplePaySetupPanel: View {
             Divider()
 
             stepRow(2, ticked.runAndAllow, ApplePaySetupSteps.runStep.title, ApplePaySetupSteps.runStep.detail)
-            Button {
-                if let url = URL(string: "shortcuts://") { openURL(url) }
-            } label: {
-                Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-                    .font(.headline)
-                    .foregroundStyle(Color.ink)
-                    .frame(maxWidth: .infinity)
+            actionButton("Open Shortcuts", symbol: "arrow.up.forward.app", bold: false) {
+                openURL(ApplePaySetupSteps.shortcutsURL)
             }
-            .buttonStyle(.glass)
-            .controlSize(.large)
 
             Divider()
 
-            let automation = ApplePaySetupSteps.automationStep(notificationTrigger: hasNotificationTrigger)
-            stepRow(3, ticked.turnOnAutomation, automation.title, automation.detail)
+            switch route {
+            case .shortcut:
+                let automation = ApplePaySetupSteps.automationStep(notificationTrigger: true)
+                stepRow(3, step3Done, automation.title, automation.detail)
 
-            DisclosureGroup("Show me how", isExpanded: $showingHow) {
-                Group {
-                    if #available(iOS 27.0, *) {
-                        WalletSetupGuide(route: .quick)
-                    } else {
-                        legacySteps
+                DisclosureGroup("Show me how", isExpanded: $showingHow) {
+                    WalletSetupGuide(route: .quick)
+                        .padding(.top, 8)
+                }
+                .font(.subheadline.weight(.semibold))
+                .tint(Color.ink)
+
+                // The switches can't be seen from here, so the person says
+                // when they are on. Setup doesn't move on without it.
+                if ticked.runAndAllow, !step3Done {
+                    actionButton("I Switched Both On", symbol: "checkmark", bold: true) {
+                        automationBuilt = true
                     }
                 }
-                .padding(.top, 8)
-            }
-            .font(.subheadline.weight(.semibold))
-            .tint(Color.ink)
 
-            DisclosureGroup("Build it by hand instead", isExpanded: $showingByHand) {
-                WalletSetupGuide(route: .byHand)
-                    .padding(.top, 8)
+                DisclosureGroup("Build it by hand instead", isExpanded: $showingByHand) {
+                    WalletSetupGuide(route: .byHand)
+                        .padding(.top, 8)
+                }
+                .font(.subheadline.weight(.semibold))
+                .tint(Color.ink)
+
+            case .automation:
+                // iOS 26: nothing to switch on. The person makes the
+                // automation; the pictures are one tap away.
+                let make = ApplePaySetupSteps.makeAutomationStep
+                stepRow(3, step3Done, make.title, make.detail)
+                actionButton(automationBuilt ? "Show Me Again" : "Show Me How", symbol: "hand.tap",
+                             bold: ticked.runAndAllow && !step3Done) {
+                    guide = .pickShortcut
+                }
+
+                if automationBuilt, !ticked.turnOnAutomation {
+                    Text(ApplePaySetupSteps.automationTestLine)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // The fallback, only once the short way has been tried.
+                    Button("Paid and nothing showed up? Build it by hand") {
+                        guide = .byHand
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                    .minTapTarget(growsBy: 24)
+                }
             }
-            .font(.subheadline.weight(.semibold))
-            .tint(Color.ink)
         }
         .setupCard()
     }
 
-    /// Plain text before iOS 27: the picture guide is checked against the
-    /// iOS 27 screens only (`WalletSetupGuide`'s own note).
-    private var legacySteps: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Self.legacyStepLines, id: \.self) { line in
-                Text(line).font(.footnote).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    /// A full-width step button: filled when it is the next thing to do.
+    @ViewBuilder
+    private func actionButton(_ title: String, symbol: String, bold: Bool, action: @escaping () -> Void) -> some View {
+        let label = Label(title, systemImage: symbol)
+            .font(.headline)
+            .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+        if bold {
+            Button(action: action) { label.foregroundStyle(Color.onBrand) }
+                .buttonStyle(.glassProminent)
+                .tint(Color.brand)
+                .controlSize(.large)
+        } else {
+            Button(action: action) { label.foregroundStyle(Color.ink) }
+                .buttonStyle(.glass)
+                .controlSize(.large)
         }
     }
-
-    static let legacyStepLines = [
-        "Add the shortcut: opens Shortcuts, tap Add Shortcut.",
-        "Run it once. Tap Allow when Shortcuts asks.",
-        "Tap › next to “tapped”, then switch on Automation.",
-    ]
 
     /// One numbered step. Ticks itself green once `done` is true — steps 1
     /// and 3 can't be seen on their own, so `ticked` (`ApplePaySetupSteps`)
@@ -385,18 +362,6 @@ struct ApplePaySetupPanel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(n): \(title). \(detail)\(done ? ". Done." : "")")
-    }
-
-    private var guideButton: some View {
-        Button {
-            showingAutomationGuide = true
-        } label: {
-            Label(automationBuilt ? "Go Through the Steps Again" : "Show Me Step by Step",
-                  systemImage: "list.number")
-                .font(.headline)
-                .foregroundStyle(automationBuilt ? Color.ink : Color.onBrand)
-                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
-        }
     }
 
     /// The number in its circle, or a green tick once the step is done.

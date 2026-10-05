@@ -2,10 +2,8 @@ import Testing
 import Foundation
 @testable import Spend
 
-/// The iOS 26 route (`ApplePaySetupSteps.Route.automation`): what the status
-/// card says while nothing is connected, and the walk-through's words. On
-/// iOS 26 the ready-made shortcut can't work, so nothing here may send
-/// anyone to it.
+/// The iOS 26 route (`ApplePaySetupSteps.Route.automation`): its own shortcut
+/// file, the walk-through's words, and when setup may move on.
 struct ApplePayAutomationRouteTests {
     private let when = Date(timeIntervalSince1970: 1_790_000_000)
 
@@ -14,76 +12,58 @@ struct ApplePayAutomationRouteTests {
         #expect(ApplePaySetupSteps.versionLine(major: 27) == "Steps for iOS 27, the iOS on this iPhone")
     }
 
-    /// Before the walk-through: no mention of a shortcut to get.
-    @Test func notConnectedOnIOS26PointsAtTheAutomation() {
-        let card = ApplePaySetupSteps.card(for: .notConnected, route: .automation, saysBuilt: false)
-        #expect(card.title == "Not connected yet")
-        #expect(card.detail == "Make one small automation in Shortcuts. About 2 minutes.")
-        #expect(!card.detail.contains("Get the Shortcut"))
+    /// Each iOS gets the file that works on it: iOS 27's carries triggers
+    /// iOS 26 can't import, and iOS 26's is typed for a Wallet transaction.
+    @Test func eachRouteDownloadsItsOwnShortcut() {
+        #expect(ApplePaySetupSteps.shortcutURL(for: .shortcut).absoluteString == "https://sortd.page/apple-pay.shortcut")
+        #expect(ApplePaySetupSteps.shortcutURL(for: .automation).absoluteString == "https://sortd.page/apple-pay-26.shortcut")
     }
 
-    /// After "I'm Done" Sortd still knows nothing, so it waits; it never
-    /// says connected.
-    @Test func afterTheWalkThroughTheCardOnlyWaits() {
-        let card = ApplePaySetupSteps.card(for: .notConnected, route: .automation, saysBuilt: true)
-        #expect(card.title == "Waiting for your first tap")
-        #expect(!card.title.lowercased().contains("connected"))
-        #expect(card.detail.contains("Pay with Apple Pay in a shop"))
-    }
-
-    /// iOS 27 keeps the status's own words, whatever the "built" flag says.
-    @Test func theShortcutRouteKeepsItsOwnWords() {
-        for built in [false, true] {
-            let card = ApplePaySetupSteps.card(for: .notConnected, route: .shortcut, saysBuilt: built)
-            #expect(card.title == ApplePayStatus.notConnected.title)
-            #expect(card.detail == ApplePayStatus.notConnected.detail)
+    /// Both files are served under the name Check the Shortcut runs, and the
+    /// iOS 26 one really is in the site folder that gets deployed.
+    @Test func theSiteServesBothFilesUnderTheShortcutsName() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let headers = try String(contentsOf: root.appendingPathComponent("site/_headers"), encoding: .utf8)
+        for path in ["/apple-pay.shortcut", "/apple-pay-26.shortcut"] {
+            let block = try #require(headers.range(of: path + "\n"))
+            let rest = headers[block.upperBound...].prefix(220)
+            #expect(rest.contains("filename=\"\(ApplePayHealthCheck.shortcutName).shortcut\""), "\(path)")
         }
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("site/apple-pay-26.shortcut").path))
     }
 
-    /// A real event always wins: once something has arrived, both routes
-    /// show the status itself.
-    @Test func aRealTapReadsTheSameOnBothRoutes() {
-        let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds",
-                                           amount: Decimal(string: "4.50")!, currency: "AUD")
-        for status in [tap, .shortcutReached(when), .tapNeedsCheck(date: when)] {
-            for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
-                let card = ApplePaySetupSteps.card(for: status, route: route, saysBuilt: true)
-                #expect(card.title == status.title)
-                #expect(card.detail == status.detail)
-            }
-        }
-    }
-
-    @Test func theWalkThroughHasFivePagesInOrder() {
+    @Test func theShortWalkThroughHasThreePagesInOrder() {
         let steps = ApplePaySetupSteps.automationSteps
-        #expect(steps.map(\.id) == [0, 1, 2, 3, 4])
+        #expect(steps.map(\.id) == [0, 1, 2])
         #expect(steps.allSatisfy { !$0.taps.isEmpty })
-        #expect(WalletSetupGuide.automationPages.map(\.title) == steps.map(\.title))
+        #expect(WalletSetupGuide(route: .automation).pages.map(\.title) == steps.map(\.title))
     }
 
-    /// The words are iOS 26's own. "New Blank Automation" is not on any
-    /// iOS 26 screen (it is "Create New Shortcut"), and the download and its
-    /// check don't exist on this route.
-    @Test func theWalkThroughUsesIOS26sOwnWords() {
+    /// The short way never asks for typing into boxes: the downloaded
+    /// shortcut already holds Amount, Merchant and Card.
+    @Test func theShortWalkThroughPicksTheShortcutAndFillsNothing() {
         let all = ApplePaySetupSteps.automationSteps
             .flatMap { $0.taps + [$0.title, $0.note ?? ""] }
             .joined(separator: " ")
-        #expect(all.contains("Create New Shortcut"))
         #expect(all.contains("Run Immediately"))
-        #expect(all.contains("Log Wallet Tap"))
-        #expect(all.contains("Show When Run"))
-        #expect(!all.contains("New Blank Automation"))
-        #expect(!all.contains("Get the Shortcut"))
-        #expect(!all.contains("Check the Shortcut"))
+        #expect(all.contains("My Shortcuts"))
+        #expect(all.contains(ApplePayHealthCheck.shortcutName))
+        #expect(!all.contains("Shortcut Input"))
+        #expect(!all.contains("Create New Shortcut"))
     }
 
-    /// The three boxes are named as Sortd's action shows them, and filled
-    /// with what Shortcuts calls each part of the tap.
-    @Test func theThreeBoxesMatchTheActionsOwnNames() {
-        let boxes = ApplePaySetupSteps.automationSteps[3].taps.joined(separator: " ")
-        for word in ["Amount", "Shop", "Merchant", "Card", "Card or Pass", "Shortcut Input"] {
-            #expect(boxes.contains(word), "\(word)")
+    /// The by-hand fallback uses iOS 26's own words. "New Blank Automation"
+    /// is not on any iOS 26 screen (it is "Create New Shortcut").
+    @Test func theByHandWalkThroughUsesIOS26sOwnWords() {
+        let steps = ApplePaySetupSteps.byHandAutomationSteps
+        #expect(steps.map(\.id) == [0, 1, 2, 3, 4])
+        #expect(WalletSetupGuide(route: .automationByHand).pages.count == 5)
+        let all = steps.flatMap { $0.taps + [$0.title, $0.note ?? ""] }.joined(separator: " ")
+        for words in ["Create New Shortcut", "Run Immediately", "Log Wallet Tap", "Show When Run",
+                      "Shortcut Input", "Merchant", "Card or Pass"] {
+            #expect(all.contains(words), "\(words)")
         }
+        #expect(!all.contains("New Blank Automation"))
     }
 
     @Test func theStartButtonOpensANewAutomation() {
@@ -91,11 +71,43 @@ struct ApplePayAutomationRouteTests {
         #expect(ApplePaySetupSteps.shortcutsURL.scheme == "shortcuts")
     }
 
-    /// The setup screen's own line is honest about the time on each route.
-    @Test func theSetupLineSaysTwoMinutesOnIOS26() {
-        guard SetupFlow.usesNewFlow else { return }
-        #expect(SetupCopy.line(.applePay, route: .automation) == "About 2 minutes, once. Or do it later from Home.")
-        #expect(SetupCopy.line(.applePay, route: .shortcut) == "About a minute, once. Or do it later from Home.")
+    // MARK: When Continue unlocks (the step is required)
+
+    @Test func nothingConnectedNeverUnlocksContinue() {
+        for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
+            for built in [false, true] {
+                #expect(!ApplePaySetupSteps.isReady(status: .notConnected, route: route, saysBuilt: built))
+            }
+        }
+    }
+
+    /// The first run is not enough on either iOS: step 3 is the one that
+    /// makes logging automatic, and the person has to say it is done.
+    @Test func stepThreeIsNeededOnBothRoutes() {
+        for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
+            #expect(!ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: route, saysBuilt: false))
+            #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: route, saysBuilt: true))
+        }
+    }
+
+    /// A real tap proves everything, whatever was or wasn't ticked off.
+    @Test func aRealTapAlwaysUnlocksContinue() {
+        let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds",
+                                           amount: Decimal(string: "4.50")!, currency: "AUD")
+        for status in [tap, .tapNeedsCheck(date: when)] {
+            for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
+                #expect(ApplePaySetupSteps.isReady(status: status, route: route, saysBuilt: false))
+            }
+        }
+    }
+
+    /// The setup screen's own line is honest about the time on each route,
+    /// and no longer offers "later": the step is required.
+    @Test func theSetupLineSaysTheTimeAndNeverLater() throws {
+        try #require(SetupFlow.usesNewFlow)
+        #expect(SetupCopy.line(.applePay, route: .automation) == "About 2 minutes, once.")
+        #expect(SetupCopy.line(.applePay, route: .shortcut) == "About a minute, once.")
+        #expect(SetupCopy.line(.cards, route: .shortcut)?.contains("skip") == false)
         #expect(SetupCopy.line(.welcome, route: .automation) == SetupCopy.line(.welcome, route: .shortcut))
     }
 }
