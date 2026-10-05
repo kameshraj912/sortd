@@ -2,6 +2,8 @@
 
 An iPhone app that logs your spending by itself. Pay with Apple Pay and Sortd writes it down. No bank login, and your purchases stay on your phone.
 
+[![Build and test](https://github.com/kameshraj912/sortd/actions/workflows/swift.yml/badge.svg)](https://github.com/kameshraj912/sortd/actions/workflows/swift.yml)
+
 **Site:** [sortd.page](https://sortd.page) · **Status:** TestFlight beta (build 1.0) · **Price:** free
 
 <p>
@@ -45,18 +47,14 @@ A few design choices worth a look:
 - **Backup without a sync server.** The backup is one encrypted record in the user's own private iCloud.
 - **Gates in scripts, not in habits.** Git hooks block secrets, debug flags outside `#if DEBUG`, and direct pushes to `main`. See [`scripts/`](scripts/).
 
-## How it was made: me and Claude Code
+## How I built it
 
-I built Sortd with [Claude Code](https://claude.com/claude-code), and the commit history shows it: nearly every commit is co-authored with Claude. I have left that history as it is.
+I designed, specced and shipped Sortd myself, with AI coding agents like [Claude Code](https://claude.com/claude-code) assisting with the code.
 
-What I did:
-
-- Decided what to build and what to leave out, and approved every spec in [`docs/specs/`](docs/specs/) before any code was written.
-- Set up the pipeline the work runs through: ten agents with one job each (builder, test writer, code reviewer, abuse tester, UI tester and more), fixed scripts, and gates that only I can open. The design is in [`docs/AgentPipeline.md`](docs/AgentPipeline.md) and the agents are in [`.claude/agents/`](.claude/agents/).
-- Tested each build on my own phone, triaged the bug hunts in [`docs/`](docs/), and decided what got merged.
-- Ran the release: the Apple Developer account, signing, TestFlight, the App Store record, and the site.
-
-What Claude did: wrote most of the Swift, TypeScript and tests, working from those specs and inside those gates.
+- **Product.** I decided what to build and what to leave out, and wrote or approved every spec in [`docs/specs/`](docs/specs/) before any code was written.
+- **Engineering process.** I set up the pipeline the work runs through: ten agents with one job each (builder, test writer, code reviewer, abuse tester, UI tester and more), fixed build and test scripts, and merge gates only I can open. The design is in [`docs/AgentPipeline.md`](docs/AgentPipeline.md).
+- **Testing.** I tested every build on my own phone, ran the bug hunts in [`docs/`](docs/), and decided what got merged.
+- **Release.** I ran the Apple Developer account, signing, TestFlight, the App Store record, the account Worker and the website.
 
 ## Run it
 
