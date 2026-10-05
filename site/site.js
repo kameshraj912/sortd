@@ -23,7 +23,8 @@
       var ok = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); };
       var show = function (msg, field) {
         err.textContent = msg; err.hidden = !msg;
-        [email, form.elements.name, form.elements.country, form.elements.iphone].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
+        [email, form.elements.name, form.elements.country, pickBtn].forEach(function (f) { if (f) f.removeAttribute("aria-invalid"); });
+        if (field === form.elements.iphone && pickBtn) field = pickBtn;
         if (field) { field.setAttribute("aria-invalid", "true"); field.focus(); }
       };
       // Turnstile tokens are single-use: after a failed submit, clear it so the next try gets a fresh one.
@@ -61,8 +62,8 @@
           "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus", "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max", "iPhone17,5": "iPhone 16e",
           "iPhone18,3": "iPhone 17", "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max", "iPhone18,4": "iPhone Air"
         };
-        var code = navigator.userAgent.match(/Instagram [\d.]+ \((\w+,\d+);/) || navigator.userAgent.match(/FBDV\/(\w+,\d+)/);
-        var exact = (code && CODES[code[1]]) || "";
+        var named = navigator.userAgent.match(/Instagram [\d.]+ \((\w+,\d+);/) || navigator.userAgent.match(/FBDV\/(\w+,\d+)/);
+        var exact = (named && CODES[named[1]]) || "";
         var likely = exact ? [exact] : (GROUPS[screenSize()] || []);
         if (likely.length) {
           var first = document.createElement("optgroup"), rest = document.createElement("optgroup");
@@ -71,6 +72,80 @@
           pick.appendChild(first); pick.appendChild(rest);
           if (exact) { pick.value = exact; document.getElementById("f-iphone-hint").textContent = "We filled this in from your phone. Change it if it's\u00a0wrong."; }
         }
+      }
+      // The native menu lists every iPhone and opens as tall as the screen. Swap it for a short
+      // list that scrolls. The <select> stays in the form, hidden, and still holds the answer, so
+      // sending and checking the form work the same. With no JavaScript the <select> is used as is.
+      var pickBtn = null;
+      if (pick) {
+        var box = document.createElement("div"), list = document.createElement("ul"), opts = [], active = -1, jump = "", jumpAt = 0;
+        box.className = "pick"; list.className = "pick-list"; list.id = "f-iphone-list"; list.setAttribute("role", "listbox"); list.hidden = true;
+        pickBtn = document.createElement("button"); pickBtn.type = "button"; pickBtn.className = "pick-btn"; pickBtn.id = "f-iphone-btn";
+        pickBtn.setAttribute("role", "combobox"); pickBtn.setAttribute("aria-haspopup", "listbox"); pickBtn.setAttribute("aria-controls", list.id);
+        pickBtn.setAttribute("aria-expanded", "false"); pickBtn.setAttribute("aria-describedby", "f-iphone-hint");
+        var addOption = function (o) {
+          if (!o.value) return;
+          var li = document.createElement("li"); li.setAttribute("role", "option"); li.id = "f-iphone-o" + opts.length; li.textContent = o.value;
+          list.appendChild(li); opts.push(li);
+        };
+        [].slice.call(pick.children).forEach(function (c) {
+          if (c.tagName !== "OPTGROUP") return addOption(c);
+          var g = document.createElement("li"); g.className = "pick-group"; g.setAttribute("role", "presentation"); g.textContent = c.label; list.appendChild(g);
+          [].slice.call(c.children).forEach(addOption);
+        });
+        var paint = function () {
+          pickBtn.textContent = pick.value || "Choose one";
+          opts.forEach(function (li) { li.setAttribute("aria-selected", li.textContent === pick.value ? "true" : "false"); });
+        };
+        var setActive = function (i) {
+          if (!opts.length) return;
+          active = Math.max(0, Math.min(opts.length - 1, i));
+          opts.forEach(function (li, n) { li.classList.toggle("is-active", n === active); });
+          pickBtn.setAttribute("aria-activedescendant", opts[active].id);
+          // Scroll inside the list only, so the page does not jump.
+          var li = opts[active];
+          if (li.offsetTop < list.scrollTop) list.scrollTop = li.offsetTop - 6;
+          else if (li.offsetTop + li.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = li.offsetTop + li.offsetHeight - list.clientHeight + 6;
+        };
+        var isOpen = function () { return !list.hidden; };
+        // byKey: opened from the keyboard, so a row is highlighted to move from. Opened by a tap or
+        // click, only an answer already given is highlighted, so no row looks picked for them.
+        var openList = function (byKey) {
+          list.hidden = false; pickBtn.setAttribute("aria-expanded", "true"); list.scrollTop = 0;
+          // If the field sits low on the screen, bring the whole list into view.
+          var gap = list.getBoundingClientRect().bottom + 16 - window.innerHeight;
+          if (gap > 0) window.scrollBy({ top: gap, behavior: "smooth" });
+          var at = -1; opts.forEach(function (li, n) { if (li.textContent === pick.value) at = n; });
+          if (at >= 0 || byKey) return setActive(at < 0 ? 0 : at);
+          active = -1; opts.forEach(function (li) { li.classList.remove("is-active"); }); pickBtn.removeAttribute("aria-activedescendant");
+        };
+        var closeList = function () { list.hidden = true; pickBtn.setAttribute("aria-expanded", "false"); pickBtn.removeAttribute("aria-activedescendant"); };
+        var choose = function (i) { pick.value = opts[i].textContent; paint(); closeList(); pickBtn.removeAttribute("aria-invalid"); };
+        pickBtn.addEventListener("click", function (e) { if (isOpen()) closeList(); else openList(e.detail === 0); });
+        pickBtn.addEventListener("blur", closeList);
+        pickBtn.addEventListener("keydown", function (e) {
+          var k = e.key;
+          if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); if (!isOpen()) openList(true); else setActive(active + (k === "ArrowDown" ? 1 : -1)); }
+          else if (k === "Home" && isOpen()) { e.preventDefault(); setActive(0); }
+          else if (k === "End" && isOpen()) { e.preventDefault(); setActive(opts.length - 1); }
+          else if ((k === "Enter" || k === " ") && isOpen()) { e.preventDefault(); if (active >= 0) choose(active); }
+          else if (k === "Escape" && isOpen()) { e.preventDefault(); closeList(); }
+          else if (k.length === 1 && k !== " " && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            // Type to jump: "15" goes to the first iPhone 15, "air" to iPhone Air.
+            var now = Date.now(); jump = (now - jumpAt > 700 ? "" : jump) + k.toLowerCase(); jumpAt = now;
+            for (var n = 0; n < opts.length; n++) {
+              var t = opts[n].textContent.toLowerCase();
+              if (t.indexOf(jump) === 0 || t.replace("iphone ", "").indexOf(jump) === 0) { if (!isOpen()) openList(true); setActive(n); break; }
+            }
+          }
+        });
+        // Keep the keyboard focus on the button while the list is tapped or scrolled.
+        list.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        list.addEventListener("click", function (e) { var i = opts.indexOf(e.target); if (i >= 0) choose(i); });
+        document.addEventListener("pointerdown", function (e) { if (isOpen() && !box.contains(e.target)) closeList(); });
+        var lab = form.querySelector('label[for="f-iphone"]'); if (lab) lab.htmlFor = pickBtn.id;
+        pick.parentNode.insertBefore(box, pick); box.appendChild(pickBtn); box.appendChild(list); box.appendChild(pick);
+        pick.hidden = true; paint();
       }
       if (/[?&]error=1/.test(location.search)) show("That didn't go through. Please try\u00a0again.");
       form.addEventListener("submit", function (e) {
