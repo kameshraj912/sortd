@@ -102,9 +102,79 @@ struct CardTests {
 }
 
 struct LocalCurrencyTests {
+    private func currency(_ zone: String, phone: String = "en_AU") -> String {
+        LocalCurrency.current(timeZone: TimeZone(identifier: zone)!, locale: Locale(identifier: phone))
+    }
+
     @Test func followsTimeZone() {
         #expect(LocalCurrency.current(timeZone: TimeZone(identifier: "Australia/Melbourne")!) == "AUD")
         #expect(LocalCurrency.current(timeZone: TimeZone(identifier: "Asia/Singapore")!) == "SGD")
+        #expect(currency("Asia/Kuala_Lumpur") == "MYR")
+    }
+
+    /// The bug this fixes: an Australian iPhone abroad used to say AUD
+    /// everywhere outside Australia, Singapore and Kuala Lumpur.
+    @Test func followsTimeZoneAnywhere() {
+        #expect(currency("Asia/Tokyo") == "JPY")
+        #expect(currency("Europe/London") == "GBP")
+        #expect(currency("Europe/Paris") == "EUR")
+        #expect(currency("America/New_York") == "USD")
+        #expect(currency("Asia/Bangkok") == "THB")
+        #expect(currency("Pacific/Auckland") == "NZD")
+        #expect(currency("Asia/Kolkata") == "INR")
+        // A phone bought elsewhere reads the same: the zone wins, not the region.
+        #expect(currency("Asia/Tokyo", phone: "en_US") == "JPY")
+        #expect(currency("Australia/Perth", phone: "en_SG") == "AUD")
+    }
+
+    /// iPhones still report some zones by their old names.
+    @Test func readsOldZoneNames() {
+        #expect(currency("Asia/Calcutta") == "INR")
+        #expect(currency("Europe/Kiev") == "UAH")
+        #expect(currency("Asia/Saigon") == "VND")
+        #expect(currency("America/Montreal") == "CAD")
+        #expect(currency("Asia/Rangoon") == "MMK")
+    }
+
+    /// Places that share another country's clock keep their own money.
+    @Test func sharedClocksKeepTheirOwnCurrency() {
+        #expect(currency("Europe/Zurich") == "CHF")
+        #expect(currency("Europe/Vaduz") == "CHF")
+        #expect(currency("America/Toronto") == "CAD")
+        #expect(currency("America/Nassau") == "BSD")
+        #expect(currency("America/Puerto_Rico") == "USD")
+    }
+
+    /// A currency with no daily rate is still the honest answer.
+    @Test func currencyWithoutARateIsStillReturned() {
+        #expect(currency("Asia/Ho_Chi_Minh") == "VND")
+        #expect(currency("Asia/Dubai") == "AED")
+        #expect(!Money.supported.contains("VND"))
+    }
+
+    /// A new card only starts in a currency the app has rates for.
+    @Test func newCardNeverStartsInACurrencyWithoutARate() {
+        let tokyo = TimeZone(identifier: "Asia/Tokyo")!, dubai = TimeZone(identifier: "Asia/Dubai")!
+        #expect(LocalCurrency.forNewCard(timeZone: tokyo, home: "AUD") == "JPY")
+        #expect(LocalCurrency.forNewCard(timeZone: dubai, home: "AUD") == "AUD")
+    }
+
+    /// No single country for the zone: the phone's region decides, as before.
+    @Test func zoneWithoutACountryUsesThePhonesRegion() {
+        #expect(currency("UTC", phone: "en_AU") == "AUD")
+        #expect(currency("GMT", phone: "en_GB") == "GBP")
+        #expect(currency("Etc/GMT+8", phone: "en_US") == "USD")
+    }
+
+    /// Every zone name an iPhone can report is either in the table or has no
+    /// single country. A new unknown name here means the table needs rebuilding
+    /// (`scripts/build-timezone-regions.py`).
+    @Test func everyKnownZoneIsCovered() {
+        let noCountry: Set<String> = ["GMT", "Antarctica/South_Pole"]
+        let missing = TimeZone.knownTimeZoneIdentifiers.filter {
+            TimeZoneRegions.region(for: $0) == nil && !noCountry.contains($0)
+        }
+        #expect(missing.isEmpty, "not in TimeZoneRegions: \(missing)")
     }
 }
 

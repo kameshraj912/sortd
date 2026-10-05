@@ -108,15 +108,33 @@ nonisolated enum AmountParser {
     private static func abs(_ d: Decimal) -> Decimal { d < 0 ? -d : d }
 }
 
-/// Where Raj is decides the purchase currency. The phone sets its time zone
-/// automatically, so Melbourne → AUD and Singapore → SGD with no input.
+/// Where the phone is decides the purchase currency. The phone sets its time
+/// zone automatically, so Melbourne → AUD, Singapore → SGD and Tokyo → JPY
+/// with no input, wherever the phone was bought. Until 6 Oct 2026 only
+/// Australia, Singapore and Kuala Lumpur were read from the time zone, and
+/// everywhere else fell back to the phone's region: an Australian iPhone in
+/// Tokyo saved ¥1,200 as A$1,200.
+///
+/// A zone with no single country (UTC, or a name newer than
+/// `TimeZoneRegions`) uses the phone's region, as before. The answer can be a
+/// currency with no daily rate (VND, AED): that purchase waits for a rate and
+/// stays out of totals, the same as one whose text names such a currency,
+/// which is better than counting it in the wrong money.
 enum LocalCurrency {
-    static func current(timeZone: TimeZone = .current) -> String {
-        let id = timeZone.identifier
-        if id.hasPrefix("Australia/") { return "AUD" }
-        if id == "Asia/Singapore" { return "SGD" }
-        if id == "Asia/Kuala_Lumpur" { return "MYR" }
-        return Locale.current.currency?.identifier ?? "AUD"
+    static func current(timeZone: TimeZone = .current, locale: Locale = .current) -> String {
+        if let region = TimeZoneRegions.region(for: timeZone.identifier),
+           let code = Locale(identifier: "und_\(region)").currency?.identifier {
+            return code
+        }
+        return locale.currency?.identifier ?? Money.home
+    }
+
+    /// The currency a new card starts with: the local one when the app has
+    /// daily rates for it, else the home currency. A card's currency is
+    /// picked from `Money.supported`, so it can never be VND or AED.
+    static func forNewCard(timeZone: TimeZone = .current, locale: Locale = .current, home: String = Money.home) -> String {
+        let local = current(timeZone: timeZone, locale: locale)
+        return Money.supported.contains(local) ? local : home
     }
 }
 
