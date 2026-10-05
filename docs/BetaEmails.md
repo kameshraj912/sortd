@@ -1,7 +1,7 @@
 # Beta emails
 
-This is an expression-of-interest list. The beta isn't open yet; when it is, you send each
-person the TestFlight link.
+The beta is open (since 5 Oct 2026) and the site says so. Each person who signs up gets the
+TestFlight link from you by email; the steps are under "When the beta opens" below.
 
 People sign up at https://sortd.page/beta. The form posts to the site's Worker
 (`site/worker/index.js`), which emails each sign-up to the address in the `BETA_TO` secret,
