@@ -710,6 +710,32 @@ h1, h2, h3, .panel-title { text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) { .done-tick { animation: none; } }
 .beta-form select[aria-invalid="true"] { border-color: var(--orange); }
 
+/* "Which iPhone?": site.js swaps the native menu (it opens as tall as the screen) for a short
+   list that scrolls. The button looks like the other dropdown; the <select> stays, hidden. */
+.beta-form select[hidden] { display: none; }
+.beta-form .pick { position: relative; min-width: 0; }
+.beta-form .pick-btn {
+  display: block; width: 100%; min-height: 50px; padding: 0 36px 0 14px; font: inherit; font-size: 17px; color: var(--text); text-align: left;
+  background-color: var(--page); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; -webkit-appearance: none; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 22px, calc(100% - 15px) 22px; background-size: 5px 5px; background-repeat: no-repeat;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.beta-form .pick-btn:focus { outline: 3px solid var(--violet); outline-offset: 1px; border-color: transparent; }
+.beta-form .pick-btn[aria-invalid="true"] { border-color: var(--orange); }
+.beta-form .pick-list {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px; list-style: none;
+  height: 252px; overflow-y: auto; overscroll-behavior: contain; background: var(--page); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+}
+.beta-form .pick-list[hidden] { display: none; }
+.beta-form .pick-list li { margin: 0; }
+.beta-form .pick-list [role="option"] { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 12px; border-radius: 8px; font-size: 17px; color: var(--text); cursor: pointer; }
+.beta-form .pick-list [role="option"].is-active { background: var(--line); }
+@media (hover: hover) { .beta-form .pick-list [role="option"]:hover { background: var(--line); } }
+.beta-form .pick-list [role="option"][aria-selected="true"] { font-weight: 600; color: var(--ink); }
+.beta-form .pick-list [role="option"][aria-selected="true"]::after { content: "\2713"; }
+.beta-form .pick-group { padding: 10px 12px 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
 /* ---------- One layout per device ---------- */
 /* iPad landscape and small Mac windows: the hero is two columns, so the
    headline gets a size that keeps each sentence on its own line. */
