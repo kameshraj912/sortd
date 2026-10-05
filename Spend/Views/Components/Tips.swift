@@ -32,7 +32,7 @@ nonisolated struct TipCopy: Identifiable, Sendable {
     let symbol: String
 
     static let applePay = TipCopy(id: "apple_pay", title: "Log Apple Pay by itself",
-                                  message: "Set up the Shortcut once and every tap lands here on its own.",
+                                  message: "Set it up once in Shortcuts and every tap lands here on its own.",
                                   symbol: "wave.3.right")
     static let swipe = TipCopy(id: "swipe", title: "Swipe left to change a category or delete",
                                message: "Swipe a purchase to change its category or delete it.",

@@ -35,6 +35,22 @@ only produces an error.
 
 Then sign it:
     shortcuts sign --mode anyone --input <out> --output site/apple-pay.shortcut
+
+iOS 26 (5 Oct 2026): `--ios26` builds the second file, `site/apple-pay-26.shortcut`.
+iOS 26 can't import an automation with a shortcut, so the file carries no
+triggers; the person makes a Wallet automation and picks this shortcut in it.
+With no trigger to say the input is a transaction, iOS 26 dropped the three
+property mappings on import (every box came back as plain "Shortcut Input").
+Two things keep them, checked on the iOS 26.5 simulator (Amount, Merchant and
+Card or Pass all survive, and a first run with Allow reaches Sortd):
+  - the shortcut accepts Wallet transactions as its input
+    (`WFWalletTransactionContentItem`, a type Shortcuts' own editor never offers);
+  - each variable is coerced to that type before its property is read.
+Not yet proven on a real iPhone with cards: that the automation hands the
+transaction to the shortcut it runs.
+
+    python3 scripts/build-apple-pay-shortcut.py --ios26
+    shortcuts sign --mode anyone --input <out> --output site/apple-pay-26.shortcut
 """
 
 import argparse, plistlib, pathlib, pprint, uuid
@@ -45,8 +61,15 @@ parser = argparse.ArgumentParser(description="Build the Sortd Apple Pay shortcut
 parser.add_argument("--notification-app", nargs=2, metavar=("BUNDLE_ID", "NAME"),
                     default=["com.apple.Passbook", "Wallet"],
                     help="the app whose notifications the second trigger watches (default: Wallet)")
+parser.add_argument("--ios26", action="store_true",
+                    help="build the iOS 26 file: no triggers, input typed as a Wallet transaction")
 args = parser.parse_args()
 NOTIFICATION_APP, NOTIFICATION_APP_NAME = args.notification_app
+IOS26 = args.ios26
+if IOS26:
+    OUT = OUT.parent / "ios26" / OUT.name
+
+TRANSACTION = "WFWalletTransactionContentItem"
 
 LOG_UUID = str(uuid.uuid4()).upper()
 
@@ -70,12 +93,11 @@ def token(attachment: dict) -> dict:
 
 def input_property(name: str) -> dict:
     """Shortcut Input → one property of the Wallet transaction."""
-    return token({
-        "Type": "ExtensionInput",
-        "Aggrandizements": [
-            {"Type": "WFPropertyVariableAggrandizement", "PropertyName": name}
-        ],
-    })
+    read = [{"Type": "WFPropertyVariableAggrandizement", "PropertyName": name}]
+    if IOS26:
+        # No trigger says what the input is, so say it here (see the note above).
+        read.insert(0, {"Type": "WFCoercionVariableAggrandizement", "CoercionItemClass": TRANSACTION})
+    return token({"Type": "ExtensionInput", "Aggrandizements": read})
 
 
 def notification_part(name: str) -> dict:
@@ -172,6 +194,12 @@ workflow = {
     "WFWorkflowActions": [log],
 }
 
+if IOS26:
+    del workflow["WFWorkflowTriggers"]
+    workflow["WFWorkflowInputContentItemClasses"] = [TRANSACTION]
+    for part in ("notificationTitle", "notificationSubtitle", "notificationBody"):
+        del log["WFWorkflowActionParameters"][part]
+
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_bytes(plistlib.dumps(workflow, fmt=plistlib.FMT_BINARY))
 print(OUT, OUT.stat().st_size, "bytes")
@@ -179,7 +207,7 @@ print(OUT, OUT.stat().st_size, "bytes")
 # Read the file back, so what is printed is what was written.
 written = plistlib.loads(OUT.read_bytes())
 print("\nTriggers:")
-pprint.pprint(written["WFWorkflowTriggers"], sort_dicts=False, width=110)
+pprint.pprint(written.get("WFWorkflowTriggers", "none (iOS 26 file)"), sort_dicts=False, width=110)
 print("\nAction:")
 pprint.pprint(written["WFWorkflowActions"], sort_dicts=False, width=110)
 print("\nShowWhenRun:", written["WFWorkflowActions"][0]["WFWorkflowActionParameters"].get("ShowWhenRun", "missing"))

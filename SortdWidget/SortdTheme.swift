@@ -171,6 +171,36 @@ enum Sortd {
         return f.string(from: value as NSDecimalNumber) ?? "\(value)"
     }
 
+    /// The same amount in two parts, so a big figure can carry its currency
+    /// small beside it. A long code ("SGD", "CHF") at full size crowded the
+    /// number out of the ring (Raj's phone, 5 Oct 2026). `symbolFirst` is
+    /// false where the locale writes the currency after the number.
+    static func moneyParts(_ value: Decimal, _ code: String,
+                           cents: Bool? = nil) -> (symbol: String, number: String, symbolFirst: Bool) {
+        let showCents = cents ?? (abs(value) < 100)
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = code
+        f.maximumFractionDigits = showCents ? 2 : 0
+        f.minimumFractionDigits = showCents ? 2 : 0
+        let full = f.string(from: value as NSDecimalNumber) ?? "\(value)"
+        guard let symbol = f.currencySymbol, !symbol.isEmpty, let found = full.range(of: symbol) else {
+            return ("", full, true)
+        }
+        var number = full
+        number.removeSubrange(found)
+        number = number.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{00A0}\u{202F}")))
+        // Before the first digit means in front, whatever sign or space sits between.
+        let firstDigit = full.firstIndex(where: \.isNumber) ?? full.endIndex
+        let symbolFirst = found.lowerBound < firstDigit
+        // "-$5.50" must not come apart as "$" then "-5.50": a minus stays in
+        // front of the currency it was written before.
+        if symbolFirst, let sign = number.first, "-\u{2212}".contains(sign) {
+            return (String(sign) + symbol, String(number.dropFirst()), true)
+        }
+        return (symbol, number, symbolFirst)
+    }
+
     /// An amount as VoiceOver should say it: "5.50 Australian dollars", not
     /// "A$5.50" (which reads as "A dollar sign five point five zero").
     static func spoken(_ value: Decimal, _ code: String, cents: Bool? = nil) -> String {
@@ -195,18 +225,18 @@ enum Sortd {
         return date.formatted(.dateTime.weekday(.abbreviated).day())
     }
 
-    /// "in 5d", "tomorrow", "today".
-    static func countdown(to date: Date, from now: Date = .now,
-                          calendar: Calendar = .current) -> String {
+    /// When a bill is due: "Today", "Tomorrow", otherwise the day itself
+    /// ("Fri 10 Oct"). A date reads at a glance; "in 5d" had to be worked out.
+    static func dueDay(_ date: Date, from now: Date = .now,
+                       calendar: Calendar = .current) -> String {
         let days = calendar.dateComponents([.day],
                                            from: calendar.startOfDay(for: now),
                                            to: calendar.startOfDay(for: date)).day ?? 0
         return switch days {
-        case ..<0: "overdue"
-        case 0: "today"
-        case 1: "tomorrow"
-        case 2...6: "in \(days)d"
-        default: "in \(days / 7)w"
+        case ..<0: "Overdue"
+        case 0: "Today"
+        case 1: "Tomorrow"
+        default: date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         }
     }
 }

@@ -70,6 +70,9 @@ struct OnboardingView: View {
     /// used. Never what was answered.
     @State private var stepsSeen = 0
     @State private var usedSkip = false
+    /// "I'm Done" on the iOS 26 automation pages (`ApplePaySetupSteps.isReady`).
+    @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
+    @State private var askingNoApplePay = false
     #if SORTD_ICLOUD
     /// "Restore from iCloud" on the welcome screen (new flow): what happened.
     @State private var restoring = false
@@ -149,7 +152,11 @@ struct OnboardingView: View {
             ZStack {
                 Color.page.ignoresSafeArea()
                 if step == .welcome || step == .building || step == .plan {
-                    SetupAura().transition(.opacity)
+                    // Fades in, leaves at once. Fading a full-screen blurred
+                    // gradient out while the next page slid in stalled the
+                    // slide for a third of a second (frame-by-frame recording,
+                    // plan to cards, 5 Oct 2026).
+                    SetupAura().transition(.asymmetric(insertion: .opacity, removal: .identity))
                 }
             }
             .animation(.easeInOut(duration: 0.6), value: step)
@@ -444,8 +451,16 @@ struct OnboardingView: View {
                     }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
-                    // New flow: the chores wait in the Finish Setup card on Home.
-                    tertiaryButton(newFlow ? "Do this later" : "Do this later and look around") { finish() }
+                    // The cards and Apple Pay steps that follow are required
+                    // (Raj, 5 Oct 2026: people tapped past them and then had
+                    // an app that logged nothing). "Do this later" went with that.
+                    if !newFlow { tertiaryButton("Do this later and look around") { finish() } }
+                // Locked: the button itself says what is missing, so the bar
+                // stays one button tall and nothing sits over the page.
+                case .cards where newFlow && book.active.isEmpty:
+                    lockedButton("Add a Card to Continue")
+                case .applePay where newFlow && !applePayReady:
+                    lockedButton(applePayRequirement)
                 case .applePay where !tapConnected && !shortcutReached && !newFlow:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
@@ -470,6 +485,41 @@ struct OnboardingView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 8)
         .padding(.top, 8)
+        .confirmationDialog("Carry on without Apple Pay?", isPresented: $askingNoApplePay, titleVisibility: .visible) {
+            Button("I Don't Use Apple Pay") {
+                usedSkip = true
+                go(1)
+            }
+            Button("Set It Up", role: .cancel) {}
+        } message: {
+            Text("Sortd writes down what you pay with Apple Pay. Without it, you add every purchase by hand.")
+        }
+    }
+
+    /// Continue while it is locked: readable, plainly not the filled button,
+    /// and not tappable. A disabled filled button drew white words on pale
+    /// grey (Raj's screenshot, iOS 26, 5 Oct 2026).
+    private func lockedButton(_ title: String) -> some View {
+        Button {} label: {
+            Label(title, systemImage: "lock.fill")
+                .font(.headline)
+                .foregroundStyle(Color.ink.opacity(0.6))
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
+        .allowsHitTesting(false)
+        .accessibilityLabel("\(title). Not available yet")
+    }
+
+    private var applePayReady: Bool {
+        ApplePaySetupSteps.isReady(status: applePayStatus, route: ApplePaySetupSteps.route, saysBuilt: automationBuilt)
+    }
+
+    /// All three steps are needed. Steps 1 and 2 tick themselves once the
+    /// shortcut has run, and then only step 3 is left.
+    private var applePayRequirement: String {
+        applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 to 3 to Continue"
     }
 
     private var primaryTitle: String {
@@ -961,9 +1011,7 @@ struct OnboardingView: View {
                     .accessibilityLabel("\(rowTitle(info)), \(info.isCredit ? "credit" : "debit")")
                     .accessibilityHint("Edit nickname and type")
                     Button {
-                        let id = info.id
-                        let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
-                        withAnimation(.snappy) { book.remove(info, hasPurchases: used) }
+                        removeCard(info)
                     } label: {
                         Image(systemName: "xmark.circle.fill").font(.footnote)
                             .symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
@@ -977,6 +1025,14 @@ struct OnboardingView: View {
                 .background(Color.card, in: .capsule)
             }
         }
+    }
+
+    /// Takes a card off. One that already has purchases is kept out of
+    /// sight, not deleted (`CardBook.remove`).
+    private func removeCard(_ info: CardInfo) {
+        let id = info.id
+        let used = ((try? context.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.cardRaw == id }))) ?? 0) > 0
+        withAnimation(.snappy) { book.remove(info, hasPurchases: used) }
     }
 
     /// One country at a time, so the list stays short. "" = works anywhere.
@@ -1011,7 +1067,11 @@ struct OnboardingView: View {
         .scrollClipDisabled()
     }
 
-    /// Banks in the chosen country, two per row. Each tap adds one card.
+    /// Banks in the chosen country, two per row. A tap picks a bank; a picked
+    /// bank's tile turns into "− 1 +", the add-to-basket control everyone
+    /// knows, so taking it off or adding a second card is right there. Until
+    /// 5 Oct 2026 every tap added another card and nothing on the tile took
+    /// one away: people tapping to undo ended up with "DBS 3" (Raj's run-through).
     /// At accessibility sizes the grid becomes one full-width row per bank:
     /// a half-width cell cut "DBS" down to "D…" (UI pass, 25 Sep).
     @ViewBuilder private func bankGrid(_ country: String) -> some View {
@@ -1026,34 +1086,10 @@ struct OnboardingView: View {
         let banks = BankPreset.all.filter { $0.country == country }
         Group {
             ForEach(banks) { bank in
-                let count = book.active.filter { $0.bank == bank.name }.count
-                Button { addCard(from: bank) } label: {
-                    HStack(spacing: 8) {
-                        Text(bank.name).font(.body).foregroundStyle(Color.ink)
-                            .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 2)
-                        if count > 0 {
-                            if count > 1 { Text("\(count)").font(.footnote.weight(.bold)).monospacedDigit() }
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.ink)
-                        } else {
-                            Image(systemName: "plus.circle").foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(count > 0 ? Color.ink : .clear, lineWidth: 1.5)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel(count > 0 ? "\(bank.name), \(count) added. Add another" : "Add \(bank.name)")
+                bankTile(bank)
             }
             // Not listed: a plain card named after the country; renamed next page.
+            let others = book.active.filter { $0.bank.isEmpty && $0.name.hasPrefix("Card") }.count
             Button {
                 var card = CardInfo(name: "Card", shortName: "Card",
                                     currency: country.isEmpty ? home : (BankPreset.all.first { $0.country == country }?.currency ?? home),
@@ -1062,7 +1098,8 @@ struct OnboardingView: View {
                 if n > 0 { card.name = "Card \(n + 1)"; card.shortName = card.name }
                 withAnimation(.snappy) { book.upsert(card) }
             } label: {
-                Label("Other bank", systemImage: "plus")
+                // Says so when one was added: its chip can be below the fold.
+                Label(others > 0 ? "Other bank · \(others) added" : "Other bank", systemImage: "plus")
                     .font(.body)
                     .foregroundStyle(Color.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1078,7 +1115,73 @@ struct OnboardingView: View {
         }
     }
 
-    /// Every tap adds one more card from this bank, named "DBS", "DBS 2"…
+    private func bankTile(_ bank: BankPreset) -> some View {
+        let mine = book.active.filter { $0.bank == bank.name }
+        let count = mine.count
+        return HStack(spacing: 0) {
+            // The name: picks the bank, or takes one card off again (a second
+            // tap on a tick box unticks it).
+            Button {
+                if let last = mine.last { removeCard(last) } else { addCard(from: bank) }
+            } label: {
+                HStack(spacing: 6) {
+                    // One word stays on one line and shrinks a little to fit
+                    // beside "− 1 +": it was breaking as "May-bank", then
+                    // cutting to "CommB…". Nothing else shares its space.
+                    Text(bank.name).font(.body).foregroundStyle(Color.ink)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : (bank.name.contains(" ") ? 2 : 1))
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if count == 0 {
+                        Image(systemName: "plus.circle").foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.leading, count == 0 ? 16 : 14)
+                .padding(.trailing, count == 0 ? 16 : 0)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel(count == 0 ? bank.name : "\(bank.name), \(count) \(count == 1 ? "card" : "cards")")
+            .accessibilityHint(count == 0 ? "Adds it" : "Takes one off")
+            .accessibilityAddTraits(count > 0 ? .isSelected : [])
+
+            if let last = mine.last {
+                stepButton("minus", "Remove a \(bank.name) card") { removeCard(last) }
+                Text("\(count)")
+                    .font(.body.weight(.semibold)).monospacedDigit()
+                    .foregroundStyle(Color.ink)
+                    .frame(minWidth: 14)
+                    .accessibilityHidden(true)
+                stepButton("plus", "Add another \(bank.name) card") { addCard(from: bank) }
+                    .padding(.trailing, 4)
+            }
+        }
+        .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(count > 0 ? Color.ink : .clear, lineWidth: 1.5)
+        }
+    }
+
+    /// Half of the "− 1 +" on a picked bank. As tall as the tile, so it is
+    /// easy to hit.
+    private func stepButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.ink)
+                .frame(width: 28, height: 28)
+                .background(Color.track, in: .circle)
+                .frame(width: 30, height: 56)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(label)
+    }
+
+    /// Adds one more card from this bank, named "DBS", "DBS 2"…
     /// Debit or credit is chosen on the next page, with the digits.
     private func addCard(from bank: BankPreset) {
         let mine = book.active.filter { $0.bank == bank.name }
@@ -1149,6 +1252,13 @@ struct OnboardingView: View {
             header("Log Apple Pay by itself", SetupCopy.line(.applePay))
             ApplePaySetupPanel(status: applePayStatus, needsCheckCount: ApplePayStatus.needsCheckCount(in: transactions))
                 .padding(.top, 10)
+            // Not a skip: an answer. Someone who never taps to pay must
+            // still be able to get into the app. At the end of the page, out
+            // of the button bar, and it asks before it goes on.
+            if newFlow, !applePayReady {
+                tertiaryButton("I don't use Apple Pay") { askingNoApplePay = true }
+                    .padding(.top, 12)
+            }
         }
     }
 

@@ -9,8 +9,12 @@ struct WalletSetupGuide: View {
     /// automation already built (the Wallet trigger and Sortd's action, both
     /// filled in) — so its three pages are just the three steps on
     /// `ApplePaySetupPanel`, drawn. `byHand` builds the whole thing from
-    /// nothing, for anyone the download doesn't work for.
-    enum Route { case quick, byHand }
+    /// nothing, for anyone the download doesn't work for. `automation` and
+    /// `automationByHand` are the two iOS 26 walk-throughs
+    /// (`ApplePaySetupSteps.automationSteps` / `.byHandAutomationSteps`),
+    /// drawn from the iOS 26.5 Shortcuts screens (5 Oct 2026); their pages
+    /// are shown by `ApplePayAutomationGuide`, not by this pager.
+    enum Route { case quick, byHand, automation, automationByHand }
 
     var route: Route = .quick
 
@@ -52,7 +56,19 @@ struct WalletSetupGuide: View {
              detail: "It saves by itself. Now pay with Apple Pay in a shop. The ▶ button only runs a test."),
     ]
 
-    var pages: [Page] { route == .quick ? Self.quickPages : Self.byHandPages }
+    /// An iOS 26 walk-through as pager pages, for the DEBUG screen host.
+    static func pages(for steps: [ApplePaySetupSteps.AutomationStep]) -> [Page] {
+        steps.map { Page(id: $0.id, title: $0.title, detail: $0.taps.joined(separator: " ")) }
+    }
+
+    var pages: [Page] {
+        switch route {
+        case .quick: Self.quickPages
+        case .byHand: Self.byHandPages
+        case .automation: Self.pages(for: ApplePaySetupSteps.automationSteps)
+        case .automationByHand: Self.pages(for: ApplePaySetupSteps.byHandAutomationSteps)
+        }
+    }
 
     /// Kept so old call sites and tests still read the long route.
     static let pages: [Page] = byHandPages
@@ -153,13 +169,14 @@ struct ShortcutsMock: View {
     }
 
     @ViewBuilder private var content: some View {
-        if route == .quick {
+        switch route {
+        case .quick:
             switch step {
             case 0: addShortcutSheet
             case 1: allowPrompt
             default: automationSwitch
             }
-        } else {
+        case .byHand:
             switch step {
             case 0: library
             case 1: triggerSearch
@@ -168,7 +185,154 @@ struct ShortcutsMock: View {
             case 4: pickVariable
             default: finished
             }
+        case .automation:
+            switch step {
+            case 0: walletSearch
+            case 1: cardsAndRun
+            default: pickShortcut
+            }
+        case .automationByHand:
+            switch step {
+            case 0: walletSearch
+            case 1: cardsAndRun
+            case 2: createAndPick
+            case 3: threeBoxes
+            default: showWhenRunOff
+            }
         }
+    }
+
+    // MARK: iOS 26 routes (the personal automation)
+
+    /// (3, short way) The list after Next: the downloaded shortcut sits
+    /// under "My Shortcuts".
+    private var pickShortcut: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(icon: "plus.square.on.square", iconColor: Self.blue, title: "Create New Shortcut", subtitle: nil)
+                .opacity(0.45)
+            Text("My Shortcuts")
+                .font(.subheadline.weight(.bold))
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .tapRing(ring, label: "1")
+                .padding(.top, 4)
+            row(brand: true, title: "Log Apple Pay in Sortd", subtitle: nil)
+                .tapRing(ring, label: "2")
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// (1) The "new automation" list, with Wallet searched for.
+    private var walletSearch: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Personal Automation").font(.headline)
+            row(icon: "creditcard.fill", iconColor: Self.blue, title: "Wallet",
+                subtitle: "\u{201C}When I tap a Wallet Card or Pass\u{201D}")
+                .tapRing(ring, label: "2")
+            Spacer(minLength: 0)
+            searchBar { Text("Wallet").font(.subheadline) }
+                .tapRing(ring, label: "1")
+        }
+    }
+
+    /// (2) "When I tap": the person's own cards, Run Immediately, Next.
+    private var cardsAndRun: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("When I tap").font(.headline)
+                Spacer()
+                pill("Next", filled: true).tapRing(ring, label: "3")
+            }
+            VStack(spacing: 0) {
+                checkRow("Your debit card", checked: true)
+                Divider().padding(.leading, 12)
+                checkRow("Your credit card", checked: true)
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
+            .tapRing(ring, label: "1")
+            VStack(spacing: 0) {
+                checkRow("Run After Confirmation", checked: false)
+                Divider().padding(.leading, 12)
+                checkRow("Run Immediately", checked: true)
+                    .tapRing(ring, label: "2")
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// (3) Create New Shortcut, then Sortd in the list of apps, then its action.
+    private var createAndPick: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(icon: "plus.square.on.square", iconColor: Self.blue, title: "Create New Shortcut", subtitle: nil)
+                .tapRing(ring, label: "1")
+            row(brand: true, title: "Sortd", subtitle: nil)
+                .tapRing(ring, label: "2")
+            row(brand: true, title: "Log Wallet Tap", subtitle: "Spending")
+                .tapRing(ring, label: "3")
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// (4) Sortd's action with its three boxes filled from the tap.
+    private var threeBoxes: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            card {
+                Text("Log").font(.subheadline)
+                token("Amount", symbol: "square.stack.3d.down.right").tapRing(ring, label: "1")
+                Text("at").font(.subheadline)
+                token("Merchant", symbol: "square.stack.3d.down.right").tapRing(ring, label: "2")
+                Image(systemName: "chevron.right.circle.fill").foregroundStyle(Self.blue)
+            }
+            card {
+                Text("Card").font(.subheadline)
+                Spacer(minLength: 0)
+                token("Card or Pass", symbol: "square.stack.3d.down.right").tapRing(ring, label: "3")
+            }
+            Spacer(minLength: 0)
+            // What appears above the keyboard once a box is tapped.
+            token("Shortcut Input", symbol: "square.stack.3d.down.right")
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// (5) Show When Run switched off, then Done.
+    private var showWhenRunOff: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Spacer()
+                pill("Done", filled: true).tapRing(ring, label: "2")
+            }
+            card {
+                Text("Log").font(.subheadline)
+                token("Amount", symbol: "square.stack.3d.down.right")
+                Text("at").font(.subheadline)
+                token("Merchant", symbol: "square.stack.3d.down.right")
+            }
+            card {
+                Text("Show When Run").font(.subheadline)
+                Spacer(minLength: 0)
+                Capsule().fill(Color.secondary.opacity(0.3)).frame(width: 44, height: 26)
+                    .overlay(alignment: .leading) {
+                        Circle().fill(.white).padding(2)
+                    }
+                    .tapRing(ring, label: "1")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// A list row with a tick at the end when chosen.
+    private func checkRow(_ text: String, checked: Bool) -> some View {
+        HStack {
+            Text(text).font(.subheadline)
+            Spacer(minLength: 0)
+            Image(systemName: "checkmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Self.blue)
+                .opacity(checked ? 1 : 0)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 12).padding(.vertical, 9)
     }
 
     // MARK: Quick route (the ready-made shortcut, checked on iOS 27)

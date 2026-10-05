@@ -40,11 +40,7 @@ struct PurchaseSourcesSettingsView: View {
             } header: {
                 BoldHeader("Apple Pay")
             } footer: {
-                if #available(iOS 27.0, *) {
-                    Text(ApplePaySetupSteps.sourcesFooter(notificationTrigger: true))
-                } else {
-                    Text(ApplePaySetupSteps.sourcesFooter(notificationTrigger: false))
-                }
+                Text(ApplePaySetupSteps.sourcesFooter(notificationTrigger: ApplePaySetupSteps.route == .shortcut))
             }
         }
         .scrollContentBackground(.hidden)

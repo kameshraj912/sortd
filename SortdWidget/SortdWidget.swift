@@ -114,45 +114,57 @@ private struct Chrome<Content: View>: View {
 
 // MARK: - Shared pieces
 
-/// Sortd's mark: the four dashes that sit under every title in the app.
-/// Small enough to be a signature rather than decoration.
-private struct BrandMark: View {
-    var width: CGFloat = 9
-    var height: CGFloat = 2.5
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Sortd.brandPalette.indices, id: \.self) { i in
-                Capsule().fill(Sortd.brandPalette[i]).frame(width: width, height: height)
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// A header line with the brand mark under it.
+/// A header line. It carried the app's four dashes until 5 Oct 2026; on a
+/// Home Screen tile they read as clutter, so the title stands alone.
 private struct Heading: View {
     var text: String
     var trailing: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(text)
-                    .font(.caption.weight(.semibold))
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            if let trailing {
+                Text(trailing)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Spacer(minLength: 2)
-                if let trailing {
-                    Text(trailing)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
+                    .fixedSize()
             }
-            BrandMark()
         }
+    }
+}
+
+/// The big figure, with its currency small beside it so a long code never
+/// crowds the number (`Sortd.moneyParts`).
+private struct BigAmount: View {
+    var value: Decimal
+    var code: String
+    var size: CGFloat = 32
+
+    var body: some View {
+        let parts = Sortd.moneyParts(value, code)
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            if parts.symbolFirst { currency(parts.symbol) }
+            Text(parts.number)
+                .font(.system(size: size, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Sortd.ink)
+                .widgetAccentable()
+                .contentTransition(.numericText())
+            if !parts.symbolFirst { currency(parts.symbol) }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.45)
+    }
+
+    private func currency(_ symbol: String) -> some View {
+        Text(symbol)
+            .font(.system(size: size * 0.5, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -211,8 +223,8 @@ private struct MoneyRow: View {
     var shop: ShopName
     var detail: String?
     var amount: String
-    var symbol: String?
-    var tint: Color = .secondary
+    /// Name and detail on one line, where the tile is wide and short.
+    var oneLine = false
     /// What VoiceOver must leave out while the iPhone is locked.
     var hiding: Hiding
 
@@ -226,28 +238,41 @@ private struct MoneyRow: View {
         }
     }
 
-    private var row: some View {
-        HStack(spacing: 8) {
-            if let symbol {
-                Image(systemName: symbol)
-                    .font(.caption2)
-                    .frame(width: 14)
-                    .foregroundStyle(tint)
+    @ViewBuilder private var row: some View {
+        if oneLine {
+            HStack(spacing: 8) {
+                shop.layoutPriority(1)
+                detailText
+                Spacer(minLength: 6)
+                amountText
             }
+        } else {
+            // The date gets a line to itself: beside a long amount
+            // ("SGD 18.99") it was cut to "Tomorr…".
             VStack(alignment: .leading, spacing: 1) {
-                shop
-                if let detail {
-                    Text(detail)
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    shop
+                    Spacer(minLength: 6)
+                    amountText
                 }
+                detailText
             }
-            Spacer(minLength: 6)
-            Text(amount)
-                .font(.footnote.monospacedDigit())
+        }
+    }
+
+    private var amountText: some View {
+        Text(amount)
+            .font(.footnote.weight(.medium).monospacedDigit())
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(Sortd.ink)
+    }
+
+    @ViewBuilder private var detailText: some View {
+        if let detail {
+            Text(detail)
+                .font(.caption2)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.secondary)
         }
     }
@@ -266,7 +291,6 @@ private struct NotReady: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            BrandMark(width: 11, height: 3)
             Spacer(minLength: 6)
             Text(line).font(.headline).lineLimit(2).minimumScaleFactor(0.8)
             Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -291,21 +315,15 @@ struct SpendingView: View {
         }
     }
 
-    // Small: today against what a day is worth. One number, one limit.
+    // Small: one number against its limit.
     private func small(_ s: WidgetSummary) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Heading(text: period.title)
             Spacer(minLength: 6)
 
-            Text(Sortd.money(period.total(s), s.currency))
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.45)
-                .lineLimit(1)
-                .foregroundStyle(Sortd.ink)
-                .widgetAccentable()
-                .contentTransition(.numericText())
+            BigAmount(value: period.total(s), code: s.currency)
 
-            Text(subtitle(s))
+            Text(smallSubtitle(s))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -313,7 +331,8 @@ struct SpendingView: View {
 
             Spacer(minLength: 6)
             SpendBar(slices: s.categories, spent: s.month, limit: s.budget, height: 7)
-            if s.budgetUsed > 1 {
+            // The month's subtitle already says "over".
+            if s.budgetUsed > 1, period != .month {
                 Text("Over budget")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -322,7 +341,7 @@ struct SpendingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(period.title), \(Sortd.money(period.total(s), s.currency)). \(subtitle(s))")
+        .accessibilityLabel("\(period.title), \(Sortd.money(period.total(s), s.currency)). \(smallSubtitle(s))")
     }
 
     // Medium: today on the left, the month on the right, colours between.
@@ -332,13 +351,7 @@ struct SpendingView: View {
             Spacer(minLength: 8)
 
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(Sortd.money(period.total(s), s.currency))
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .foregroundStyle(Sortd.ink)
-                    .widgetAccentable()
-                    .contentTransition(.numericText())
+                BigAmount(value: period.total(s), code: s.currency, size: 38)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(rightTitle(s))
@@ -396,6 +409,17 @@ struct SpendingView: View {
         return "\(Sortd.money(s.month, s.currency, cents: false)) this month"
     }
 
+    /// Under the small tile's number. For the month the heading already says
+    /// "This month", so it says what is left instead of repeating the budget.
+    private func smallSubtitle(_ s: WidgetSummary) -> String {
+        guard period == .month else { return subtitle(s) }
+        if let left = s.leftThisMonth {
+            let amount = Sortd.money(abs(left), s.currency, cents: false)
+            return left < 0 ? "\(amount) over budget" : "\(amount) left"
+        }
+        return "Today \(Sortd.money(s.today, s.currency, cents: false))"
+    }
+
     /// The other number worth knowing, whichever one isn't on show.
     private func trailing(_ s: WidgetSummary) -> String {
         switch period {
@@ -429,7 +453,7 @@ struct SortdSpendingWidget: Widget {
             .widgetURL(SortdLink.home)
         }
         .configurationDisplayName("Spending")
-        .description("Today, this week or this month — against what you have to spend, in your category colours.")
+        .description("This month, this week or today, against what you have to spend, in your category colours.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -443,7 +467,7 @@ struct QuickAddView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Heading(text: "Log it now",
-                    trailing: entry.summary.map { Sortd.money($0.today, $0.currency, cents: false) })
+                    trailing: entry.summary.map { "\(Sortd.money($0.today, $0.currency, cents: false)) today" })
 
             if family == .systemSmall {
                 // One big target beats three small ones in a small widget.
@@ -501,7 +525,8 @@ struct QuickAddView: View {
     private func big(_ symbol: String, _ title: String, _ url: URL, filled: Bool) -> some View {
         Link(destination: url) {
             VStack(spacing: 5) {
-                Image(systemName: symbol).font(.system(size: 19, weight: .semibold))
+                // Same height for every symbol, so the three words line up.
+                Image(systemName: symbol).font(.system(size: 19, weight: .semibold)).frame(height: 24)
                 Text(title).font(.caption2.weight(.medium)).lineLimit(1)
             }
             .foregroundStyle(filled ? Sortd.onInk : Sortd.ink)
@@ -548,17 +573,20 @@ struct BillsView: View {
     }
 
     private func content(_ s: WidgetSummary) -> some View {
-        let limit = family == .systemSmall ? 2 : 4
-        let soon = Array(s.bills.prefix(limit))
+        // Small: three two-line rows fill the tile. Medium is wide and short,
+        // so each bill takes one line and four fit.
+        let small = family == .systemSmall
+        let soon = Array(s.bills.prefix(small ? 3 : 4))
         let total = soon.reduce(Decimal(0)) { $0 + $1.amount }
-        return VStack(alignment: .leading, spacing: 7) {
-            Heading(text: "Coming up",
-                    trailing: family == .systemSmall ? nil : Sortd.money(total, s.currency, cents: false))
+        return VStack(alignment: .leading, spacing: small ? 6 : 8) {
+            // The total is of the rows shown; the small tile leaves it out
+            // rather than show a sum that looks like "everything coming up".
+            Heading(text: "Coming up", trailing: small ? nil : Sortd.money(total, s.currency, cents: false))
             ForEach(soon) { bill in
                 MoneyRow(shop: ShopName(name: bill.name),
-                         detail: Sortd.countdown(to: bill.due),
+                         detail: Sortd.dueDay(bill.due),
                          amount: Sortd.money(bill.amount, bill.currency),
-                         symbol: nil,
+                         oneLine: !small,
                          hiding: Hiding(redaction, s))
             }
             Spacer(minLength: 0)
@@ -674,6 +702,8 @@ struct BudgetRingView: View {
         return max(0, min(1, value))
     }
 
+    private static let ringWidth: CGFloat = 9
+
     private func ring(_ s: WidgetSummary, budget: Decimal) -> some View {
         let left = s.leftThisMonth ?? (budget - s.month)
         let over = left < 0
@@ -683,16 +713,20 @@ struct BudgetRingView: View {
                 .overBudgetIsPrivate(over, s)
 
             ZStack {
-                Circle().stroke(Sortd.track, lineWidth: 10)
-                Circle()
+                // Inset by half the line, so the stroke stays inside its own
+                // frame and never leans on the heading or the tile's edge.
+                Circle().inset(by: Self.ringWidth / 2).stroke(Sortd.track, lineWidth: Self.ringWidth)
+                Circle().inset(by: Self.ringWidth / 2)
                     .trim(from: 0, to: over ? 1 : Self.share(left: left, budget: budget))
                     .stroke(over ? Sortd.over : Sortd.brandGreen,
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                            style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .widgetAccentable()
                 VStack(spacing: 0) {
-                    Text(Sortd.money(abs(left), s.currency, cents: false))
-                        .font(.system(.title2, design: .rounded, weight: .bold))
+                    // The figure alone: the line under it names the currency.
+                    // "SGD 827" at this size ran across the ring (5 Oct 2026).
+                    Text(Sortd.moneyParts(abs(left), s.currency, cents: false).number)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
@@ -706,11 +740,12 @@ struct BudgetRingView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, Self.ringWidth + 8)
             }
+            // Square, so the text's padding is measured from the ring itself.
+            .aspectRatio(1, contentMode: .fit)
             .amountIsPrivate(s)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -722,13 +757,7 @@ struct BudgetRingView: View {
         return VStack(alignment: .leading, spacing: 0) {
             Heading(text: "This month")
             Spacer(minLength: 6)
-            Text(Sortd.money(s.month, s.currency))
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.45)
-                .lineLimit(1)
-                .foregroundStyle(Sortd.ink)
-                .widgetAccentable()
+            BigAmount(value: s.month, code: s.currency)
                 .amountIsPrivate(s)
             Spacer(minLength: 6)
             HStack(spacing: 4) {
@@ -802,18 +831,31 @@ struct TodayView: View {
         let last = s.recent.first
         let hiding = Hiding(redaction, s)
         return VStack(alignment: .leading, spacing: 0) {
-            Heading(text: "Today")
+            Heading(text: "Today", trailing: Self.countLine(s.todayCount))
             Spacer(minLength: 6)
 
-            Text(Sortd.money(s.today, s.currency))
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.45)
-                .lineLimit(1)
-                .foregroundStyle(Sortd.ink)
-                .widgetAccentable()
-                .contentTransition(.numericText())
+            BigAmount(value: s.today, code: s.currency)
                 .amountIsPrivate(s)
+
+            // With a budget, today has a limit: show how far into it the day is.
+            if let allowance = s.dayAllowance, allowance > 0 {
+                let over = s.today > allowance
+                // How full the bar is says how much was spent: hidden with the amounts.
+                DayBar(share: Self.share(spent: s.today, allowance: allowance), over: over)
+                    .amountIsPrivate(s)
+                    .padding(.top, 3)
+                // The whole line where it fits, the short one where it doesn't
+                // (a long currency code, or larger text).
+                ViewThatFits(in: .horizontal) {
+                    Text(Self.allowanceLine(s, allowance: allowance, short: false))
+                    Text(Self.allowanceLine(s, allowance: allowance, short: true))
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.top, 4)
+                .amountIsPrivate(s)
+            }
 
             Spacer(minLength: 8)
 
@@ -844,14 +886,40 @@ struct TodayView: View {
         .accessibilityLabel(label(s, last: last, hiding: hiding))
     }
 
+    /// "3 purchases", beside the heading. Nothing when the day is empty.
+    static func countLine(_ count: Int) -> String? {
+        count > 0 ? "\(count) \(count == 1 ? "purchase" : "purchases")" : nil
+    }
+
+    /// How much of the day's allowance is used, 0 to 1.
+    static func share(spent: Decimal, allowance: Decimal) -> Double {
+        guard allowance > 0 else { return 0 }
+        let value = (spent as NSDecimalNumber).doubleValue / (allowance as NSDecimalNumber).doubleValue
+        return max(0, min(1, value))
+    }
+
+    /// "A$6.90 left of A$50 a day", or "A$3 over A$50 a day". The word says
+    /// which, so the bar's colour never has to.
+    static func allowanceLine(_ s: WidgetSummary, allowance: Decimal, short: Bool, spoken: Bool = false) -> String {
+        let gap = allowance - s.today
+        // VoiceOver gets "6.90 Australian dollars", not "A dollar sign 6.90".
+        let amount = spoken ? Sortd.spoken(abs(gap), s.currency) : Sortd.money(abs(gap), s.currency)
+        let limit = spoken ? Sortd.spoken(allowance, s.currency, cents: false) : Sortd.money(allowance, s.currency, cents: false)
+        if gap < 0 { return short ? "\(amount) over" : "\(amount) over \(limit) a day" }
+        return short ? "\(amount) left" : "\(amount) left of \(limit) a day"
+    }
+
     private func label(_ s: WidgetSummary, last: WidgetSummary.Item?, hiding: Hiding) -> String {
         var parts: [String] = []
         if hiding.amounts {
             parts.append("Today. Hidden while your iPhone is locked.")
         } else {
             var line = "Today, \(Sortd.spoken(s.today, s.currency))"
-            if s.todayCount > 0 { line += ", \(s.todayCount) \(s.todayCount == 1 ? "purchase" : "purchases")" }
+            if let count = Self.countLine(s.todayCount) { line += ", \(count)" }
             parts.append(line + ".")
+            if let allowance = s.dayAllowance, allowance > 0 {
+                parts.append(Self.allowanceLine(s, allowance: allowance, short: false, spoken: true) + ".")
+            }
         }
         if let last {
             let shop = hiding.shop ? "A purchase" : last.merchant
@@ -859,6 +927,27 @@ struct TodayView: View {
             parts.append("Last: \(shop)\(amount), \(Sortd.when(last.date, now: entry.date)).")
         }
         return parts.joined(separator: " ")
+    }
+}
+
+/// Today against the day's allowance: a thin bar that fills as the day's
+/// money goes, and turns to the app's "over" red past the limit.
+private struct DayBar: View {
+    var share: Double
+    var over: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            Capsule()
+                .fill(over ? Sortd.over : Sortd.brandGreen)
+                // Nothing spent draws nothing: a pip at zero read as "some".
+                .frame(width: share > 0 ? max(5, geo.size.width * share) : 0)
+                .widgetAccentable()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Sortd.track, in: Capsule())
+        }
+        .frame(height: 5)
+        .accessibilityHidden(true)
     }
 }
 
@@ -901,10 +990,18 @@ struct RecentView: View {
                 Link(destination: SortdLink.purchase(item.id)) {
                     HStack(spacing: 10) {
                         CategoryTile(category: item.category)
-                        ShopName(name: item.merchant, font: .subheadline)
+                        VStack(alignment: .leading, spacing: 0) {
+                            ShopName(name: item.merchant, font: .subheadline)
+                            // A fixed grey: inside a Link, `.secondary` is a
+                            // shade of the link's blue.
+                            Text(Sortd.when(item.date, now: entry.date))
+                                .font(.caption2)
+                                .foregroundStyle(Color(.secondaryLabel))
+                                .lineLimit(1)
+                        }
                         Spacer(minLength: 8)
                         Text(Sortd.money(item.amount, item.currency))
-                            .font(.subheadline.monospacedDigit())
+                            .font(.subheadline.weight(.medium).monospacedDigit())
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                             .foregroundStyle(Sortd.ink)
