@@ -30,7 +30,7 @@ I pay for almost everything with my phone, in two currencies (AUD and SGD), and 
 
 | Part | Stack | Where |
 |---|---|---|
-| iPhone app | Swift 6, SwiftUI, SwiftData, Swift Charts, App Intents, WidgetKit, StoreKit 2 | `Spend/`, `SortdWidget/` |
+| iPhone app | Swift, SwiftUI, SwiftData, Swift Charts, App Intents, WidgetKit, StoreKit 2 | `Spend/`, `SortdWidget/` |
 | Unit tests | Swift Testing, in-memory store | `SpendTests/` |
 | Account service | TypeScript on Cloudflare Workers, App Attest, Vitest | `worker/` |
 | Website | Plain HTML, CSS and JS on Cloudflare | `site/` |
