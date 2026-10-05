@@ -995,6 +995,18 @@ struct SpendChart: View {
     private var current: [Point] { series(from: interval.start, days: daysSoFar) }
     private var previous: [Point] { series(from: previousStart, days: totalDays, until: interval.start) }
 
+    /// A series as it is drawn: from zero at the start of the period, each
+    /// day's running total at the end of that day. Drawn at the day itself,
+    /// the first day of a week or month was a lone dot with no line at all
+    /// (Raj's phone, Monday 5 Oct 2026: "This week" was one dot at $100).
+    private func drawn(_ points: [Point]) -> [Point] {
+        [Point(date: interval.start, total: 0)] + points.map { Point(date: dayEnd($0.date), total: $0.total) }
+    }
+
+    private func dayEnd(_ day: Date) -> Date {
+        cal.date(byAdding: .day, value: 1, to: day) ?? day
+    }
+
     private var showBudget: Bool { range == .month && budget > 0 }
 
     /// Fit the y-axis to the lines (and the budget), with a little headroom.
@@ -1091,13 +1103,13 @@ struct SpendChart: View {
 
     private var chart: some View {
         Chart {
-            ForEach(previous) { p in
+            ForEach(drawn(previous)) { p in
                 LineMark(x: .value("Day", p.date), y: .value("Spent", p.total), series: .value("Period", "previous"))
                     .foregroundStyle(Color.secondary.opacity(0.6))
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
                     .interpolationMethod(.monotone)
             }
-            ForEach(current) { p in
+            ForEach(drawn(current)) { p in
                 AreaMark(x: .value("Day", p.date), y: .value("Spent", p.total))
                     .foregroundStyle(Color.ink.opacity(0.06))
                     .interpolationMethod(.monotone)
@@ -1105,11 +1117,12 @@ struct SpendChart: View {
                     .foregroundStyle(Color.ink)
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .interpolationMethod(.monotone)
-                    .accessibilityLabel(p.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .accessibilityLabel("By the end of " + (cal.date(byAdding: .day, value: -1, to: p.date) ?? p.date)
+                        .formatted(.dateTime.weekday(.wide).day().month(.wide)))
                     .accessibilityValue(Money.spoken(Decimal(p.total), Money.home))
             }
             if let last = current.last, selected == nil {
-                PointMark(x: .value("Day", last.date), y: .value("Spent", last.total))
+                PointMark(x: .value("Day", dayEnd(last.date)), y: .value("Spent", last.total))
                     .foregroundStyle(Color.ink)
                     .symbolSize(60)
             }
@@ -1131,9 +1144,9 @@ struct SpendChart: View {
                     }
             }
             if let d = selected, let p = current.first(where: { cal.isDate($0.date, inSameDayAs: d) }) {
-                RuleMark(x: .value("Day", p.date))
+                RuleMark(x: .value("Day", dayEnd(p.date)))
                     .foregroundStyle(Color.secondary.opacity(0.4))
-                PointMark(x: .value("Day", p.date), y: .value("Spent", p.total))
+                PointMark(x: .value("Day", dayEnd(p.date)), y: .value("Spent", p.total))
                     .foregroundStyle(Color.ink)
                     .symbolSize(70)
             }
