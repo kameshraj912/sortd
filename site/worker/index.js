@@ -18,11 +18,12 @@
 import { EmailMessage } from "cloudflare:email";
 
 const FROM = "beta@sortd.page";
-// Where a sign-up goes next: the public TestFlight link (App Store Connect > TestFlight > Beta).
+// Where a sign-up goes next: the public link of the "Website Beta" TestFlight group (App Store
+// Connect > TestFlight > Website Beta), kept apart from the invite-only "Beta" group.
 // It is handed out only after a good sign-up, so it is not in any page's source. TestFlight
 // lists public-link testers without a name or email, so the sign-up email is the only record
 // of who joined.
-const TESTFLIGHT_URL = "https://testflight.apple.com/join/6gPpfWXg";
+const TESTFLIGHT_URL = "https://testflight.apple.com/join/p3VQ6YGk";
 const COUNTRIES = ["Australia", "Singapore", "Malaysia", "Other"];
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
 // Turnstile: the token must come from this form on these hosts.
