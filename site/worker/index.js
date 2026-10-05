@@ -18,6 +18,12 @@
 import { EmailMessage } from "cloudflare:email";
 
 const FROM = "beta@sortd.page";
+// Where a sign-up goes next: the public link of the "Website Beta" TestFlight group (App Store
+// Connect > TestFlight > Website Beta), kept apart from the invite-only "Beta" group.
+// It is handed out only after a good sign-up, so it is not in any page's source. TestFlight
+// lists public-link testers without a name or email, so the sign-up email is the only record
+// of who joined.
+const TESTFLIGHT_URL = "https://testflight.apple.com/join/p3VQ6YGk";
 const COUNTRIES = ["Australia", "Singapore", "Malaysia", "Other"];
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
 // Turnstile: the token must come from this form on these hosts.
@@ -44,9 +50,10 @@ export default {
 
 async function handleBeta(request, env) {
   const wantsJSON = (request.headers.get("accept") || "").includes("application/json");
-  const reply = (ok, error, status) => wantsJSON
-    ? json(ok ? { ok: true } : { ok: false, error }, status || (ok ? 200 : 400))
-    : Response.redirect(new URL(ok ? "/beta-thanks" : "/beta?error=1", request.url), 303);
+  // `next` is the TestFlight link, given only once the sign-up email has been sent.
+  const reply = (ok, error, status, next) => wantsJSON
+    ? json(ok ? (next ? { ok: true, next } : { ok: true }) : { ok: false, error }, status || (ok ? 200 : 400))
+    : Response.redirect(ok ? (next || new URL("/beta-thanks", request.url)) : new URL("/beta?error=1", request.url), 303);
 
   // Only accept the form from our own pages.
   // Some browsers send "Origin: null", which isn't a URL; treat anything unparseable as foreign.
@@ -104,7 +111,8 @@ async function handleBeta(request, env) {
     `From:       ${request.headers.get("cf-ipcountry") || "?"} (Cloudflare's guess)`,
     "",
     "Reply to this email to write to them directly.",
-    "The beta is open: send them the TestFlight link (see docs/BetaEmails.md).",
+    "They were sent straight to TestFlight after signing up. No reply needed.",
+    "TestFlight shows public-link testers without names, so this email is your record of who joined.",
   ];
   const subject = `Beta sign-up: ${name || email}${country ? " (" + country + ")" : ""}`;
 
@@ -115,7 +123,7 @@ async function handleBeta(request, env) {
     console.log("beta email failed", e && e.message);
     return reply(false, "We couldn't save that just now. Please try again, or email support@sortd.page.");
   }
-  return reply(true);
+  return reply(true, null, 200, TESTFLIGHT_URL);
 }
 
 // Turnstile server-side check. Cloudflare returns { success: true } only for a valid,

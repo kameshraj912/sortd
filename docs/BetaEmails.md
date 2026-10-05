@@ -1,7 +1,10 @@
 # Beta emails
 
-The beta is open (since 5 Oct 2026) and the site says so. Each person who signs up gets the
-TestFlight link from you by email; the steps are under "When the beta opens" below.
+The beta is open (since 5 Oct 2026). The form at sortd.page/beta sends each person straight to the
+public link of the "Website Beta" TestFlight group once their sign-up email has reached you (`TESTFLIGHT_URL` in
+`site/worker/index.js`), so no reply is needed. TestFlight lists public-link testers without a name
+or email, so these sign-up emails are the only record of who joined. The steps under "When the beta
+opens" below are the old by-hand way; use them to invite someone by email instead.
 
 People sign up at https://sortd.page/beta. The form posts to the site's Worker
 (`site/worker/index.js`), which emails each sign-up to the address in the `BETA_TO` secret,
