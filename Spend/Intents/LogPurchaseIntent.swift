@@ -52,6 +52,12 @@ struct LogPurchaseIntent: AppIntent {
         /// A refund was noted (whole, partial or on its own row). Not a
         /// purchase, so no "Logged" notice (`LoggedNotice`).
         var refund: Bool = false
+        /// Nothing came in at all (a ▶ run, most likely) and no real tap has
+        /// been logged yet: worth a "the shortcut reached Sortd" notice, since
+        /// the shortcut runs with "Show When Run" off and the dialog is never
+        /// seen (`LoggedNotice`). After the first real tap a blank run stays
+        /// silent, so a blank companion of a real purchase never posts it.
+        var reachedBeforeFirstTap: Bool = false
     }
 
     /// The merchant name the removed "Send a Test Tap" button wrote
@@ -168,8 +174,10 @@ struct LogPurchaseIntent: AppIntent {
         // card name as if it were the shop. It's kept below, tagged "needs
         // a check", instead of either extreme.
         if name.isEmpty, parsed == nil, cardName.isEmpty {
+            let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             return Outcome(message: "Sortd is connected. Pay in a shop to log a purchase.",
-                           transaction: nil, merged: false)
+                           transaction: nil, merged: false,
+                           reachedBeforeFirstTap: !ApplePayStatus.hasRealTap(in: taps))
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let missingShop = name.isEmpty
