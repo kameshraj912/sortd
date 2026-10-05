@@ -152,7 +152,11 @@ struct OnboardingView: View {
             ZStack {
                 Color.page.ignoresSafeArea()
                 if step == .welcome || step == .building || step == .plan {
-                    SetupAura().transition(.opacity)
+                    // Fades in, leaves at once. Fading a full-screen blurred
+                    // gradient out while the next page slid in stalled the
+                    // slide for a third of a second (frame-by-frame recording,
+                    // plan to cards, 5 Oct 2026).
+                    SetupAura().transition(.asymmetric(insertion: .opacity, removal: .identity))
                 }
             }
             .animation(.easeInOut(duration: 0.6), value: step)
@@ -454,9 +458,9 @@ struct OnboardingView: View {
                 // Locked: the button itself says what is missing, so the bar
                 // stays one button tall and nothing sits over the page.
                 case .cards where newFlow && book.active.isEmpty:
-                    primaryButton("Add a Card to Continue") {}.disabled(true)
+                    lockedButton("Add a Card to Continue")
                 case .applePay where newFlow && !applePayReady:
-                    primaryButton(applePayRequirement) {}.disabled(true)
+                    lockedButton(applePayRequirement)
                 case .applePay where !tapConnected && !shortcutReached && !newFlow:
                     primaryButton("Open Shortcuts") {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
@@ -492,14 +496,30 @@ struct OnboardingView: View {
         }
     }
 
+    /// Continue while it is locked: readable, plainly not the filled button,
+    /// and not tappable. A disabled filled button drew white words on pale
+    /// grey (Raj's screenshot, iOS 26, 5 Oct 2026).
+    private func lockedButton(_ title: String) -> some View {
+        Button {} label: {
+            Label(title, systemImage: "lock.fill")
+                .font(.headline)
+                .foregroundStyle(Color.ink.opacity(0.6))
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
+        .allowsHitTesting(false)
+        .accessibilityLabel("\(title). Not available yet")
+    }
+
     private var applePayReady: Bool {
         ApplePaySetupSteps.isReady(status: applePayStatus, route: ApplePaySetupSteps.route, saysBuilt: automationBuilt)
     }
 
-    /// Steps 1 and 2 tick themselves once the shortcut has run; on iOS 26
-    /// step 3 is the automation pages.
+    /// All three steps are needed. Steps 1 and 2 tick themselves once the
+    /// shortcut has run, and then only step 3 is left.
     private var applePayRequirement: String {
-        applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 and 2 to Continue"
+        applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 to 3 to Continue"
     }
 
     private var primaryTitle: String {
@@ -1104,20 +1124,21 @@ struct OnboardingView: View {
             Button {
                 if let last = mine.last { removeCard(last) } else { addCard(from: bank) }
             } label: {
-                HStack(spacing: 8) {
-                    // One word stays on one line and shrinks to fit: beside
-                    // "− 1 +" it was breaking as "May-bank".
+                HStack(spacing: 6) {
+                    // One word stays on one line and shrinks a little to fit
+                    // beside "− 1 +": it was breaking as "May-bank", then
+                    // cutting to "CommB…". Nothing else shares its space.
                     Text(bank.name).font(.body).foregroundStyle(Color.ink)
                         .lineLimit(typeSize.isAccessibilitySize ? nil : (bank.name.contains(" ") ? 2 : 1))
                         .minimumScaleFactor(0.7)
                         .multilineTextAlignment(.leading)
-                    Spacer(minLength: 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if count == 0 {
                         Image(systemName: "plus.circle").foregroundStyle(.secondary)
                     }
                 }
-                .padding(.leading, 16)
-                .padding(.trailing, count == 0 ? 16 : 2)
+                .padding(.leading, count == 0 ? 16 : 14)
+                .padding(.trailing, count == 0 ? 16 : 0)
                 .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                 .contentShape(.rect)
             }
@@ -1131,7 +1152,7 @@ struct OnboardingView: View {
                 Text("\(count)")
                     .font(.body.weight(.semibold)).monospacedDigit()
                     .foregroundStyle(Color.ink)
-                    .frame(minWidth: 16)
+                    .frame(minWidth: 14)
                     .accessibilityHidden(true)
                 stepButton("plus", "Add another \(bank.name) card") { addCard(from: bank) }
                     .padding(.trailing, 4)
@@ -1153,7 +1174,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.ink)
                 .frame(width: 28, height: 28)
                 .background(Color.track, in: .circle)
-                .frame(width: 32, height: 56)
+                .frame(width: 30, height: 56)
                 .contentShape(.rect)
         }
         .buttonStyle(.pressable)
