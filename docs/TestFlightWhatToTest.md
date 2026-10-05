@@ -37,7 +37,8 @@ Thanks for trying Sortd. Three things matter most this round.
    and follow the pictures. Then pay for something small with Apple Pay in a shop. On iOS 27,
    also pay for something in an app or on a website with Apple Pay. Did each appear in
    Activity within a minute, with the right shop, amount and card? If not, tell us your bank
-   and what Wallet's notification said.
+   and what Wallet's notification said. A guide with a picture of every step:
+   sortd.page/setup-guide.pdf
 
 2. Receipts and statements. Scan two or three paper receipts, then import a CSV or PDF
    statement or a screenshot of your bank app. Check the amount, the shop and the date.
