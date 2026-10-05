@@ -32,6 +32,7 @@ enum LoggedNotice {
         switch saved {
         case .purchase: url
         case .needsCheck(let id, _, _): "sortd://purchase/\(id.uuidString)"
+        case .reached: "sortd://home"
         }
     }
 
@@ -41,6 +42,9 @@ enum LoggedNotice {
         case purchase(id: UUID, amount: Decimal, currency: String, merchant: String)
         /// A row tagged "needs a check": no shop, no amount, or neither.
         case needsCheck(id: UUID, missingShop: Bool, missingAmount: Bool)
+        /// Nothing saved, but the shortcut reached Sortd before any real tap
+        /// was logged (`Outcome.reachedBeforeFirstTap`): tells a ▶ test it worked.
+        case reached
     }
 
     struct Content: Equatable {
@@ -51,12 +55,14 @@ enum LoggedNotice {
         let body: String
     }
 
-    /// The run's result in the notice's terms. Nil when nothing was saved
-    /// or merged: a ▶ test run, a declined payment, a notification with no
+    /// The run's result in the notice's terms. `.reached` for an empty run
+    /// before the first real tap. Nil when nothing was saved or merged: a
+    /// later empty run, a declined payment, a notification with no
     /// amount, a save that failed and was queued, a refund, a legacy
     /// "Sortd Test" row, or a "Check the Shortcut" run.
     @MainActor
     static func saved(from outcome: LogPurchaseIntent.Outcome) -> Saved? {
+        if outcome.reachedBeforeFirstTap { return .reached }
         guard !outcome.saveFailed, !outcome.refund, let t = outcome.transaction,
               t.rawMerchant != LogPurchaseIntent.legacyTestMerchant, t.rawMerchant != ApplePayHealthCheck.merchant,
               !t.refunded else { return nil }
@@ -85,6 +91,10 @@ enum LoggedNotice {
             }
             return Content(id: idPrefix + id.uuidString, title: "Needs a check",
                            body: "A purchase came in without \(without). Tap to fix.")
+        case .reached:
+            // True for a ▶ run and for a real run that arrived blank alike.
+            return Content(id: idPrefix + "reached", title: "Shortcut connected",
+                           body: "The shortcut reached Sortd, but no payment came with it. Pay with Apple Pay in a shop to log one.")
         }
     }
 

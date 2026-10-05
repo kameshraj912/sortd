@@ -98,13 +98,36 @@ struct ApplePayLoggedNoticeTests {
         #expect(second.title == "Logged")
     }
 
-    // MARK: - Nothing posted
+    // MARK: - A ▶ test run (5 Oct 2026)
 
-    @Test func nothingForAPlayButtonTestRun() async throws {
+    /// "Show When Run" is off, so without this a ▶ run looked like nothing happened.
+    @Test func aPlayButtonRunBeforeAnyTapSaysConnected() async throws {
         let r = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "", in: store(), book: book(), now: now)
+        #expect(r.transaction == nil)
+        let content = try #require(notice(r))
+        #expect(content.title == "Shortcut connected")
+        #expect(content.body == "The shortcut reached Sortd, but no payment came with it. Pay with Apple Pay in a shop to log one.")
+        #expect(LoggedNotice.link(for: .reached) == "sortd://home")
+    }
+
+    /// Once a real tap has been logged, a blank run (a ▶ run, or a blank
+    /// companion of a real purchase) stays silent.
+    @Test func aPlayButtonRunAfterARealTapSaysNothing() async throws {
+        let ctx = store(), b = book()
+        _ = try await LogWalletTapIntent.handle(nil, amount: "A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                                                in: ctx, book: b, now: now)
+        let r = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "", in: ctx, book: b,
+                                                    now: now.addingTimeInterval(600))
         #expect(r.transaction == nil)
         #expect(notice(r) == nil)
     }
+
+    @Test func theConnectedNoticeFollowsTheSettingAndPermission() {
+        #expect(LoggedNotice.content(for: .reached, settingOn: false, authorized: true) == nil)
+        #expect(LoggedNotice.content(for: .reached, settingOn: true, authorized: false) == nil)
+    }
+
+    // MARK: - Nothing posted
 
     @Test func nothingForADeclinedPayment() async throws {
         let r = try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "",
