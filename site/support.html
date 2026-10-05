@@ -112,7 +112,7 @@
 
   <h2>How do currencies work?</h2>
   <ul>
-    <li><strong>Purchase currency:</strong> if Apple Pay sends the currency with the amount, Sortd uses it. If not, a tap in a shop uses the local currency in Australia, Singapore and Malaysia (from your iPhone's time zone), and your iPhone's region currency anywhere else. A payment in an app or on a website uses the card's currency.</li>
+    <li><strong>Purchase currency:</strong> if Apple Pay sends the currency with the amount, Sortd uses it. If not, a tap in a shop uses the currency of the country you're in, which Sortd reads from your iPhone's time zone (from build 7; older builds only did this in Australia, Singapore and Malaysia). A payment in an app or on a website uses the card's currency.</li>
     <li><strong>Totals</strong> are shown in your home currency. Change it in Settings › Currency › Show Totals In.</li>
     <li>Purchases in other currencies are converted using that day's European Central Bank rate, downloaded from frankfurter.dev. On weekends and holidays the most recent earlier rate is used. Tap Update Exchange Rates if a conversion is missing.</li>
   </ul>
