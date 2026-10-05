@@ -6,7 +6,7 @@
 - Price: free. Every feature, including the receipt camera, Insights, subscriptions and bills, and budgets.
 - Currencies: 30+ currencies, converted at that day's European Central Bank rate.
 - Limits: Apple's Wallet trigger can miss a payment. Cash and cards that are not in Apple Pay are added by hand, with the camera or from a statement.
-- Status: the TestFlight beta is open now (since 5 October 2026); sign up to get the link. Not on the App Store yet.
+- Status: the TestFlight beta is open now (since 5 October 2026); sign up at sortd.page/beta and the form takes you straight to TestFlight. Not on the App Store yet.
 - Sign-off: Consider it Sortd.
 
 ## Pages

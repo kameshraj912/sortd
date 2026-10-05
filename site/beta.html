@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join the beta – Sortd: Spending Tracker</title>
-<meta name="description" content="Join the Sortd beta. Leave your email and we will send you the TestFlight link. The beta is open now.">
+<meta name="description" content="Join the Sortd beta on TestFlight. The beta is open now.">
 <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
 <link rel="icon" type="image/png" href="img/favicon.png?v=2">
@@ -13,12 +13,12 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sortd: Spending Tracker">
 <meta property="og:title" content="Join the beta – Sortd: Spending Tracker">
-<meta property="og:description" content="Join the Sortd beta. Leave your email and we will send you the TestFlight link. The beta is open now.">
+<meta property="og:description" content="Join the Sortd beta on TestFlight. The beta is open now.">
 <meta property="og:url" content="https://sortd.page/beta">
 <meta property="og:image" content="https://sortd.page/img/og.png?v=2">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="style.css?v=42">
-<script src="site.js?v=39"></script>
+<script src="site.js?v=40"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -43,14 +43,14 @@
   <div id="beta-intro">
   <h1>Join the Sortd beta</h1>
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-  <p>The beta is <b>open now.</b> Leave your email and we'll send you the TestFlight link. You'll need an iPhone on iOS&nbsp;26 or later. Yes, that means finally installing the update you've been&nbsp;snoozing.</p>
+  <p>The beta is <b>open now.</b> Tell us who you are and you go straight to TestFlight. You'll need an iPhone on iOS&nbsp;26 or later. Yes, that means finally installing the update you've been&nbsp;snoozing.</p>
   </div>
 
   <form class="beta-form" id="beta-form" action="/api/beta" method="post" novalidate>
     <div class="field">
       <label for="f-email">Email</label>
       <input id="f-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="254" aria-describedby="f-email-hint">
-      <p class="hint" id="f-email-hint">We'll send exactly one email: your TestFlight link. Unlike every other app you've signed up&nbsp;for.</p>
+      <p class="hint" id="f-email-hint">So we know who's testing. We'll only email you about the beta. Unlike every other app you've signed up&nbsp;for.</p>
     </div>
     <div class="field">
       <label for="f-name">First name</label>
@@ -86,16 +86,16 @@
     <div class="cf-turnstile" data-sitekey="0x4AAAAAAE-iLd-MyhG48_1V" data-action="beta-signup" data-theme="auto"></div>
     <p class="form-error" id="beta-error" role="alert" hidden></p>
     <button class="btn btn-primary" type="submit">Join the beta</button>
-    <p class="hint small">We use this only to send your invite. Not kept in a database, not shared, not sold. We're a budgeting app, not a data&nbsp;broker. <a href="privacy#beta">Privacy</a></p>
+    <p class="hint small">We use this to know who's testing and to email you about the beta. Not kept in a database, not shared, not sold. We're a budgeting app, not a data&nbsp;broker. <a href="privacy#beta">Privacy</a></p>
   </form>
 
   <div class="beta-done" id="beta-done" role="status" hidden>
     <svg class="done-tick" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="24"/><path d="M14 24.5l7 7 13-14" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <h2 class="as-h1">You've been Sortd.</h2>
     <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <p>You're on the list. We'll send the TestFlight link to <strong id="beta-done-email">your email</strong>. Until then, try not to open your banking app. We'll deal with it&nbsp;soon.</p>
-    <p class="muted">One email. No newsletters. No "we noticed you haven't opened the app"&nbsp;guilt&nbsp;trips.</p>
-    <a class="btn btn-primary" href="/">OK, back to doomscrolling</a>
+    <p>You're in, <strong id="beta-done-email">your email</strong>. Opening TestFlight now. If nothing happens, tap the&nbsp;button.</p>
+    <p class="muted">No newsletters. No "we noticed you haven't opened the app"&nbsp;guilt&nbsp;trips.</p>
+    <a class="btn btn-primary" id="beta-next" href="/">Open TestFlight</a>
   </div>
 
   <p class="muted" id="beta-alt">Rather type it yourself? Email&nbsp;<a href="mailto:support@sortd.page?subject=Join%20the%20Sortd%20beta">support@sortd.page</a>.</p>

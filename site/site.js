@@ -15,7 +15,7 @@
   root.classList.add("js");
 
   document.addEventListener("DOMContentLoaded", function () {
-    // Beta sign-up: send without leaving the page, then show "You're on the list".
+    // Beta sign-up: send without leaving the page, then open TestFlight (the Worker hands back the link).
     var form = document.getElementById("beta-form");
     if (form) {
       var err = document.getElementById("beta-error"), done = document.getElementById("beta-done");
@@ -46,6 +46,9 @@
               form.hidden = true; done.hidden = false;
               if (!form.hasAttribute("data-stay")) window.scrollTo(0, 0);
               var h = done.querySelector(".as-h1"); h.setAttribute("tabindex", "-1"); h.focus();
+              var next = document.getElementById("beta-next");
+              if (next && res.next) { next.href = res.next; setTimeout(function () { location.href = res.next; }, 1500); }
+              else if (next) next.hidden = true;
             }
             else { show(res.error || "That didn't go through. Please try\u00a0again."); resetCaptcha(); }
           })
