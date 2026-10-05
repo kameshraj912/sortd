@@ -192,7 +192,13 @@ enum Sortd {
         number = number.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{00A0}\u{202F}")))
         // Before the first digit means in front, whatever sign or space sits between.
         let firstDigit = full.firstIndex(where: \.isNumber) ?? full.endIndex
-        return (symbol, number, found.lowerBound < firstDigit)
+        let symbolFirst = found.lowerBound < firstDigit
+        // "-$5.50" must not come apart as "$" then "-5.50": a minus stays in
+        // front of the currency it was written before.
+        if symbolFirst, let sign = number.first, "-\u{2212}".contains(sign) {
+            return (String(sign) + symbol, String(number.dropFirst()), true)
+        }
+        return (symbol, number, symbolFirst)
     }
 
     /// An amount as VoiceOver should say it: "5.50 Australian dollars", not

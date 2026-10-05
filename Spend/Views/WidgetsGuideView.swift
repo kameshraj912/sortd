@@ -24,7 +24,7 @@ struct WidgetsGuideView: View {
                 widget("plus.circle", "Quick Add",
                        "Add a purchase, scan a receipt or import a statement in one tap.")
                 widget("calendar.badge.clock", "Bills",
-                       "Subscriptions and bills about to charge, with a countdown.")
+                       "Subscriptions and bills about to charge, with the day each one is due.")
                 widget("lock", "Lock Screen",
                        "Today's total as a small dial, a line under the clock, or plain text.")
             }

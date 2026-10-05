@@ -579,7 +579,9 @@ struct BillsView: View {
         let soon = Array(s.bills.prefix(small ? 3 : 4))
         let total = soon.reduce(Decimal(0)) { $0 + $1.amount }
         return VStack(alignment: .leading, spacing: small ? 6 : 8) {
-            Heading(text: "Coming up", trailing: Sortd.money(total, s.currency, cents: false))
+            // The total is of the rows shown; the small tile leaves it out
+            // rather than show a sum that looks like "everything coming up".
+            Heading(text: "Coming up", trailing: small ? nil : Sortd.money(total, s.currency, cents: false))
             ForEach(soon) { bill in
                 MoneyRow(shop: ShopName(name: bill.name),
                          detail: Sortd.dueDay(bill.due),
@@ -898,10 +900,11 @@ struct TodayView: View {
 
     /// "A$6.90 left of A$50 a day", or "A$3 over A$50 a day". The word says
     /// which, so the bar's colour never has to.
-    static func allowanceLine(_ s: WidgetSummary, allowance: Decimal, short: Bool) -> String {
+    static func allowanceLine(_ s: WidgetSummary, allowance: Decimal, short: Bool, spoken: Bool = false) -> String {
         let gap = allowance - s.today
-        let amount = Sortd.money(abs(gap), s.currency)
-        let limit = Sortd.money(allowance, s.currency, cents: false)
+        // VoiceOver gets "6.90 Australian dollars", not "A dollar sign 6.90".
+        let amount = spoken ? Sortd.spoken(abs(gap), s.currency) : Sortd.money(abs(gap), s.currency)
+        let limit = spoken ? Sortd.spoken(allowance, s.currency, cents: false) : Sortd.money(allowance, s.currency, cents: false)
         if gap < 0 { return short ? "\(amount) over" : "\(amount) over \(limit) a day" }
         return short ? "\(amount) left" : "\(amount) left of \(limit) a day"
     }
@@ -915,7 +918,7 @@ struct TodayView: View {
             if let count = Self.countLine(s.todayCount) { line += ", \(count)" }
             parts.append(line + ".")
             if let allowance = s.dayAllowance, allowance > 0 {
-                parts.append(Self.allowanceLine(s, allowance: allowance, short: false) + ".")
+                parts.append(Self.allowanceLine(s, allowance: allowance, short: false, spoken: true) + ".")
             }
         }
         if let last {
@@ -937,7 +940,8 @@ private struct DayBar: View {
         GeometryReader { geo in
             Capsule()
                 .fill(over ? Sortd.over : Sortd.brandGreen)
-                .frame(width: max(5, geo.size.width * share))
+                // Nothing spent draws nothing: a pip at zero read as "some".
+                .frame(width: share > 0 ? max(5, geo.size.width * share) : 0)
                 .widgetAccentable()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Sortd.track, in: Capsule())
