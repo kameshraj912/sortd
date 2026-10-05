@@ -47,3 +47,16 @@ Thanks for trying Sortd. Three things matter most this round.
 
 Also worth a look: setup on a fresh install, Activity (scroll, search, Go to Date in the
 filter menu), App Lock, Dark Mode and the largest text size.
+
+## What to Test (build 1.0 (7), 5 Oct 2026)
+
+Two fixes in this build.
+
+1. Pressing ▶ in the shortcut now tells you it worked. Until your first real purchase, a test
+   run shows a "Shortcut connected" notification (if notifications are on). Nothing is saved.
+
+2. Travelling. A tap that arrives without a currency now uses the currency of the country
+   you are in, wherever your iPhone was bought. If you are away from home, pay for something
+   with Apple Pay and check the currency in Activity.
+
+Everything else is as before: Apple Pay logging, receipts, statements, iCloud backup.
