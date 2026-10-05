@@ -63,4 +63,27 @@ struct WidgetFaceRulesTests {
         #expect(target?.name == "purchase")
         #expect(target?.id == id.uuidString)
     }
+
+    /// The Spending widget opens on the month. On "Today" it repeated the
+    /// Today widget beside it (Raj's Home Screen, 5 Oct 2026).
+    @Test func theSpendingWidgetStartsOnThisMonth() throws {
+        let intent = try source("SortdWidget/SortdWidgetIntent.swift")
+        #expect(intent.contains(#"@Parameter(title: "Show", default: .month)"#))
+    }
+
+    /// No tile draws the app's four dashes any more, and none shows a bill
+    /// as "in 5d": it gets a real day.
+    @Test func noTileDrawsTheDashesOrACountdown() throws {
+        let widget = try source("SortdWidget/SortdWidget.swift")
+        #expect(!widget.contains("BrandMark"))
+        #expect(!widget.contains("countdown(to:"))
+        #expect(widget.contains("Sortd.dueDay(bill.due)"))
+    }
+
+    /// The ring's centre is the figure alone. With the currency beside it
+    /// ("SGD 827") the text ran across the ring.
+    @Test func theRingShowsTheFigureWithoutItsCurrency() throws {
+        let widget = try source("SortdWidget/SortdWidget.swift")
+        #expect(widget.contains("Text(Sortd.moneyParts(abs(left), s.currency, cents: false).number)"))
+    }
 }

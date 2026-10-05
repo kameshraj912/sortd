@@ -89,7 +89,9 @@ struct SpendingConfiguration: WidgetConfigurationIntent {
         IntentDescription("Pick which total to show and how the widget looks.")
     }
 
-    @Parameter(title: "Show", default: .today)
+    /// This month by default: the Today widget already shows today, and two
+    /// tiles saying the same thing was the first thing Raj saw (5 Oct 2026).
+    @Parameter(title: "Show", default: .month)
     var period: SortdPeriod
 
     @Parameter(title: "Look", default: .auto)
