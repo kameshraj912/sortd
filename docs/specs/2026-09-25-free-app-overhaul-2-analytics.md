@@ -86,11 +86,12 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `intro_shown`, `intro_finished(skipped, step)`: the three-step app intro (`docs/specs/2026-09-25-app-intro.md`). `intro_shown` once per showing (a fresh install or a Help replay); `intro_finished` once per showing when it ends, `step` is the 0-based step it ended on
 - `analytics_opted_out`: sent once, then nothing. The switch and the date it was flipped are kept on the phone (`analyticsEnabled`, `analyticsConsentChangedAt`) and survive Delete All Data.
 - `signed_in(provider: apple|google)`, `signed_out`: sign-in (sub-spec 4) also calls `identify` (before `signed_in`) and `reset` (after `signed_out`). Never the email or the subject.
+- `apple_pay_setup_action(action, route: shortcut|automation, step: not_connected|step_3_left|said_done|tap_logged, page?)` (6 Oct 2026): every tap on the Apple Pay setup step, so the funnel shows where people stop. `action` is the button: `get_shortcut`, `open_shortcuts`, `check_shortcut`, `show_me_how`, `by_hand`, `switched_on`, `start_in_shortcuts`, `back_to_shortcuts`, `guide_next`, `guide_done`, `finish_step_3_home`, `no_apple_pay`, `no_apple_pay_confirmed`; the by-hand guide's taps carry a `by_hand_` prefix. `page` is the walk-through page, 1-based. Never on sample data.
 - `founder_note_seen(moment: aha|about)`: the founder's note (`FounderNoteSheet`), sent each time it is shown — at the aha moment (once ever, right after `ActivationCard`'s celebration) or replayed from Settings › About. `founder_note_reply_tapped`: the "Tell Kameshraj" button, before its mailto opens.
 
 ### Beta additions (26 Sep 2026): more intent events, session replay, the developer menu
 
-Session replay: on only in a `SORTD_REPLAY` build (the beta), off for the App Store release,
+Session replay: on in a `SORTD_REPLAY` build that is not an App Store copy (`Analytics.replayAllowed`, by receipt; since 6 Oct 2026 the Release config carries the flag so TestFlight records), off for the App Store release,
 following the same `Analytics.isEnabled` switch (`PostHogSDK.optOut()` uninstalls the replay
 integration, `optIn()` reinstalls it). `screenshotMode` (SwiftUI needs it, not the wireframe
 mode), all text inputs, images and sandboxed views masked by default, and `.postHogMask()` on

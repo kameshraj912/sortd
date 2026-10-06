@@ -13,6 +13,10 @@ struct ApplePayAutomationGuide: View {
     let steps: [ApplePaySetupSteps.AutomationStep]
     /// Which set of drawings goes with `steps`.
     let drawing: WalletSetupGuide.Route
+    /// The connection as the caller sees it, for `apple_pay_setup_action`.
+    /// The guide is offered once the shortcut has reached Sortd, so that is
+    /// the default; a caller that knows better (a tap already logged) says so.
+    var status: ApplePayStatus = .shortcutReached(.now)
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -24,15 +28,24 @@ struct ApplePayAutomationGuide: View {
     /// it gives way: the words are what must stay on screen.
     private var mockHeight: CGFloat { typeSize.isAccessibilitySize ? 200 : min(scaledMockHeight, 320) }
 
-    init(steps: [ApplePaySetupSteps.AutomationStep], drawing: WalletSetupGuide.Route) {
+    init(steps: [ApplePaySetupSteps.AutomationStep], drawing: WalletSetupGuide.Route,
+         status: ApplePayStatus = .shortcutReached(.now)) {
         self.steps = steps
         self.drawing = drawing
+        self.status = status
         // Each walk-through keeps its own place.
         let key = ApplePaySetupSteps.automationPageKey + (drawing == .automationByHand ? ".byHand" : "")
         _storedPage = AppStorage(wrappedValue: 0, key)
     }
 
     private var page: Int { min(max(storedPage, 0), steps.count - 1) }
+
+    /// `apple_pay_setup_action` from inside the guide. The by-hand guide's
+    /// taps are named apart, so "page 2" is never ambiguous in the funnel.
+    private func trackAction(_ action: String, page: Int? = nil) {
+        let name = drawing == .automationByHand ? "by_hand_" + action : action
+        ApplePaySetupSteps.trackAction(name, status: status, saysBuilt: built, page: page)
+    }
     private var step: ApplePaySetupSteps.AutomationStep { steps[page] }
     private var isLast: Bool { page == steps.count - 1 }
 
@@ -137,6 +150,7 @@ struct ApplePayAutomationGuide: View {
                 // back to Shortcuts, where the half-made automation is waiting
                 // (checked on iOS 26.5: it stays where it was left).
                 Button {
+                    trackAction(page == 0 ? "start_in_shortcuts" : "back_to_shortcuts", page: page + 1)
                     let url = page == 0 ? ApplePaySetupSteps.createAutomationURL : ApplePaySetupSteps.shortcutsURL
                     // If the direct link is refused, plain Shortcuts still opens.
                     openURL(url) { accepted in
@@ -169,10 +183,12 @@ struct ApplePayAutomationGuide: View {
                     }
                     Button {
                         if isLast {
+                            trackAction("guide_done", page: page + 1)
                             built = true
                             storedPage = 0
                             dismiss()
                         } else {
+                            trackAction("guide_next", page: page + 1)
                             storedPage = page + 1
                         }
                     } label: {

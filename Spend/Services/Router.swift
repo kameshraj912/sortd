@@ -19,6 +19,8 @@ final class Router {
     /// A sheet for Home to present.
     enum Sheet: Hashable {
         case add, budget, scan
+        /// The Apple Pay Logging page, as Home's Finish Setup card opens it.
+        case applePaySetup
     }
 
     /// What a `sortd://` link names, and the id after it if it has one
@@ -113,6 +115,12 @@ final class Router {
         case "import":
             settingsPath = [.importing]
             showingSettings = true
+        case "applepay":
+            // The reminder to finish Apple Pay logging (`ApplePayStepNudge`).
+            // Home's own setup sheet, not a Settings push: pushed by value
+            // the page came up blank (simulator, 6 Oct 2026).
+            tab = .home
+            sheet = .applePaySetup
         default:
             tab = .home
         }

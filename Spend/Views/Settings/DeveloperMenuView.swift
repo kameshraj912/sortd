@@ -39,7 +39,7 @@ struct DeveloperMenuView: View {
 
                 Section {
                     LabeledContent("Analytics", value: Analytics.shared.isEnabled ? "On" : "Off")
-                    LabeledContent("Session Replay", value: Analytics.shared.isEnabled && Analytics.replayBuildFlagOn ? "On" : "Off")
+                    LabeledContent("Session Replay", value: Analytics.shared.isEnabled && Analytics.replayAllowed ? "On" : "Off")
                     LabeledContent("PostHog Host", value: Analytics.postHogHost)
                     LabeledContent("Sentry", value: CrashReporting.isOn ? "On" : "Off")
                     LabeledContent("Version", value: "\(version) (\(build))")

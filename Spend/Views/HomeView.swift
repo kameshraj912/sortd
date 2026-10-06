@@ -147,8 +147,11 @@ struct HomeView: View {
             // "add" links open from RootView (one add sheet for the whole
             // app); Home only handles its own budget sheet.
             .onChange(of: Router.shared.sheet, initial: true) { _, pending in
-                guard pending == .budget else { return }
-                showingBudget = true
+                switch pending {
+                case .budget: showingBudget = true
+                case .applePaySetup: showingSetup = true
+                default: return
+                }
                 Router.shared.clearSheet()
             }
             .sheet(isPresented: $showingSetup) {

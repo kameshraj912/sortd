@@ -236,3 +236,45 @@ extension ApplePaySetupSteps {
     /// Under step 3 once the walk-through is finished and no tap has landed.
     static let automationTestLine = "Now pay with Apple Pay in a shop. The purchase shows up in Sortd by itself."
 }
+
+// MARK: - What people tap on the step (6 Oct 2026)
+
+extension ApplePaySetupSteps {
+    /// Where the Apple Pay setup had got to, for `apple_pay_setup_action`.
+    /// `ApplePayStatus` plus the person's own "I'm done": the three things
+    /// the funnel needs to tell apart. Never an amount or a shop.
+    enum Progress: String {
+        /// Nothing has reached Sortd.
+        case notConnected = "not_connected"
+        /// The shortcut ran (steps 1 and 2), step 3 not said done.
+        case stepThreeLeft = "step_3_left"
+        /// Step 3 said done, no real tap yet.
+        case saidDone = "said_done"
+        /// A real tap has landed.
+        case tapLogged = "tap_logged"
+
+        init(status: ApplePayStatus, saysBuilt: Bool) {
+            switch status {
+            case .notConnected: self = .notConnected
+            case .shortcutReached: self = saysBuilt ? .saidDone : .stepThreeLeft
+            case .tapLogged, .tapNeedsCheck: self = .tapLogged
+            }
+        }
+    }
+
+    /// One event per tap on the step, so the funnel shows where people
+    /// stop. `action` is the button's name in snake case; `page` is the
+    /// walk-through page for `guide_page`, 1-based.
+    static func trackAction(_ action: String, route: Route = ApplePaySetupSteps.route,
+                            status: ApplePayStatus, saysBuilt: Bool, page: Int? = nil) {
+        // Sample data is a look around, not a setup: keep it out of the funnel.
+        guard !DemoData.isActive else { return }
+        var props: [String: Analytics.AnalyticsValue] = [
+            "action": .string(action),
+            "route": .string(route == .shortcut ? "shortcut" : "automation"),
+            "step": .string(Progress(status: status, saysBuilt: saysBuilt).rawValue),
+        ]
+        if let page { props["page"] = .int(page) }
+        Analytics.shared.track(.applePaySetupAction, props)
+    }
+}

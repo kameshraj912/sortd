@@ -519,6 +519,9 @@ struct OnboardingView: View {
         .padding(.top, 8)
         .confirmationDialog("Carry on without Apple Pay?", isPresented: $askingNoApplePay, titleVisibility: .visible) {
             Button("I Don't Use Apple Pay") {
+                ApplePaySetupSteps.trackAction("no_apple_pay_confirmed", status: applePayStatus, saysBuilt: automationBuilt)
+                // Kept: the Apple Pay reminder stays quiet for this person.
+                UserDefaults.standard.set(true, forKey: ApplePayStepNudge.noApplePayKey)
                 usedSkip = true
                 go(1)
             }
@@ -1296,7 +1299,10 @@ struct OnboardingView: View {
             // still be able to get into the app. At the end of the page, out
             // of the button bar, and it asks before it goes on.
             if newFlow, !applePayReady {
-                tertiaryButton("I don't use Apple Pay") { askingNoApplePay = true }
+                tertiaryButton("I don't use Apple Pay") {
+                    ApplePaySetupSteps.trackAction("no_apple_pay", status: applePayStatus, saysBuilt: automationBuilt)
+                    askingNoApplePay = true
+                }
                     .padding(.top, 12)
             }
         }

@@ -38,7 +38,10 @@ struct ApplePayStepLeftCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Button { showingGuide = true } label: {
+                Button {
+                    ApplePaySetupSteps.trackAction("finish_step_3_home", status: .shortcutReached(.now), saysBuilt: automationBuilt)
+                    showingGuide = true
+                } label: {
                     Text("Finish Step 3")
                         .font(.headline)
                         .foregroundStyle(Color.onBrand)

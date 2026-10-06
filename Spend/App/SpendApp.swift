@@ -297,6 +297,21 @@ struct RootView: View {
     @State private var tab: AppTab = .home
     #endif
 
+    /// `ApplePayStepNudge.update` with what the store says right now.
+    private func scheduleApplePayNudge() {
+        let defaults = UserDefaults.standard
+        // Someone who pays cash, or said they don't use Apple Pay, is never reminded.
+        let wants = defaults.string(forKey: SetupProfile.paymentKey) != SetupProfile.Payment.cash.rawValue
+            && !defaults.bool(forKey: ApplePayStepNudge.noApplePayKey)
+        let done = onboarded && !setupPresented
+        guard done, wants else { ApplePayStepNudge.cancel(); return }
+        // A store that can't be read says nothing about logging: no reminder.
+        guard let taps = try? context.fetch(FetchDescriptor<Transaction>()) else { return }
+        let status = ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: taps)
+        let built = defaults.bool(forKey: ApplePaySetupSteps.automationBuiltKey)
+        Task { await ApplePayStepNudge.update(status: status, saysBuilt: built, setupDone: true, wantsApplePay: true) }
+    }
+
     /// Setup is on screen (first run, "Run Setup Again", or a debug flag).
     private var setupPresented: Bool {
         !setupFinished && (!onboarded || rerun || Self.forceSetup)
@@ -389,6 +404,10 @@ struct RootView: View {
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
             #endif
+            // And to set the reminder to finish Apple Pay logging; coming
+            // back takes it down, so it always counts from the last leave.
+            if phase == .background { scheduleApplePayNudge() }
+            if phase == .active { ApplePayStepNudge.cancel() }
         }
         // Offline to online: the work that waited for a connection carries on.
         .onChange(of: Connectivity.shared.isOnline) { old, new in
