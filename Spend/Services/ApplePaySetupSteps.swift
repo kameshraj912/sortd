@@ -170,7 +170,7 @@ extension ApplePaySetupSteps {
         AutomationStep(id: 3, title: "Fill in 3 boxes",
                        taps: ["Tap Amount, then Shortcut Input above the keyboard. Tap Shortcut Input again and choose Amount.",
                               "Do the same for Shop. Choose Merchant.",
-                              "Tap the blue ›, then Card. Choose Card or Pass."]),
+                              "Tap the blue ›, then Card. Choose Shortcut Input, then Card or Pass."]),
         AutomationStep(id: 4, title: "Turn off Show When Run",
                        taps: ["Switch off Show When Run. It is under Card.",
                               "Tap Done at the top right."],
