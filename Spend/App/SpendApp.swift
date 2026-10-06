@@ -297,6 +297,15 @@ struct RootView: View {
     @State private var tab: AppTab = .home
     #endif
 
+    /// `ApplePayStepNudge.update` with what the store says right now.
+    private func scheduleApplePayNudge() {
+        let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
+        let status = ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: taps)
+        let built = UserDefaults.standard.bool(forKey: ApplePaySetupSteps.automationBuiltKey)
+        let done = onboarded && !setupPresented
+        Task { await ApplePayStepNudge.update(status: status, saysBuilt: built, setupDone: done) }
+    }
+
     /// Setup is on screen (first run, "Run Setup Again", or a debug flag).
     private var setupPresented: Bool {
         !setupFinished && (!onboarded || rerun || Self.forceSetup)
@@ -389,6 +398,8 @@ struct RootView: View {
             // Leaving the app is the natural moment to back up what was done.
             if phase == .background { CloudBackup.shared.backUpOnBackground(from: context) }
             #endif
+            // And to set, or clear, the reminder to finish Apple Pay logging.
+            if phase == .background { scheduleApplePayNudge() }
         }
         // Offline to online: the work that waited for a connection carries on.
         .onChange(of: Connectivity.shared.isOnline) { old, new in
