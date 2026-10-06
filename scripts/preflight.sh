@@ -79,9 +79,16 @@ if grep -q 'posthog-ios' "$PBX"; then
   fi
 fi
 
-# 1d. Session replay is for TestFlight only. An App Store build must not carry the flag.
-if grep -q 'SORTD_REPLAY' "$PBX" && [ "$MODE" = "--appstore" ]; then
-  bad "SORTD_REPLAY is still in the Release build settings. Remove it before an App Store build (replay is TestFlight only)."
+# 1d. Session replay is for TestFlight only. Since 6 Oct 2026 the Release build carries
+# SORTD_REPLAY so TestFlight records; the App Store copy is kept quiet at run time by its
+# receipt (Analytics.replayAllowed). An App Store build must still have that guard.
+if [ "$MODE" = "--appstore" ]; then
+  if grep -q 'return isTestFlight' Spend/Services/Analytics.swift \
+     && grep -q 'if Analytics.replayAllowed' Spend/Services/Analytics.swift; then
+    ok "session replay stays off for App Store copies (TestFlight receipt check in Analytics.replayAllowed)."
+  else
+    bad "Analytics.replayAllowed no longer gates on the TestFlight receipt: an App Store copy could record replays."
+  fi
 fi
 
 # 2. Build number must be unique per upload; remind, don't guess.

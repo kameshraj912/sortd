@@ -11,4 +11,15 @@ enum Distribution {
     static var isAppStore: Bool {
         isAppStore(receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent)
     }
+
+    /// A TestFlight (or developer-signed) install, by its sandbox receipt.
+    /// Said positively, so an unknown receipt counts as "not TestFlight":
+    /// anything that must stay off for App Store copies gates on this.
+    static func isTestFlight(receiptName: String?) -> Bool {
+        receiptName == "sandboxReceipt"
+    }
+
+    static var isTestFlight: Bool {
+        isTestFlight(receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent)
+    }
 }

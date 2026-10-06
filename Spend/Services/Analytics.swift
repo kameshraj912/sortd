@@ -66,6 +66,11 @@ final class Analytics {
         case cardAdded = "card_added"
         case appLockTurnedOn = "app_lock_turned_on"
         case helpOpened = "help_opened"
+        /// Every tap on the Apple Pay setup step (6 Oct 2026): both iOS 26
+        /// testers tapped out of it and the named steps alone could not say
+        /// where. `action` names the button, `route` the iOS route, `step`
+        /// how far the setup had got (`ApplePaySetupSteps.Progress`).
+        case applePaySetupAction = "apple_pay_setup_action"
         /// The hidden developer menu (Settings › About, 7 taps): a forced
         /// event so Raj can see one arrive in PostHog on demand.
         case developerTestEvent = "developer_test_event"
@@ -174,13 +179,33 @@ final class Analytics {
     }
 
     /// Whether this build was compiled with session replay at all
-    /// (`SORTD_REPLAY`, the beta only). Replay also needs consent
-    /// (`isEnabled`); the developer menu shows both together.
+    /// (`SORTD_REPLAY`). Replay also needs consent (`isEnabled`) and a copy
+    /// that is not from the App Store (`replayAllowed`); the developer menu
+    /// shows them together.
     static var replayBuildFlagOn: Bool {
         #if SORTD_REPLAY
         true
         #else
         false
+        #endif
+    }
+
+    /// Replay is for TestFlight only (Raj, 26 Sep 2026). Since 6 Oct 2026
+    /// the Release build carries the flag too, so testers' builds record;
+    /// the App Store copy of the same binary is told apart by its receipt.
+    /// Gated on the TestFlight receipt being there, not on the App Store
+    /// one being absent, so a copy with no receipt at all never records.
+    /// The simulator has no receipt: Debug builds keep replay there.
+    static var replayAllowed: Bool {
+        replayAllowed(flagOn: replayBuildFlagOn, isTestFlight: Distribution.isTestFlight)
+    }
+
+    static func replayAllowed(flagOn: Bool, isTestFlight: Bool) -> Bool {
+        guard flagOn else { return false }
+        #if DEBUG
+        return true
+        #else
+        return isTestFlight
         #endif
     }
 
@@ -547,16 +572,18 @@ final class LivePostHogClient: PostHogClient {
         // release. Screenshot mode, not wireframes, since this is SwiftUI;
         // text, images and sandboxed pickers are masked wholesale, and the
         // few money/shop views left get an explicit `.postHogMask()`.
-        #if SORTD_REPLAY
-        config.sessionReplay = true
-        config.sessionReplayConfig.screenshotMode = true
-        config.sessionReplayConfig.maskAllTextInputs = true
-        config.sessionReplayConfig.maskAllImages = true
-        config.sessionReplayConfig.maskAllSandboxedViews = true
-        config.sessionReplayConfig.throttleDelay = 1
-        #else
-        config.sessionReplay = false
-        #endif
+        // The flag alone is not enough: the same Release binary goes to
+        // TestFlight and the App Store, and only the first may record.
+        if Analytics.replayAllowed {
+            config.sessionReplay = true
+            config.sessionReplayConfig.screenshotMode = true
+            config.sessionReplayConfig.maskAllTextInputs = true
+            config.sessionReplayConfig.maskAllImages = true
+            config.sessionReplayConfig.maskAllSandboxedViews = true
+            config.sessionReplayConfig.throttleDelay = 1
+        } else {
+            config.sessionReplay = false
+        }
         config.captureApplicationLifecycleEvents = true
         config.captureScreenViews = false
         config.captureElementInteractions = false
