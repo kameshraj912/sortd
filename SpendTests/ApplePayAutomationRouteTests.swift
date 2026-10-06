@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import Spend
 
-/// The iOS 26 route (`ApplePaySetupSteps.Route.automation`): its own shortcut
-/// file, the walk-through's words, and when setup may move on.
+/// The iOS 26 route (`ApplePaySetupSteps.Route.automation`): the automation
+/// built by hand, the walk-through's words, and when setup may move on.
 struct ApplePayAutomationRouteTests {
     private let when = Date(timeIntervalSince1970: 1_790_000_000)
 
@@ -12,52 +12,36 @@ struct ApplePayAutomationRouteTests {
         #expect(ApplePaySetupSteps.versionLine(major: 27) == "Steps for iOS 27, the iOS on this iPhone")
     }
 
-    /// Each iOS gets the file that works on it: iOS 27's carries triggers
-    /// iOS 26 can't import, and iOS 26's is typed for a Wallet transaction.
-    @Test func eachRouteDownloadsItsOwnShortcut() {
-        #expect(ApplePaySetupSteps.shortcutURL(for: .shortcut).absoluteString == "https://sortd.page/apple-pay.shortcut")
-        #expect(ApplePaySetupSteps.shortcutURL(for: .automation).absoluteString == "https://sortd.page/apple-pay-26.shortcut")
-    }
-
-    /// Both files are served under the name Check the Shortcut runs, and the
-    /// iOS 26 one really is in the site folder that gets deployed.
-    @Test func theSiteServesBothFilesUnderTheShortcutsName() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let headers = try String(contentsOf: root.appendingPathComponent("site/_headers"), encoding: .utf8)
-        for path in ["/apple-pay.shortcut", "/apple-pay-26.shortcut"] {
-            let block = try #require(headers.range(of: path + "\n"))
-            let rest = headers[block.upperBound...].prefix(220)
-            #expect(rest.contains("filename=\"\(ApplePayHealthCheck.shortcutName).shortcut\""), "\(path)")
-        }
-        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("site/apple-pay-26.shortcut").path))
-    }
-
-    @Test func theShortWalkThroughHasThreePagesInOrder() {
-        let steps = ApplePaySetupSteps.automationSteps
-        #expect(steps.map(\.id) == [0, 1, 2])
-        #expect(steps.allSatisfy { !$0.taps.isEmpty })
-        #expect(WalletSetupGuide(route: .automation).pages.map(\.title) == steps.map(\.title))
-    }
-
-    /// The short way never asks for typing into boxes: the downloaded
-    /// shortcut already holds Amount, Merchant and Card.
-    @Test func theShortWalkThroughPicksTheShortcutAndFillsNothing() {
+    /// Only iOS 27 downloads a shortcut. iOS 26 builds the step by hand:
+    /// a step that arrives in a downloaded shortcut asks "Allow … to share …
+    /// with Sortd?" on the first real tap, which a background automation
+    /// can't show (6 Oct 2026, "Automation failed").
+    @Test func onlyIOS27DownloadsAShortcut() {
+        #expect(ApplePaySetupSteps.shortcutFileURL.absoluteString == "https://sortd.page/apple-pay.shortcut")
         let all = ApplePaySetupSteps.automationSteps
             .flatMap { $0.taps + [$0.title, $0.note ?? ""] }
             .joined(separator: " ")
-        #expect(all.contains("Run Immediately"))
-        #expect(all.contains("My Shortcuts"))
-        #expect(all.contains(ApplePayHealthCheck.shortcutName))
-        #expect(!all.contains("Shortcut Input"))
-        #expect(!all.contains("Create New Shortcut"))
+        #expect(!all.contains("apple-pay-26"))
+        #expect(!all.contains("Under them, tap " + ApplePayHealthCheck.shortcutName))
     }
 
-    /// The by-hand fallback uses iOS 26's own words. "New Blank Automation"
-    /// is not on any iOS 26 screen (it is "Create New Shortcut").
-    @Test func theByHandWalkThroughUsesIOS26sOwnWords() {
-        let steps = ApplePaySetupSteps.byHandAutomationSteps
+    /// The iOS 27 file is served under the name Check the Shortcut runs.
+    @Test func theSiteServesTheShortcutUnderTheShortcutsName() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let headers = try String(contentsOf: root.appendingPathComponent("site/_headers"), encoding: .utf8)
+        let block = try #require(headers.range(of: "/apple-pay.shortcut\n"))
+        let rest = headers[block.upperBound...].prefix(220)
+        #expect(rest.contains("filename=\"\(ApplePayHealthCheck.shortcutName).shortcut\""))
+    }
+
+    /// The iOS 26 walk-through builds Sortd's action into the automation,
+    /// in iOS 26's own words. "New Blank Automation" is not on any iOS 26
+    /// screen (it is "Create New Shortcut").
+    @Test func theIOS26WalkThroughBuildsTheActionByHand() {
+        let steps = ApplePaySetupSteps.automationSteps
         #expect(steps.map(\.id) == [0, 1, 2, 3, 4])
-        #expect(WalletSetupGuide(route: .automationByHand).pages.count == 5)
+        #expect(steps.allSatisfy { !$0.taps.isEmpty })
+        #expect(WalletSetupGuide(route: .automation).pages.map(\.title) == steps.map(\.title))
         let all = steps.flatMap { $0.taps + [$0.title, $0.note ?? ""] }.joined(separator: " ")
         for words in ["Create New Shortcut", "Run Immediately", "Log Wallet Tap", "Show When Run",
                       "Shortcut Input", "Merchant", "Card or Pass"] {
@@ -73,11 +57,10 @@ struct ApplePayAutomationRouteTests {
 
     // MARK: When Continue unlocks (the step is required)
 
-    @Test func nothingConnectedNeverUnlocksContinue() {
-        for route in [ApplePaySetupSteps.Route.shortcut, .automation] {
-            for built in [false, true] {
-                #expect(!ApplePaySetupSteps.isReady(status: .notConnected, route: route, saysBuilt: built))
-            }
+    /// iOS 27 needs the shortcut to have reached Sortd first.
+    @Test func nothingConnectedNeverUnlocksContinueOnIOS27() {
+        for built in [false, true] {
+            #expect(!ApplePaySetupSteps.isReady(status: .notConnected, route: .shortcut, saysBuilt: built))
         }
     }
 
@@ -88,11 +71,62 @@ struct ApplePayAutomationRouteTests {
         #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .shortcut, saysBuilt: true))
     }
 
-    /// iOS 26: steps 1 and 2 let the person into the app (6 Oct 2026). Its
-    /// step 3 is the hard one, and being stuck there must not lock the app.
-    @Test func iOS26GoesOnAfterStepsOneAndTwo() {
-        #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .automation, saysBuilt: false))
+    /// iOS 26: nothing reaches Sortd before a real tap, so "I'm Done" at the
+    /// end of the walk-through is what lets the person in.
+    @Test func iOS26GoesOnWithImDone() {
+        #expect(!ApplePaySetupSteps.isReady(status: .notConnected, route: .automation, saysBuilt: false))
+        #expect(ApplePaySetupSteps.isReady(status: .notConnected, route: .automation, saysBuilt: true))
+        #expect(!ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .automation, saysBuilt: false))
         #expect(ApplePaySetupSteps.isReady(status: .shortcutReached(when), route: .automation, saysBuilt: true))
+    }
+
+    /// After "I'm Done" on iOS 26 the status card waits for the first tap
+    /// instead of saying "Not connected yet". Never on iOS 27.
+    @Test func iOS26WaitsForTheFirstTapAfterImDone() {
+        #expect(ApplePaySetupSteps.waitingForFirstTap(status: .notConnected, route: .automation, saysBuilt: true))
+        #expect(!ApplePaySetupSteps.waitingForFirstTap(status: .notConnected, route: .automation, saysBuilt: false))
+        #expect(!ApplePaySetupSteps.waitingForFirstTap(status: .notConnected, route: .shortcut, saysBuilt: true))
+        #expect(!ApplePaySetupSteps.waitingForFirstTap(status: .tapNeedsCheck(date: when), route: .automation, saysBuilt: true))
+    }
+
+    /// Someone who set up iOS 26 with the downloaded shortcut and never had a
+    /// tap log is asked once to make the automation the new way. A tap that
+    /// already landed, iOS 27, or a second launch leave everything alone.
+    @Test func oldIOS26SetupIsResetOnce() throws {
+        let name = "ios26-reset-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(true, forKey: ApplePaySetupSteps.automationBuiltKey)
+        defaults.set(2, forKey: ApplePaySetupSteps.automationPageKey)
+
+        #expect(!ApplePaySetupSteps.resetOldIOS26Setup(route: .shortcut, hasRealTap: false, defaults: defaults))
+        #expect(defaults.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+
+        #expect(ApplePaySetupSteps.resetOldIOS26Setup(route: .automation, hasRealTap: false, defaults: defaults))
+        #expect(!defaults.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+        #expect(defaults.integer(forKey: ApplePaySetupSteps.automationPageKey) == 0)
+
+        defaults.set(true, forKey: ApplePaySetupSteps.automationBuiltKey)
+        #expect(!ApplePaySetupSteps.resetOldIOS26Setup(route: .automation, hasRealTap: false, defaults: defaults))
+        #expect(defaults.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+    }
+
+    @Test func aTapThatLandedKeepsOldIOS26Setup() throws {
+        let name = "ios26-reset-tap-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(true, forKey: ApplePaySetupSteps.automationBuiltKey)
+        #expect(!ApplePaySetupSteps.resetOldIOS26Setup(route: .automation, hasRealTap: true, defaults: defaults))
+        #expect(defaults.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+    }
+
+    /// iOS 26's Home card and status line talk about the automation, not
+    /// "step 3": there is only one step on iOS 26.
+    @Test func iOS26NeverSaysStepThree() {
+        #expect(!ApplePaySetupSteps.stepThreeLeftLine(route: .automation).contains("step"))
+        #expect(!ApplePaySetupSteps.stepThreeLeftStatusLine(route: .automation).contains("Step"))
+        #expect(ApplePaySetupSteps.stepThreeLeftButton(route: .automation) == "Show Me How")
+        #expect(ApplePaySetupSteps.stepThreeLeftButton(route: .shortcut) == "Finish Step 3")
     }
 
     /// Step 3 is put off, not dropped: Home keeps saying it is left until the

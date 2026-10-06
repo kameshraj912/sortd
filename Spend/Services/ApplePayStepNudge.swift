@@ -48,7 +48,7 @@ enum ApplePayStepNudge {
         var body: String {
             switch self {
             case .notSetUp: "Set it up once and every tap writes itself down. About a minute. Tap to start."
-            case .stepThreeLeft: "Finish step 3 and your taps log themselves. Tap to finish."
+            case .stepThreeLeft: "Finish it in Shortcuts and your taps log themselves. Tap to finish."
             }
         }
     }

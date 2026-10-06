@@ -106,7 +106,11 @@ struct SettingsView: View {
         case .tapLogged(let date, _, _, _): "Last tap \(date.formatted(.relative(presentation: .named)))"
         case .tapNeedsCheck: "Last tap needs a check"
         case .shortcutReached: "Connected · waiting for a shop tap"
-        case .notConnected: "Not set up yet"
+        case .notConnected:
+            // iOS 26: nothing reaches Sortd before the first real tap.
+            ApplePaySetupSteps.waitingForFirstTap(status: .notConnected,
+                                                  saysBuilt: UserDefaults.standard.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+                ? "Set up · waiting for a shop tap" : "Not set up yet"
         }
     }
 

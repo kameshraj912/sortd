@@ -41,8 +41,7 @@ struct DebugScreenHost: View {
                 // `WalletSetupGuide`).
                 let route: WalletSetupGuide.Route = switch ProcessInfo.processInfo.environment["SPEND_GUIDE_ROUTE"] {
                 case "byhand": .byHand
-                case "automation": .automation
-                case "automation-byhand": .automationByHand
+                case "automation", "automation-byhand": .automation
                 default: .quick
                 }
                 let pageIndex = Int(ProcessInfo.processInfo.environment["SPEND_GUIDE_PAGE"] ?? "") ?? 0
@@ -57,13 +56,10 @@ struct DebugScreenHost: View {
                         .padding()
                     }
                 }
-            // The iOS 26 walk-throughs on their own (for screenshots only: a
+            // The iOS 26 walk-through on its own (for screenshots only: a
             // page pinned with `-applePayAutomationPage 2` can't be left with Next).
             case "automation-guide": Color.page.sheet(isPresented: .constant(true)) {
                 ApplePayAutomationGuide(steps: ApplePaySetupSteps.automationSteps, drawing: .automation)
-            }
-            case "automation-guide-byhand": Color.page.sheet(isPresented: .constant(true)) {
-                ApplePayAutomationGuide(steps: ApplePaySetupSteps.byHandAutomationSteps, drawing: .automationByHand)
             }
             case "tip": Color.page.sheet(isPresented: .constant(true)) { TipJarView() }
             case "scan": Color.page.sheet(isPresented: .constant(true)) { ReceiptScanView { _ in } }

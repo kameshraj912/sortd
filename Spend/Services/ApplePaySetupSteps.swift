@@ -93,11 +93,17 @@ extension ApplePaySetupSteps {
         /// iOS 27: the ready-made shortcut carries its own triggers; the
         /// person switches them on.
         case shortcut
-        /// iOS 26: a shortcut can't bring an automation with it. The person
-        /// adds the iOS 26 shortcut (`shortcutURL(for:)`), runs it once, then
-        /// makes a Wallet automation and picks that shortcut in it. Check the
-        /// Shortcut, which sends text, is not offered: this shortcut only
-        /// takes a Wallet transaction.
+        /// iOS 26: a shortcut can't bring an automation with it, so the
+        /// person builds one in Shortcuts: a Wallet automation with Sortd's
+        /// Log Wallet Tap inside it, filled from the tap (`automationSteps`).
+        /// Nothing is downloaded (6 Oct 2026): a step that arrives in a
+        /// downloaded shortcut needs a second "Allow … to share … with
+        /// Sortd?" the first time a real tap's data reaches it, and an
+        /// automation runs in the background where that question can't be
+        /// shown, so every tap ended in "Automation failed". A step added by
+        /// hand is trusted from the start (checked on the iOS 26.5
+        /// simulator). Check the Shortcut is not offered: there is no
+        /// shortcut of ours to run.
         case automation
     }
 
@@ -118,20 +124,18 @@ extension ApplePaySetupSteps {
         "Steps for iOS \(major), the iOS on this iPhone"
     }
 
-    /// The file Get the Shortcut opens. iOS 26 has its own: no triggers, and
-    /// its input typed as a Wallet transaction so Amount, Merchant and Card
-    /// survive the import (`scripts/build-apple-pay-shortcut.py --ios26`).
-    static func shortcutURL(for route: Route) -> URL {
+    /// The file Get the Shortcut opens (iOS 27 only; iOS 26 downloads nothing).
+    static var shortcutFileURL: URL {
         #if DEBUG
         // A local copy, for simulator runs before the site has the file.
         if let forced = ProcessInfo.processInfo.environment["SPEND_SHORTCUT_URL"], let url = URL(string: forced) { return url }
         #endif
-        return route == .shortcut ? shortcutURL : URL(string: "https://sortd.page/apple-pay-26.shortcut")!
+        return shortcutURL
     }
 
-    /// Step 3 on iOS 26.
-    static let makeAutomationStep = (title: "Tell Shortcuts when to run it",
-                                     detail: "Make one automation, so it runs each time you pay. We show you every tap.")
+    /// The one step on iOS 26: the automation, built by hand.
+    static let makeAutomationStep = (title: "Make one automation in Shortcuts",
+                                     detail: "5 short steps, about 2 minutes. You do it once. After that, every Apple Pay tap in a shop logs by itself.")
 
     /// One page of a walk-through.
     struct AutomationStep: Identifiable, Equatable {
@@ -143,10 +147,10 @@ extension ApplePaySetupSteps {
         var note: String?
     }
 
-    /// The iOS 26 walk-through: the automation that runs the downloaded
-    /// shortcut. Words are iOS 26's own, read from the 26.0, 26.4 and 26.5
-    /// simulators' Shortcuts on 5 Oct 2026. Short lines, one tap each:
-    /// written for someone who has never opened Shortcuts.
+    /// The iOS 26 walk-through: a Wallet automation with Sortd's action
+    /// added and filled in by hand. Words are iOS 26's own, read from the
+    /// 26.0, 26.4 and 26.5 simulators' Shortcuts on 5 Oct 2026. Short lines,
+    /// one tap each: written for someone who has never opened Shortcuts.
     static let automationSteps: [AutomationStep] = [
         AutomationStep(id: 0, title: "Find Wallet",
                        taps: ["Tap the Search box at the bottom. Type the word Wallet.",
@@ -158,22 +162,11 @@ extension ApplePaySetupSteps {
                        taps: ["Tap each card you pay with. A tick shows beside it.",
                               "Tap Run Immediately.",
                               "Tap Next at the top right."]),
-        AutomationStep(id: 2, title: "Pick the Sortd shortcut",
-                       taps: ["Find the words My Shortcuts.",
-                              "Under them, tap Log Apple Pay in Sortd."],
-                       note: "That is all. Nothing to type."),
-    ]
-
-    /// The long way on iOS 26, for when the downloaded shortcut doesn't log
-    /// a tap: the action is added and filled in by hand. This is the route
-    /// Raj's own printed guide walks through.
-    static let byHandAutomationSteps: [AutomationStep] = [
-        automationSteps[0],
-        automationSteps[1],
         AutomationStep(id: 2, title: "Add Sortd's action",
                        taps: ["Tap Create New Shortcut.",
                               "Scroll down and tap Sortd.",
-                              "Tap Log Wallet Tap."]),
+                              "Tap Log Wallet Tap."],
+                       note: "Don't pick a shortcut under My Shortcuts. Sortd's own action is the one that works."),
         AutomationStep(id: 3, title: "Fill in 3 boxes",
                        taps: ["Tap Amount, then Shortcut Input above the keyboard. Tap Shortcut Input again and choose Amount.",
                               "Do the same for Shop. Choose Merchant.",
@@ -181,8 +174,13 @@ extension ApplePaySetupSteps {
         AutomationStep(id: 4, title: "Turn off Show When Run",
                        taps: ["Switch off Show When Run. It is under Card.",
                               "Tap Done at the top right."],
-                       note: "You only do this once."),
+                       note: "That's it. Now pay with Apple Pay in a shop."),
     ]
+
+    /// Set up with an older build: the Wallet automation runs the downloaded
+    /// "Log Apple Pay in Sortd", which can't log a tap. Said on the first page
+    /// for anyone who made one.
+    static let oldAutomationLine = "Made a Wallet automation for Sortd before? Delete it first: in Automation, swipe left on it and tap Delete."
 
     /// Opens Shortcuts on its "new automation" list, past Automation › New
     /// Automation (present in iOS 26.0 to 26.5). If a future iOS drops it,
@@ -198,24 +196,35 @@ extension ApplePaySetupSteps {
     /// back (or a relaunch) lands where the person was.
     static let automationPageKey = "applePayAutomationPage"
 
-    /// Whether setup may move on from the Apple Pay step. Steps 1 and 2 show
-    /// as the shortcut reaching Sortd. Step 3 can't be seen, so the person
-    /// says so: "I'm Done" on the iOS 26 pages, "I Switched Both On" on iOS
-    /// 27. A real tap proves all three.
+    /// Whether setup may move on from the Apple Pay step. A real tap proves
+    /// everything. Otherwise the person says the automation is made, since
+    /// Sortd can't see it: "I Switched Both On" on iOS 27 (after the
+    /// shortcut has reached Sortd), "I'm Done" at the end of the iOS 26
+    /// walk-through, where nothing reaches Sortd before a real tap.
     ///
-    /// iOS 27 needs all three (Raj, 5 Oct 2026: people tapped Continue past
-    /// them, and step 3 is the one that makes logging automatic; there it is
-    /// two switches). iOS 26 lets people in after steps 1 and 2 (Raj, 6 Oct
-    /// 2026): its step 3 is about seven taps in Shortcuts, from memory, and
-    /// testers who got stuck there were locked out of the whole app. Step 3
-    /// is not dropped: `stepThreeLeft` keeps it on Home until it is done.
+    /// iOS 27 needs all three steps (Raj, 5 Oct 2026: people tapped
+    /// Continue past them). iOS 26's walk-through can be paged to its end,
+    /// so being stuck in Shortcuts never locks anyone out of the app.
     static func isReady(status: ApplePayStatus, route: Route, saysBuilt: Bool) -> Bool {
         switch status {
-        case .notConnected: false
-        case .shortcutReached: route == .automation || saysBuilt
         case .tapLogged, .tapNeedsCheck: true
+        case .shortcutReached: saysBuilt
+        case .notConnected: route == .automation && saysBuilt
         }
     }
+
+    /// iOS 26 after "I'm Done", before the first real tap: nothing has
+    /// reached Sortd yet, and that is expected. The status card says so
+    /// instead of "Not connected yet".
+    static func waitingForFirstTap(status: ApplePayStatus, route: Route = ApplePaySetupSteps.route, saysBuilt: Bool) -> Bool {
+        route == .automation && saysBuilt && status == .notConnected
+    }
+
+    /// The status card for `waitingForFirstTap`.
+    static let waitingTitle = "Ready for your first tap"
+    static let waitingDetail = "Pay with Apple Pay in a shop. It shows up here by itself."
+    /// iOS 26, nothing made yet.
+    static let notSetUpDetail = "Make the automation below. Until then, your taps aren't written down."
 
     /// Steps 1 and 2 are done and step 3 is not: the shortcut has reached
     /// Sortd, no real tap has landed, and the person hasn't said the
@@ -227,14 +236,43 @@ extension ApplePaySetupSteps {
 
     /// The status card on the setup page while step 3 is left. "Now pay in a
     /// shop" would be a lie there: nothing logs until the automation exists.
-    static let stepThreeLeftStatusLine = "Steps 1 and 2 are done. Step 3 is left, and it is the one that logs your taps."
+    /// On iOS 26 this is someone who set up with an older build: the
+    /// downloaded shortcut reached Sortd, but its automation can't log.
+    static func stepThreeLeftStatusLine(route: Route = ApplePaySetupSteps.route) -> String {
+        route == .automation
+            ? "Your taps aren't logging yet. Make the automation below, the new way."
+            : "Steps 1 and 2 are done. Step 3 is left, and it is the one that logs your taps."
+    }
 
     /// The Home card for `stepThreeLeft`.
     static let stepThreeLeftTitle = "Apple Pay isn't logging yet"
-    static let stepThreeLeftLine = "One step is left in Shortcuts. Until it's done, your taps aren't written down."
+    static func stepThreeLeftLine(route: Route = ApplePaySetupSteps.route) -> String {
+        route == .automation
+            ? "One automation to make in Shortcuts. Until it's done, your taps aren't written down."
+            : "One step is left in Shortcuts. Until it's done, your taps aren't written down."
+    }
+    static func stepThreeLeftButton(route: Route = ApplePaySetupSteps.route) -> String {
+        route == .automation ? "Show Me How" : "Finish Step 3"
+    }
 
-    /// Under step 3 once the walk-through is finished and no tap has landed.
-    static let automationTestLine = "Now pay with Apple Pay in a shop. The purchase shows up in Sortd by itself."
+    /// Set once the one-time iOS 26 reset has run (`resetOldIOS26Setup`).
+    static let ios26ResetKey = "applePayIOS26ByHandReset"
+
+    /// One time, on iOS 26: anyone who said "I'm Done" on the old
+    /// pick-the-shortcut walk-through and has never had a tap log made an
+    /// automation that can't log. Their "done" is taken back so the setup
+    /// page and Home ask them to make it the new way. Someone a tap has
+    /// already reached is left alone. Returns whether it reset anything.
+    @discardableResult
+    static func resetOldIOS26Setup(route: Route = ApplePaySetupSteps.route, hasRealTap: Bool, defaults: UserDefaults = .standard) -> Bool {
+        guard route == .automation, !defaults.bool(forKey: ios26ResetKey) else { return false }
+        defaults.set(true, forKey: ios26ResetKey)
+        guard !hasRealTap, defaults.bool(forKey: automationBuiltKey) else { return false }
+        defaults.set(false, forKey: automationBuiltKey)
+        defaults.set(0, forKey: automationPageKey)
+        return true
+    }
+
 }
 
 // MARK: - What people tap on the step (6 Oct 2026)

@@ -552,9 +552,10 @@ struct OnboardingView: View {
     }
 
     /// Steps 1 and 2 tick themselves once the shortcut has run. iOS 27 then
-    /// needs step 3 too; iOS 26 may go on without it (`isReady`).
+    /// needs step 3 too; iOS 26 needs "I'm Done" at the end of its
+    /// walk-through (`isReady`).
     private var applePayRequirement: String {
-        if ApplePaySetupSteps.route == .automation { return "Do Steps 1 and 2 to Continue" }
+        if ApplePaySetupSteps.route == .automation { return "Make the Automation to Continue" }
         return applePayStatus.isConnected ? "Do Step 3 to Continue" : "Do Steps 1 to 3 to Continue"
     }
 
@@ -791,8 +792,9 @@ struct OnboardingView: View {
     private var setupTasks: [SetupTask] {
         SetupChecklist.tasks(flow: flow, hasCards: !book.active.isEmpty,
                              // Ticked only with all three steps done, the same as Home.
-                             tapped: applePayStatus.isConnected
-                                 && !ApplePaySetupSteps.stepThreeLeft(status: applePayStatus, saysBuilt: automationBuilt),
+                             tapped: (applePayStatus.isConnected
+                                 && !ApplePaySetupSteps.stepThreeLeft(status: applePayStatus, saysBuilt: automationBuilt))
+                                 || ApplePaySetupSteps.waitingForFirstTap(status: applePayStatus, saysBuilt: automationBuilt),
                              widgetAdded: false)
     }
 

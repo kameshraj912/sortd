@@ -14,9 +14,7 @@ struct ApplePayAutomationGuide: View {
     /// Which set of drawings goes with `steps`.
     let drawing: WalletSetupGuide.Route
     /// The connection as the caller sees it, for `apple_pay_setup_action`.
-    /// The guide is offered once the shortcut has reached Sortd, so that is
-    /// the default; a caller that knows better (a tap already logged) says so.
-    var status: ApplePayStatus = .shortcutReached(.now)
+    var status: ApplePayStatus = .notConnected
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -29,23 +27,23 @@ struct ApplePayAutomationGuide: View {
     private var mockHeight: CGFloat { typeSize.isAccessibilitySize ? 200 : min(scaledMockHeight, 320) }
 
     init(steps: [ApplePaySetupSteps.AutomationStep], drawing: WalletSetupGuide.Route,
-         status: ApplePayStatus = .shortcutReached(.now)) {
+         status: ApplePayStatus = .notConnected) {
         self.steps = steps
         self.drawing = drawing
         self.status = status
-        // Each walk-through keeps its own place.
-        let key = ApplePaySetupSteps.automationPageKey + (drawing == .automationByHand ? ".byHand" : "")
-        _storedPage = AppStorage(wrappedValue: 0, key)
+        _storedPage = AppStorage(wrappedValue: 0, ApplePaySetupSteps.automationPageKey)
     }
 
     private var page: Int { min(max(storedPage, 0), steps.count - 1) }
 
-    /// `apple_pay_setup_action` from inside the guide. The by-hand guide's
-    /// taps are named apart, so "page 2" is never ambiguous in the funnel.
+    /// `apple_pay_setup_action` from inside the guide.
     private func trackAction(_ action: String, page: Int? = nil) {
-        let name = drawing == .automationByHand ? "by_hand_" + action : action
-        ApplePaySetupSteps.trackAction(name, status: status, saysBuilt: built, page: page)
+        ApplePaySetupSteps.trackAction(action, status: status, saysBuilt: built, page: page)
     }
+
+    /// Someone whose downloaded shortcut once reached Sortd made the old
+    /// kind of automation; the first page tells them to delete it.
+    private var madeOldAutomation: Bool { LogPurchaseIntent.shortcutHasReachedApp }
     private var step: ApplePaySetupSteps.AutomationStep { steps[page] }
     private var isLast: Bool { page == steps.count - 1 }
 
@@ -89,6 +87,12 @@ struct ApplePayAutomationGuide: View {
                             Text(note)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if page == 0, madeOldAutomation {
+                            Label(ApplePaySetupSteps.oldAutomationLine, systemImage: "exclamationmark.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
