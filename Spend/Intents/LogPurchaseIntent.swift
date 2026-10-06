@@ -136,6 +136,8 @@ struct LogPurchaseIntent: AppIntent {
         defaults.set(now, forKey: lastTapAtKey)
         defaults.set(appending(record, to: recentRuns(defaults)), forKey: recentRunsKey)
         defaults.synchronize()
+        // Logging has moved on: no "isn't logging yet" reminder may follow.
+        ApplePayStepNudge.cancel()
     }
 
     /// The whole tap-handling logic, callable from tests.

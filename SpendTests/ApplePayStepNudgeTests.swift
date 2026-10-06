@@ -21,22 +21,34 @@ struct ApplePayStepNudgeTests {
     /// No reminder before setup is finished, none without permission, and
     /// none once logging works.
     @Test func noReminderUnlessSetUpAllowedAndLeftUndone() {
-        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: false, authorized: true) == .clear)
-        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: true, authorized: false) == .clear)
-        #expect(ApplePayStepNudge.plan(stage: nil, pendingStage: .notSetUp, setupDone: true, authorized: true) == .clear)
-        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: true, authorized: true) == .schedule(.notSetUp))
+        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: false, wantsApplePay: true, authorized: true) == .clear)
+        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: true, wantsApplePay: true, authorized: false) == .clear)
+        #expect(ApplePayStepNudge.plan(stage: nil, pendingStage: .notSetUp, setupDone: true, wantsApplePay: true, authorized: true) == .clear)
+        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: true, wantsApplePay: true, authorized: true) == .schedule(.notSetUp))
+    }
+
+    /// Cash, or "I don't use Apple Pay": never a reminder.
+    @Test func noReminderForSomeoneWhoDoesNotUseApplePay() {
+        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: nil, setupDone: true, wantsApplePay: false, authorized: true) == .clear)
+        #expect(ApplePayStepNudge.plan(stage: .stepThreeLeft, pendingStage: .stepThreeLeft, setupDone: true, wantsApplePay: false, authorized: true) == .clear)
     }
 
     /// Leaving the app again does not push the reminder further out; a new
     /// stage (steps 1 and 2 done) rewrites it with the new words.
     @Test func leavingAgainKeepsTheReminderUnlessTheStageMoved() {
-        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: .notSetUp, setupDone: true, authorized: true) == .leave)
-        #expect(ApplePayStepNudge.plan(stage: .stepThreeLeft, pendingStage: .notSetUp, setupDone: true, authorized: true) == .schedule(.stepThreeLeft))
+        #expect(ApplePayStepNudge.plan(stage: .notSetUp, pendingStage: .notSetUp, setupDone: true, wantsApplePay: true, authorized: true) == .leave)
+        #expect(ApplePayStepNudge.plan(stage: .stepThreeLeft, pendingStage: .notSetUp, setupDone: true, wantsApplePay: true, authorized: true) == .schedule(.stepThreeLeft))
     }
 
-    @Test func theReminderOpensTheSetupPage() {
+    @Test @MainActor func theReminderLinkOpensHomesSetupSheet() {
         let target = Router.target(for: URL(string: ApplePayStepNudge.url)!)
         #expect(target?.name == "applepay")
+        let router = Router.shared
+        router.sheet = nil
+        router.follow(target!)
+        #expect(router.tab == .home)
+        #expect(router.sheet == .applePaySetup)
+        router.clearSheet()
         #expect(ApplePayStepNudge.ids.count == ApplePayStepNudge.delays.count)
         #expect(ApplePayStepNudge.delays == [24 * 3600, 3 * 24 * 3600])
         for stage in [Stage.notSetUp, .stepThreeLeft] {

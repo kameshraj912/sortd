@@ -520,6 +520,8 @@ struct OnboardingView: View {
         .confirmationDialog("Carry on without Apple Pay?", isPresented: $askingNoApplePay, titleVisibility: .visible) {
             Button("I Don't Use Apple Pay") {
                 ApplePaySetupSteps.trackAction("no_apple_pay_confirmed", status: applePayStatus, saysBuilt: automationBuilt)
+                // Kept: the Apple Pay reminder stays quiet for this person.
+                UserDefaults.standard.set(true, forKey: ApplePayStepNudge.noApplePayKey)
                 usedSkip = true
                 go(1)
             }
