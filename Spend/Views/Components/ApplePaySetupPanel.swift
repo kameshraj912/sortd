@@ -98,9 +98,9 @@ struct ApplePaySetupPanel: View {
         .sheet(item: $guide) { which in
             switch which {
             case .pickShortcut:
-                ApplePayAutomationGuide(steps: ApplePaySetupSteps.automationSteps, drawing: .automation)
+                ApplePayAutomationGuide(steps: ApplePaySetupSteps.automationSteps, drawing: .automation, status: status)
             case .byHand:
-                ApplePayAutomationGuide(steps: ApplePaySetupSteps.byHandAutomationSteps, drawing: .automationByHand)
+                ApplePayAutomationGuide(steps: ApplePaySetupSteps.byHandAutomationSteps, drawing: .automationByHand, status: status)
             }
         }
     }
@@ -179,8 +179,14 @@ struct ApplePaySetupPanel: View {
         }
     }
 
+    /// `apple_pay_setup_action` for this panel's state.
+    private func trackAction(_ action: String, page: Int? = nil) {
+        ApplePaySetupSteps.trackAction(action, route: route, status: status, saysBuilt: automationBuilt, page: page)
+    }
+
     private func runHealthCheck() {
         guard let url = ApplePayHealthCheck.runURL else { return }
+        trackAction("check_shortcut")
         let now = Date.now
         healthCheckStartedAt = now
         healthCheck = .waiting
@@ -264,6 +270,7 @@ struct ApplePaySetupPanel: View {
             actionButton(shortcutOpened || ticked.addShortcut ? "Get It Again" : "Get the Shortcut",
                          symbol: "square.and.arrow.down", bold: !ticked.addShortcut) {
                 shortcutOpened = true
+                trackAction("get_shortcut")
                 safariPage = SafariPage(url: ApplePaySetupSteps.shortcutURL(for: route))
             }
 
@@ -278,6 +285,7 @@ struct ApplePaySetupPanel: View {
 
             stepRow(2, ticked.runAndAllow, ApplePaySetupSteps.runStep.title, ApplePaySetupSteps.runStep.detail)
             actionButton("Open Shortcuts", symbol: "arrow.up.forward.app", bold: false) {
+                trackAction("open_shortcuts")
                 openURL(ApplePaySetupSteps.shortcutsURL)
             }
 
@@ -299,6 +307,7 @@ struct ApplePaySetupPanel: View {
                 // when they are on. Setup doesn't move on without it.
                 if ticked.runAndAllow, !step3Done {
                     actionButton("I Switched Both On", symbol: "checkmark", bold: true) {
+                        trackAction("switched_on")
                         automationBuilt = true
                     }
                 }
@@ -317,6 +326,7 @@ struct ApplePaySetupPanel: View {
                 stepRow(3, step3Done, make.title, make.detail)
                 actionButton(automationBuilt ? "Show Me Again" : "Show Me How", symbol: "hand.tap",
                              bold: ticked.runAndAllow && !step3Done) {
+                    trackAction("show_me_how")
                     guide = .pickShortcut
                 }
 
@@ -327,6 +337,7 @@ struct ApplePaySetupPanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                     // The fallback, only once the short way has been tried.
                     Button("Paid and nothing showed up? Build it by hand") {
+                        trackAction("by_hand")
                         guide = .byHand
                     }
                     .font(.footnote.weight(.semibold))

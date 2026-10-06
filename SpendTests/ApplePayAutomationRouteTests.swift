@@ -134,3 +134,54 @@ struct ApplePayAutomationRouteTests {
         #expect(SetupCopy.line(.welcome, route: .automation) == SetupCopy.line(.welcome, route: .shortcut))
     }
 }
+
+/// `apple_pay_setup_action`: the funnel event for the step (6 Oct 2026).
+struct ApplePaySetupActionTests {
+    private let when = Date(timeIntervalSince1970: 1_790_000_000)
+
+    @Test func progressTellsTheThreeStatesApart() {
+        typealias P = ApplePaySetupSteps.Progress
+        #expect(P(status: .notConnected, saysBuilt: false) == .notConnected)
+        #expect(P(status: .notConnected, saysBuilt: true) == .notConnected)
+        #expect(P(status: .shortcutReached(when), saysBuilt: false) == .stepThreeLeft)
+        #expect(P(status: .shortcutReached(when), saysBuilt: true) == .saidDone)
+        #expect(P(status: .tapNeedsCheck(date: when), saysBuilt: false) == .tapLogged)
+        let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds", amount: 4.5, currency: "AUD")
+        #expect(P(status: tap, saysBuilt: false) == .tapLogged)
+    }
+
+    /// The event carries the button, the route and the progress, and no
+    /// shop or amount, whatever the status holds.
+    @Test func theEventCarriesOnlySafeProperties() {
+        #expect(Analytics.Event.applePaySetupAction.rawValue == "apple_pay_setup_action")
+        let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds", amount: 4.5, currency: "AUD")
+        let sink = SpySink()
+        let name = "ApplePaySetupActionTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let analytics = Analytics(sink: sink, defaults: defaults, regionCode: "AU")
+        analytics.isEnabled = true
+        analytics.track(.applePaySetupAction, ["action": .string("guide_next"), "route": .string("automation"),
+                                               "step": .string(ApplePaySetupSteps.Progress(status: tap, saysBuilt: false).rawValue),
+                                               "page": .int(2)])
+        let sent = sink.captured.last
+        #expect(sent?.name == "apple_pay_setup_action")
+        #expect(Set(sent?.properties.keys.map { $0 } ?? []) == ["action", "route", "step", "page"])
+        #expect(sent?.properties["step"] as? String == "tap_logged")
+        #expect(analytics.violations.isEmpty)
+    }
+
+    /// Replay records only with the TestFlight receipt in a Release build;
+    /// an App Store copy, or one with no receipt, never does.
+    @Test func replayNeedsTheFlagAndATestFlightReceipt() {
+        #expect(!Analytics.replayAllowed(flagOn: false, isTestFlight: true))
+        #expect(!Analytics.replayAllowed(flagOn: false, isTestFlight: false))
+        #expect(Analytics.replayAllowed(flagOn: true, isTestFlight: true))
+        #if !DEBUG
+        #expect(!Analytics.replayAllowed(flagOn: true, isTestFlight: false))
+        #endif
+        #expect(Distribution.isTestFlight(receiptName: "sandboxReceipt"))
+        #expect(!Distribution.isTestFlight(receiptName: "receipt"))
+        #expect(!Distribution.isTestFlight(receiptName: nil))
+    }
+}
