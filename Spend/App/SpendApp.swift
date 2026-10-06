@@ -112,6 +112,12 @@ struct SpendApp: App {
             let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             ApplePayStatus.settleTestTap(hasRealTap: ApplePayStatus.hasRealTap(in: taps))
         }
+        // iOS 26 set up with the downloaded shortcut (builds 6 to 8) can't
+        // log a tap: ask once to make the automation the new way.
+        if ApplePaySetupSteps.route == .automation {
+            let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
+            ApplePaySetupSteps.resetOldIOS26Setup(hasRealTap: ApplePayStatus.hasRealTap(in: taps))
+        }
         // Run lines from older builds held shop names and amounts.
         LogPurchaseIntent.scrubOldRunText()
         #if DEBUG

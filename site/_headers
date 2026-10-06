@@ -22,3 +22,9 @@
 
 /setup-guide.pdf
   Cache-Control: public, max-age=3600
+
+/setup-guide-ios26.pdf
+  Cache-Control: public, max-age=3600
+
+/setup-guide-ios27.pdf
+  Cache-Control: public, max-age=3600

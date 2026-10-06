@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Set up Sortd</title>
+<!--
+  Sortd set-up guide (iOS 26 by hand, 6 Oct 2026). Make the three PDFs with
+  docs/setup-guide/make-pdfs.sh: both iOS (site/setup-guide.pdf), iOS 26 only
+  (site/setup-guide-ios26.pdf) and iOS 27 only (site/setup-guide-ios27.pdf).
+  guide.html#26 or #27 shows one iOS. Step words follow
+  Spend/Services/ApplePaySetupSteps.swift.
+-->
+<style>
+:root{
+  --page:#f6f6f8; --card:#fff; --ink:#111113; --muted:#5c5c63; --faint:#8e8e93; --line:#e3e3e6;
+  --orange:#f0643d; --amber:#f5a623; --violet:#7b6bf0; --green:#2bb07a;
+  --ios-blue:#0a7aff; --screen:#f2f2f7;
+}
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:var(--ink);font-size:12px;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--page)}
+.page{width:210mm;height:297mm;padding:49px 49px 0;background:var(--page);position:relative;overflow:hidden;page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto}
+body{counter-reset:pg}.page{counter-increment:pg}.foot .pg::after{content:counter(pg)}
+body.only26 [data-ios="27"],body.only27 [data-ios="26"],body.only26 .or,body.only27 .or{display:none!important}
+.warn{background:#fff4ec;border:1px solid #f7c9b3;border-radius:12px;padding:9px 14px;font-size:12.5px;margin:-4px 0 14px}
+.draw .tok{display:inline-block;color:var(--ios-blue);background:#e6f0ff;border-radius:6px;padding:1px 5px;font-weight:600}
+.draw .act{background:#fff;border-radius:8px;padding:8px;line-height:2}
+.draw .sw{display:inline-block;width:26px;height:15px;border-radius:8px;background:#d1d1d6;position:relative;vertical-align:middle}
+.draw .sw::after{content:"";position:absolute;left:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#fff}
+.draw .kb{margin-top:auto;text-align:center}
+.draw.col{display:flex;flex-direction:column}
+.draw .grp .ring{outline:none;box-shadow:inset 0 0 0 2.5px var(--orange)}
+.page.w .step{height:418px}.page.w .shot img{width:158px;height:344px}
+.foot{position:absolute;left:49px;right:49px;bottom:34px;display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.09em;color:var(--faint)}
+b{font-weight:650}
+
+/* title page */
+.brand{display:flex;align-items:center;gap:14px}
+.brand img{width:46px;height:46px;border-radius:11px}
+.brand .name{font-size:26px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.bars{display:flex;gap:4px;margin-top:5px}
+.bars span{height:4px;width:14px;border-radius:2px}
+.bars span:nth-child(1){background:var(--orange)}.bars span:nth-child(2){background:var(--amber)}
+.bars span:nth-child(3){background:var(--violet)}.bars span:nth-child(4){background:var(--green)}
+h1{font-size:44px;letter-spacing:-.035em;line-height:1.1;margin:26px 0 16px;font-weight:800}
+.versions{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.version{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--violet);border-radius:16px;padding:12px 16px 14px}
+.version.g{border-top-color:var(--green)}
+.version .what{font-size:22px;font-weight:750;letter-spacing:-.02em;margin-top:8px;line-height:1.15}
+.version .how{color:var(--muted);font-size:14px}
+.pill{display:inline-block;color:#fff;background:var(--ink);font-size:11.5px;font-weight:700;letter-spacing:.03em;border-radius:99px;padding:2px 11px}
+.pill.v{background:var(--violet)}.pill.g{background:var(--green)}.pill.o{background:var(--orange)}
+.unsure{color:var(--muted);font-size:13.5px;margin:12px 0 18px}
+.unsure b{color:var(--ink)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 16px 16px}
+.box h2{display:flex;align-items:center;gap:10px;font-size:24px;letter-spacing:-.025em;margin:0 0 10px;font-weight:750}
+.box ol{margin:0 0 12px;padding-left:36px;font-size:14px;line-height:1.55}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.thumbs figure{margin:0;text-align:center;font-size:12.5px}
+.thumbs img{width:100%;display:block;border:1px solid #d9d9de;border-radius:14px;margin-bottom:6px}
+.turn{background:var(--page);border-radius:10px;padding:9px 14px;font-size:14px;margin-top:12px}
+
+/* step pages */
+.part{margin:0}
+.part h2{font-size:25px;letter-spacing:-.025em;margin:8px 0 14px;font-weight:750;line-height:1.2}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px 14px 10px;height:455px;display:flex;flex-direction:column;align-items:center}
+.step .head{display:flex;gap:11px;align-self:stretch;min-height:44px}
+.step .n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.step h3{margin:1px 0 1px;font-size:16px;line-height:1.2;font-weight:700;letter-spacing:-.01em}
+.step p{margin:0;color:var(--muted);font-size:12px;line-height:1.35}
+.step p b{color:var(--ink)}
+.shot{margin-top:auto;display:flex;flex-direction:column;align-items:center}
+.shot img,.draw{width:172px;height:374px;border:1px solid #d9d9de;border-radius:16px;display:block}
+.shot.tight img,.shot.tight .draw{width:163px;height:354px}
+.cap{color:var(--faint);font-size:10.5px;margin-top:5px;text-align:center}
+
+/* drawn screens */
+.draw{border:1.5px dashed #c4c4cc;background:var(--screen);padding:14px 8px;font-size:10px;text-align:left}
+.draw .bar{display:flex;justify-content:space-between;color:var(--ios-blue);font-size:11.5px;padding:0 2px}
+.draw .bar .off{opacity:.45}
+.draw .t{font-size:14px;font-weight:700;margin:10px 1px 7px}
+.draw .grp{background:#fff;border-radius:8px;overflow:hidden}
+.draw .r{display:flex;justify-content:space-between;align-items:center;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.draw .r:last-child{border-bottom:0}
+.draw .r.dim{color:var(--faint)}
+.draw .tick{color:var(--ios-blue);font-weight:700}
+.draw .lbl{font-weight:700;font-size:11px;margin:12px 2px 6px}
+.draw .ico{flex:none;width:15px;height:15px;border-radius:4px;background:var(--ink);color:#fff;font-size:9.5px;font-weight:800;display:inline-grid;place-items:center;margin-right:5px}
+.draw .ico.new{background:none;border:1.2px solid var(--faint);color:var(--faint)}
+.draw .ring{outline:2.5px solid var(--orange);outline-offset:1.5px;border-radius:8px}
+.draw .r.left{justify-content:flex-start}
+
+/* part 3 */
+.check{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.check .step{height:auto;align-items:stretch;padding-bottom:14px}
+.check .n{font-size:16px}
+.check .big{width:230px;border:1px solid #d9d9de;border-radius:18px;display:block;margin:12px auto 0}
+.check .strip{width:100%;border:1px solid #d9d9de;border-radius:10px;display:block;margin-top:12px}
+.know{background:var(--page);border-radius:12px;padding:12px 14px;margin-top:16px}
+.know h4{margin:0 0 6px;font-size:14.5px}
+.know ul{margin:0;padding-left:18px;font-size:12px;line-height:1.5}
+.know li{margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<section class="page">
+  <div class="brand"><img src="img/logo.png" alt=""><div><div class="name">sortd</div><div class="bars"><span></span><span></span><span></span><span></span></div></div></div>
+  <h1>Set up Sortd</h1>
+  <div class="versions">
+    <div class="version" data-ios="27"><span class="pill v">iOS 27</span><div class="what">Part 2A</div><div class="how">10 steps · about 1 minute</div></div>
+    <div class="version g" data-ios="26"><span class="pill g">iOS 26</span><div class="what">Part 2B</div><div class="how">14 steps · about 2 minutes</div></div>
+  </div>
+  <p class="unsure">Not sure? Open <b>Settings › General › About</b> and look at <b>iOS Version</b>.</p>
+  <div class="box">
+    <h2><span class="pill">Part 1</span> Get Sortd</h2>
+    <ol>
+      <li>On your iPhone, open the <b>TestFlight link</b> from your Sortd email.</li>
+      <li>If it asks, install <b>TestFlight</b> from the App Store. It’s free and made by Apple. Then open the link again.</li>
+      <li>Tap <b>Accept</b>, then <b>Install</b>. Open <b>Sortd</b> and follow its screens:</li>
+    </ol>
+    <div class="thumbs">
+      <figure><img src="img/1-start.png" alt="">Tap <b>Get Started</b></figure>
+      <figure><img src="img/1-guest.png" alt="">Sign in, or <b>Continue as guest</b></figure>
+      <figure><img src="img/1-questions.png" alt="">Answer 4 quick questions</figure>
+      <figure><img src="img/1-cards.png" alt="">Tap the banks you pay with</figure>
+    </div>
+    <div class="turn">When Sortd shows <b>Log Apple Pay by itself</b>, turn to <span data-ios="27"><b>Part 2A</b> (iOS 27)</span><span class="or"> or </span><span data-ios="26"><b>Part 2B</b> (iOS 26)</span>.</div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 2 -->
+<section class="page" data-ios="27">
+  <div class="part"><span class="pill v">Part 2A · iOS 27</span><h2>Apple Pay logging on iOS 27</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">1</div><div><h3>Tap Get the Shortcut</h3><p>On Sortd’s <b>Log Apple Pay by itself</b> screen.</p></div></div><div class="shot"><img src="img/27-get.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">2</div><div><h3>Tap Open in “Shortcuts”</h3><p>A page opens with the shortcut file.</p></div></div><div class="shot"><img src="img/open-in-shortcuts.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">3</div><div><h3>Tap Add Shortcut</h3><p>The blue button at the bottom.</p></div></div><div class="shot"><img src="img/27-add.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">4</div><div><h3>Tap Edit</h3><p>If you see <b>Describe a Shortcut</b>, tap <b>Edit</b> at the top right.</p></div></div><div class="shot"><img src="img/27-edit.png" alt=""></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 3 -->
+<section class="page" data-ios="27">
+  <div class="part"><span class="pill v">Part 2A · iOS 27</span><h2>Apple Pay logging on iOS 27</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">5</div><div><h3>Tap ▶ to run it once</h3><p>Bottom right of the screen.</p></div></div><div class="shot"><img src="img/27-run.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">6</div><div><h3>Tap Allow</h3><p>This lets the shortcut send your taps to Sortd.</p></div></div><div class="shot"><img src="img/27-allow.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">7</div><div><h3>Tap › next to “tapped”</h3><p>On the <b>When Any Card is tapped</b> line.</p></div></div><div class="shot"><img src="img/27-tapped.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">8</div><div><h3>Switch on Automation</h3><p>“Automation is turned off” goes away. Leave <b>Notify</b> off.</p></div></div><div class="shot"><img src="img/27-switch.png" alt=""></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 4 -->
+<section class="page" data-ios="27">
+  <div class="part"><span class="pill v">Part 2A · iOS 27</span><h2>Apple Pay logging on iOS 27</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">9</div><div><h3>Do the same for Wallet</h3><p>Tap <b>›</b> on <b>When I receive a notification from Wallet</b>, then switch on <b>Automation</b>. This logs Apple Pay in apps and on websites.</p></div></div><div class="shot tight"><img src="img/27-wallet.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">10</div><div><h3>Back in Sortd, tap I Switched Both On</h3><p>It is under step 3. Then tap <b>Continue</b>.</p></div></div><div class="shot tight"><img src="img/27-switched.png" alt=""></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 5 -->
+<section class="page w" data-ios="26">
+  <div class="part"><span class="pill g">Part 2B · iOS 26</span><h2>Apple Pay logging on iOS 26</h2></div>
+  <div class="warn"><b>Made a Wallet automation for Sortd before?</b> Delete it first. In Shortcuts, tap <b>Automation</b>, swipe left on it and tap <b>Delete</b>. Then do these steps. No shortcut to download.</div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">1</div><div><h3>Tap Show Me Step by Step</h3><p>On Sortd’s <b>Log Apple Pay by itself</b> screen. All 5 steps are listed there too.</p></div></div><div class="shot"><img src="img/26-showme.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">2</div><div><h3>Tap Start in Shortcuts</h3><p>Shortcuts opens on a list.</p></div></div><div class="shot"><img src="img/26-start.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">3</div><div><h3>Tap Search. Type Wallet.</h3><p>Search is at the bottom. Not there? Tap <b>Automation</b>, then <b>New Automation</b>.</p></div></div><div class="shot tight"><img src="img/26-search.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">4</div><div><h3>Tap Wallet</h3><p>“When I tap a Wallet Card or Pass”.</p></div></div><div class="shot"><img src="img/26-wallet.png" alt=""></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 6 -->
+<section class="page" data-ios="26">
+  <div class="part"><span class="pill g">Part 2B · iOS 26</span><h2>Apple Pay logging on iOS 26</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">5</div><div><h3>Pick your cards</h3><p>Tap each card you pay with. A tick shows beside it.</p></div></div><div class="shot tight"><div class="draw col"><div class="bar"><span>‹</span><span class="off">Next</span></div><div class="t">When I tap</div><div class="grp ring"><div class="r">My debit card <span class="tick">✓</span></div><div class="r">My credit card <span class="tick">✓</span></div></div></div><div class="cap">A drawing. Your own cards show here</div></div></div>
+    <div class="step"><div class="head"><div class="n">6</div><div><h3>Tap Run Immediately</h3><p>The tick moves to <b>Run Immediately</b>.</p></div></div><div class="shot"><img src="img/26-run-immediately.png" alt=""></div></div>
+    <div class="step"><div class="head"><div class="n">7</div><div><h3>Tap Next</h3><p>Top right. Leave <b>Notify When Run</b> off.</p></div></div><div class="shot tight"><img src="img/26-next.png" alt=""><div class="cap">Next turns blue once your cards are picked</div></div></div>
+    <div class="step"><div class="head"><div class="n">8</div><div><h3>Tap Create New Shortcut</h3><p>Don’t pick a shortcut under <b>My Shortcuts</b>.</p></div></div><div class="shot tight"><div class="draw col"><div class="bar"><span>‹</span><span></span></div><div class="grp ring" style="margin-top:12px"><div class="r left"><span class="ico new">+</span>Create New Shortcut</div></div><div class="lbl">My Shortcuts</div><div class="grp"><div class="r left dim">Don’t pick anything here</div></div></div><div class="cap">A drawing of this screen</div></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 7 -->
+<section class="page" data-ios="26">
+  <div class="part"><span class="pill g">Part 2B · iOS 26</span><h2>Apple Pay logging on iOS 26</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">9</div><div><h3>Tap Sortd, then Log Wallet Tap</h3><p>Scroll down the list of apps to find <b>Sortd</b>.</p></div></div><div class="shot tight"><div class="draw col"><div class="grp" style="margin-top:6px"><div class="r left dim">Search Actions</div></div><div class="lbl">Apps</div><div class="grp"><div class="r left dim">Shortcuts</div><div class="r left ring"><span class="ico">$</span>Sortd</div></div><div class="lbl">Sortd</div><div class="grp"><div class="r left ring"><span class="ico">$</span>Log Wallet Tap</div><div class="r left dim"><span class="ico">$</span>Log Purchase</div></div></div><div class="cap">A drawing of this screen</div></div></div>
+    <div class="step"><div class="head"><div class="n">10</div><div><h3>Fill in Amount</h3><p>Tap <b>Amount</b>, then <b>Shortcut Input</b>. Tap it again and choose <b>Amount</b>.</p></div></div><div class="shot tight"><div class="draw col"><div class="act">Log <span class="tok ring">Amount</span> at <span class="tok">Shop</span> in Sortd ›</div><div class="kb"><span class="tok ring">Shortcut Input</span><div class="grp" style="margin-top:8px;text-align:left"><div class="r">Amount <span class="tick">✓</span></div><div class="r dim">Merchant</div><div class="r dim">Card or Pass</div></div></div></div><div class="cap">Tap Shortcut Input, then tap it again for this list</div></div></div>
+    <div class="step"><div class="head"><div class="n">11</div><div><h3>Fill in Shop</h3><p>Do the same for <b>Shop</b>. Choose <b>Merchant</b>.</p></div></div><div class="shot tight"><div class="draw col"><div class="act">Log <span class="tok">Amount</span> at <span class="tok ring">Merchant</span> in Sortd ›</div><div class="kb"><div class="grp" style="text-align:left"><div class="r dim">Amount</div><div class="r">Merchant <span class="tick">✓</span></div><div class="r dim">Card or Pass</div></div></div></div><div class="cap">A drawing of this screen</div></div></div>
+    <div class="step"><div class="head"><div class="n">12</div><div><h3>Fill in Card</h3><p>Tap the blue <b>›</b>, then <b>Card</b>. Choose <b>Shortcut Input</b>, then <b>Card or Pass</b>.</p></div></div><div class="shot tight"><div class="draw col"><div class="act">Log <span class="tok">Amount</span> at <span class="tok">Merchant</span> in Sortd <span class="ring" style="padding:0 3px">›</span></div><div class="grp" style="margin-top:8px"><div class="r">Card <span class="tok ring">Card or Pass</span></div><div class="r dim">Transaction</div></div></div><div class="cap">A drawing of this screen</div></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 8 -->
+<section class="page" data-ios="26">
+  <div class="part"><span class="pill g">Part 2B · iOS 26</span><h2>Apple Pay logging on iOS 26</h2></div>
+  <div class="steps">
+    <div class="step"><div class="head"><div class="n">13</div><div><h3>Switch off Show When Run</h3><p>It is under <b>Card</b>. Then tap <b>Done</b> at the top right.</p></div></div><div class="shot tight"><div class="draw col"><div class="bar"><span></span><span class="ring" style="padding:0 4px">Done</span></div><div class="act" style="margin-top:10px">Log <span class="tok">Amount</span> at <span class="tok">Merchant</span> in Sortd</div><div class="grp" style="margin-top:8px"><div class="r">Card <span class="tok">Card or Pass</span></div><div class="r ring">Show When Run <span class="sw"></span></div></div></div><div class="cap">Show When Run switched off (grey)</div></div></div>
+    <div class="step"><div class="head"><div class="n">14</div><div><h3>Back in Sortd, tap I’m Done</h3><p>Tap <b>◀ Sortd</b> at the top left. Tap <b>I’m Done</b>, then <b>Continue</b>.</p></div></div><div class="shot"><img src="img/26-done.png" alt=""></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<!-- 9 -->
+<section class="page">
+  <div class="part"><span class="pill o">Part 3</span><h2>Check it works</h2></div>
+  <div class="check">
+    <div class="step"><div class="head"><div class="n">✓</div><div><h3>Pay with Apple Pay in a shop</h3><p>Open Sortd and tap <b>Activity</b>. The purchase is already there. The ▶ button in Shortcuts doesn’t test this.</p></div></div>
+      <img class="big" src="img/3-activity.png" alt=""><div class="cap">Example: S$5.20 at Kopitiam</div></div>
+    <div class="step"><div class="head"><div class="n">✓</div><div><h3>Sortd says it worked</h3><p>⚙ › <b>Purchase Sources</b> › <b>Apple Pay Logging</b> shows <b>Last tap logged</b>.</p></div></div>
+      <img class="strip" src="img/3-logged.png" alt="">
+      <div class="know"><h4>Good to know</h4><ul>
+        <li><b>Apps and websites:</b> on iOS 27 these log from Wallet’s notification. On iOS 26, add them with <b>+</b> in Sortd.</li>
+        <li><b>iOS 26, paid and nothing showed up:</b> open the automation in Shortcuts. Amount, Shop and Card must each say <b>Shortcut Input</b>, and <b>Run Immediately</b> must be ticked.</li>
+        <li><b>Cash, or anything missed:</b> tap <b>+</b> in Sortd.</li>
+        <li><b>Now and then</b> Apple’s trigger misses a tap, mostly at vending machines, transport gates and parking.</li>
+        <li><b>Help:</b> sortd.page/support</li>
+      </ul></div></div>
+  </div>
+  <div class="foot"><span>SET UP SORTD</span><span class="pg"></span></div>
+</section>
+
+<script>
+  // guide.html#26 or #27: one iOS only (make-pdfs.sh).
+  if (location.hash === "#26") document.body.classList.add("only26");
+  if (location.hash === "#27") document.body.classList.add("only27");
+</script>
+</body>
+</html>

@@ -12,7 +12,10 @@ external script is Cloudflare Turnstile on the beta form.
 - `site.js` — theme switch, feature tabs, beta form, scroll reveals and the easter eggs
 - `style.css` — the only stylesheet (light and dark follow the device setting)
 - `setup-guide.pdf` — the set-up guide with pictures (iOS 26 and 27), linked from the support page and the
-  TestFlight "What to Test" text. Made from `docs/drafts/Sortd-Setup-Guide-build6/guide.html` (not in git)
+  TestFlight "What to Test" text; `setup-guide-ios26.pdf` and `setup-guide-ios27.pdf` are one iOS each.
+  Made from `docs/setup-guide/guide.html` with `docs/setup-guide/make-pdfs.sh`
+- `apple-pay-26.shortcut` — no longer offered (iOS 26 builds its automation by hand since 6 Oct 2026). Kept
+  only while builds 6 to 8 are on TestFlight, since their "Get the Shortcut" links here; delete it once they expire
 
 ## Before publishing
 

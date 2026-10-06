@@ -65,7 +65,10 @@ struct PurchaseSourcesSettingsView: View {
         case .shortcutReached:
             return "Connected · waiting for a shop tap"
         case .notConnected:
-            return "Not set up yet"
+            // iOS 26: nothing reaches Sortd before the first real tap.
+            return ApplePaySetupSteps.waitingForFirstTap(status: .notConnected,
+                                                         saysBuilt: UserDefaults.standard.bool(forKey: ApplePaySetupSteps.automationBuiltKey))
+                ? "Set up · waiting for a shop tap" : "Not set up yet"
         }
     }
 }
