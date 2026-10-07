@@ -80,6 +80,7 @@ The names below are the `Analytics.Event` raw values, pinned by `SpendTests/Anal
 - `purchase_added_manually(category_changed, has_note)`
 - `purchase_deleted(count)`, `purchase_undone(count)`
 - `apple_pay_tap_logged(merged)`
+- `apple_pay_run(kind, result, has_amount, has_shop, has_card, has_title, has_subtitle, has_body)` (8 Oct 2026): one per Shortcuts run that reaches Sortd, saved or not, so a run that logged nothing still says why. `kind` is `tap` or `notification` (any notification part set). `result` is what came of it: `saved`, `merged`, `needs_check`, `blank` (nothing came in), `no_amount`, `not_completed` (declined), `money_in`, `refund` or `queued` (the store could not save, kept for later). The `has_*` flags say which fields arrived, never what they said: never an amount, shop or card.
 - `backup_completed`, `restore_completed(mode)`
 - `tip_left(size: small|medium|large)`: never the price
 - `tip_shown(id)`, `tip_used(id)`: in-app tips (sub-spec 7). `id` is the tip's `TipCopy` id (`apple_pay`, `swipe`, `search`, `insights`, `month`); shown once per tip per install, used once when the thing the tip was about is done after it was shown

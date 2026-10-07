@@ -58,6 +58,9 @@ struct LogPurchaseIntent: AppIntent {
         /// seen (`LoggedNotice`). After the first real tap a blank run stays
         /// silent, so a blank companion of a real purchase never posts it.
         var reachedBeforeFirstTap: Bool = false
+        /// A notification run that was read but saved nothing, and why
+        /// (declined, no amount, money in). For the `apple_pay_run` event.
+        var dropped: WalletNotification.Reading? = nil
     }
 
     /// The merchant name the removed "Send a Test Tap" button wrote
