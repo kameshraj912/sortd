@@ -341,4 +341,75 @@ struct ApplePayOnlineNotificationTests {
         try await notify("Qantas", "Boarding pass", "Gate 12", ctx: ctx, book: b)
         #expect(ApplePayStatus.resolve(lastReachedAt: now, taps: try rows(ctx), now: now) == .shortcutReached(now))
     }
+
+    // MARK: - Bank app sentences
+
+    private let bankSentence = "You spent $23.40 at DOORDASH with your card ending 4821."
+
+    @Test func aBankSentenceSavesARow() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("CommBank", nil, bankSentence, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.amount == Decimal(string: "23.40"))
+        #expect(t.rawMerchant.lowercased() == "doordash")
+        #expect(t.tapOrigins == "b")
+        #expect(t.seenByBank)
+        #expect(!t.needsCheck)
+        #expect(t.category == .foodDelivery)
+        #expect(try rows(ctx).count == 1)
+    }
+
+    @Test func aBankSentenceMatchesTheCardByLastFour() async throws {
+        let ctx = store(), b = book()
+        b.upsert(CardInfo(id: "cba", name: "CommBank Debit", shortName: "CommBank", bank: "CommBank", last4: ["4821"]))
+        let r = try await notify("CommBank", nil, bankSentence, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.card == Card(rawValue: "cba"))
+    }
+
+    @Test func aBankNoticeThatIsNotAPurchaseSavesNothing() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("CommBank", nil, "Your available balance is $1,204.11", ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(r.dropped == .notAPurchase)
+        #expect(try rows(ctx).count == 0)
+        #expect(LogPurchaseIntent.lastTapReceivedAt != nil)
+    }
+
+    /// A tap, Wallet's notification and the bank's notice for one payment:
+    /// one row, the tap's shop name, all three letters in t, n, b order.
+    @Test func tapThenWalletThenBankIsOneRow() async throws {
+        let ctx = store(), b = book()
+        try await notify("", "", "", amount: "A$23.40", merchant: "DoorDash", card: "NAB Visa Debit",
+                         ctx: ctx, book: b, at: now)
+        try await notify("NAB Visa Debit", "DoorDash", "A$23.40", ctx: ctx, book: b, at: now.addingTimeInterval(30))
+        let third = try await notify("CommBank", nil, "You spent $23.40 at DOORDASH*ORDER with your card ending 4821.",
+                                     ctx: ctx, book: b, at: now.addingTimeInterval(60))
+        #expect(third.merged)
+        let all = try rows(ctx)
+        #expect(all.count == 1)
+        #expect(all.first?.tapOrigins == "tnb")
+        #expect(all.first?.rawMerchant == "DoorDash")
+    }
+
+    /// A tap that joins a bank-only row replaces the bank's shop name.
+    @Test func bankThenTapKeepsTheTapsName() async throws {
+        let ctx = store(), b = book()
+        try await notify("CommBank", nil, "You spent $23.40 at DOORDASH*ORDER with your card ending 4821.",
+                         ctx: ctx, book: b, at: now)
+        try await notify("", "", "", amount: "A$23.40", merchant: "DoorDash", card: "NAB Visa Debit",
+                         ctx: ctx, book: b, at: now.addingTimeInterval(120))
+        let all = try rows(ctx)
+        #expect(all.count == 1)
+        #expect(all.first?.rawMerchant == "DoorDash")
+        #expect(all.first?.tapOrigins == "tb")
+    }
+
+    @Test func aBankSentenceElevenMinutesLaterIsItsOwnRow() async throws {
+        let ctx = store(), b = book()
+        try await notify("", "", "", amount: "A$23.40", merchant: "DoorDash", card: "NAB Visa Debit",
+                         ctx: ctx, book: b, at: now)
+        try await notify("CommBank", nil, bankSentence, ctx: ctx, book: b, at: now.addingTimeInterval(11 * 60))
+        #expect(try rows(ctx).count == 2)
+    }
 }
