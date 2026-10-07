@@ -40,10 +40,11 @@ final class Analytics {
         /// One per Shortcuts run that reaches Sortd (8 Oct 2026), saved or
         /// not, so a run that logged nothing still says why. `kind` is
         /// tap|notification, `result` is saved|merged|needs_check|blank|
-        /// no_amount|not_completed|money_in|refund|queued, and
-        /// `has_amount`/`has_shop`/`has_card`/`has_title`/`has_subtitle`/
-        /// `has_body` say which fields arrived. Never an amount, a shop or a
-        /// card name (`LogWalletTapIntent.runEvent`).
+        /// no_amount|not_completed|money_in|refund|health_check|queued|
+        /// not_saved, and `has_amount`/`has_shop`/`has_card`/`has_title`/
+        /// `has_subtitle`/`has_body`/`has_text` say which fields arrived.
+        /// Never an amount, a shop or a card name
+        /// (`LogWalletTapIntent.runEvent`).
         case applePayRun = "apple_pay_run"
         case tabOpened = "tab_opened"
         case tipLeft = "tip_left"

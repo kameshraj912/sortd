@@ -49,6 +49,10 @@ struct LogPurchaseIntent: AppIntent {
         let transaction: Transaction?
         let merged: Bool
         var saveFailed: Bool = false
+        /// False when a failed save could not be queued either
+        /// (`TapQueue.notSavedMessage`), so the run is lost. Only read when
+        /// `saveFailed` is set.
+        var kept: Bool = true
         /// A refund was noted (whole, partial or on its own row). Not a
         /// purchase, so no "Logged" notice (`LoggedNotice`).
         var refund: Bool = false
@@ -352,7 +356,8 @@ struct LogPurchaseIntent: AppIntent {
         } catch {
             let message = await TapQueue.saveForLater(merchant: merchant, amount: amount, card: card, date: now,
                                                       trigger: trigger, url: queueURL)
-            return Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+            return Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
+                           kept: message != TapQueue.notSavedMessage)
         }
     }
 

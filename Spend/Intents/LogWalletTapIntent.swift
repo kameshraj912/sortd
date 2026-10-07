@@ -226,12 +226,14 @@ struct LogWalletTapIntent: AppIntent {
                 case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
                     let message = await TapQueue.saveForLater(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
                                                               date: now, trigger: .notification)
-                    return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+                    return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
+                                                     kept: message != TapQueue.notSavedMessage)
                 }
             }
             let resolved = Self.resolvedFields(transaction: transaction, amount: amount, merchant: merchant, card: card)
             let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card, date: now)
-            return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+            return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
+                                             kept: message != TapQueue.notSavedMessage)
         }
         let outcome: LogPurchaseIntent.Outcome
         do {
@@ -243,9 +245,10 @@ struct LogWalletTapIntent: AppIntent {
         } catch {
             // `handle` never actually throws (its own do/catch queues
             // instead), but its signature does; a genuine surprise here
-            // still must not reach Shortcuts as a failed action.
+            // still must not reach Shortcuts as a failed action. Nothing
+            // was queued here, so the run is lost (`kept: false`).
             outcome = LogPurchaseIntent.Outcome(message: "Saved for later. Sortd will finish it when it next opens.",
-                                                transaction: nil, merged: false, saveFailed: true)
+                                                transaction: nil, merged: false, saveFailed: true, kept: false)
         }
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: container.mainContext)
@@ -357,17 +360,20 @@ struct LogWalletTapIntent: AppIntent {
 
     /// The `apple_pay_run` properties for one run: what kind it was, what
     /// came of it, and which fields arrived. Fixed words and booleans only,
-    /// never an amount, a shop or a card name. `transaction` (the old
-    /// free-text field) adds no key: the `has_*` flags are the fields as
-    /// they arrived, before any parsing.
+    /// never an amount, a shop or a card name. The `has_*` flags are the
+    /// fields as they arrived, before any parsing; `has_text` is the old
+    /// free-text `transaction` field.
     @MainActor
     static func runEvent(outcome: LogPurchaseIntent.Outcome, transaction: String?, amount: String?, merchant: String?,
                          card: String?, notification: WalletNotification) -> [String: Analytics.AnalyticsValue] {
         let result: String
         if outcome.saveFailed {
-            result = "queued"
+            result = outcome.kept ? "queued" : "not_saved"
         } else if let dropped = outcome.dropped, let word = Self.droppedWord(dropped) {
             result = word
+        } else if outcome.transaction?.rawMerchant == ApplePayHealthCheck.merchant {
+            // "Check the Shortcut" (`ApplePaySetupPanel`): not a purchase.
+            result = "health_check"
         } else if outcome.refund {
             result = "refund"
         } else if let t = outcome.transaction {
@@ -390,6 +396,7 @@ struct LogWalletTapIntent: AppIntent {
             "has_title": .bool(!TapField.isBlank(notification.title)),
             "has_subtitle": .bool(!TapField.isBlank(notification.subtitle)),
             "has_body": .bool(!TapField.isBlank(notification.body)),
+            "has_text": .bool(!TapField.isBlank(transaction)),
         ]
     }
 
