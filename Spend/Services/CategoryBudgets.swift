@@ -113,6 +113,12 @@ enum CategoryBudgets {
         "\(month)|\(category.rawValue)|\(threshold.rawValue)"
     }
 
+    /// The notification's identifier, the same for the tap nudge and the
+    /// foreground check, so iOS shows one crossing once (8 Oct 2026).
+    static func notificationID(month: String, category: SpendCategory, threshold: Threshold) -> String {
+        "category-limit-" + alertKey(month: month, category: category, threshold: threshold)
+    }
+
     /// Which alerts to send now, and the updated record. Each threshold fires
     /// once per category per month. If both are crossed at once only the
     /// 100% one is sent, but both are recorded. Old months are dropped.
@@ -155,10 +161,18 @@ enum CategoryBudgets {
 
     /// The alert's body: "Transport this month: $180 of $200 · $20 left",
     /// or "· $12 over" once past the limit. Exactly at the limit it is
-    /// "$0 left": only spending past the limit counts as over.
+    /// "$0 left": only spending past the limit counts as over. Over by less
+    /// than a whole unit (200.30 of 200) reads "· at its limit", never "$0 over".
     static func statusLine(_ category: SpendCategory, _ p: Progress) -> String {
         func money(_ x: Double) -> String { Money.format(Decimal(x), Money.home, cents: false) }
-        let tail = p.status == .over ? "\(money(-p.left)) over" : "\(money(p.left)) left"
+        let tail: String
+        if p.status != .over {
+            tail = "\(money(p.left)) left"
+        } else if money(-p.left) == money(0) {
+            tail = "at its limit"
+        } else {
+            tail = "\(money(-p.left)) over"
+        }
         return "\(category.name) this month: \(money(p.spent)) of \(money(p.limit)) · \(tail)"
     }
 }

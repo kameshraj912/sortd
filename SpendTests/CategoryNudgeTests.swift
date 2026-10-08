@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
+import UserNotifications
 @testable import Spend
 
 /// The nudge after a Wallet tap: when the tap moves a category past 80% or
@@ -140,6 +141,9 @@ struct CategoryNudgeTests {
         #expect(exact == "Transport this month: \(m(200)) of \(m(200)) · \(m(0)) left")
         let over = CategoryBudgets.statusLine(.transport, .init(spent: 212, limit: 200))
         #expect(over == "Transport this month: \(m(212)) of \(m(200)) · \(m(12)) over")
+        // Over by less than the rounding: say "at its limit", not "$0 over".
+        let hair = CategoryBudgets.statusLine(.transport, .init(spent: 200.3, limit: 200))
+        #expect(hair == "Transport this month: \(m(200.3)) of \(m(200)) · at its limit")
     }
 
     // MARK: - The switch
@@ -152,41 +156,120 @@ struct CategoryNudgeTests {
         #expect(!CategoryNudge.isOn(d))
     }
 
-    @Test func billsToggleDoesNotGateTheNudge() throws {
-        let standard = UserDefaults.standard
-        let was = standard.object(forKey: Reminders.enabledKey)
-        standard.set(false, forKey: Reminders.enabledKey)
-        defer {
-            if let was { standard.set(was, forKey: Reminders.enabledKey) } else { standard.removeObject(forKey: Reminders.enabledKey) }
-        }
-        let r = due(txn(30), [txn(150)], limits: [.transport: 200])
-        #expect(try #require(r.alert).threshold == .near)
-    }
-
     // MARK: - post
 
-    /// Notification permission is not granted in the test host, so `post`
-    /// returns early anyway (see `FreeAppTests`); this pins that, with the
-    /// switch off, nothing is recorded: not the alert, not the date.
-    @Test func postRecordsNothingWhenOff() async throws {
+    /// A real Wallet tap logged in an in-memory store, with 150 already
+    /// spent in the tap's own category and a limit of 200 there, so the tap
+    /// (30) crosses 80%. Asserts on the records (`sentAlerts`, the nudge
+    /// dates): the test host cannot post a notification, so `allowed` is
+    /// injected and the OS call itself is not checked.
+    private func crossingTap(_ d: UserDefaults) async throws -> (LogPurchaseIntent.Outcome, ModelContext, SpendCategory) {
         let container = try ModelContainer(for: Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let ctx = ModelContext(container)
-        ctx.insert(txn(150))
+        let r = try await LogWalletTapIntent.handle(nil, amount: Money.format(30, Money.home), merchant: "Uber",
+                                                    card: "NAB Visa Debit", in: ctx, book: CardBook(defaults: suite()), now: now)
+        let t = try #require(r.transaction)
+        guard case .purchase = LoggedNotice.saved(from: r) else {
+            Issue.record("the tap should log as a plain purchase")
+            return (r, ctx, t.category)
+        }
+        ctx.insert(txn(150, t.category, ago: 7_200))
         try ctx.save()
+        CategoryBudgets.set(200, for: t.category, d)
+        return (r, ctx, t.category)
+    }
 
+    private func dates(_ d: UserDefaults) -> [Date] { d.array(forKey: CategoryNudge.datesKey) as? [Date] ?? [] }
+
+    @Test func postRecordsNothingWhenTheSwitchIsOff() async throws {
         let d = suite()
-        CategoryBudgets.set(200, for: .transport, d)
+        let (r, ctx, _) = try await crossingTap(d)
         d.set(false, forKey: CategoryNudge.enabledKey)
 
-        let book = CardBook(defaults: suite())
-        let r = try await LogWalletTapIntent.handle(nil, amount: Money.format(30, Money.home), merchant: "Uber",
-                                                    card: "NAB Visa Debit", in: ctx, book: book, now: now)
-        #expect(r.transaction != nil)
-
-        await CategoryNudge.post(for: r, in: ctx, now: now, defaults: d)
+        await CategoryNudge.post(for: r, in: ctx, now: now, defaults: d, allowed: { true })
 
         #expect(CategoryBudgets.sentAlerts(d).isEmpty)
-        #expect((d.array(forKey: CategoryNudge.datesKey) ?? []).isEmpty)
+        #expect(dates(d).isEmpty)
+    }
+
+    @Test func postRecordsNothingWithoutPermission() async throws {
+        let d = suite()
+        let (r, ctx, _) = try await crossingTap(d)
+        d.set(true, forKey: CategoryNudge.enabledKey)
+
+        await CategoryNudge.post(for: r, in: ctx, now: now, defaults: d, allowed: { false })
+
+        #expect(CategoryBudgets.sentAlerts(d).isEmpty)
+        #expect(dates(d).isEmpty)
+    }
+
+    @Test func postAtTheWeeklyCapRecordsTheCrossingButNotADate() async throws {
+        let d = suite()
+        let (r, ctx, category) = try await crossingTap(d)
+        let full = [now - day, now - 2 * day, now - 3 * day]
+        d.set(full, forKey: CategoryNudge.datesKey)
+
+        await CategoryNudge.post(for: r, in: ctx, now: now, defaults: d, allowed: { true })
+
+        #expect(CategoryBudgets.sentAlerts(d).contains(key(category, .near)))
+        #expect(dates(d) == full)
+    }
+
+    @Test func postUnderTheCapPrunesOldDatesAndAddsNow() async throws {
+        let d = suite()
+        let (r, ctx, category) = try await crossingTap(d)
+        d.set([now - 10 * day], forKey: CategoryNudge.datesKey)
+
+        await CategoryNudge.post(for: r, in: ctx, now: now, defaults: d, allowed: { true })
+
+        #expect(CategoryBudgets.sentAlerts(d).contains(key(category, .near)))
+        #expect(dates(d) == [now])
+    }
+
+    // MARK: - The foreground check shares the cap and the notification
+
+    /// Four categories crossing at once (first open after the update) post
+    /// at most three; all four are recorded so none comes back later.
+    @Test func foregroundCheckSharesTheWeeklyCap() async {
+        let d = suite()
+        let cats: [SpendCategory] = [.transport, .groceries, .eatingOut, .shopping]
+        for c in cats { CategoryBudgets.set(100, for: c, d) }
+        let all = cats.map { txn(90, $0) }
+
+        await Reminders.checkCategoryLimits(all, now: now, defaults: d, allowed: { true })
+
+        for c in cats { #expect(CategoryBudgets.sentAlerts(d).contains(key(c, .near))) }
+        #expect(dates(d) == [now, now, now])
+    }
+
+    @Test func foregroundCheckWithoutPermissionAddsNoDates() async {
+        let d = suite()
+        CategoryBudgets.set(100, for: .transport, d)
+        await Reminders.checkCategoryLimits([txn(90)], now: now, defaults: d, allowed: { false })
+        #expect(CategoryBudgets.sentAlerts(d).contains(key(.transport, .near)))
+        #expect(dates(d).isEmpty)
+    }
+
+    /// One request builder, so the tap nudge and the foreground check can
+    /// never announce the same crossing under two ids.
+    @Test func bothPathsUseOneNotification() throws {
+        let alert = CategoryBudgets.Alert(category: .transport, threshold: .near, progress: .init(spent: 180, limit: 200))
+        let request = CategoryNudge.request(for: alert, now: now)
+        #expect(request.identifier == "category-limit-" + key(.transport, .near))
+        #expect(request.identifier == CategoryBudgets.notificationID(month: CategoryBudgets.monthKey(now),
+                                                                     category: .transport, threshold: .near))
+        #expect(request.content.userInfo["url"] as? String == "sortd://insights")
+        #expect(request.content.interruptionLevel == .active)
+        #expect(request.content.title == "Transport is near its limit")
+
+        let services = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Spend/Services")
+        // Both paths post through `CategoryNudge.send`, which builds the request above.
+        let reminders = try String(contentsOf: services.appendingPathComponent("Reminders.swift"), encoding: .utf8)
+        let nudge = try String(contentsOf: services.appendingPathComponent("CategoryNudge.swift"), encoding: .utf8)
+        #expect(reminders.contains("await CategoryNudge.send("))
+        #expect(!reminders.contains("\"category-limit-\""))
+        #expect(nudge.contains("await send("))
     }
 }

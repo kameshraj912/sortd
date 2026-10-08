@@ -329,7 +329,9 @@ struct LogWalletTapIntent: AppIntent {
         // seen: say "Logged" with a notification, if already allowed.
         await LoggedNotice.post(for: outcome)
         // A second notice when this tap moves its category past 80% or 100%
-        // of its limit (8 Oct 2026). Same gates as "Logged", plus its own switch.
+        // of its limit (8 Oct 2026). Only for a saved purchase, with Category
+        // Limit Alerts on, a limit on that category and notifications already
+        // allowed; at most 3 a week.
         await CategoryNudge.post(for: outcome, in: container.mainContext, now: now)
         return outcome
     }

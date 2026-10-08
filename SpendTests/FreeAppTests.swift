@@ -23,7 +23,9 @@ struct FreeAppTests {
     /// today) still guards on `ProStore.shared.isPro`. In the test process
     /// nothing is ever purchased, so with the gate still in place this stays
     /// red: it never records the over-limit alert even though a category is
-    /// well over its limit and reminders are on.
+    /// well over its limit. (Since 8 Oct 2026 the check follows its own
+    /// switch, `CategoryNudge.enabledKey`, on by default; the bills toggle
+    /// set below no longer matters.)
     ///
     /// Asserts on `CategoryBudgets.sentAlerts`, not on
     /// `UNUserNotificationCenter.pendingNotificationRequests()`: the unit

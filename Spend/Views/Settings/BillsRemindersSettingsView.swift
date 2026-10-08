@@ -69,7 +69,7 @@ struct BillsRemindersSettingsView: View {
             }
             Section {
                 Toggle(isOn: Binding(
-                    get: { Reminders.paceAlertShownOn(stored: paceAlert, notificationsAllowed: notificationsAllowed) },
+                    get: { Reminders.alertShownOn(stored: paceAlert, notificationsAllowed: notificationsAllowed) },
                     set: { on in
                         paceAlert = on
                         guard on else { return }
@@ -82,21 +82,11 @@ struct BillsRemindersSettingsView: View {
                     })) {
                     Label("Budget Pace Alert", systemImage: "gauge.with.needle")
                 }
-            } header: {
-                BoldHeader("Budget")
-            } footer: {
-                if notificationsAllowed {
-                    Text("One alert a month if you're on track to pass your budget.")
-                } else {
-                    Text("Turn on notifications for Sortd in Settings to get this alert.")
-                }
-            }
-            Section {
                 // Its own switch since 8 Oct 2026; the bills one no longer
                 // decides it. Shown off while iOS blocks notifications, like
                 // the pace alert above.
                 Toggle(isOn: Binding(
-                    get: { Reminders.paceAlertShownOn(stored: categoryAlerts, notificationsAllowed: notificationsAllowed) },
+                    get: { Reminders.alertShownOn(stored: categoryAlerts, notificationsAllowed: notificationsAllowed) },
                     set: { on in
                         categoryAlerts = on
                         guard on else { return }
@@ -108,9 +98,11 @@ struct BillsRemindersSettingsView: View {
                     })) {
                     Label("Category Limit Alerts", systemImage: "chart.bar.xaxis")
                 }
+            } header: {
+                BoldHeader("Budget")
             } footer: {
                 if notificationsAllowed {
-                    Text("When a category passes 80% and 100% of its monthly limit, after the tap that does it.")
+                    Text("One alert a month if you're on track to pass your budget.\n\nAn alert when a category reaches 80% and 100% of its monthly limit, right after the tap or when you next open Sortd. At most three a week.")
                 } else {
                     Text("Turn on notifications for Sortd in Settings to get these alerts.")
                 }

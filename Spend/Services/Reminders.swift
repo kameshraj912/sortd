@@ -82,10 +82,11 @@ enum Reminders {
         status == .authorized || status == .provisional || status == .ephemeral
     }
 
-    /// What the Budget Pace Alert switch shows. The stored choice is kept as it
-    /// is; while iOS blocks notifications the switch reads off, because the
-    /// alert can never arrive (it only sends when notifications are allowed).
-    nonisolated static func paceAlertShownOn(stored: Bool, notificationsAllowed: Bool) -> Bool {
+    /// What an alert switch shows (Budget Pace Alert, Category Limit Alerts).
+    /// The stored choice is kept as it is; while iOS blocks notifications the
+    /// switch reads off, because the alert can never arrive (it only sends
+    /// when notifications are allowed).
+    nonisolated static func alertShownOn(stored: Bool, notificationsAllowed: Bool) -> Bool {
         stored && notificationsAllowed
     }
 
@@ -179,32 +180,26 @@ enum Reminders {
 
     // MARK: Category limits
 
-    private static let limitPrefix = "category-limit-"
-
     /// A notification when a category first passes 80% and 100% of its
     /// monthly limit, checked when the app comes to the foreground. Each one
     /// fires once a month. Since 8 Oct 2026 it follows its own switch
     /// (`CategoryNudge.isOn`, Settings › Bills & Reminders › Category Limit
-    /// Alerts), not the bills reminders one. The nudge after a Wallet tap
-    /// (`CategoryNudge.post`) shares the record and the identifier, so a
-    /// crossing it already announced is not sent again here.
+    /// Alerts), not the bills reminders one, and posts through
+    /// `CategoryNudge.send`, the same sender as the nudge after a Wallet tap:
+    /// one record, one identifier and one weekly cap of 3 for both. Every
+    /// crossing is recorded even past the cap, so the first open after an
+    /// update cannot send a burst. `allowed` is there for tests.
     static func checkCategoryLimits(_ transactions: [Transaction], now: Date = .now,
-                                    defaults: UserDefaults = .standard) async {
+                                    defaults: UserDefaults = .standard,
+                                    allowed: () async -> Bool = LoggedNotice.notificationsAllowed) async {
         guard CategoryNudge.isOn(defaults) else { return }
         let progress = CategoryBudgets.progress(for: transactions, limits: CategoryBudgets.all(defaults), now: now)
         let due = CategoryBudgets.dueAlerts(progress, month: CategoryBudgets.monthKey(now),
                                             sent: CategoryBudgets.sentAlerts(defaults))
         CategoryBudgets.saveSentAlerts(due.sent, defaults)
-
-        let center = UNUserNotificationCenter.current()
+        guard !due.alerts.isEmpty, await allowed() else { return }
         for alert in due.alerts {
-            let content = UNMutableNotificationContent()
-            content.title = CategoryBudgets.title(for: alert.category, alert.threshold)
-            content.body = CategoryBudgets.statusLine(alert.category, alert.progress)
-            content.sound = .default
-            let id = limitPrefix + CategoryBudgets.alertKey(month: CategoryBudgets.monthKey(now),
-                                                             category: alert.category, threshold: alert.threshold)
-            try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+            await CategoryNudge.send(alert, now: now, defaults: defaults)
         }
     }
 
