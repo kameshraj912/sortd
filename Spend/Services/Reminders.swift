@@ -182,10 +182,15 @@ enum Reminders {
     private static let limitPrefix = "category-limit-"
 
     /// A notification when a category first passes 80% and 100% of its
-    /// monthly limit. Only when reminders are on; each one fires once a month.
+    /// monthly limit, checked when the app comes to the foreground. Each one
+    /// fires once a month. Since 8 Oct 2026 it follows its own switch
+    /// (`CategoryNudge.isOn`, Settings › Bills & Reminders › Category Limit
+    /// Alerts), not the bills reminders one. The nudge after a Wallet tap
+    /// (`CategoryNudge.post`) shares the record and the identifier, so a
+    /// crossing it already announced is not sent again here.
     static func checkCategoryLimits(_ transactions: [Transaction], now: Date = .now,
                                     defaults: UserDefaults = .standard) async {
-        guard shouldSchedule(enabled: enabled) else { return }
+        guard CategoryNudge.isOn(defaults) else { return }
         let progress = CategoryBudgets.progress(for: transactions, limits: CategoryBudgets.all(defaults), now: now)
         let due = CategoryBudgets.dueAlerts(progress, month: CategoryBudgets.monthKey(now),
                                             sent: CategoryBudgets.sentAlerts(defaults))
@@ -193,18 +198,9 @@ enum Reminders {
 
         let center = UNUserNotificationCenter.current()
         for alert in due.alerts {
-            let name = alert.category.name
-            let p = alert.progress
-            let limit = Money.format(Decimal(p.limit), Money.home, cents: false)
             let content = UNMutableNotificationContent()
-            switch alert.threshold {
-            case .near:
-                content.title = "\(name) is near its limit"
-                content.body = "\(Money.format(Decimal(p.spent), Money.home, cents: false)) of \(limit) spent. \(Money.format(Decimal(p.left), Money.home, cents: false)) left this month."
-            case .over:
-                content.title = "\(name) is over its limit"
-                content.body = "\(Money.format(Decimal(-p.left), Money.home, cents: false)) over your \(limit) limit this month."
-            }
+            content.title = CategoryBudgets.title(for: alert.category, alert.threshold)
+            content.body = CategoryBudgets.statusLine(alert.category, alert.progress)
             content.sound = .default
             let id = limitPrefix + CategoryBudgets.alertKey(month: CategoryBudgets.monthKey(now),
                                                              category: alert.category, threshold: alert.threshold)

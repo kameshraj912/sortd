@@ -140,4 +140,25 @@ enum CategoryBudgets {
     static func saveSentAlerts(_ sent: Set<String>, _ defaults: UserDefaults = .standard) {
         defaults.set(sent.sorted(), forKey: alertsKey)
     }
+
+    // MARK: Copy
+
+    /// The alert's title: "Transport is near its limit" or "…is over its
+    /// limit". Shared by the foreground check (`Reminders`) and the nudge
+    /// after a tap (`CategoryNudge`), 8 Oct 2026.
+    static func title(for category: SpendCategory, _ threshold: Threshold) -> String {
+        switch threshold {
+        case .near: "\(category.name) is near its limit"
+        case .over: "\(category.name) is over its limit"
+        }
+    }
+
+    /// The alert's body: "Transport this month: $180 of $200 · $20 left",
+    /// or "· $12 over" once past the limit. Exactly at the limit it is
+    /// "$0 left": only spending past the limit counts as over.
+    static func statusLine(_ category: SpendCategory, _ p: Progress) -> String {
+        func money(_ x: Double) -> String { Money.format(Decimal(x), Money.home, cents: false) }
+        let tail = p.status == .over ? "\(money(-p.left)) over" : "\(money(p.left)) left"
+        return "\(category.name) this month: \(money(p.spent)) of \(money(p.limit)) · \(tail)"
+    }
 }

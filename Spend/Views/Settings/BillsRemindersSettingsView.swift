@@ -1,12 +1,15 @@
 import SwiftUI
 import SwiftData
 
-/// Settings › Bills & Reminders: recurring subscriptions/bills and the
-/// day-before notification.
+/// Settings › Bills & Reminders: recurring subscriptions/bills, the
+/// day-before notification, the budget pace alert and the category limit
+/// alerts.
 struct BillsRemindersSettingsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage(Reminders.paceAlertKey) private var paceAlert = true
+    /// Default on, the same as `CategoryNudge.isOn`.
+    @AppStorage(CategoryNudge.enabledKey) private var categoryAlerts = true
     @AppStorage(SetupProfile.checkInKey) private var checkIn = SetupProfile.CheckIn.needed.rawValue
     @State private var notificationsBlocked = false
     /// What iOS allows now. Assumed yes until checked, so the switch does not
@@ -86,6 +89,30 @@ struct BillsRemindersSettingsView: View {
                     Text("One alert a month if you're on track to pass your budget.")
                 } else {
                     Text("Turn on notifications for Sortd in Settings to get this alert.")
+                }
+            }
+            Section {
+                // Its own switch since 8 Oct 2026; the bills one no longer
+                // decides it. Shown off while iOS blocks notifications, like
+                // the pace alert above.
+                Toggle(isOn: Binding(
+                    get: { Reminders.paceAlertShownOn(stored: categoryAlerts, notificationsAllowed: notificationsAllowed) },
+                    set: { on in
+                        categoryAlerts = on
+                        guard on else { return }
+                        Task {
+                            let allowed = await Reminders.requestPermission()
+                            notificationsAllowed = allowed
+                            if !allowed { notificationsBlocked = true }
+                        }
+                    })) {
+                    Label("Category Limit Alerts", systemImage: "chart.bar.xaxis")
+                }
+            } footer: {
+                if notificationsAllowed {
+                    Text("When a category passes 80% and 100% of its monthly limit, after the tap that does it.")
+                } else {
+                    Text("Turn on notifications for Sortd in Settings to get these alerts.")
                 }
             }
         }

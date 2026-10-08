@@ -328,6 +328,9 @@ struct LogWalletTapIntent: AppIntent {
         // The shortcut runs with "Show When Run" off, so the dialog is not
         // seen: say "Logged" with a notification, if already allowed.
         await LoggedNotice.post(for: outcome)
+        // A second notice when this tap moves its category past 80% or 100%
+        // of its limit (8 Oct 2026). Same gates as "Logged", plus its own switch.
+        await CategoryNudge.post(for: outcome, in: container.mainContext, now: now)
         return outcome
     }
 
