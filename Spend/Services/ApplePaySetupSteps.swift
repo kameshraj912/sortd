@@ -332,3 +332,140 @@ extension ApplePaySetupSteps {
         Analytics.shared.track(.applePaySetupAction, props)
     }
 }
+
+// MARK: - The new shortcut, and what's new for iOS 26 (8 Oct 2026)
+
+extension ApplePaySetupSteps {
+    /// The downloaded shortcut's version. 2 is build 10's (it passes the
+    /// sending app and takes a bank's app on the notification trigger); 1 is
+    /// builds 4 to 9's. On iOS 26 it stands for "has seen the way round
+    /// Sortd missing from the Shortcuts list".
+    static let shortcutVersion = 2
+    /// The version this install has. Set to `shortcutVersion` when Get the
+    /// Shortcut opens the file on iOS 27, on "I've Done It" on the card, and
+    /// at the first launch of a fresh install (`settleShortcutVersion`).
+    static let shortcutVersionKey = "applePayShortcutVersion"
+
+    /// The stored version as it should be read. An install that set up
+    /// before the key existed has the old setup, so an unset 0 reads as 1.
+    static func storedShortcutVersion(raw: Int, hasSetUpBefore: Bool) -> Int {
+        raw > 0 ? raw : (hasSetUpBefore ? 1 : 0)
+    }
+
+    static func storedShortcutVersion(hasSetUpBefore: Bool, defaults: UserDefaults = .standard) -> Int {
+        storedShortcutVersion(raw: defaults.integer(forKey: shortcutVersionKey), hasSetUpBefore: hasSetUpBefore)
+    }
+
+    static func markNewShortcut(defaults: UserDefaults = .standard) {
+        defaults.set(shortcutVersion, forKey: shortcutVersionKey)
+    }
+
+    /// At launch: an install with nothing set up and no version yet is new
+    /// as of this build, so anything it sets up is the new way. Stamping it
+    /// now keeps the card from showing after an iOS 26 "I'm Done" or an
+    /// iOS 27 by-hand build. Returns whether it stamped.
+    @discardableResult
+    static func settleShortcutVersion(hasSetUpBefore: Bool, defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: shortcutVersionKey) == nil, !hasSetUpBefore else { return false }
+        markNewShortcut(defaults: defaults)
+        return true
+    }
+
+    /// Whether to show the card on Home and the banner on the setup page.
+    ///
+    /// iOS 27: the shortcut has reached Sortd before (a run or a tap row),
+    /// so the old shortcut is in the library. iOS 26: setup was finished
+    /// before ("I'm Done", or the old shortcut reached Sortd), and no real
+    /// tap has logged; someone whose taps log needs no way round.
+    static func needsNewShortcut(route: Route, hasReachedBefore: Bool, saysBuilt: Bool = false, hasRealTap: Bool = false,
+                                 storedVersion: Int, dismissed: Bool) -> Bool {
+        guard storedVersion < shortcutVersion, !dismissed else { return false }
+        switch route {
+        case .shortcut: return hasReachedBefore
+        case .automation: return (saysBuilt || hasReachedBefore) && !hasRealTap
+        }
+    }
+
+    /// `needsNewShortcut` from what the views hold: the status, "I'm done",
+    /// and the raw stored version.
+    static func needsNewShortcut(route: Route, status: ApplePayStatus, saysBuilt: Bool, rawVersion: Int) -> Bool {
+        let realTap = switch status {
+        case .tapLogged, .tapNeedsCheck: true
+        case .notConnected, .shortcutReached: false
+        }
+        let setUp = status.isConnected || saysBuilt
+        return needsNewShortcut(route: route, hasReachedBefore: status.isConnected, saysBuilt: saysBuilt, hasRealTap: realTap,
+                                storedVersion: storedShortcutVersion(raw: rawVersion, hasSetUpBefore: setUp),
+                                dismissed: false)
+    }
+
+    /// The card's words, per route.
+    struct NewShortcutCopy: Equatable {
+        let title: String
+        let line: String
+        let steps: [String]
+        /// The setup page's filled button: opens a page in the Safari sheet.
+        let pageButton: String
+        /// Home's filled button: opens the setup page.
+        let homeButton: String
+        let doneButton: String
+    }
+
+    static func newShortcutCopy(route: Route) -> NewShortcutCopy {
+        switch route {
+        case .shortcut:
+            NewShortcutCopy(
+                title: "Get the new shortcut",
+                line: "This build reads your bank's alerts too, so Apple Pay in apps can log even when Wallet says nothing. It needs the new shortcut.",
+                steps: ["In Shortcuts, press and hold Log Apple Pay in Sortd, then Delete.",
+                        "Get the shortcut again below and turn both automations on.",
+                        "Tap + next to Wallet under \u{201C}When I receive a notification\u{201D} and add your bank's app. Turn on purchase alerts in that app."],
+                pageButton: "Get the Shortcut",
+                homeButton: "Show Me How",
+                doneButton: "I've Done It")
+        case .automation:
+            NewShortcutCopy(
+                title: "What's new for iOS 26",
+                line: "If Sortd wasn't in the Shortcuts list when you made the automation, there is a way round now.",
+                steps: ["Open Sortd once, wait ten seconds, then restart your iPhone and try the automation again.",
+                        "Still missing? Build the shortcut first under My Shortcuts, then pick it in the Wallet automation.",
+                        "The full steps are on sortd.page/support under \u{201C}Sortd isn't in the list\u{201D}."],
+                pageButton: "Open the Steps",
+                homeButton: "Show Me How",
+                doneButton: "I've Done It")
+        }
+    }
+
+    /// `apple_pay_setup_action`'s `action` for the card.
+    enum NewShortcutAction {
+        case shown, get, done
+
+        func name(route: Route) -> String {
+            switch (route, self) {
+            case (.shortcut, .shown): "new_shortcut_shown"
+            case (.shortcut, .get): "new_shortcut_get"
+            case (.shortcut, .done): "new_shortcut_done"
+            case (.automation, .shown): "ios26_whats_new_shown"
+            case (.automation, .get): "ios26_whats_new_open"
+            case (.automation, .done): "ios26_whats_new_done"
+            }
+        }
+    }
+
+    /// `shown` goes once per launch, whichever of the card or the banner
+    /// appears first.
+    private static var newShortcutShownSent = false
+
+    /// True the first time only; flips `sent`. Pure, for the test.
+    static func claimShownOnce(_ sent: inout Bool) -> Bool {
+        guard !sent else { return false }
+        sent = true
+        return true
+    }
+
+    static func trackNewShortcut(_ action: NewShortcutAction, route: Route = ApplePaySetupSteps.route,
+                                 status: ApplePayStatus, saysBuilt: Bool) {
+        if action == .shown, !claimShownOnce(&newShortcutShownSent) { return }
+        trackAction(action.name(route: route), route: route, status: status, saysBuilt: saysBuilt)
+    }
+}

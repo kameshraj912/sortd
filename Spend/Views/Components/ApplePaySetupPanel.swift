@@ -61,6 +61,8 @@ struct ApplePaySetupPanel: View {
     private var hasNotificationTrigger: Bool { route == .shortcut }
 
     @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
+    /// `ApplePaySetupSteps.shortcutVersionKey`: the new-shortcut card goes once it is 2.
+    @AppStorage(ApplePaySetupSteps.shortcutVersionKey) private var shortcutVersion = 0
     /// The iOS 26 walk-through is open.
     @State private var showingAutomationGuide = false
 
@@ -86,6 +88,7 @@ struct ApplePaySetupPanel: View {
             // Check the Shortcut sends text; the iOS 26 shortcut only takes
             // a Wallet transaction, so the check would always say "nothing".
             if route == .shortcut { healthCheckSection }
+            newShortcutCard
             steps
             scopeNote
             nudgeLine
@@ -265,6 +268,52 @@ struct ApplePaySetupPanel: View {
         return status.detail
     }
 
+    // MARK: - Get the new shortcut / What's new for iOS 26 (8 Oct 2026)
+
+    /// For anyone who set up on an older build (`needsNewShortcut`). On
+    /// iOS 27 the filled button opens the shortcut file, as step 1's does;
+    /// on iOS 26 it opens the support page's "Sortd isn't in the list".
+    /// Either one, or I've Done It, hides the card.
+    @ViewBuilder
+    private var newShortcutCard: some View {
+        if ApplePaySetupSteps.needsNewShortcut(route: route, status: status, saysBuilt: automationBuilt, rawVersion: shortcutVersion) {
+            let copy = ApplePaySetupSteps.newShortcutCopy(route: route)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(copy.title).font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(copy.line).font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(Array(copy.steps.enumerated()), id: \.offset) { n, step in
+                    HStack(alignment: .top, spacing: 12) {
+                        stepBadge(n + 1, done: false)
+                        Text(step).font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Step \(n + 1): \(step)")
+                }
+                actionButton(copy.pageButton, symbol: route == .shortcut ? "square.and.arrow.down" : "safari", bold: true) {
+                    ApplePaySetupSteps.trackNewShortcut(.get, route: route, status: status, saysBuilt: automationBuilt)
+                    if route == .shortcut { shortcutOpened = true }
+                    let url = route == .shortcut ? ApplePaySetupSteps.shortcutFileURL : ApplePaySetupSteps.missingFromListURL
+                    safariPage = SafariPage(url: url)
+                    shortcutVersion = ApplePaySetupSteps.shortcutVersion
+                }
+                actionButton(copy.doneButton, symbol: "checkmark", bold: false) {
+                    ApplePaySetupSteps.trackNewShortcut(.done, route: route, status: status, saysBuilt: automationBuilt)
+                    withAnimation(.snappy) { shortcutVersion = ApplePaySetupSteps.shortcutVersion }
+                }
+            }
+            .setupCard()
+            .onAppear {
+                ApplePaySetupSteps.trackNewShortcut(.shown, route: route, status: status, saysBuilt: automationBuilt)
+            }
+            .transition(.opacity)
+        }
+    }
+
     // MARK: - The three steps
 
     /// Step 3 is the one that makes logging automatic. Sortd can't see it
@@ -290,6 +339,8 @@ struct ApplePaySetupPanel: View {
                          symbol: "square.and.arrow.down", bold: !ticked.addShortcut) {
                 shortcutOpened = true
                 trackAction("get_shortcut")
+                // The file this opens is the current shortcut.
+                shortcutVersion = ApplePaySetupSteps.shortcutVersion
                 safariPage = SafariPage(url: ApplePaySetupSteps.shortcutFileURL)
             }
 

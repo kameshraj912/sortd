@@ -118,6 +118,15 @@ struct SpendApp: App {
             let taps = (try? context.fetch(FetchDescriptor<Transaction>())) ?? []
             ApplePaySetupSteps.resetOldIOS26Setup(hasRealTap: ApplePayStatus.hasRealTap(in: taps))
         }
+        // A fresh install is new as of this build: anything it sets up is
+        // the new way, so "Get the new shortcut" / "What's new for iOS 26"
+        // never shows for it (8 Oct 2026).
+        if UserDefaults.standard.object(forKey: ApplePaySetupSteps.shortcutVersionKey) == nil {
+            let setUp = LogPurchaseIntent.shortcutHasReachedApp
+                || UserDefaults.standard.bool(forKey: ApplePaySetupSteps.automationBuiltKey)
+                || ApplePayStatus.hasRealTap(in: (try? context.fetch(FetchDescriptor<Transaction>())) ?? [])
+            ApplePaySetupSteps.settleShortcutVersion(hasSetUpBefore: setUp)
+        }
         // Run lines from older builds held shop names and amounts.
         LogPurchaseIntent.scrubOldRunText()
         #if DEBUG

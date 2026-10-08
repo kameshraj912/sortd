@@ -78,6 +78,7 @@ struct HomeView: View {
                                 // then the one notification ask.
                                 ActivationCard()
                                 ApplePayStepLeftCard()
+                                NewShortcutCard()
                                 FinishSetupCard()
                                 ApplePayNudgeCard()
                             }
@@ -705,6 +706,7 @@ struct HomeView: View {
                     Text("Your purchases show up here.").font(.body).foregroundStyle(.secondary)
                 }
                 ApplePayStepLeftCard()
+                NewShortcutCard()
                 FinishSetupCard(canHide: false)
                 Button { showingAdd = true } label: {
                     HStack(spacing: 12) {
