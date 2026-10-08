@@ -98,3 +98,22 @@ Bank app alerts, and category limit alerts.
 What must not happen: a balance, a code or an offer from the bank app showing up as a
 purchase. A refund coming off twice. If you see either, send a screenshot with TestFlight's
 feedback button.
+
+
+## What to Test (Build 1.0 (11))
+
+If you set up Apple Pay on an earlier build, Sortd now shows a card that says what changed.
+
+1. iPhone on iOS 27: "Get the new shortcut" on Home and at the top of the Apple Pay setup
+   page. It asks you to delete the old shortcut, get the new one, turn both automations on,
+   and add your bank's app.
+
+2. iPhone on iOS 26: "What's new for iOS 26". It explains what to do if Sortd wasn't in the
+   Shortcuts list. If your taps already log, you won't see it.
+
+What to check:
+- The card shows if you set up on an earlier build. It does not show on a fresh install.
+- Show Me How on Home opens the setup page.
+- I've Done It hides the card for good.
+- On the setup page, Get the Shortcut (iOS 27) or Open the Steps (iOS 26) opens the page, and
+  the card is gone when you come back.
