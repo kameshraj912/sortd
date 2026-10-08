@@ -173,7 +173,11 @@ extension ApplePaySetupSteps {
                        taps: ["Tap Create New Shortcut.",
                               "Scroll down and tap Sortd.",
                               "Tap Log Wallet Tap."],
-                       note: "Don't pick a shortcut under My Shortcuts. Sortd's own action is the one that works."),
+                       // iOS 26.6 beta: Sortd was missing from this list for one tester
+                       // (an iOS picker bug, 8 Oct 2026). A shortcut built by hand is
+                       // trusted; a downloaded one is not, so the fallback is the one
+                       // time My Shortcuts is right (`missingFromListURL`).
+                       note: "Don't pick a shortcut under My Shortcuts. Sortd's own action is the one that works.\nSortd not in the list? Open Sortd once, wait ten seconds, then restart your iPhone and try again. Still missing? Build it yourself first: see \u{201C}Sortd isn't in the list\u{201D} on sortd.page/support."),
         AutomationStep(id: 3, title: "Fill in 3 boxes",
                        taps: ["Tap Amount, then Shortcut Input above the keyboard. Tap Shortcut Input again and choose Amount.",
                               "Do the same for Shop. Choose Merchant.",
@@ -195,6 +199,11 @@ extension ApplePaySetupSteps {
     static let createAutomationURL = URL(string: "shortcuts://create-automation")!
     /// Back to Shortcuts, wherever it was left.
     static let shortcutsURL = URL(string: "shortcuts://")!
+    /// The support page's fallback for "Sortd isn't in the Shortcuts list"
+    /// (opened in the in-app Safari sheet from page 3's note).
+    static let missingFromListURL = URL(string: "https://sortd.page/support#ios26-missing")!
+    /// The words in a note that open `missingFromListURL`.
+    static let missingFromListLinkText = "sortd.page/support"
 
     /// Set when the person taps "I'm Done" on the last page. Nothing tells
     /// Sortd an automation exists, so this only ever means "they say so".

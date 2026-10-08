@@ -16,6 +16,7 @@ struct ApplePayAutomationGuide: View {
     /// The connection as the caller sees it, for `apple_pay_setup_action`.
     var status: ApplePayStatus = .notConnected
 
+    @State private var safariPage: SafariPage?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -35,6 +36,16 @@ struct ApplePayAutomationGuide: View {
     }
 
     private var page: Int { min(max(storedPage, 0), steps.count - 1) }
+
+    /// A note, with the support page's address turned into a link.
+    private func noteText(_ note: String) -> AttributedString {
+        var text = AttributedString(note)
+        if let range = text.range(of: ApplePaySetupSteps.missingFromListLinkText) {
+            text[range].link = ApplePaySetupSteps.missingFromListURL
+            text[range].underlineStyle = .single
+        }
+        return text
+    }
 
     /// `apple_pay_setup_action` from inside the guide.
     private func trackAction(_ action: String, page: Int? = nil) {
@@ -84,10 +95,15 @@ struct ApplePayAutomationGuide: View {
                             .accessibilityLabel("\(index + 1). \(tap)")
                         }
                         if let note = step.note {
-                            Text(note)
+                            Text(noteText(note))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                                // Links in a note open in the in-app Safari sheet, not the default browser.
+                                .environment(\.openURL, OpenURLAction { url in
+                                    safariPage = SafariPage(url: url)
+                                    return .handled
+                                })
                         }
                         if page == 0, madeOldAutomation {
                             Label(ApplePaySetupSteps.oldAutomationLine, systemImage: "exclamationmark.circle.fill")
@@ -111,6 +127,9 @@ struct ApplePayAutomationGuide: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
+            }
+            .sheet(item: $safariPage) { page in
+                SafariSheet(url: page.url).ignoresSafeArea()
             }
         }
     }
