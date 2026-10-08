@@ -21,8 +21,9 @@
 <script src="site.js?v=42"></script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"WebSite","name":"Sortd: Spending Tracker","alternateName":"Sortd","url":"https://sortd.page/"},
- {"@type":"MobileApplication","name":"Sortd: Spending Tracker","alternateName":"Sortd","operatingSystem":"iOS 26 or later","applicationCategory":"FinanceApplication","description":"An iPhone spending tracker that logs Apple Pay purchases by itself, reads paper receipts with the camera, tracks subscriptions and converts 30+ currencies. Free. Purchases stay on the iPhone.","url":"https://sortd.page/","image":"https://sortd.page/img/og.png?v=2","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}},
+ {"@type":"Organization","@id":"https://sortd.page/#org","name":"Sortd","url":"https://sortd.page/","logo":"https://sortd.page/img/icon-256.png","email":"support@sortd.page","sameAs":["https://www.instagram.com/sortd.money/"]},
+ {"@type":"WebSite","name":"Sortd: Spending Tracker","alternateName":["Sortd","sortd.page"],"url":"https://sortd.page/","publisher":{"@id":"https://sortd.page/#org"}},
+ {"@type":"MobileApplication","name":"Sortd: Spending Tracker","alternateName":"Sortd","operatingSystem":"iOS 26 or later","applicationCategory":"FinanceApplication","description":"An iPhone spending tracker that logs Apple Pay purchases by itself, reads paper receipts with the camera, tracks subscriptions and converts 30+ currencies. Free. Purchases stay on the iPhone.","url":"https://sortd.page/","image":"https://sortd.page/img/og.png?v=2","publisher":{"@id":"https://sortd.page/#org"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}},
  {"@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"Does Sortd connect to my bank?","acceptedAnswer":{"@type":"Answer","text":"No. There is no bank login. Purchases come from your Apple Pay payments, receipt photos, bank statements you import, or what you add yourself."}},
   {"@type":"Question","name":"How does Sortd log Apple Pay purchases automatically?","acceptedAnswer":{"@type":"Answer","text":"You set up one automation in Apple's Shortcuts app. After that, taps in shops are logged from the tap, with the shop, amount and card. On iOS 27 or later, payments in apps and on websites are logged from Wallet's notification, if your card sends one."}},
@@ -398,6 +399,7 @@
       <a href="terms">Terms of Use</a>
       <a href="support">Support</a>
       <a href="mailto:support@sortd.page">Contact</a>
+      <a href="https://www.instagram.com/sortd.money/" rel="me">Instagram</a>
     </nav>
     </div>
     <div class="foot-legal">
