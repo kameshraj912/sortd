@@ -147,6 +147,20 @@ struct ApplePayAutomationRouteTests {
         #expect(ApplePaySetupSteps.automationSteps[0].note?.contains("Delete the space after Wallet") == true)
     }
 
+    /// iOS 26.6 beta: Sortd can be missing from the list Shortcuts shows in a
+    /// new Wallet automation (an iOS picker bug). Page 3 says what to try,
+    /// and that the shortcut you build yourself is the one My Shortcuts
+    /// exception. The words in "sortd.page/support" open the support page.
+    @Test func actionPageSaysWhatToDoWhenSortdIsNotInTheList() throws {
+        let page = try #require(ApplePaySetupSteps.automationSteps.first { $0.id == 2 })
+        let note = try #require(page.note)
+        #expect(note.contains("restart"))
+        #expect(note.contains("My Shortcuts"))
+        #expect(note.contains("sortd.page/support"))
+        #expect(note.contains(ApplePaySetupSteps.missingFromListLinkText))
+        #expect(ApplePaySetupSteps.missingFromListURL.absoluteString == "https://sortd.page/support#ios26-missing")
+    }
+
     /// A real tap proves everything, whatever was or wasn't ticked off.
     @Test func aRealTapAlwaysUnlocksContinue() {
         let tap = ApplePayStatus.tapLogged(date: when, merchant: "Seven Seeds",
