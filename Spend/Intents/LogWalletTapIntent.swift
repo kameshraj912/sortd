@@ -193,10 +193,27 @@ struct LogWalletTapIntent: AppIntent {
     /// fallback included, not a shortcut through `handle` alone — otherwise
     /// a replay could look healthy while a real Shortcuts run, hitting a
     /// closed store, would not be.
+    ///
+    /// Every run that gets here logs one `apple_pay_run` event, whatever
+    /// came of it (8 Oct 2026): a run that saved nothing left no trace, so
+    /// "why wasn't it logged" had no answer.
     @MainActor
     static func performAndLog(transaction: String?, amount: String?, merchant: String?, card: String?,
                              notification: WalletNotification = .init(),
                              now: Date = .now) async -> LogPurchaseIntent.Outcome {
+        let outcome = await Self.performRun(transaction: transaction, amount: amount, merchant: merchant, card: card,
+                                            notification: notification, now: now)
+        Analytics.shared.track(.applePayRun, Self.runEvent(outcome: outcome, transaction: transaction, amount: amount,
+                                                           merchant: merchant, card: card, notification: notification))
+        return outcome
+    }
+
+    /// `performAndLog` without the run event, so its early returns cannot
+    /// skip it.
+    @MainActor
+    private static func performRun(transaction: String?, amount: String?, merchant: String?, card: String?,
+                                   notification: WalletNotification,
+                                   now: Date) async -> LogPurchaseIntent.Outcome {
         guard case .success(let container) = SpendStore.containerForIntent() else {
             if notification.isPresent {
                 // Read now, so only a real payment is queued.
@@ -209,12 +226,14 @@ struct LogWalletTapIntent: AppIntent {
                 case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
                     let message = await TapQueue.saveForLater(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
                                                               date: now, trigger: .notification)
-                    return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+                    return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
+                                                     kept: message != TapQueue.notSavedMessage)
                 }
             }
             let resolved = Self.resolvedFields(transaction: transaction, amount: amount, merchant: merchant, card: card)
             let message = await TapQueue.saveForLater(merchant: resolved.merchant, amount: resolved.amount, card: resolved.card, date: now)
-            return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true)
+            return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
+                                             kept: message != TapQueue.notSavedMessage)
         }
         let outcome: LogPurchaseIntent.Outcome
         do {
@@ -226,9 +245,10 @@ struct LogWalletTapIntent: AppIntent {
         } catch {
             // `handle` never actually throws (its own do/catch queues
             // instead), but its signature does; a genuine surprise here
-            // still must not reach Shortcuts as a failed action.
+            // still must not reach Shortcuts as a failed action. Nothing
+            // was queued here, so the run is lost (`kept: false`).
             outcome = LogPurchaseIntent.Outcome(message: "Saved for later. Sortd will finish it when it next opens.",
-                                                transaction: nil, merged: false, saveFailed: true)
+                                                transaction: nil, merged: false, saveFailed: true, kept: false)
         }
         // The app may not be running: update the widget before Shortcuts ends.
         WidgetBridge.refresh(from: container.mainContext)
@@ -335,7 +355,60 @@ struct LogWalletTapIntent: AppIntent {
         case .moneyIn: WalletNotification.moneyInMessage
         default: WalletNotification.noAmountMessage
         }
-        return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false)
+        return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, dropped: reading)
+    }
+
+    /// The `apple_pay_run` properties for one run: what kind it was, what
+    /// came of it, and which fields arrived. Fixed words and booleans only,
+    /// never an amount, a shop or a card name. The `has_*` flags are the
+    /// fields as they arrived, before any parsing; `has_text` is the old
+    /// free-text `transaction` field.
+    @MainActor
+    static func runEvent(outcome: LogPurchaseIntent.Outcome, transaction: String?, amount: String?, merchant: String?,
+                         card: String?, notification: WalletNotification) -> [String: Analytics.AnalyticsValue] {
+        let result: String
+        if outcome.saveFailed {
+            result = outcome.kept ? "queued" : "not_saved"
+        } else if let dropped = outcome.dropped, let word = Self.droppedWord(dropped) {
+            result = word
+        } else if outcome.transaction?.rawMerchant == ApplePayHealthCheck.merchant {
+            // "Check the Shortcut" (`ApplePaySetupPanel`): not a purchase.
+            result = "health_check"
+        } else if outcome.refund {
+            result = "refund"
+        } else if let t = outcome.transaction {
+            if outcome.merged {
+                result = "merged"
+            } else if t.needsCheck || t.lacksShop || t.amount <= 0 {
+                result = "needs_check"
+            } else {
+                result = "saved"
+            }
+        } else {
+            result = "blank"
+        }
+        return [
+            "kind": .string(notification.isPresent ? "notification" : "tap"),
+            "result": .string(result),
+            "has_amount": .bool(!TapField.isBlank(amount)),
+            "has_shop": .bool(!TapField.isBlank(merchant)),
+            "has_card": .bool(!TapField.isBlank(card)),
+            "has_title": .bool(!TapField.isBlank(notification.title)),
+            "has_subtitle": .bool(!TapField.isBlank(notification.subtitle)),
+            "has_body": .bool(!TapField.isBlank(notification.body)),
+            "has_text": .bool(!TapField.isBlank(transaction)),
+        ]
+    }
+
+    /// Why a notification run saved nothing, as the event's word. A payment
+    /// is never dropped, so it has none.
+    private static func droppedWord(_ reading: WalletNotification.Reading) -> String? {
+        switch reading {
+        case .notCompleted: "not_completed"
+        case .noAmount: "no_amount"
+        case .moneyIn: "money_in"
+        case .payment: nil
+        }
     }
 }
 
