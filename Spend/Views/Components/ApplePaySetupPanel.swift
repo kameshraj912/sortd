@@ -448,10 +448,18 @@ struct ApplePaySetupPanel: View {
     /// What the shortcut can and can't see — replaces the longer timeout
     /// paragraph that used to sit here (router feel check, 27 Sep 2026:
     /// this screen carried the same steps three times over).
+    ///
+    /// On iOS 27 the bank-app line sits under it (8 Oct 2026): some banks
+    /// send Wallet no notification, so the person adds the bank's own app.
     private var scopeNote: some View {
-        Text(ApplePaySetupSteps.scopeLine(notificationTrigger: hasNotificationTrigger))
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ApplePaySetupSteps.scopeLine(notificationTrigger: hasNotificationTrigger))
+            if hasNotificationTrigger {
+                Text(ApplePaySetupSteps.bankAppLine)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

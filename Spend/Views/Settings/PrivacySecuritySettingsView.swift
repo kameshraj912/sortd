@@ -72,7 +72,9 @@ struct PrivacySecuritySettingsView: View {
 
             Section {
                 row("checklist", "Your setup answers", "Kept only on this iPhone.")
-                row("bell", "Notifications", "Made on this iPhone. Check-ins never show amounts.")
+                // The bank-app part since 8 Oct 2026: the shortcut can pass
+                // a bank app's notifications to Sortd (`BankNotice`).
+                row("bell", "Notifications", "Made on this iPhone. Check-ins never show amounts. If you add your bank's app to the shortcut, its notifications reach Sortd on this iPhone only; purchases are kept, the rest ignored.")
                 row("sparkles", "Apple Intelligence", "Reads receipts on this iPhone. Nothing is sent anywhere.")
                 row("square.grid.2x2", "Widgets", "A summary kept on this iPhone.")
             } header: {

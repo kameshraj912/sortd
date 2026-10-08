@@ -14,7 +14,9 @@ The file carries two things, the way every working Wallet shortcut does
      Stored shape checked on an iOS 27 simulator on 2 Oct 2026.
 2. Sortd's own action with Amount, Merchant and Card or Pass mapped straight
    from the tap (proven on Raj's phone; unchanged), plus Notification
-   Title, Subtitle and Body mapped from the notification trigger's output.
+   Title, Subtitle, Body and App mapped from the notification trigger's
+   output. App (9 Oct 2026) tells Sortd which app sent it, so a bank app the
+   person adds to the trigger is read as the bank's.
    Sortd reads the notification whenever any of the three has text and
    then ignores the tap fields. "Show When Run" is off, so a run never
    stops on a dialog.
@@ -101,7 +103,7 @@ def input_property(name: str) -> dict:
 
 
 def notification_part(name: str) -> dict:
-    """The Notification trigger's output → Title, Subtitle or Body."""
+    """The Notification trigger's output → Title, Subtitle, Body or App."""
     return token({
         "Type": "TriggerOutput",
         "TriggerIdentifier": "WFNotificationTrigger",
@@ -132,6 +134,9 @@ log = {
         "notificationTitle": notification_part("Title"),
         "notificationSubtitle": notification_part("Subtitle"),
         "notificationBody": notification_part("Body"),
+        # Which app sent it (9 Oct 2026), so Sortd reads a bank app's
+        # notification as the bank's, even a short one.
+        "notificationApp": notification_part("App"),
     },
 }
 
@@ -197,7 +202,7 @@ workflow = {
 if IOS26:
     del workflow["WFWorkflowTriggers"]
     workflow["WFWorkflowInputContentItemClasses"] = [TRANSACTION]
-    for part in ("notificationTitle", "notificationSubtitle", "notificationBody"):
+    for part in ("notificationTitle", "notificationSubtitle", "notificationBody", "notificationApp"):
         del log["WFWorkflowActionParameters"][part]
 
 OUT.parent.mkdir(parents=True, exist_ok=True)

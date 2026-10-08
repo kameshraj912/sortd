@@ -63,7 +63,8 @@ struct LogPurchaseIntent: AppIntent {
         /// silent, so a blank companion of a real purchase never posts it.
         var reachedBeforeFirstTap: Bool = false
         /// A notification run that was read but saved nothing, and why
-        /// (declined, no amount, money in). For the `apple_pay_run` event.
+        /// (declined, no amount, money in, a bank notice that is not a
+        /// purchase). For the `apple_pay_run` event.
         var dropped: WalletNotification.Reading? = nil
     }
 
@@ -150,8 +151,10 @@ struct LogPurchaseIntent: AppIntent {
     /// The whole tap-handling logic, callable from tests.
     ///
     /// `trigger`: `.notification` when the fields were read from Wallet's
-    /// notification (`LogWalletTapIntent`), which changes how it is matched
-    /// to a tap of the same purchase (see `mergeNotification`). `record`
+    /// notification (`LogWalletTapIntent`), `.bank` when from a bank app's
+    /// (8 Oct 2026), which changes how it is matched to a tap of the same
+    /// purchase (see `mergeNotification`). A bank run is handled as a
+    /// Wallet notification run is, card and currency included. `record`
     /// and `seen` replace the default raw text kept for Settings and for a
     /// "needs a check" note. `queueURL` is where a tap that can't be saved
     /// is queued: nil is the real queue; a test passes its own temp file so
@@ -197,17 +200,23 @@ struct LogPurchaseIntent: AppIntent {
         // stray second card behind. "Check the Shortcut" sends a made-up
         // card ("Test Card"): never saved to the person's cards.
         let healthCheck = name == ApplePayHealthCheck.merchant
+        let fromNotification = trigger != .tap
         var cardID = healthCheck ? .other
-            : trigger == .notification
+            : fromNotification
             ? (cardName.isEmpty ? .other : book.match(card))
             : book.matchOrCreate(cardName.isEmpty ? nil : card)
         // No currency in the text: a tap takes where the phone is; a
-        // notification (often an online payment) takes the card's, then home.
+        // notification (often an online payment), Wallet's or the bank's,
+        // takes the card's, then home.
         func fallbackCurrency(_ card: Card) -> String {
-            trigger == .notification ? (book.info(card)?.currency ?? Money.home) : LocalCurrency.current()
+            fromNotification ? (book.info(card)?.currency ?? Money.home) : LocalCurrency.current()
         }
         let noun = trigger == .tap ? "Tap" : "Payment"
-        let sender = trigger == .tap ? "Apple Pay sent" : "Wallet's notification had"
+        let sender = switch trigger {
+        case .tap: "Apple Pay sent"
+        case .notification: "Wallet's notification had"
+        case .bank: "Your bank's notification had"
+        }
 
         // #8 (spec 2026-09-26): never let a throw from here on — a fetch or
         // a save failing (disk full, corrupt file, failed migration) —
@@ -238,13 +247,14 @@ struct LogPurchaseIntent: AppIntent {
             if !refund {
                 let companion: CompanionResult
                 switch trigger {
-                case .notification:
+                case .notification, .bank:
                     companion = try Self.mergeNotification(name: name, parsed: parsed, knownCard: cardID,
                                                            cardText: cardName.isEmpty ? nil : card, book: book,
-                                                           now: now, in: context)
+                                                           trigger: trigger, now: now, in: context)
                 case .tap:
                     // A notification row for this purchase landed first
-                    // (2 Oct 2026): the tap joins it, and its shop and card win.
+                    // (2 Oct 2026; Wallet's or, 8 Oct 2026, the bank's): the
+                    // tap joins it, and its shop and card win.
                     if let absorbed = try Self.absorbNotificationRow(name: name, parsed: parsed, missingAmount: missingAmount,
                                                                      cardID: cardID, now: now, in: context) {
                         return absorbed
@@ -306,7 +316,7 @@ struct LogPurchaseIntent: AppIntent {
                 note = refund ? "Refund to your card" : ""
             }
             // Its own row now, so a card the notification named is kept.
-            if trigger == .notification, cardID == .other, !cardName.isEmpty, !healthCheck { cardID = book.matchOrCreate(card) }
+            if fromNotification, cardID == .other, !cardName.isEmpty, !healthCheck { cardID = book.matchOrCreate(card) }
             let purchase = IncomingPurchase(
                 date: now,
                 merchant: name.isEmpty ? "Unknown merchant" : name,
@@ -496,7 +506,8 @@ struct LogPurchaseIntent: AppIntent {
         var amount: Decimal
         var currency: String
         var date: Date
-        /// `TapTrigger` raw value of the run that applied it.
+        /// `TapTrigger` raw values of the runs that applied or matched it
+        /// ("t", then "tn", "tnb" as the others report the same refund).
         var trigger: String
     }
 
@@ -517,18 +528,22 @@ struct LogPurchaseIntent: AppIntent {
         saveRefundReports([report] + refundReports(defaults), defaults)
     }
 
-    /// The row an earlier report of this same refund already changed: the
-    /// other trigger, within `triggerPairWindow`, same amount and currency,
-    /// and the row still in this store with its card and shop agreeing (the
-    /// same loose shop rule `Refunds` used to pick it). Each report pairs
-    /// once, so two real refunds of one amount each count.
+    /// The row an earlier report of this same refund already changed: a
+    /// trigger that has not reported it yet, within `triggerPairWindow`,
+    /// same amount and currency, and the row still in this store with its
+    /// card and shop agreeing (the same loose shop rule `Refunds` used to
+    /// pick it). The report is kept with this trigger's letter added, so
+    /// the third of tap, Wallet and bank finds it too (review, 8 Oct 2026:
+    /// removing it let the third take off a second purchase). One trigger
+    /// never matches its own report, so two real refunds of one amount
+    /// each count.
     @MainActor
     static func sameRefund(amount: Decimal, currency: String, card: Card, merchant: String,
                            trigger: TapTrigger, now: Date, in context: ModelContext,
                            defaults: UserDefaults = reachDefaults) throws -> Transaction? {
         var reports = refundReports(defaults)
         for (i, r) in reports.enumerated() {
-            guard r.trigger != trigger.rawValue, abs(r.date.timeIntervalSince(now)) <= triggerPairWindow,
+            guard !r.trigger.contains(trigger.rawValue), abs(r.date.timeIntervalSince(now)) <= triggerPairWindow,
                   r.amount == amount, r.currency == currency else { continue }
             let id = r.row
             guard let t = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })).first,
@@ -536,7 +551,7 @@ struct LogPurchaseIntent: AppIntent {
                   merchant.isEmpty || lacksShop(t) || Deduper.similarity(t.rawMerchant, merchant) >= 0.3
                       || Deduper.similarity(t.merchant, merchant) >= 0.3
             else { continue }
-            reports.remove(at: i)
+            reports[i].trigger += trigger.rawValue
             saveRefundReports(reports, defaults)
             return t
         }
@@ -562,24 +577,33 @@ struct LogPurchaseIntent: AppIntent {
                        transaction: t, merged: true)
     }
 
-    /// A notification run (it always has an amount). In order:
-    /// 1. the tap of this purchase: the row only the tap trigger has
-    ///    reported that is closest in time (the latest tap, in real use),
-    ///    within 10 minutes either side, same amount, same card when both
-    ///    know it, shops agree (`shopsAgree`: spelled differently is fine,
-    ///    another shop is not);
+    /// A notification run, Wallet's or a bank app's (`trigger`; it always
+    /// has an amount). In order:
+    /// 1. the tap of this purchase: the row another trigger has reported and
+    ///    this one has not (the tap's, or since 8 Oct 2026 the other
+    ///    notification's: a bank notice joins a row only Wallet's
+    ///    notification made, and the other way round) that is closest in
+    ///    time (the latest tap, in real use), within 10 minutes either side,
+    ///    same amount, same card when both know it, shops agree
+    ///    (`shopsAgree`: spelled differently is fine, another shop is not);
     /// 2. a tap that arrived with no amount: within 3 minutes, shops agree;
-    /// 3. the same notification again: a row that has already seen one,
-    ///    within 60 s, same amount, same shop (Wallet posting twice).
+    /// 3. the same notification again: a row this trigger has already
+    ///    reported, same amount, same shop, within 60 s for Wallet (Wallet
+    ///    posting twice; two real online payments at one shop 90 s apart
+    ///    stay two rows) and within `triggerPairWindow` for a bank (review,
+    ///    8 Oct 2026: a bank can send "pending" then "spent", or Wallet's
+    ///    prose reads as a bank sentence next to the bank's own).
     /// A waiting tap comes first, so two coffees whose notifications both
     /// arrive after both taps still pair one each.
     /// The kept row gets the notification's shop, card or amount only where
-    /// it had none. Otherwise `.notMerged`, carrying every tap row nearby so
+    /// it had none, so a bank's name never replaces a tap's. Otherwise
+    /// `.notMerged`, carrying every tap row nearby so
     /// the general Deduper (same source, 10 minutes, names alike) cannot
     /// fold two separate online purchases at one shop into one.
     @MainActor
     static func mergeNotification(name: String, parsed: AmountParser.Result?, knownCard: Card, cardText: String?,
-                                  book: CardBook, now: Date, in context: ModelContext) throws -> CompanionResult {
+                                  book: CardBook, trigger: TapTrigger = .notification,
+                                  now: Date, in context: ModelContext) throws -> CompanionResult {
         guard let parsed, parsed.amount > 0 else { return .notMerged(excluding: []) }
         let from = now.addingTimeInterval(-triggerPairWindow)
         let to = now.addingTimeInterval(triggerPairWindow)
@@ -587,7 +611,10 @@ struct LogPurchaseIntent: AppIntent {
             .filter { $0.seenIn.contains(.tap) && !$0.refunded }
         let candidates = taps.filter { cardsAgree($0.card, knownCard) }
         func gap(_ t: Transaction) -> TimeInterval { abs(t.date.timeIntervalSince(now)) }
-        let tapOnly = candidates.filter { $0.seenByTapTrigger && !$0.seenByNotification }
+        // Rows another trigger has reported and this one has not yet.
+        let waiting = candidates.filter {
+            !$0.seen(by: trigger) && ($0.seenByTapTrigger || $0.seenByNotification || $0.seenByBank)
+        }
 
         // Closest first; on a tie, the later row.
         func closer(_ a: Transaction, _ b: Transaction) -> Bool {
@@ -595,10 +622,13 @@ struct LogPurchaseIntent: AppIntent {
         }
         // Same amount alone is not enough: a tap at another shop is another
         // purchase (an online payment of the same amount minutes later).
-        let tapRow = tapOnly.filter { $0.amount == parsed.amount && shopsAgree($0, name) }.min(by: closer)
-        let blankTap = tapOnly.filter { $0.amount == 0 && gap($0) <= 3 * 60 && shopsAgree($0, name) }.min(by: closer)
+        let tapRow = waiting.filter { $0.amount == parsed.amount && shopsAgree($0, name) }.min(by: closer)
+        let blankTap = waiting
+            .filter { $0.seenByTapTrigger && $0.amount == 0 && gap($0) <= 3 * 60 && shopsAgree($0, name) }
+            .min(by: closer)
+        let repeatWindow: TimeInterval = trigger == .bank ? triggerPairWindow : 60
         let repeatOf = candidates
-            .filter { $0.seenByNotification && gap($0) <= 60 && $0.amount == parsed.amount && shopsAgree($0, name) }
+            .filter { $0.seen(by: trigger) && gap($0) <= repeatWindow && $0.amount == parsed.amount && shopsAgree($0, name) }
             .min(by: closer)
         guard let t = tapRow ?? blankTap ?? repeatOf else {
             return .notMerged(excluding: Set(taps.map(\.id)))
@@ -611,14 +641,15 @@ struct LogPurchaseIntent: AppIntent {
         }
         if lacksShop(t), !name.isEmpty { try setShop(t, to: name, recategorise: false, in: context) }
         if t.card == .other, let cardText { t.card = knownCard != .other ? knownCard : book.matchOrCreate(cardText) }
-        t.markOrigin(.notification)
+        t.markOrigin(trigger)
         settleNeedsCheck(t)
         try context.save()
         return .merged(mergedOutcome(t, noun: "Payment"))
     }
 
-    /// A tap run, ahead of `mergeTapCompanion`: a row only Wallet's
-    /// notification has reported, within 10 minutes, same amount, same card
+    /// A tap run, ahead of `mergeTapCompanion`: a row only notifications
+    /// have reported (Wallet's, a bank app's, or both; 8 Oct 2026), within
+    /// 10 minutes, same amount, same card
     /// when both know it, shops agree (`shopsAgree`), is this purchase — the tap joins it and the tap's
     /// shop and card win (the tap names the shop as the till does). A tap
     /// with no amount only joins one within 3 minutes whose shop agrees.
@@ -627,10 +658,10 @@ struct LogPurchaseIntent: AppIntent {
                                       cardID: Card, now: Date, in context: ModelContext) throws -> Outcome? {
         let from = now.addingTimeInterval(-triggerPairWindow)
         let to = now.addingTimeInterval(triggerPairWindow)
-        let onlyNotification = TapTrigger.notification.rawValue
         func gap(_ t: Transaction) -> TimeInterval { abs(t.date.timeIntervalSince(now)) }
         let match = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.date >= from && $0.date <= to }))
-            .filter { $0.tapOrigins == onlyNotification && !$0.refunded && cardsAgree($0.card, cardID) }
+            .filter { !$0.seenByTapTrigger && ($0.seenByNotification || $0.seenByBank) }
+            .filter { !$0.refunded && cardsAgree($0.card, cardID) }
             // The shops must agree too: a tap at another shop for the same
             // amount is another purchase, not this online payment.
             .filter { t in

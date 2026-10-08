@@ -160,6 +160,8 @@ struct SpendApp: App {
         // SPEND_TAP_NTITLE/_NSUBTITLE/_NBODY fill Wallet's notification
         // (iOS 27 Notification trigger, 2 Oct 2026): any one set makes it a
         // notification run, which ignores the four tap fields.
+        // SPEND_TAP_NAPP is Notification › App (8 Oct 2026): "Wallet", a
+        // bank's name, or unset for a shortcut from before the app field.
         let tapKeys = ["SPEND_TAP_TEXT", "SPEND_TAP_MERCHANT", "SPEND_TAP_AMOUNT", "SPEND_TAP_CARD",
                        "SPEND_TAP_NTITLE", "SPEND_TAP_NSUBTITLE", "SPEND_TAP_NBODY"]
         if tapKeys.contains(where: { env[$0] != nil }) {
@@ -169,7 +171,8 @@ struct SpendApp: App {
             let card = env["SPEND_TAP_CARD"] ?? ""
             let notification = WalletNotification(title: env["SPEND_TAP_NTITLE"] ?? "",
                                                   subtitle: env["SPEND_TAP_NSUBTITLE"] ?? "",
-                                                  body: env["SPEND_TAP_NBODY"] ?? "")
+                                                  body: env["SPEND_TAP_NBODY"] ?? "",
+                                                  app: env["SPEND_TAP_NAPP"])
             let delay = env["SPEND_TAP_DELAY"].flatMap(Double.init) ?? 1
             let repeatCount = max(1, env["SPEND_TAP_REPEAT"].flatMap(Int.init) ?? 1)
             let gap = env["SPEND_TAP_GAP"].flatMap(Double.init) ?? 2

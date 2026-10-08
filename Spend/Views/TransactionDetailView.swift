@@ -247,7 +247,8 @@ struct TransactionDetailView: View {
             detail: "\(t.card == .other ? t.paidWithLabel : t.card.name) · \(t.date.formatted(date: .abbreviated, time: .shortened))",
             state: .done)]
         for source in t.seenIn {
-            steps.append(.init(title: source.label, detail: sourceDetail(source), state: .done))
+            let line = Self.historyLine(source: source, tapOrigins: t.tapOrigins)
+            steps.append(.init(title: line.title, detail: line.detail, state: .done))
         }
         if t.needsReview {
             steps.append(.init(title: "Amount missing", detail: "Apple Pay didn’t send one. Type it in above.", state: .current))
@@ -264,7 +265,27 @@ struct TransactionDetailView: View {
         return steps
     }
 
-    private func sourceDetail(_ source: TxnSource) -> String {
+    struct HistoryLine: Equatable {
+        let title: String
+        let detail: String
+    }
+
+    /// One "where it came from" line. A row only a notification reported is
+    /// not an Apple Pay tap: it says which notification (review, 8 Oct 2026).
+    static func historyLine(source: TxnSource, tapOrigins: String?) -> HistoryLine {
+        let origins = tapOrigins ?? ""
+        if source == .tap, !origins.isEmpty, !origins.contains(TapTrigger.tap.rawValue) {
+            if origins.contains(TapTrigger.notification.rawValue) {
+                return HistoryLine(title: "Wallet notification", detail: "Logged from Wallet's notification")
+            }
+            if origins.contains(TapTrigger.bank.rawValue) {
+                return HistoryLine(title: "Bank notification", detail: "Logged from your bank's alert")
+            }
+        }
+        return HistoryLine(title: source.label, detail: sourceDetail(source))
+    }
+
+    private static func sourceDetail(_ source: TxnSource) -> String {
         switch source {
         case .tap: "Logged the moment you paid"
         case .email: "Matched from your email receipt"

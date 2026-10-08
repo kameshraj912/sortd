@@ -56,19 +56,26 @@ extension ApplePaySetupSteps {
                "In the shortcut, tap › next to \u{201C}tapped\u{201D}, then switch on Automation.")
     }
 
-    /// The quiet line under the steps: what the shortcut can see.
+    /// The quiet line under the steps: what the shortcut can see. On iOS 27
+    /// a payment in an app or on a website can come from Wallet's
+    /// notification or, once the person adds it, their bank app's (8 Oct 2026).
     static func scopeLine(notificationTrigger: Bool) -> String {
         notificationTrigger
-            ? "Taps in shops log from the tap. Payments in apps and on websites log from Wallet's notification, if your bank sends one."
+            ? "Taps in shops log from the tap. Payments in apps and on websites log from a notification, from Wallet or from your bank's app."
             : "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts."
     }
 
     /// The footer under Apple Pay in Settings › Purchase Sources.
     static func sourcesFooter(notificationTrigger: Bool) -> String {
         notificationTrigger
-            ? "Logs Apple Pay taps in shops the moment you pay, and online payments when Wallet sends a notification."
+            ? "Logs Apple Pay taps in shops the moment you pay, and other payments when Wallet or your bank's app sends a notification."
             : "Logs in-store Apple Pay taps the moment you pay."
     }
+
+    /// Under the scope line on iOS 27 only. Some banks (ANZ, CommBank) send
+    /// Wallet no notification for in-app Apple Pay, and sometimes none for a
+    /// tap, but their own app does (8 Oct 2026).
+    static let bankAppLine = "Bank doesn't send Wallet a notification? In the shortcut, tap + next to Wallet under \u{201C}When I receive a notification\u{201D} and add your bank's app. Turn on purchase alerts in that app."
 
     /// The footer under the panel: what still needs adding by hand.
     static func byHandLine(notificationTrigger: Bool) -> String {

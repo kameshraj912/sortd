@@ -1,0 +1,168 @@
+# Online payments from the bank app's notification
+
+3 Oct 2026. Follows `2026-09-26-apple-pay-failsafes.md`. Research: `docs/research/2026-10-03-online-apple-pay.md`.
+
+## Problem
+
+Apple Pay inside apps and on websites does not fire the Wallet tap trigger. PR #105 added a
+second trigger, "When I receive a notification from Wallet". Two things are still unknown:
+whether Shortcuts passes Wallet's notifications on at all (it did not on the simulator), and
+whether each bank makes Wallet show one. Other trackers that cover online payments (finerd)
+point the iOS 27 Notification trigger at **the bank's own app**. That also covers card
+payments that are not Apple Pay.
+
+## What changes
+
+1. **Reading.** A notification run can now be a bank app's sentence, not only Wallet's short
+   lines. New pure reader `BankNotice` (in `Spend/Services/`), used by
+   `WalletNotification.read` when the text reads as a sentence:
+   - Logs only when the text says money was spent: a spend word (spent, purchase, paid,
+     payment of, charged, transaction of, debited, used at…) **and** an amount.
+   - Shop: what follows "at", "to", "@" or "with merchant", up to "on", "with", "using",
+     "card", "ending", a date, or the end. Trim trailing full stops and "Pty Ltd".
+   - Card: masked digits ("ending 4821", "•••• 4821", "x4821") go through the existing
+     card matching. No card words means the card is left to the usual default.
+   - Currency: "SGD 23.40", "S$23.40", "A$23.40", "AUD23.40", "$23.40" (bare `$` = home).
+   - Never a purchase: one-time codes (OTP, "verification code", "do not share"), money
+     coming in (received, deposit, credited, salary, transfer from), balance or limit
+     alerts with no spend word, declined/failed (existing rule), marketing ("cashback",
+     "offer", "win", "% off") with no spend word, refunds go to the existing refund path.
+   - Anything else with an amount but no spend word is **not logged** and makes no
+     "needs a check" row. A bank app sends many notifications; a wrong purchase is worse
+     than a missed one.
+2. **One purchase, up to three signals.** A tap, Wallet's notification and the bank's
+   notification for the same payment merge into one row (same amount and currency inside
+   the existing window; shop names may differ, e.g. "DOORDASH*ORDER" vs "DoorDash").
+   `Transaction.tapOrigins` gains "b" for a bank-app run. The first shop name with real
+   letters wins; a later bank name never overwrites a tap's.
+3. **Setup words (iOS 27 only).** Step 3 stays "Turn both automations on". One new quiet
+   line under the steps: "For payments in apps and on websites, tap + next to Wallet in the
+   shortcut and add your bank's app. Turn on purchase alerts in that app." The scope line
+   becomes: "Taps in shops log from the tap. Payments in apps and on websites log from a
+   notification, from Wallet or from your bank's app."
+4. **What is kept.** Bank apps also send codes and balances. `recordReach` keeps the raw
+   text of a notification run only when it was read as a payment. For every other
+   notification run it keeps "notification run · not a purchase" and no text. (DEBUG builds
+   keep the raw text, for tuning on Raj's phone.) Nothing from a notification goes to
+   analytics or Sentry.
+5. **Privacy text** (in-app Privacy page; the site follows through issue #79): "If you add
+   your bank's app to the shortcut, iOS passes that app's notifications to Sortd on your
+   iPhone. Sortd keeps the ones that are purchases and ignores the rest. Nothing is sent
+   anywhere."
+
+## Not in this change
+
+- Per-bank shortcut files with the bank app pre-filled (needs each bank's bundle id and a
+  phone to check each one).
+- Bank SMS through the Message trigger.
+- FinanceKit: US and UK only.
+
+## Sample texts (made up to look like bank notices; real ones are not published)
+
+The real wording comes from Raj's phone test; the developer menu's Recent Runs shows it.
+
+| Text | Result |
+|---|---|
+| "You spent $23.40 at DOORDASH with your card ending 4821." | A$23.40, DoorDash, card 4821 |
+| "A transaction of SGD 31.80 was made with your DBS card ending 1234 at UBER EATS on 03 Oct." | S$31.80, Uber Eats, card 1234 |
+| "Purchase of AUD 5.50 at Seven Seeds Carlton" | A$5.50, Seven Seeds Carlton |
+| "Card purchase: $12.00 to NETFLIX.COM" | A$12.00, Netflix.com |
+| "Your OTP is 482193. Do not share it. Amount SGD 31.80 at UBER" | nothing |
+| "You received $50.00 from J TAN via PayID" | nothing |
+| "Your available balance is $1,204.11" | nothing |
+| "Payment of $23.40 to DOORDASH was declined" | nothing (existing rule) |
+| "Refund of $23.40 from DOORDASH" | refund path |
+| "Get $20 cashback when you spend $100 at Myer" | nothing |
+| "Your credit card payment of $500.00 is due on 12 Oct" | nothing (bill reminder, not a purchase) |
+
+## Open, for the phone test
+
+- Does Wallet's own notification reach the trigger on a real iPhone?
+- What does Raj's bank app actually send? Tune `BankNotice` from Recent Runs.
+- Does adding a second app with "+" keep both, and does each fire?
+
+## Built 8 Oct 2026
+
+What shipped (branch `bank-notice`):
+
+- `Spend/Services/BankNotice.swift`: `isSentence` and `read`, as above. `WalletNotification.read`
+  hands a sentence to it; Wallet's short lines read as before. New reading `.notAPurchase`
+  ("Sortd saw a bank notification that isn't a purchase. Nothing was logged."), run log result
+  `not_purchase`.
+- `TapTrigger.bank` ("b") on `Transaction.tapOrigins`, written t, n, b. A bank run pairs with a
+  tap the way Wallet's notification does, and a bank run and Wallet's notification join each
+  other's rows. A tap that lands after a bank-only row takes it over with the tap's shop name.
+- Setup (iOS 27): new scope line, Purchase Sources footer, and a bank-app line under the scope
+  line. Privacy page "Notifications" row. Support page: a fourth quick step and a "The bank
+  was late" reason.
+
+What differs from the plan above:
+
+- **Sentence test.** A spend or money word counts only in a line of four words or more, and a
+  long line counts only if it holds an amount. A line that is only "Apple Pay" or "Wallet"
+  keeps the text on Wallet's reader. Without this, a Wallet shop line such as "Balance Yoga"
+  or a long shop name would read as a bank notice and be dropped.
+- **Card.** Masked digits are kept as the last four ("4821") and matched to a saved card. A
+  bank notice never makes a new card from digits alone.
+- **Bare "$".** The card's currency, then home, the same as Wallet's notification (not always
+  home).
+- **Pairing** checks amount, card and shop, as Wallet's notification does. Currency is not
+  compared: one side often has only a guessed currency.
+- **Refund before money in.** "Refund … credited" is a refund, as in Wallet's reader.
+- **What is kept.** The run log keeps only the shape of every run ("notification run" and
+  field lengths), bank or Wallet. No raw text is kept, in DEBUG or release.
+- **Setup words.** The bank-app line is the longer "Bank doesn't send Wallet a notification?"
+  wording; the privacy text says "on this iPhone" and "keeps the purchases and ignores the rest".
+- A bank notice with no amount and a spend word ("Your payment is being processed") is
+  `.notAPurchase`, not `.noAmount`.
+
+Review fixes, same day:
+
+- Refusals run on every notification, Wallet's or a bank's, before either reader: codes and
+  approvals, offers, bills and scheduled payments, pending, reversed or cancelled, money in,
+  balances, limits, interest and moves between the person's own accounts. They are phrases,
+  not bare words, so a Wallet shop line like "Balance Yoga" still logs.
+- A bank sentence needs one amount (a second one only after "balance") and a shop. "Spend" is
+  an offer's word, not a purchase's.
+- A refund seen by tap, Wallet and bank comes off once: the refund report keeps every trigger
+  that matched it.
+- Two bank runs for one amount at one shop inside the pair window are one row. Two Wallet
+  notifications still need to be within 60 s (two real online payments at one shop 90 s apart
+  stay two rows).
+- A card named only by the bank counts only when one saved card fits it.
+- The run log's `kind` is `bank` for a bank sentence. Purchase History says "Bank
+  notification" or "Wallet notification" for a row no tap reported.
+
+Review round 2, same day:
+
+- **Phrases and bare words.** Refusal phrases ("available balance", "is pending", "interest
+  paid", "was cancelled", "salary credited", "will be made", "confirm your") run on every
+  notification, Wallet's short lines one line at a time, never across a line break. Bare words
+  ("pending", "interest", "offer", "win", "scheduled", "hold", "cancelled", "salary",
+  "blocked", "upcoming", "coming up", "goes out", "requires", "voided", "reverted",
+  "authorisation", "$25.00 interest", "to … Card") run only on a bank's sentence, so shops like
+  "The Pending Co", "Interest Cafe" and "Hold On Pizza" still log from Wallet's lines.
+- **A bank's status on Wallet's lines.** Once Wallet's reader has an amount, it refuses when a
+  line is only a bank status ("Payment received", "Money in", "Low balance", "Fee charged",
+  "Hold placed", "Salary"), when there are two clear amounts, or when the title is just a
+  bank's name and no line under it could be a shop ("YouTrip · Top up successful"). "Top up"
+  counts only under a bank's title: "Myki · Top up · A$20.00" is a purchase.
+- **Shop names.** "is", "in", "and", "of" end a shop's name only in lower case, and "balance"
+  only before an amount: "The Balance Yoga Studio", "Bread In Common" stay whole.
+
+**Which app sent it (9 Oct 2026).** The shortcut now also passes Notification › App to Sortd
+(new "Notification App" parameter on Log Wallet Tap; `site/apple-pay.shortcut` rebuilt and
+signed, the iOS 26 file unchanged). Whether iOS hands over the app's name or its bundle id is
+not known yet, so both work. Wallet is matched by its exact name or bundle id only ("Wallet",
+"Apple Wallet", "Apple Pay", "com.apple.Passbook", "Passbook", and Wallet's display name in
+every language, read from the iOS 26.5 simulator's Passbook.app), never by "wallet" inside a
+name: "TNG eWallet" is a bank. Any other app is read as the bank's: by `BankNotice` only, so a
+terse line with no spend word ("Payment received · $120.00") is never a purchase, and a saved
+row is a bank row ("b") even from a short line. Wallet and no app (a shortcut from before 9
+Oct) read alike: a sentence goes to `BankNotice`, short lines to Wallet's reader and its line
+guards.
+The run log keeps the app's length only, and `apple_pay_run` gains `has_app`.
+In analytics, `money_in` is now rarer: a bank's "received" line with no money-in phrase is
+`not_purchase`. Round 3 also refuses payment networks on a line (Osko, PayNow, PayID, PayLah,
+BPAY, GIRO), rewards and rebates, direct debits, overseas fees, "authorisation of", "for
+verification" and "you earned 230 points".

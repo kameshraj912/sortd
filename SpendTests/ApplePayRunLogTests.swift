@@ -35,16 +35,18 @@ struct ApplePayRunLogTests {
     /// One run through the real intent path, and the event it would log.
     /// `queueURL` is the test's own queue file, for a forced save failure.
     private func run(text: String? = nil, amount: String? = nil, merchant: String? = nil, card: String? = nil,
-                     title: String? = nil, subtitle: String? = nil, body: String? = nil,
+                     title: String? = nil, subtitle: String? = nil, body: String? = nil, app: String? = nil,
                      in ctx: ModelContext, book b: CardBook, at date: Date,
                      forceSaveFailure: Bool = false, queueURL: URL? = nil) async throws -> Run {
         let outcome = try await LogWalletTapIntent.handle(text, amount: amount, merchant: merchant, card: card,
                                                           notificationTitle: title, notificationSubtitle: subtitle,
-                                                          notificationBody: body, in: ctx, book: b, now: date,
+                                                          notificationBody: body, notificationApp: app,
+                                                          in: ctx, book: b, now: date,
                                                           debugForceSaveFailure: forceSaveFailure, queueURL: queueURL)
         let event = LogWalletTapIntent.runEvent(outcome: outcome, transaction: text, amount: amount, merchant: merchant,
                                                 card: card,
-                                                notification: WalletNotification(title: title, subtitle: subtitle, body: body))
+                                                notification: WalletNotification(title: title, subtitle: subtitle, body: body,
+                                                                                 app: app))
         return (outcome, event)
     }
 
@@ -104,8 +106,9 @@ struct ApplePayRunLogTests {
 
     private let allowedWords: Set<String> = ["tap", "notification", "saved", "merged", "needs_check", "blank",
                                              "no_amount", "not_completed", "money_in", "refund", "health_check",
-                                             "queued", "not_saved"]
-    private let nineKeys: Set<String> = ["kind", "result", "has_amount", "has_shop", "has_card",
+                                             "queued", "not_saved", "not_purchase", "bank"]
+    /// Ten since 9 Oct 2026 (`has_app`).
+    private let eventKeys: Set<String> = ["kind", "result", "has_amount", "has_shop", "has_card", "has_app",
                                          "has_title", "has_subtitle", "has_body", "has_text"]
 
     // MARK: - What kind of run, and what came of it
@@ -183,6 +186,37 @@ struct ApplePayRunLogTests {
         #expect(string(r.event, "result") == "no_amount")
     }
 
+    /// A bank app's balance alert: a bank run (8 Oct 2026 review: kind
+    /// "bank", was "notification"), not a purchase.
+    @Test func aBankNoticeThatIsNotAPurchaseIsNotPurchase() async throws {
+        let r = try await run(body: "Your available balance is $1,204.11", in: store(), book: book(), at: now)
+        #expect(r.outcome.dropped == .notAPurchase)
+        #expect(string(r.event, "kind") == "bank")
+        #expect(string(r.event, "result") == "not_purchase")
+    }
+
+    /// The shortcut says which app sent it: a bank's app makes a bank run,
+    /// even for a short line.
+    @Test func aRunFromABanksAppSaysSo() async throws {
+        let r = try await run(title: "Payment received", body: "$120.00", app: "CommBank", in: store(), book: book(), at: now)
+        #expect(string(r.event, "kind") == "bank")
+        #expect(flag(r.event, "has_app") == true)
+        #expect(string(r.event, "result") == "not_purchase")
+        let wallet = try await run(title: "NAB Visa Debit", subtitle: "DoorDash", body: "A$23.40", app: "Wallet",
+                                   in: store(), book: book(), at: now)
+        #expect(string(wallet.event, "kind") == "notification")
+        #expect(flag(wallet.event, "has_app") == true)
+        #expect(flag(try await fullTap().event, "has_app") == false)
+    }
+
+    @Test func aBankPurchaseIsABankRun() async throws {
+        let r = try await run(title: "CommBank", body: "You spent $23.40 at DOORDASH with your card ending 4821.",
+                              in: store(), book: book(), at: now)
+        #expect(r.outcome.transaction != nil)
+        #expect(string(r.event, "kind") == "bank")
+        #expect(string(r.event, "result") == "saved")
+    }
+
     @Test func moneyInIsMoneyIn() async throws {
         let r = try await moneyIn()
         #expect(r.outcome.dropped == .moneyIn)
@@ -213,7 +247,7 @@ struct ApplePayRunLogTests {
 
     @Test func noWordsOrMoneyLeaveThePhone() async throws {
         for event in try await everyRun().map(\.event) {
-            #expect(Set(event.keys) == nineKeys)
+            #expect(Set(event.keys) == eventKeys)
             #expect(Analytics.deniedKeys.isDisjoint(with: event.keys))
             for (key, value) in event {
                 switch value {
