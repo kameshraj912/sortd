@@ -209,6 +209,19 @@ struct ApplePayRunLogTests {
         #expect(flag(try await fullTap().event, "has_app") == false)
     }
 
+    /// Shortcuts' own "App" is no app, the same as for `source`.
+    @Test func thePlaceholderAppIsNoApp() async throws {
+        let placeholder = try await run(title: "NAB Visa Debit", subtitle: "DoorDash", body: "A$23.40", app: "App",
+                                        in: store(), book: book(), at: now)
+        #expect(flag(placeholder.event, "has_app") == false)
+        let bank = try await run(title: "NAB Visa Debit", subtitle: "DoorDash", body: "A$23.40", app: "CommBank",
+                                 in: store(), book: book(), at: now)
+        #expect(flag(bank.event, "has_app") == true)
+        let record = LogWalletTapIntent.record(transaction: nil, amount: nil, merchant: nil, card: nil,
+                                               notification: WalletNotification(body: "x", app: "App"), at: now)
+        #expect(record.contains("app placeholder"))
+    }
+
     @Test func aBankPurchaseIsABankRun() async throws {
         let r = try await run(title: "CommBank", body: "You spent $23.40 at DOORDASH with your card ending 4821.",
                               in: store(), book: book(), at: now)

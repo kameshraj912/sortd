@@ -60,15 +60,41 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// Which app sent it, as far as `app` says.
     enum Source: Equatable { case wallet, bank, unknown }
 
+    /// The app's name as sent, with direction marks trimmed, or "" when it is
+    /// blank or Shortcuts' own "App" placeholder (a shop called "App" is
+    /// still a shop, but an app called "App" is no app). `source`, the run
+    /// log's record and the `has_app` flag all read the app through this.
+    private var cleanApp: String {
+        let name = TapField.normalize(app).trimmingCharacters(in: Self.directionMarks)
+        return name.lowercased() == "app" ? "" : name
+    }
+
+    /// True when a real app name arrived (not blank, not the placeholder).
+    var hasApp: Bool { !cleanApp.isEmpty }
+
+    /// How the app arrived, never its name (see `TapField.shape`).
+    var appShape: String {
+        if hasApp { return "\(cleanApp.count) characters" }
+        let raw = app?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return raw.isEmpty ? "empty" : "placeholder"
+    }
+
     /// Blank, or Shortcuts' own "App" placeholder: unknown (an old
-    /// shortcut). Wallet only by its exact name or bundle id, never by
-    /// "wallet" inside another name ("TNG eWallet" is a money app; review,
-    /// 8 Oct 2026). Any other app: one the person added to the trigger, so
-    /// their bank's.
+    /// shortcut). Wallet by its exact name or bundle id. A name that only
+    /// has "wallet" or "passbook" inside it ("Wallet.app", "TNG eWallet") is
+    /// Wallet too when the text is short lines, not a sentence: what iOS
+    /// puts in Notification › App (the name, the bundle id, or the file
+    /// name) is not verified on a phone, and a Wallet notification with an
+    /// unexpected name must not fall to the bank reader and save nothing.
+    /// A sentence from such an app still goes to the bank reader, since a
+    /// money app ("TNG eWallet") writes sentences. Any other app: one the
+    /// person added to the trigger, so their bank's.
     var source: Source {
-        let name = TapField.normalize(app).trimmingCharacters(in: Self.directionMarks).lowercased()
-        if name.isEmpty || name == "app" { return .unknown }
-        return Self.walletNames.contains(name) ? .wallet : .bank
+        let name = cleanApp.lowercased()
+        if name.isEmpty { return .unknown }
+        if Self.walletNames.contains(name) { return .wallet }
+        if name.contains("wallet") || name.contains("passbook"), !BankNotice.isSentence(joined) { return .wallet }
+        return .bank
     }
 
     private static let directionMarks = CharacterSet(charactersIn: "\u{200E}\u{200F}")
@@ -102,7 +128,7 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// run log keeps.
     var shape: String {
         "title \(TapField.shape(title)) · subtitle \(TapField.shape(subtitle)) · body \(TapField.shape(body))"
-            + " · app \(TapField.shape(app))"
+            + " · app \(appShape)"
     }
 
     /// Read by the bank's reader (`BankNotice`): sent by a bank's app, or
@@ -216,13 +242,13 @@ struct LogWalletTapIntent: AppIntent {
     /// iOS 27's Notification trigger (an app or a website, as well as a
     /// till): Wallet's notification, part by part. When any of these is
     /// set, Amount, Shop, Card and Transaction are ignored.
-    @Parameter(title: "Notification Title", description: "The Wallet notification's title.")
+    @Parameter(title: "Notification Title", description: "The notification's title (Wallet or your bank's app).")
     var notificationTitle: String?
 
-    @Parameter(title: "Notification Subtitle", description: "The Wallet notification's subtitle.")
+    @Parameter(title: "Notification Subtitle", description: "The notification's subtitle (Wallet or your bank's app).")
     var notificationSubtitle: String?
 
-    @Parameter(title: "Notification Body", description: "The Wallet notification's body.")
+    @Parameter(title: "Notification Body", description: "The notification's body (Wallet or your bank's app).")
     var notificationBody: String?
 
     /// Which app sent the notification (9 Oct 2026): Wallet's is read as
@@ -480,7 +506,7 @@ struct LogWalletTapIntent: AppIntent {
             "has_amount": .bool(!TapField.isBlank(amount)),
             "has_shop": .bool(!TapField.isBlank(merchant)),
             "has_card": .bool(!TapField.isBlank(card)),
-            "has_app": .bool(!TapField.isBlank(notification.app)),
+            "has_app": .bool(notification.hasApp),
             "has_title": .bool(!TapField.isBlank(notification.title)),
             "has_subtitle": .bool(!TapField.isBlank(notification.subtitle)),
             "has_body": .bool(!TapField.isBlank(notification.body)),

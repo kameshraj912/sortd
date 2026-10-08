@@ -187,8 +187,9 @@ enum Reminders {
     /// Alerts), not the bills reminders one, and posts through
     /// `CategoryNudge.send`, the same sender as the nudge after a Wallet tap:
     /// one record, one identifier and one weekly cap of 3 for both. Every
-    /// crossing is recorded even past the cap, so the first open after an
-    /// update cannot send a burst. `allowed` is there for tests.
+    /// crossing is recorded even past the cap, so a crossing is never sent
+    /// twice later. The first open after an update can still post up to 3 at
+    /// once (the cap, not zero). `allowed` is there for tests.
     static func checkCategoryLimits(_ transactions: [Transaction], now: Date = .now,
                                     defaults: UserDefaults = .standard,
                                     allowed: () async -> Bool = LoggedNotice.notificationsAllowed) async {

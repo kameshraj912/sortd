@@ -656,15 +656,42 @@ struct ApplePayOnlineNotificationTests {
 
     // MARK: - Review round 3, 8 Oct 2026
 
-    /// Wallet is matched by its exact name or bundle id, never by "wallet"
-    /// inside another app's name: "TNG eWallet" is a money app.
+    /// "wallet" inside another app's name does not make it Wallet when the
+    /// text is a sentence: "TNG eWallet" is a money app. It goes to the
+    /// bank reader (see `source`).
     @Test(arguments: ["TNG eWallet", "Wallet Co"])
     func anAppWithWalletInItsNameIsABank(app: String) async throws {
         let ctx = store(), b = book()
-        let r = try await notify("TNG eWallet", nil, "Payment received: $120.00 from TAN WEI MING", app: app, ctx: ctx, book: b)
+        let sentence = "Payment received: $120.00 from TAN WEI MING"
+        let r = try await notify("TNG eWallet", nil, sentence, app: app, ctx: ctx, book: b)
         #expect(r.transaction == nil)
         #expect(try rows(ctx).isEmpty)
-        #expect(WalletNotification(body: "x", app: app).source == .bank)
+        #expect(WalletNotification(title: "TNG eWallet", body: sentence, app: app).source == .bank)
+    }
+
+    /// What iOS sends for Notification › App is unverified: a name that only
+    /// has "wallet" in it, with Wallet's short lines, is Wallet's row.
+    @Test func aWalletNameWithShortLinesIsAWalletRow() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("NAB Visa Debit", "DoorDash", "A$23.40", app: "Wallet.app", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.rawMerchant == "DoorDash")
+        #expect(t.tapOrigins == "n")
+        #expect(WalletNotification(title: "NAB Visa Debit", subtitle: "DoorDash", body: "A$23.40", app: "Wallet.app").source == .wallet)
+    }
+
+    /// The fallback keeps Wallet's line guards: a money app's status line
+    /// ("Payment received / $120.00") saves nothing, and so does its sentence
+    /// (the bank reader refuses a money-in notice).
+    @Test func aWalletNamedMoneyAppSavesNothing() async throws {
+        let ctx = store(), b = book()
+        let sentence = try await notify("TNG eWallet", nil, "Payment received: $120.00 from TAN", app: "TNG eWallet",
+                                        ctx: ctx, book: b)
+        #expect(sentence.transaction == nil)
+        let status = try await notify("Payment received", nil, "$120.00", app: "TNG eWallet", ctx: ctx, book: b,
+                                      at: now.addingTimeInterval(3600))
+        #expect(status.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
     }
 
     /// Wallet's name on a phone in another language is still Wallet.
