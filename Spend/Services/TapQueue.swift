@@ -18,8 +18,9 @@ enum TapQueue {
         var amount: String?
         var card: String?
         var date: Date
-        /// `TapTrigger` raw value: "n" when Wallet's notification sent it
-        /// (its fields are then already read from the notification). Nil
+        /// `TapTrigger` raw value: "n" when Wallet's notification sent it,
+        /// "b" a bank app's (its fields are then already read from the
+        /// notification). Nil
         /// means the tap trigger, as every entry before 2 Oct 2026.
         var trigger: String? = nil
 

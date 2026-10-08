@@ -71,7 +71,13 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         "title \(TapField.shape(title)) · subtitle \(TapField.shape(subtitle)) · body \(TapField.shape(body))"
     }
 
-    /// What one notification says.
+    /// The text reads as a bank app's sentence, not Wallet's short lines
+    /// (`BankNotice.isSentence`): the person added their bank's app to the
+    /// shortcut (8 Oct 2026). Its run is logged as a bank run (`TapTrigger.bank`).
+    var isBankNotice: Bool { BankNotice.isSentence(joined) }
+
+    /// What one notification says: Wallet's short lines, or a bank app's
+    /// sentence (`BankNotice`, 8 Oct 2026).
     enum Reading: Equatable {
         /// A payment with an amount. `amount` starts with "-" for a refund,
         /// so it takes the existing refund path.
@@ -83,13 +89,17 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         /// Money came in ("You received $25.00 from …", a deposit): not
         /// spending. A refund is not this: it takes the refund path.
         case moneyIn
+        /// A bank app's notification that is not a purchase: a code, a
+        /// balance, a bill reminder, an offer, or an amount with no spend
+        /// word. Nothing is saved, not even a "needs a check" row.
+        case notAPurchase
     }
 
     /// Wording that means no money moved. Checked before anything else, so
-    /// "Payment declined · A$23.40" is never logged.
-    private static let notCompletedPattern =
+    /// "Payment declined · A$23.40" is never logged. `BankNotice` uses it too.
+    static let notCompletedPattern =
         #"\b(?:declined|not completed|failed|unsuccessful|couldn['’]t be|could not be|insufficient)\b"#
-    private static let refundPattern = #"\brefund(?:ed|s)?\b"#
+    static let refundPattern = #"\brefund(?:ed|s)?\b"#
     /// Wording that means money came to the person, not from them. Not a
     /// bare "deposit": paying a booking deposit is spending.
     private static let moneyInPattern =
@@ -97,10 +107,12 @@ nonisolated struct WalletNotification: Equatable, Sendable {
 
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
-    /// what is left. The tap fields are never looked at.
+    /// what is left. A bank app's sentence goes to `BankNotice` instead.
+    /// The tap fields are never looked at.
     @MainActor
     func read(isKnownCard: (String) -> Bool = { _ in false }) -> Reading {
         let text = joined
+        if BankNotice.isSentence(text) { return BankNotice.read(text, isKnownCard: isKnownCard) }
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
         }
@@ -119,6 +131,7 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     static let noAmountMessage = "Sortd saw a Wallet notification with no amount."
     static let notCompletedMessage = "Sortd saw a payment that didn't go through. Nothing was logged."
     static let moneyInMessage = "Sortd saw money coming in, not a purchase. Nothing was logged."
+    static let notAPurchaseMessage = "Sortd saw a bank notification that isn't a purchase. Nothing was logged."
 }
 
 /// One-field version of Log Purchase for the Wallet automation: pick the
@@ -219,13 +232,13 @@ struct LogWalletTapIntent: AppIntent {
                 // Read now, so only a real payment is queued.
                 let reading = notification.read(isKnownCard: { CardBook.shared.match($0) != .other })
                 switch reading {
-                case .notCompleted, .noAmount, .moneyIn:
+                case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                     LogPurchaseIntent.recordReach(Self.record(transaction: transaction, amount: amount, merchant: merchant,
                                                               card: card, notification: notification, at: now), at: now)
                     return Self.notPaymentOutcome(reading)
                 case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
                     let message = await TapQueue.saveForLater(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
-                                                              date: now, trigger: .notification)
+                                                              date: now, trigger: notification.isBankNotice ? .bank : .notification)
                     return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, saveFailed: true,
                                                      kept: message != TapQueue.notSavedMessage)
                 }
@@ -305,17 +318,22 @@ struct LogWalletTapIntent: AppIntent {
         if notification.isPresent {
             let reading = notification.read(isKnownCard: { book.match($0) != .other })
             switch reading {
-            case .notCompleted, .noAmount, .moneyIn:
+            case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                 // Shortcuts reached Sortd, but there is nothing to save:
-                // never a "needs a check" row for a boarding pass.
+                // never a "needs a check" row for a boarding pass or a
+                // bank's balance alert.
                 LogPurchaseIntent.recordReach(record, at: now)
                 return Self.notPaymentOutcome(reading)
             case .payment(let parsedAmount, let parsedMerchant, let parsedCard):
                 shop = parsedMerchant
+                // A bank app's sentence is its own trigger, so it can pair
+                // with the tap and with Wallet's notification of the same
+                // purchase (8 Oct 2026).
+                let trigger: TapTrigger = notification.isBankNotice ? .bank : .notification
                 result = try await LogPurchaseIntent.handle(merchant: parsedMerchant, amount: parsedAmount, card: parsedCard,
                                                             in: context, book: book, now: now,
                                                             debugForceSaveFailure: debugForceSaveFailure,
-                                                            trigger: .notification, record: record, seen: notification.seen,
+                                                            trigger: trigger, record: record, seen: notification.seen,
                                                             queueURL: queueURL)
             }
         } else {
@@ -353,6 +371,7 @@ struct LogWalletTapIntent: AppIntent {
         let message = switch reading {
         case .notCompleted: WalletNotification.notCompletedMessage
         case .moneyIn: WalletNotification.moneyInMessage
+        case .notAPurchase: WalletNotification.notAPurchaseMessage
         default: WalletNotification.noAmountMessage
         }
         return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, dropped: reading)
@@ -407,6 +426,7 @@ struct LogWalletTapIntent: AppIntent {
         case .notCompleted: "not_completed"
         case .noAmount: "no_amount"
         case .moneyIn: "money_in"
+        case .notAPurchase: "not_purchase"
         case .payment: nil
         }
     }
@@ -526,8 +546,9 @@ nonisolated enum WalletTapText {
     /// payment of"), never at the start of a name on its own ("A Little Cafe").
     private static let followingFiller: Set<String> = ["a", "an", "of", "at", "your", "from"]
     private static let trailingFiller: Set<String> = ["refund", "refunded", "payment", "purchase"]
-    /// Whole lines that name Wallet itself, never a shop.
-    private static let walletNames: Set<String> = ["apple pay", "wallet", "apple wallet", "apple cash"]
+    /// Whole lines that name Wallet itself, never a shop. `BankNotice` reads
+    /// one as "this notification is Wallet's".
+    static let walletNames: Set<String> = ["apple pay", "wallet", "apple wallet", "apple cash"]
 
     /// One shop/card candidate from a notification with its framing words
     /// and stray punctuation removed, or nil when nothing is left.

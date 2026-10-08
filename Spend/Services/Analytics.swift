@@ -40,7 +40,8 @@ final class Analytics {
         /// One per Shortcuts run that reaches Sortd (8 Oct 2026), saved or
         /// not, so a run that logged nothing still says why. `kind` is
         /// tap|notification, `result` is saved|merged|needs_check|blank|
-        /// no_amount|not_completed|money_in|refund|health_check|queued|
+        /// no_amount|not_completed|money_in|not_purchase (a bank app's
+        /// notification that is not a purchase)|refund|health_check|queued|
         /// not_saved, and `has_amount`/`has_shop`/`has_card`/`has_title`/
         /// `has_subtitle`/`has_body`/`has_text` say which fields arrived.
         /// Never an amount, a shop or a card name

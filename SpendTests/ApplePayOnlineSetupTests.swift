@@ -101,16 +101,17 @@ struct ApplePayOnlineSetupTests {
 
     @Test func theScopeLineNamesAppsAndWebsitesOnIOS27() {
         #expect(ApplePaySetupSteps.scopeLine(notificationTrigger: true)
-                == "Taps in shops log from the tap. Payments in apps and on websites log from Wallet's notification, if your bank sends one.")
+                == "Taps in shops log from the tap. Payments in apps and on websites log from a notification, from Wallet or from your bank's app.")
         #expect(ApplePaySetupSteps.scopeLine(notificationTrigger: false)
                 == "Works for taps in shops. Online and Apple Watch payments don't reach Shortcuts.")
     }
 
     /// The Purchase Sources footer only mentions online payments where the
-    /// shortcut can catch them.
+    /// shortcut can catch them: from a notification, Wallet's or the bank
+    /// app's (copy changed 8 Oct 2026).
     @Test func theSourcesFooterMentionsOnlineOnlyOnIOS27() {
-        #expect(ApplePaySetupSteps.sourcesFooter(notificationTrigger: true).contains("online"))
-        #expect(!ApplePaySetupSteps.sourcesFooter(notificationTrigger: false).contains("online"))
+        #expect(ApplePaySetupSteps.sourcesFooter(notificationTrigger: true).contains("notification"))
+        #expect(!ApplePaySetupSteps.sourcesFooter(notificationTrigger: false).contains("notification"))
     }
 
     /// Get the Shortcut opens our own signed file on sortd.page, in the
