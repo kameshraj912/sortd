@@ -481,17 +481,7 @@ struct ApplePaySetupPanel: View {
 
     /// The number in its circle, or a green tick once the step is done.
     private func stepBadge(_ n: Int, done: Bool) -> some View {
-        Group {
-            if done {
-                Image(systemName: "checkmark").font(.subheadline.weight(.bold))
-            } else {
-                Text("\(n)").font(.subheadline.weight(.bold))
-            }
-        }
-        .foregroundStyle(Color.onBrand)
-        .frame(width: 26, height: 26)
-        .background(done ? Color.up : Color.ink, in: .circle)
-        .accessibilityHidden(true)
+        StepBadge(number: n, done: done)
     }
 
     // MARK: - Scope
@@ -512,5 +502,28 @@ struct ApplePaySetupPanel: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// A step's number in its circle, or a green tick once it is done. The
+/// circle grows with Dynamic Type: at a fixed 26 points the digit and the
+/// tick spilled out of it at the largest sizes (AX5 feel check, 8 Oct 2026).
+private struct StepBadge: View {
+    let number: Int
+    let done: Bool
+    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 26
+
+    var body: some View {
+        Group {
+            if done {
+                Image(systemName: "checkmark").font(.subheadline.weight(.bold))
+            } else {
+                Text("\(number)").font(.subheadline.weight(.bold))
+            }
+        }
+        .foregroundStyle(Color.onBrand)
+        .frame(width: size, height: size)
+        .background(done ? Color.up : Color.ink, in: .circle)
+        .accessibilityHidden(true)
     }
 }
