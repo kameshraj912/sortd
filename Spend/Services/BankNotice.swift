@@ -243,17 +243,37 @@ nonisolated enum BankNotice {
     private static let spendPattern =
         #"\b(?:spent|purchases?|paid|payment (?:of|to)|charged|transaction (?:of|at)|debited|used at|card purchase)\b"#
 
+    /// "Refund" as a verb tied to the money ("Refund of $5.00", "DOORDASH
+    /// refunded $5.00", "refund to your card", a line that starts with
+    /// "Refund"), not the word anywhere (bug hunt 8 Oct 2026, b10-A9).
+    private static let refundVerbPattern =
+        #"(?m)^\s*refund(?:s|ed)?\b|\brefunded\b|\brefund(?:\s+of\b|\s+from\b|\s*:|\s+to\s+your\b)"#
+    /// "refund" that never makes a refund: a purchase's footer ("request a
+    /// refund", "refund policy") or a shop's name ("REFUND CENTRE").
+    private static let notARefundPattern =
+        #"\brequest(?:ing)?\s+(?:a\s+|your\s+)?refund\b|\brefund\s+(?:polic(?:y|ies)|cent(?:re|er)s?)\b"#
+
     /// What the bank's notification says. `isKnownCard` is a `CardBook`
     /// match, for a card named only by its name ("with YouTrip").
     static func read(_ text: String, isKnownCard: (String) -> Bool = { _ in false }) -> WalletNotification.Reading {
         if let refused = refusal(text) { return refused }
         let spend = has(spendPattern, in: text)
-        let refund = has(WalletNotification.refundPattern, in: text)
+        let refundVerb = has(refundVerbPattern,
+                             in: text.replacingOccurrences(of: notARefundPattern, with: " ",
+                                                           options: [.regularExpression, .caseInsensitive]))
         // No spend word is not a purchase: "Payment received · $120.00"
         // from a bank's app (9 Oct 2026; it used to read as money in, which
         // also saved nothing).
-        guard refund || spend, let amount = WalletTapText.money(in: text),
+        guard refundVerb || spend, let amount = WalletTapText.money(in: text),
               let value = AmountParser.parse(amount)?.amount, value > 0 else { return .notAPurchase }
+        // A spend word before the amount makes it a purchase, so a refund
+        // word after it does not count ("You spent $23.40 at X. … refund").
+        // Both a spend word before the amount and a refund verb ("Your
+        // purchase of $20.00 at X was refunded"): which one it is can't be
+        // told, so nothing is saved.
+        let spendFirst = spendBefore(amount, in: text)
+        if refundVerb, spendFirst { return .notAPurchase }
+        let refund = refundVerb && !spendFirst
         // Two amounts are not one purchase ("$23.40 at DOORDASH and $5.00
         // at UBER", a weekly total), unless the second is the balance. No
         // shop is not a purchase either: "You've spent $500 this week".
@@ -263,15 +283,36 @@ nonisolated enum BankNotice {
         return .payment(amount: signed, merchant: shop, card: card(in: text, isKnownCard: isKnownCard))
     }
 
+    /// True when a spend word comes before the amount's first place in the text.
+    private static func spendBefore(_ amount: String, in text: String) -> Bool {
+        guard let at = text.range(of: amount),
+              let word = text.range(of: spendPattern, options: [.regularExpression, .caseInsensitive]) else { return false }
+        return word.lowerBound < at.lowerBound
+    }
+
     /// Another clear amount in the text, other than one straight after
-    /// "balance" or "bal".
+    /// "balance" or "bal". The same amount twice counts as two
+    /// ("$20.00 at UBER and $20.00 at DOORDASH", b10-A10), so copies of it
+    /// are counted before they are taken out.
     private static func hasSecondAmount(_ text: String, besides amount: String) -> Bool {
+        let balanceBefore = #"\bbal(?:ance)?(?:\s+(?:is|of|now))?[\s:.\-]*$"#
+        func afterBalance(_ at: Range<String.Index>, in s: String) -> Bool {
+            String(s[..<at.lowerBound]).range(of: balanceBefore, options: [.regularExpression, .caseInsensitive]) != nil
+        }
+        // Each copy of the amount, whole (not "20.00" inside "120.00").
+        let copy = #"(?<![\d.,])"# + NSRegularExpression.escapedPattern(for: amount) + #"(?!\d)"#
+        var copies: [Range<String.Index>] = []
+        var from = text.startIndex
+        while from < text.endIndex,
+              let at = text.range(of: copy, options: .regularExpression, range: from..<text.endIndex) {
+            copies.append(at)
+            from = at.upperBound
+        }
+        if copies.dropFirst().contains(where: { !afterBalance($0, in: text) }) { return true }
         let rest = text.replacingOccurrences(of: amount, with: " ")
         guard let second = WalletTapText.money(in: rest), WalletTapText.isClearAmount(second),
               let at = rest.range(of: second) else { return false }
-        let before = String(rest[..<at.lowerBound])
-        return before.range(of: #"\bbal(?:ance)?(?:\s+(?:is|of|now))?[\s:.\-]*$"#,
-                            options: [.regularExpression, .caseInsensitive]) == nil
+        return !afterBalance(at, in: rest)
     }
 
     // MARK: - Shop

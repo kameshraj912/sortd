@@ -32,6 +32,16 @@ nonisolated enum TapField {
 
     static func isBlank(_ value: String?) -> Bool { normalize(value).isEmpty }
 
+    /// The longest field the readers look at (bug hunt 8 Oct 2026, b10-A13):
+    /// a 10,000-digit body took 7.5 s. No real tap field or notification is
+    /// near this long, so the rest is cut off, not refused.
+    static let maxLength = 1_000
+
+    /// The value cut to `maxLength` characters.
+    static func capped(_ value: String?) -> String? {
+        value.map { String($0.prefix(maxLength)) }
+    }
+
     /// How a field arrived, never what it said: "empty", "placeholder" (a
     /// magic variable's own name) or its length. This is all the run log in
     /// Settings keeps, so a shop name or an amount cannot outlive the
@@ -56,6 +66,12 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// shortcut made before then. Whether iOS hands over the app's name or
     /// its bundle id is not known yet, so `source` takes either.
     var app: String? = nil
+
+    /// Every part cut to `TapField.maxLength`.
+    var capped: WalletNotification {
+        WalletNotification(title: TapField.capped(title), subtitle: TapField.capped(subtitle),
+                           body: TapField.capped(body), app: TapField.capped(app))
+    }
 
     /// Which app sent it, as far as `app` says.
     enum Source: Equatable { case wallet, bank, unknown }
@@ -298,6 +314,10 @@ struct LogWalletTapIntent: AppIntent {
     static func performAndLog(transaction: String?, amount: String?, merchant: String?, card: String?,
                              notification: WalletNotification = .init(),
                              now: Date = .now) async -> LogPurchaseIntent.Outcome {
+        // Very long text is cut before anything reads it (b10-A13).
+        let transaction = TapField.capped(transaction), amount = TapField.capped(amount)
+        let merchant = TapField.capped(merchant), card = TapField.capped(card)
+        let notification = notification.capped
         let outcome = await Self.performRun(transaction: transaction, amount: amount, merchant: merchant, card: card,
                                             notification: notification, now: now)
         Analytics.shared.track(.applePayRun, Self.runEvent(outcome: outcome, transaction: transaction, amount: amount,
@@ -401,8 +421,11 @@ struct LogWalletTapIntent: AppIntent {
                        in context: ModelContext, book: CardBook,
                        now: Date = .now, debugForceSaveFailure: Bool = false,
                        queueURL: URL? = nil) async throws -> LogPurchaseIntent.Outcome {
+        // Very long text is cut before anything reads it (b10-A13).
+        let text = TapField.capped(text), amount = TapField.capped(amount)
+        let merchant = TapField.capped(merchant), card = TapField.capped(card)
         let notification = WalletNotification(title: notificationTitle, subtitle: notificationSubtitle, body: notificationBody,
-                                              app: notificationApp)
+                                              app: notificationApp).capped
         let record = Self.record(transaction: text, amount: amount, merchant: merchant, card: card,
                                  notification: notification, at: now)
         let result: LogPurchaseIntent.Outcome
@@ -694,7 +717,9 @@ nonisolated enum WalletTapText {
         let patterns = [
             // Not inside a word: "PANTRY 24" is not 24 Turkish lira.
             #"(?<![A-Za-z])"# + sign + marker + #"\s?"# + number, // A$4.50, SGD 6.20, -$5
-            sign + number + #"\s?(?:[A-Z]{3})\b"#,             // 6.20 SGD
+            // Starts where a number starts, so a long run of digits is not
+            // rescanned from every digit (b10-A13).
+            sign + #"(?<![\d.,])"# + number + #"\s?(?:[A-Z]{3})\b"#, // 6.20 SGD
             // 4.50, 1,234.50 — the whole number, not "234.50" out of it.
             sign + #"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)[.,]\d{2}\b"#,
         ]
