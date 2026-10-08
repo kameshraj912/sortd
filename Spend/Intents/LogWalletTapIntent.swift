@@ -108,10 +108,13 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
     /// what is left. A bank app's sentence goes to `BankNotice` instead.
-    /// The tap fields are never looked at.
+    /// `BankNotice.refusal` runs first on every notification, so a short
+    /// bank line ("Available balance $1,204.11") is never logged by either
+    /// reader (review, 8 Oct 2026). The tap fields are never looked at.
     @MainActor
     func read(isKnownCard: (String) -> Bool = { _ in false }) -> Reading {
         let text = joined
+        if let refused = BankNotice.refusal(text) { return refused }
         if BankNotice.isSentence(text) { return BankNotice.read(text, isKnownCard: isKnownCard) }
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
@@ -230,7 +233,7 @@ struct LogWalletTapIntent: AppIntent {
         guard case .success(let container) = SpendStore.containerForIntent() else {
             if notification.isPresent {
                 // Read now, so only a real payment is queued.
-                let reading = notification.read(isKnownCard: { CardBook.shared.match($0) != .other })
+                let reading = notification.read(isKnownCard: { CardBook.shared.isOneCard(named: $0) })
                 switch reading {
                 case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                     LogPurchaseIntent.recordReach(Self.record(transaction: transaction, amount: amount, merchant: merchant,
@@ -316,7 +319,7 @@ struct LogWalletTapIntent: AppIntent {
         let result: LogPurchaseIntent.Outcome
         let shop: String?
         if notification.isPresent {
-            let reading = notification.read(isKnownCard: { book.match($0) != .other })
+            let reading = notification.read(isKnownCard: { book.isOneCard(named: $0) })
             switch reading {
             case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                 // Shortcuts reached Sortd, but there is nothing to save:
@@ -377,7 +380,8 @@ struct LogWalletTapIntent: AppIntent {
         return LogPurchaseIntent.Outcome(message: message, transaction: nil, merged: false, dropped: reading)
     }
 
-    /// The `apple_pay_run` properties for one run: what kind it was, what
+    /// The `apple_pay_run` properties for one run: what kind it was ("tap",
+    /// "notification" for Wallet's, "bank" for a bank app's sentence), what
     /// came of it, and which fields arrived. Fixed words and booleans only,
     /// never an amount, a shop or a card name. The `has_*` flags are the
     /// fields as they arrived, before any parsing; `has_text` is the old
@@ -407,7 +411,7 @@ struct LogWalletTapIntent: AppIntent {
             result = "blank"
         }
         return [
-            "kind": .string(notification.isPresent ? "notification" : "tap"),
+            "kind": .string(!notification.isPresent ? "tap" : notification.isBankNotice ? "bank" : "notification"),
             "result": .string(result),
             "has_amount": .bool(!TapField.isBlank(amount)),
             "has_shop": .bool(!TapField.isBlank(merchant)),
@@ -550,9 +554,15 @@ nonisolated enum WalletTapText {
     /// one as "this notification is Wallet's".
     static let walletNames: Set<String> = ["apple pay", "wallet", "apple wallet", "apple cash"]
 
+    /// A bank's heading, never a shop: "Purchase alert" read as the shop
+    /// "alert" once "purchase" was dropped as filler (review, 8 Oct 2026).
+    private static let alertNames: Set<String> = ["purchase alert", "transaction alert", "card alert", "payment alert"]
+
     /// One shop/card candidate from a notification with its framing words
     /// and stray punctuation removed, or nil when nothing is left.
     private static func withoutNotificationFiller(_ candidate: String) -> String? {
+        let whole = candidate.trimmingCharacters(in: .whitespaces.union(.init(charactersIn: ".,;:!·-–—|"))).lowercased()
+        if alertNames.contains(whole) { return nil }
         var words = candidate.split(separator: " ").map(String.init)
         var dropped = false
         while let first = words.first?.lowercased(),

@@ -412,4 +412,116 @@ struct ApplePayOnlineNotificationTests {
         try await notify("CommBank", nil, bankSentence, ctx: ctx, book: b, at: now.addingTimeInterval(11 * 60))
         #expect(try rows(ctx).count == 2)
     }
+
+    // MARK: - Review, 8 Oct 2026
+
+    /// Short bank lines skip the sentence reader, so the refusals run on
+    /// every notification before either reader.
+    @Test(arguments: [
+        ["CommBank", "Available balance $1,204.11", ""],
+        ["NAB", "Balance: $1,204.11", ""],
+        ["Westpac", "Salary $3,000.00", ""],
+        ["ANZ", "Limit increased to $5,000", ""],
+        ["DBS", "Get $20 cashback", ""],
+        ["OCBC", "Code 482193 $31.80", ""],
+    ])
+    func aShortBankLineThatIsNotAPurchaseSavesNothing(_ parts: [String]) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify(parts[0], parts[1], parts[2], ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
+    }
+
+    /// The refusals are phrases, not bare words: a shop called "Balance
+    /// Yoga" on Wallet's own line still logs.
+    @Test func aWalletShopNamedBalanceStillLogs() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("NAB Visa Debit", "Balance Yoga", "A$20.00", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.rawMerchant == "Balance Yoga")
+    }
+
+    @Test func aPurchaseAlertTitleIsNotTheShop() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("Purchase alert", nil, "$23.40 at DOORDASH", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.rawMerchant == "DOORDASH")
+    }
+
+    /// One refund reported by the tap, Wallet and the bank comes off one
+    /// purchase only, even with two purchases it could match.
+    @Test func aRefundSeenByTapWalletAndBankComesOffOnce() async throws {
+        let ctx = store(), b = book()
+        b.upsert(CardInfo(id: "nab", name: "NAB Visa Debit", shortName: "NAB", bank: "NAB",
+                          currency: "AUD", country: "AU", last4: ["4821"], walletWords: ["nab"]))
+        for daysAgo in [20.0, 10.0] {
+            try await notify("", "", "", amount: "A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                             ctx: ctx, book: b, at: now.addingTimeInterval(-daysAgo * 86_400))
+        }
+        try await notify("", "", "", amount: "-A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                         ctx: ctx, book: b, at: now)
+        try await notify("NAB Visa Debit", "Seven Seeds", "-A$5.50", ctx: ctx, book: b, at: now.addingTimeInterval(30))
+        try await notify("NAB", nil, "Refund of $5.50 from SEVEN SEEDS on your card ending 4821",
+                         ctx: ctx, book: b, at: now.addingTimeInterval(60))
+        let all = try rows(ctx)
+        #expect(all.count == 2)
+        #expect(all.filter(\.refunded).count == 1)
+    }
+
+    /// Wallet's notification and the bank's, either order, five minutes
+    /// apart: one purchase.
+    @Test(arguments: [true, false])
+    func walletAndBankNoticesFiveMinutesApartAreOneRow(walletFirst: Bool) async throws {
+        let ctx = store(), b = book()
+        let first = walletFirst ? ["NAB Visa Debit", "DoorDash", "A$23.40"] : ["CommBank", "", bankSentence]
+        let second = walletFirst ? ["CommBank", "", bankSentence] : ["NAB Visa Debit", "DoorDash", "A$23.40"]
+        try await notify(first[0], first[1], first[2], ctx: ctx, book: b, at: now)
+        try await notify(second[0], second[1], second[2], ctx: ctx, book: b, at: now.addingTimeInterval(300))
+        let all = try rows(ctx)
+        #expect(all.count == 1)
+        #expect(all.first?.tapOrigins == "nb")
+    }
+
+    /// Two bank notices for one purchase (a "pending" one that slipped
+    /// through, then "spent"; or Wallet prose read as a sentence and the
+    /// bank's own): one row.
+    @Test func twoBankNoticesFiveMinutesApartAreOneRow() async throws {
+        let ctx = store(), b = book()
+        try await notify("NAB Visa Debit", nil, "$23.40 paid to DoorDash with Mastercard ••4821", ctx: ctx, book: b, at: now)
+        let second = try await notify("CommBank", nil, bankSentence, ctx: ctx, book: b, at: now.addingTimeInterval(300))
+        #expect(second.merged)
+        #expect(try rows(ctx).count == 1)
+    }
+
+    /// A card named only by the bank is the card only when one card fits.
+    @Test func aBankNameWithTwoCardsNamesNoCard() async throws {
+        let ctx = store(), b = book()
+        b.upsert(CardInfo(id: "cbad", name: "CommBank Debit", shortName: "CommBank", bank: "CommBank", walletWords: ["commbank"]))
+        b.upsert(CardInfo(id: "cbac", name: "CommBank Credit", shortName: "CommBank", bank: "CommBank", isCredit: true,
+                          walletWords: ["commbank"]))
+        let r = try await notify("CommBank", nil, "You spent $23.40 at DOORDASH.", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.card == .other)
+    }
+
+    @Test func aBankNameWithOneCardIsThatCard() async throws {
+        let ctx = store(), b = book()
+        b.upsert(CardInfo(id: "cbad", name: "CommBank Debit", shortName: "CommBank", bank: "CommBank", walletWords: ["commbank"]))
+        let r = try await notify("CommBank", nil, "You spent $23.40 at DOORDASH.", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.card == Card(rawValue: "cbad"))
+    }
+
+    /// Purchase History names where a notification-only row came from, not
+    /// "Apple Pay tap".
+    @Test func historySaysWhichNotificationLoggedIt() {
+        #expect(TransactionDetailView.historyLine(source: .tap, tapOrigins: "b")
+                == .init(title: "Bank notification", detail: "Logged from your bank's alert"))
+        #expect(TransactionDetailView.historyLine(source: .tap, tapOrigins: "n")
+                == .init(title: "Wallet notification", detail: "Logged from Wallet's notification"))
+        #expect(TransactionDetailView.historyLine(source: .tap, tapOrigins: "tb")
+                == .init(title: "Apple Pay tap", detail: "Logged the moment you paid"))
+        #expect(TransactionDetailView.historyLine(source: .tap, tapOrigins: nil)
+                == .init(title: "Apple Pay tap", detail: "Logged the moment you paid"))
+    }
 }

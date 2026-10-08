@@ -115,4 +115,113 @@ struct BankNoticeTests {
     @Test func amountWithoutSpendWordIsNotAPurchase() {
         #expect(BankNotice.read("Your limit is now $2,000.00 at your request") == .notAPurchase)
     }
+
+    // MARK: - Review, 8 Oct 2026: sentences that are not spending
+
+    @Test(arguments: [
+        "We paid you $25.00 interest",
+        "J TAN paid you $50.00",
+        "J TAN paid $50.00 into your account",
+        "A payment of $50.00 from J TAN has arrived",
+    ])
+    func moneyComingInIsMoneyIn(_ text: String) {
+        #expect(BankNotice.read(text) == .moneyIn)
+    }
+
+    @Test(arguments: [
+        "You paid $500.00 to your credit card ending 4821",
+        "We've paid $200.00 from your Everyday account to your Savings account",
+        "You paid $200.00 to ANZ Savings ending 4821",
+        "Your card payment of $500.00 has been processed",
+    ])
+    func movingMoneyBetweenYourOwnAccountsIsNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test(arguments: [
+        "Your card limit was increased to $2,000. Spend responsibly.",
+        "Spending alert: you've spent $500.00 this week",
+        "You've spent $1,200 this month. That's 80% of your budget",
+    ])
+    func limitsAndSpendingTotalsAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test(arguments: [
+        "Spend $50 at Woolworths this week and get 10% back",
+        "Spend $100 or more at Myer to earn 2,000 bonus points",
+        "Earn double points when you spend $30 at Coles",
+        "Last chance! Spend $20 at Uber Eats and save",
+    ])
+    func offersAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test(arguments: [
+        "Your NetCode is 482193 for a payment of $31.80 to UBER",
+        "Your code is 482193 to approve a $31.80 purchase at UBER",
+        "Use 482193 to confirm your payment of $31.80 to UBER. Never share this code.",
+        "Approve your purchase of $31.80 at UBER in the CommBank app",
+        "Did you just try to make a purchase of $31.80 at UBER? Open the app to approve",
+        "Your card was charged $1.00 to verify it by APPLE.COM",
+    ])
+    func codesAndApprovalsAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test(arguments: [
+        "Payment of $500 due 12 Oct",
+        "Make a payment of $35 by 12 Oct to avoid late fees",
+        "Your bill of $89.00 will be paid on 15 Oct",
+        "Your scheduled payment of $200.00 to J Smith will be paid tomorrow",
+        "Your $500.00 payment to TELSTRA is scheduled",
+        "Autopay: $500.00 will be paid from your account on 12 Oct",
+        "You will be charged $15.99 by NETFLIX on 12 Oct",
+    ])
+    func billsAndPaymentsToComeAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test(arguments: [
+        "Transaction of $23.40 at DOORDASH was reversed",
+        "Your $23.40 purchase at DOORDASH was cancelled",
+        "A pending transaction of $23.40 at DOORDASH",
+    ])
+    func reversedCancelledAndPendingAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    @Test func aBlockedTransactionIsNotCompleted() {
+        #expect(BankNotice.read("We blocked a transaction of $999.00 at XYZ STORE on card ending 4821") == .notCompleted)
+    }
+
+    @Test func aSpendSentenceWithNoShopIsNotAPurchase() {
+        #expect(BankNotice.read("You spent $23.40 with your card ending 4821") == .notAPurchase)
+    }
+
+    /// A second amount means it is not one purchase, unless it is the balance.
+    @Test func aSecondAmountIsNotAPurchaseUnlessItIsTheBalance() {
+        #expect(BankNotice.read("You spent $23.40 at DOORDASH and $5.00 at UBER") == .notAPurchase)
+        #expect(BankNotice.read("You spent $23.40 at DOORDASH. Available balance $976.60")
+                == .payment(amount: "$23.40", merchant: "DOORDASH", card: nil))
+    }
+
+    // MARK: - Review, 8 Oct 2026: where the shop's name ends
+
+    @Test(arguments: [
+        "You spent $23.40 at DOORDASH in Carlton",
+        "Purchase of $23.40 at DOORDASH has been approved",
+        "Purchase of $23.40 at DOORDASH will appear on your statement",
+        "Purchase of $23.40 at DOORDASH \u{2014} balance $976.60",
+        "You spent $23.40 at DOORDASH balance $976.60",
+        "You spent $23.40 at DOORDASH? Not you? Call us",
+    ])
+    func theShopStopsWhereTheSentenceMovesOn(_ text: String) {
+        #expect(payment(text)?.merchant == "DOORDASH")
+    }
+
+    @Test func aShopThatRefundedIsTheShop() {
+        #expect(BankNotice.read("DOORDASH refunded $5.00 to your card ending 4821")
+                == .payment(amount: "-$5.00", merchant: "DOORDASH", card: "4821"))
+    }
 }

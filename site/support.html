@@ -52,7 +52,7 @@
     <li><strong>Get the shortcut.</strong> <a href="/apple-pay.shortcut"><strong>Get the ready&#8209;made shortcut</strong></a> on your iPhone. A page opens. Tap <strong>Open in "Shortcuts"</strong>, then tap <strong>Add Shortcut</strong>. It already knows which part of the payment is the amount, the shop and the card.</li>
     <li><strong>Run it once and tap Allow.</strong> In Shortcuts, tap <strong>Log Apple Pay in Sortd</strong> to run it (or press ▶ if it is open). Tap <strong>Allow</strong>, then come back to Sortd.</li>
     <li><strong>Turn both automations on.</strong> The shortcut has two "When…" lines (the tap and Wallet's notification). Tap <strong>&rsaquo;</strong> next to each line and switch on <strong>Automation</strong>.</li>
-    <li><strong>Bank doesn't show Wallet notifications?</strong> Tap <strong>+</strong> next to Wallet under "When I receive a notification" and add your bank's app. Turn on purchase alerts in that app. ANZ and CommBank need this.</li>
+    <li><strong>Bank doesn't send Wallet a notification?</strong> Tap <strong>+</strong> next to Wallet under "When I receive a notification" and add your bank's app. Turn on purchase alerts in that app. Our ANZ and CommBank testers needed this.</li>
   </ol>
   <p>That's it. Pay with Apple Pay and it shows up in Sortd.</p>
   <h3 id="apple-pay-26">On iOS 26</h3>
@@ -77,7 +77,7 @@
     <li>Do the same for <strong>Shop</strong> (choose Merchant). Tap <strong>&rsaquo;</strong> to show <strong>Card</strong> and choose <strong>Card or Pass</strong>.</li>
     <li>Tap back to save. That's it.</li>
   </ol>
-  <p class="note">Pressing ▶ in Shortcuts is only a test. It has no purchase in it, so nothing is saved. Pay with Apple Pay to log a real one. Taps in shops log from the tap. On iOS 27 or later, payments in apps and on websites log from Wallet's notification, if your card sends one. Before iOS 27, only taps in shops are logged.</p>
+  <p class="note">Pressing ▶ in Shortcuts is only a test. It has no purchase in it, so nothing is saved. Pay with Apple Pay to log a real one. Taps in shops log from the tap. On iOS 27 or later, payments in apps and on websites log from a notification, from Wallet or from your bank's app. Before iOS 27, only taps in shops are logged.</p>
 
   <h3>A tap shows the wrong shop, amount or card</h3>
   <p>Open Settings › Purchase Sources › Apple Pay Logging in Sortd and press and hold the status card at the top. <strong>Last Tap Received</strong> shows exactly what Apple Pay sent. If the shop or amount came in blank, Sortd still saves the purchase and marks it <strong>Needs a check</strong>, so you can fix it in Activity.</p>
@@ -86,7 +86,7 @@
   <ul>
     <li><strong>Apple's trigger missed it.</strong> Apple's Wallet trigger sometimes misses a payment, most often at vending machines, transport gates and parking. Sortd sees when a payment arrives, not your automation.</li>
     <li><strong>It was in an app or on a website.</strong> Those need iOS 27 or later, both automations switched on, and a notification from Wallet or from your bank's app. If your bank doesn't make Wallet show one, add your bank's app to the shortcut (step 4 of the iOS 27 steps above).</li>
-    <li><strong>The bank was late.</strong> Apple's trigger waits for your bank to confirm a tap and gives up if it is slow, most often with some Mastercard issuers, at transport gates, parking and vending. Adding your bank's app to the notification trigger catches these too. Also check Settings › Notifications › Wallet has Summarize Notifications off, and Settings › Apps › Wallet has Mobile Data on.</li>
+    <li><strong>The bank was late.</strong> Apple's trigger waits for your bank to confirm a tap and gives up if it is slow, most often at transport gates, parking and vending. Adding your bank's app to the notification trigger catches these too. Also worth checking: Summarize Notifications is off in Settings › Notifications › Wallet, and Mobile Data is on in Settings › Apps › Wallet.</li>
     <li><strong>It wasn't Apple Pay.</strong> Cash, and cards that aren't in Apple Pay, are never seen.</li>
   </ul>
   <p>You can always add the purchase by hand (the + button), scan the receipt with the camera, or import a statement in Settings › Backup &amp; Data › Import.</p>

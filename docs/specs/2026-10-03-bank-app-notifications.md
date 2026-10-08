@@ -115,3 +115,20 @@ What differs from the plan above:
   wording; the privacy text says "on this iPhone" and "keeps the purchases and ignores the rest".
 - A bank notice with no amount and a spend word ("Your payment is being processed") is
   `.notAPurchase`, not `.noAmount`.
+
+Review fixes, same day:
+
+- Refusals run on every notification, Wallet's or a bank's, before either reader: codes and
+  approvals, offers, bills and scheduled payments, pending, reversed or cancelled, money in,
+  balances, limits, interest and moves between the person's own accounts. They are phrases,
+  not bare words, so a Wallet shop line like "Balance Yoga" still logs.
+- A bank sentence needs one amount (a second one only after "balance") and a shop. "Spend" is
+  an offer's word, not a purchase's.
+- A refund seen by tap, Wallet and bank comes off once: the refund report keeps every trigger
+  that matched it.
+- Two bank runs for one amount at one shop inside the pair window are one row. Two Wallet
+  notifications still need to be within 60 s (two real online payments at one shop 90 s apart
+  stay two rows).
+- A card named only by the bank counts only when one saved card fits it.
+- The run log's `kind` is `bank` for a bank sentence. Purchase History says "Bank
+  notification" or "Wallet notification" for a row no tap reported.

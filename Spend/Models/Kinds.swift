@@ -203,6 +203,14 @@ final class CardBook {
         return candidates(walletName).first?.card ?? .other
     }
 
+    /// A card named only by its name ("YouTrip", a bank's name as a
+    /// notification title) counts when exactly one card fits it, or its
+    /// saved digits are in it. With a debit and a credit card at one bank,
+    /// "CommBank" names neither (review, 8 Oct 2026).
+    func isOneCard(named name: String) -> Bool {
+        card(digitsIn: name) != nil || candidates(name).count == 1
+    }
+
     /// Cards whose Wallet words appear in the name, best first.
     func candidates(_ walletName: String?) -> [CardInfo] {
         let name = " " + (walletName ?? "").lowercased() + " "

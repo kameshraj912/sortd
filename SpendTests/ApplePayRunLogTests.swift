@@ -104,7 +104,7 @@ struct ApplePayRunLogTests {
 
     private let allowedWords: Set<String> = ["tap", "notification", "saved", "merged", "needs_check", "blank",
                                              "no_amount", "not_completed", "money_in", "refund", "health_check",
-                                             "queued", "not_saved", "not_purchase"]
+                                             "queued", "not_saved", "not_purchase", "bank"]
     private let nineKeys: Set<String> = ["kind", "result", "has_amount", "has_shop", "has_card",
                                          "has_title", "has_subtitle", "has_body", "has_text"]
 
@@ -183,12 +183,21 @@ struct ApplePayRunLogTests {
         #expect(string(r.event, "result") == "no_amount")
     }
 
-    /// A bank app's balance alert: read as a notification, not a purchase.
+    /// A bank app's balance alert: a bank run (8 Oct 2026 review: kind
+    /// "bank", was "notification"), not a purchase.
     @Test func aBankNoticeThatIsNotAPurchaseIsNotPurchase() async throws {
         let r = try await run(body: "Your available balance is $1,204.11", in: store(), book: book(), at: now)
         #expect(r.outcome.dropped == .notAPurchase)
-        #expect(string(r.event, "kind") == "notification")
+        #expect(string(r.event, "kind") == "bank")
         #expect(string(r.event, "result") == "not_purchase")
+    }
+
+    @Test func aBankPurchaseIsABankRun() async throws {
+        let r = try await run(title: "CommBank", body: "You spent $23.40 at DOORDASH with your card ending 4821.",
+                              in: store(), book: book(), at: now)
+        #expect(r.outcome.transaction != nil)
+        #expect(string(r.event, "kind") == "bank")
+        #expect(string(r.event, "result") == "saved")
     }
 
     @Test func moneyInIsMoneyIn() async throws {

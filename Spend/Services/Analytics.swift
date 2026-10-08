@@ -39,7 +39,7 @@ final class Analytics {
         case applePayTapLogged = "apple_pay_tap_logged"
         /// One per Shortcuts run that reaches Sortd (8 Oct 2026), saved or
         /// not, so a run that logged nothing still says why. `kind` is
-        /// tap|notification, `result` is saved|merged|needs_check|blank|
+        /// tap|notification|bank (a bank app's sentence), `result` is saved|merged|needs_check|blank|
         /// no_amount|not_completed|money_in|not_purchase (a bank app's
         /// notification that is not a purchase)|refund|health_check|queued|
         /// not_saved, and `has_amount`/`has_shop`/`has_card`/`has_title`/
