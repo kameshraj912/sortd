@@ -242,3 +242,97 @@ struct BugHuntUITests {
         #expect(target == Router.Target(name: "purchase", id: id.uuidString))
     }
 }
+
+/// Bug hunt 8 Oct 2026, area ui-intents-widget (docs/BugHunt-2026-10-08.md):
+/// the Wallet tap intents, the widget summary and the `sortd://` router.
+/// Every test here documents an unfixed finding: tagged as a known bug, run
+/// only with `scripts/test.sh --known-bugs`. Fixing one means removing its
+/// tag and trait.
+@MainActor
+struct BugHuntUITests1008 {
+
+    // MARK: - Harness
+
+    private func store() throws -> ModelContext {
+        let schema = Schema([Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    private func book() -> CardBook {
+        CardBook(defaults: UserDefaults(suiteName: "bughunt-ui-1008-\(UUID().uuidString)")!)
+    }
+
+    private let melbourne: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Australia/Melbourne")!
+        return c
+    }()
+
+    private let start = Date(timeIntervalSince1970: 1_790_000_000)
+
+    // MARK: - 1. Arabic-Indic digits in the tap's Amount
+
+    /// An iPhone set to Egypt or Saudi Arabia writes numbers with
+    /// Arabic-Indic digits by default, so the Wallet automation's Amount
+    /// arrives as "٥٫٠٠ ج.م.‏". `AmountParser.parse` only knows ASCII
+    /// digits (`[0-9]` in Spend/Services/Parsing.swift:86-87), returns nil,
+    /// and `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:177,
+    /// 196) saves the tap as "amount missing" — every tap, for every such
+    /// phone. The shop and card come through; only the money is lost.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-ui-1008-01", "a Wallet tap whose amount uses Arabic-Indic digits is saved with no amount"))
+    func anArabicIndicAmountFromAWalletTapIsNotSavedAsAmountMissing() async throws {
+        #expect(AmountParser.parse("٥٫٠٠")?.amount == Decimal(5),
+                "AmountParser reads \(String(describing: AmountParser.parse("٥٫٠٠"))) for ٥٫٠٠")
+        let ctx = try store()
+        let r = try await LogWalletTapIntent.handle(nil, amount: "٥٫٠٠ ج.م.\u{200F}", merchant: "كارفور", card: "Visa",
+                                                    in: ctx, book: book(), now: start)
+        let t = try #require(r.transaction, "nothing saved: \(r.message)")
+        #expect(t.amount == Decimal(5), "saved \(t.amount); message was: \(r.message)")
+        #expect(!t.needsReview, "the row is flagged “Add amount”; message was: \(r.message)")
+    }
+
+    // MARK: - 2. A purchase link with extra path parts
+
+    /// attacks.md (deep-links-and-intents): `sortd://purchase/<uuid>/extra/parts`
+    /// should open the same row. `Router.target(for:)`
+    /// (Spend/Services/Router.swift:83-85) keeps the whole path after the
+    /// host as the id, so `UUID(uuidString:)` in `follow`
+    /// (Router.swift:97) gets "<uuid>/extra/parts", fails, and Activity
+    /// opens with nothing selected.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-ui-1008-02", "sortd://purchase/<uuid>/extra/parts opens nothing"))
+    func aPurchaseLinkWithExtraPathPartsStillNamesThePurchase() throws {
+        let id = UUID()
+        let url = try #require(URL(string: "sortd://purchase/\(id.uuidString)/extra/parts"))
+        let target = try #require(Router.target(for: url))
+        #expect(target.name == "purchase")
+        #expect(target.id.flatMap(UUID.init(uuidString:)) == id,
+                "the router hands follow() the id \(String(describing: target.id))")
+    }
+
+    // MARK: - 3. Widgets with only the health-check row
+
+    /// Someone who has only run "Check the Shortcut" (and logged nothing)
+    /// gets "A$0" / "A$0.00" on the Spending and Today widgets instead of
+    /// "Nothing logged · Tap to add your first purchase":
+    /// `WidgetBridge.build` (Spend/Services/WidgetBridge.swift:70) sets
+    /// `hasAnyPurchases` from every row, while its totals (line 76-80) and
+    /// Activity (`Transaction.excludingLegacyTest`) leave the health-check
+    /// and legacy test rows out.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-ui-1008-03", "the widgets show $0 instead of “Nothing logged” when only the health check ran"))
+    func aStoreWithOnlyTheHealthCheckRowReadsAsNothingLogged() async throws {
+        let ctx = try store()
+        _ = try await LogWalletTapIntent.handle(ApplePayHealthCheck.payloadText, in: ctx, book: book(), now: start)
+        let all = try ctx.fetch(FetchDescriptor<Transaction>())
+        #expect(all.count == 1, "the health check should leave exactly one hidden row")
+        let s = WidgetBridge.build(from: all, budget: 0, now: start, calendar: melbourne)
+        #expect(s.today == 0)
+        #expect(!s.hasAnyPurchases, "hasAnyPurchases is true with no real purchase, so the widgets draw $0")
+    }
+}
