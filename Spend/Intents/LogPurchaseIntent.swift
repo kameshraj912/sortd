@@ -165,6 +165,8 @@ struct LogPurchaseIntent: AppIntent {
                        debugForceSaveFailure: Bool = false,
                        trigger: TapTrigger = .tap, record: String? = nil,
                        seen seenOverride: String? = nil, queueURL: URL? = nil) async throws -> Outcome {
+        // Very long text is cut before anything reads it (b10-A13).
+        let merchant = TapField.capped(merchant), amount = TapField.capped(amount), card = TapField.capped(card)
         // Shortcuts sometimes hands intents an empty merchant or amount
         // (developer.apple.com/forums/thread/797233), or — a blank
         // Notification-trigger run, failsafe #13 — a magic variable's own
@@ -528,8 +530,15 @@ struct LogPurchaseIntent: AppIntent {
         saveRefundReports([report] + refundReports(defaults), defaults)
     }
 
+    /// How far back a notification's refund (Wallet's or a bank's) looks for
+    /// the same refund reported by another trigger. A bank often sends its
+    /// refund notice long after the till refund (bug hunt 8 Oct 2026,
+    /// b10-A5 to A7), so it gets a week; a tap keeps `triggerPairWindow`.
+    static let notificationRefundWindow: TimeInterval = 7 * 86_400
+
     /// The row an earlier report of this same refund already changed: a
-    /// trigger that has not reported it yet, within `triggerPairWindow`,
+    /// trigger that has not reported it yet, within `triggerPairWindow` for
+    /// a tap or `notificationRefundWindow` back for a notification,
     /// same amount and currency, and the row still in this store with its
     /// card and shop agreeing (the same loose shop rule `Refunds` used to
     /// pick it). The report is kept with this trigger's letter added, so
@@ -542,8 +551,10 @@ struct LogPurchaseIntent: AppIntent {
                            trigger: TapTrigger, now: Date, in context: ModelContext,
                            defaults: UserDefaults = reachDefaults) throws -> Transaction? {
         var reports = refundReports(defaults)
+        let back = trigger == .tap ? triggerPairWindow : notificationRefundWindow
         for (i, r) in reports.enumerated() {
-            guard !r.trigger.contains(trigger.rawValue), abs(r.date.timeIntervalSince(now)) <= triggerPairWindow,
+            guard !r.trigger.contains(trigger.rawValue),
+                  now.timeIntervalSince(r.date) <= back, r.date.timeIntervalSince(now) <= triggerPairWindow,
                   r.amount == amount, r.currency == currency else { continue }
             let id = r.row
             guard let t = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })).first,

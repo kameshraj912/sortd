@@ -148,11 +148,10 @@ struct AbuseBuild10Tests {
     /// refund. The bank's notice is the same refund, so the new purchase
     /// must still count. Today it is marked refunded and drops out of totals.
     ///
-    /// Known bug: `LogPurchaseIntent.sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546) only looks
+    /// Fixed 8 Oct 2026, was: `LogPurchaseIntent.sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546) only looks
     /// `triggerPairWindow` (10 min) back; a bank's refund notice comes later, and
     /// `Refunds.markRefundedPurchase` then takes the next matching purchase.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A5", "a bank's refund notice more than 10 min after the till refund refunds a second purchase"))
+    @Test(.bug(id: "b10-A5", "a bank's refund notice more than 10 min after the till refund refunds a second purchase"))
     func aLateBankRefundDoesNotRefundTheRepurchase() async throws {
         let ctx = store(), b = book()
         try await tap("A$20.00", "Uniqlo", ctx: ctx, book: b, at: now)
@@ -169,9 +168,8 @@ struct AbuseBuild10Tests {
     /// today's is refunded at the till; the bank's refund notice comes 30
     /// minutes later and takes yesterday's coffee off too.
     ///
-    /// Known bug: same as b10-A5, `sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A6", "a late bank refund notice takes off yesterday's purchase as well"))
+    /// Fixed 8 Oct 2026, was: same as b10-A5, `sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546).
+    @Test(.bug(id: "b10-A6", "a late bank refund notice takes off yesterday's purchase as well"))
     func aLateBankRefundLeavesYesterdaysCoffee() async throws {
         let ctx = store(), b = book()
         let yesterday = try #require(try await tap("A$5.50", "Seven Seeds", ctx: ctx, book: b, at: now - 86_400).transaction)
@@ -185,10 +183,9 @@ struct AbuseBuild10Tests {
     /// A partial refund (A$10 off A$59.90) reported by the tap, Wallet and,
     /// 11+ minutes later, the bank comes off twice: A$39.90 is left.
     ///
-    /// Known bug: same window, `sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546), then
+    /// Fixed 8 Oct 2026, was: same window, `sameRefund` (Spend/Intents/LogPurchaseIntent.swift:546), then
     /// `Refunds.markPartiallyRefunded` lowers the row again.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A7", "a partial refund reported late by the bank is taken off twice"))
+    @Test(.bug(id: "b10-A7", "a partial refund reported late by the bank is taken off twice"))
     func aPartialRefundReportedThreeTimesComesOffOnce() async throws {
         let ctx = store(), b = book()
         let row = try #require(try await tap("A$59.90", "Uniqlo", ctx: ctx, book: b, at: now).transaction)
@@ -224,10 +221,9 @@ struct AbuseBuild10Tests {
     /// ("Not you? … request a refund") takes yesterday's A$23.40 DoorDash
     /// off and logs nothing; a shop called "Refund Centre" becomes a refund.
     ///
-    /// Known bug: `BankNotice.read` (Spend/Services/BankNotice.swift:251) sets `refund` from
+    /// Fixed 8 Oct 2026, was: `BankNotice.read` (Spend/Services/BankNotice.swift:251) sets `refund` from
     /// `refundPattern` anywhere in the text, even after a spend word.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A9", "the word refund anywhere in a bank's purchase sentence turns it into a refund"))
+    @Test(.bug(id: "b10-A9", "the word refund anywhere in a bank's purchase sentence turns it into a refund"))
     func aSpendSentenceWithRefundInItIsAPurchase() async throws {
         let ctx = store(), b = book()
         let yesterday = try #require(try await tap("A$23.40", "DoorDash", ctx: ctx, book: b, at: now - 86_400).transaction)
@@ -245,10 +241,9 @@ struct AbuseBuild10Tests {
     /// when the amounts differ, but logged as one when they are equal:
     /// "$20.00 at UBER and $20.00 at DOORDASH" saves A$20 at Uber.
     ///
-    /// Known bug: `BankNotice.hasSecondAmount` (Spend/Services/BankNotice.swift:269) removes every copy of the
+    /// Fixed 8 Oct 2026, was: `BankNotice.hasSecondAmount` (Spend/Services/BankNotice.swift:269) removes every copy of the
     /// first amount before looking for a second, so an equal second amount is never seen.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A10", "two equal amounts in one bank sentence are read as one purchase"))
+    @Test(.bug(id: "b10-A10", "two equal amounts in one bank sentence are read as one purchase"))
     func twoEqualAmountsInOneBankSentenceAreNotOnePurchase() async throws {
         for body in ["You spent $20.00 at UBER and $20.00 at DOORDASH.",
                      "You spent $5.50 at SEVEN SEEDS. You spent $5.50 at MARKET LANE."] {
@@ -300,10 +295,9 @@ struct AbuseBuild10Tests {
     /// quadratic. A bank sentence ("You spent 1111….00 at X") takes ~4 s even
     /// from a bank's app.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:671), the "6.20 SGD"
+    /// Fixed 8 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:671), the "6.20 SGD"
     /// pattern has no lookbehind, so `\d+` restarts at every digit.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A13", "a long run of digits makes the notification reader take seconds"))
+    @Test(.bug(id: "b10-A13", "a long run of digits makes the notification reader take seconds"))
     func aLongRunOfDigitsReturnsQuickly() async throws {
         let digits = String(repeating: "1", count: 10_000)
         for (body, app) in [(digits, ""), (digits, "Wallet"), ("You spent \(digits).00 at X", "CommBank")] {
