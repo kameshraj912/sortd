@@ -105,7 +105,7 @@ nonisolated enum BankNotice {
         #"\b(?:do not|don['’]t|never) share\b"#,
         #"\bto (?:approve|confirm|verify|authori[sz]e)\b"#,
         #"\b(?:approve|confirm) (?:your|this|the)\b"#,
-        #"\bdid you (?:just )?(?:try|make|attempt)\b"#,
+        #"\bdid you (?:just )?(?:try|make|attempt)\b"#, #"\bfor verification\b"#,
         #"\brequires? (?:authentication|approval|verification)\b"#,
     ]
     private static let codeWords = [#"\brequires\b"#]
@@ -116,6 +116,7 @@ nonisolated enum BankNotice {
         #"\bcash ?back\b"#, #"\bbonus points?\b"#, #"\bearn\s+(?:double|triple|bonus|extra|up to)\b"#,
         #"\bearn\s+\d[\d,]*\s+(?:bonus\s+)?points\b"#,
         #"\d\s?%\s?(?:off|back)\b"#, #"\blast chance\b"#, #"\band save\b"#, #"\bspecial offer\b"#,
+        #"\byou(?:['’]ve| have)? earned \d"#,
     ]
     private static let offerWords = [#"\boffers?\b"#, #"\bwin\b"#, #"\b(?:earn|collect)\s+(?:\d|points)"#]
     /// Money that is owed or will move later: a bill, a scheduled payment.
@@ -130,7 +131,7 @@ nonisolated enum BankNotice {
     /// Not finished, or undone.
     private static let notDonePhrases = [
         #"\bpending (?:transaction|payment|purchase|charge)\b"#, #"\b(?:is|was|still|transaction|payment) pending\b"#,
-        #"\bon hold\b"#, #"\bhold (?:placed|of)\b"#, #"\bpre-?auth\w*"#, #"\bauthori[sz]ation hold\b"#, #"\breversal\b"#,
+        #"\bon hold\b"#, #"\bhold (?:placed|of)\b"#, #"\bauthori[sz]ation (?:of|for)\b"#, #"\bpre-?auth\w*"#, #"\bauthori[sz]ation hold\b"#, #"\breversal\b"#,
         #"\b(?:was|been|transaction|payment|purchase) (?:reversed|cancell?ed|voided|reverted)\b"#,
     ]
     private static let notDoneWords = [
@@ -176,13 +177,17 @@ nonisolated enum BankNotice {
         "received", "incoming", "money", "added", "balance", "bal", "interest", "fee", "fees", "charged", "transfer",
         "transferred", "moved", "sent", "repayment", "payment", "payments", "spend", "spending", "reminder", "upcoming",
         "authorisation", "authorization", "hold", "reverted", "voided", "exchanged", "converted", "paynow", "osko",
-        "bpay", "giro", "payid", "paylah", "salary",
+        "bpay", "giro", "payid", "paylah", "salary", "reward", "rewards", "rebate", "direct",
     ]
+    /// Payment networks: a line naming one is money moving between people
+    /// or accounts, whatever else is on it ("Osko from SARAH LEE").
+    private static let networkWords: Set<String> = ["osko", "paynow", "payid", "paylah", "bpay", "giro"]
     /// Words that ride along with a status word without naming a shop.
     private static let statusFiller: Set<String> = [
         "low", "new", "your", "alert", "notice", "this", "that", "week", "weekly", "month", "monthly", "today",
         "tomorrow", "successful", "successfully", "complete", "completed", "placed", "card", "account", "transaction",
         "a", "an", "the", "of", "to", "from", "in", "has", "been", "is", "was", "on", "for", "you", "we", "made",
+        "debit", "overseas",
     ]
     /// A top-up is a status only under a bank's own title: "Myki · Top up ·
     /// A$20.00" is a purchase.
@@ -207,6 +212,7 @@ nonisolated enum BankNotice {
     /// nothing else that could be a shop's name.
     private static func isStatusLine(_ line: String, topUp: Bool) -> Bool {
         let w = words(line)
+        if w.contains(where: networkWords.contains) { return true }
         let status = topUp ? statusWords.union(topUpWords) : statusWords
         return w.contains(where: status.contains) && w.allSatisfy { status.contains($0) || statusFiller.contains($0) }
     }

@@ -12,7 +12,7 @@ nonisolated enum TapField {
     /// Case-insensitive: Shortcuts' own capitalisation is not guaranteed to
     /// survive every code path that touches this text.
     private static let placeholders: Set<String> = [
-        "amount", "merchant", "card or pass", "name", "title", "subtitle", "body", "app",
+        "amount", "merchant", "card or pass", "name", "title", "subtitle", "body",
         "(null)", "nil", "\"\"",
     ]
 
@@ -60,17 +60,31 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// Which app sent it, as far as `app` says.
     enum Source: Equatable { case wallet, bank, unknown }
 
-    /// Blank: unknown (an old shortcut). Wallet by its name or bundle id
-    /// ("Wallet", "com.apple.Passbook"). Any other app: one the person
-    /// added to the trigger, so their bank's.
+    /// Blank, or Shortcuts' own "App" placeholder: unknown (an old
+    /// shortcut). Wallet only by its exact name or bundle id, never by
+    /// "wallet" inside another name ("TNG eWallet" is a money app; review,
+    /// 8 Oct 2026). Any other app: one the person added to the trigger, so
+    /// their bank's.
     var source: Source {
-        let name = TapField.normalize(app).lowercased()
-        if name.isEmpty { return .unknown }
-        if ["wallet", "apple wallet", "com.apple.passbook", "passbook"].contains(name) || name.contains("wallet") {
-            return .wallet
-        }
-        return .bank
+        let name = TapField.normalize(app).trimmingCharacters(in: Self.directionMarks).lowercased()
+        if name.isEmpty || name == "app" { return .unknown }
+        return Self.walletNames.contains(name) ? .wallet : .bank
     }
+
+    private static let directionMarks = CharacterSet(charactersIn: "\u{200E}\u{200F}")
+
+    /// Wallet's names, lower case: English and its bundle id, then its
+    /// display name in every language, read from `CFBundleDisplayName` in
+    /// the iOS 26.5 simulator runtime's
+    /// `Applications/Passbook.app/*.lproj/InfoPlist.strings` (8 Oct 2026).
+    static let walletNames: Set<String> = Set([
+        "wallet", "apple wallet", "apple pay", "com.apple.passbook", "passbook",
+        "المحفظة", "Портфейл", "ওয়ালেট", "Cartera", "Peněženka", "Πορτοφόλι", "Lompakko", "Cartes",
+        "Portefeuille", "વૉલેટ", "ארנק", "वॉलेट", "Novčanik", "Tárca", "Dompet", "ウォレット", "ವಾಲೆಟ್",
+        "지갑", "Piniginė", "വാലറ്റ്", "Lommebok", "ୱଲେଟ୍", "ਵੌਲਿਟ", "Portfel", "Carteira", "Portofel",
+        "Peňaženka", "Denarnica", "Plånbok", "வாலெட்", "వాలెట్", "กระเป๋าสตางค์", "Cüzdan", "Гаманець",
+        "والیٹ", "Ví", "钱包", "銀包", "錢包",
+    ].map { $0.lowercased() })
 
     var isPresent: Bool { !TapField.isBlank(title) || !TapField.isBlank(subtitle) || !TapField.isBlank(body) }
 
@@ -91,14 +105,14 @@ nonisolated struct WalletNotification: Equatable, Sendable {
             + " · app \(TapField.shape(app))"
     }
 
-    /// Read by the bank's reader (`BankNotice`): sent by a bank's app, or,
-    /// with no app (an old shortcut), text that reads as a bank's sentence.
+    /// Read by the bank's reader (`BankNotice`): sent by a bank's app, or
+    /// text that reads as a bank's sentence, from Wallet or with no app (an
+    /// old shortcut; review, 8 Oct 2026: the same reading for both).
     /// Its run is a bank run (`TapTrigger.bank`, run log kind "bank").
     var isBankNotice: Bool {
         switch source {
         case .bank: true
-        case .wallet: false
-        case .unknown: BankNotice.isSentence(joined)
+        case .wallet, .unknown: BankNotice.isSentence(joined)
         }
     }
 
@@ -133,9 +147,10 @@ nonisolated struct WalletNotification: Equatable, Sendable {
 
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
-    /// what is left. A bank's notification goes to `BankNotice` instead:
-    /// one from a bank's app always, even a short line (9 Oct 2026), and
-    /// with no app a sentence. Wallet's own is never read as a bank's.
+    /// what is left. A bank's notification goes to `BankNotice` instead
+    /// (`isBankNotice`): one from a bank's app always, even a short line
+    /// (9 Oct 2026), and a sentence from Wallet or with no app. Wallet and
+    /// no app read alike.
     /// On Wallet's short lines, `BankNotice`'s refusal phrases run first,
     /// line by line, and once there is an amount a bank's status line
     /// ("Payment received", "Low balance") is refused too (review, 8 Oct

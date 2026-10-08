@@ -85,8 +85,10 @@ TestFlight's feedback button. That is the most useful thing you can send us.
 Sortd can now read your bank app's purchase alerts, for banks that send Wallet no
 notification (some ANZ and CommBank cards do this).
 
-1. Got the shortcut before 9 October? Get it again from the setup page. The new one tells
-   Sortd which app each notification came from.
+1. Got the shortcut before 9 October? Delete the old one first: in Shortcuts, press and hold
+   Log Apple Pay in Sortd and tap Delete. Then get the new one from the setup page, turn both
+   automations on, and add your bank's app again. If you skip the delete, two automations run.
+   The new one tells Sortd which app each notification came from.
 
 2. Add your bank's app to the notification trigger. In Shortcuts, open the Sortd automation,
    tap + next to Wallet under "When I receive a notification" and add your bank's app. Turn

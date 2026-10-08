@@ -153,9 +153,16 @@ Review round 2, same day:
 **Which app sent it (9 Oct 2026).** The shortcut now also passes Notification › App to Sortd
 (new "Notification App" parameter on Log Wallet Tap; `site/apple-pay.shortcut` rebuilt and
 signed, the iOS 26 file unchanged). Whether iOS hands over the app's name or its bundle id is
-not known yet, so both work. Wallet ("Wallet", "com.apple.Passbook", anything with "wallet")
-is read by Wallet's reader with its line guards. Any other app is read as the bank's: by
-`BankNotice` only, so a terse line with no spend word ("Payment received · $120.00") is never
-a purchase, and a saved row is a bank row ("b") even from a short line. No app (a shortcut
-from before 9 Oct) keeps the old guess: a sentence is the bank's, short lines are Wallet's.
+not known yet, so both work. Wallet is matched by its exact name or bundle id only ("Wallet",
+"Apple Wallet", "Apple Pay", "com.apple.Passbook", "Passbook", and Wallet's display name in
+every language, read from the iOS 26.5 simulator's Passbook.app), never by "wallet" inside a
+name: "TNG eWallet" is a bank. Any other app is read as the bank's: by `BankNotice` only, so a
+terse line with no spend word ("Payment received · $120.00") is never a purchase, and a saved
+row is a bank row ("b") even from a short line. Wallet and no app (a shortcut from before 9
+Oct) read alike: a sentence goes to `BankNotice`, short lines to Wallet's reader and its line
+guards.
 The run log keeps the app's length only, and `apple_pay_run` gains `has_app`.
+In analytics, `money_in` is now rarer: a bank's "received" line with no money-in phrase is
+`not_purchase`. Round 3 also refuses payment networks on a line (Osko, PayNow, PayID, PayLah,
+BPAY, GIRO), rewards and rebates, direct debits, overseas fees, "authorisation of", "for
+verification" and "you earned 230 points".

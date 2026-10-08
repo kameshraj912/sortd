@@ -595,12 +595,17 @@ struct ApplePayOnlineNotificationTests {
     }
 
     /// From a bank's app, a terse line is never a purchase.
+    /// A short line that logs with no app (an old shortcut) logs nothing
+    /// from a bank's app: the app decides the reader (review round 3: the
+    /// old input here saved nothing either way, so it pinned nothing).
     @Test func aBanksTerseLineSavesNothing() async throws {
         let ctx = store(), b = book()
-        let r = try await notify("Payment received", nil, "$120.00", app: "CommBank", ctx: ctx, book: b)
-        #expect(r.transaction == nil)
-        #expect(r.dropped == .notAPurchase)
+        let fromBank = try await notify(nil, nil, "$5.50 at Seven Seeds", app: "CommBank", ctx: ctx, book: b)
+        #expect(fromBank.transaction == nil)
+        #expect(fromBank.dropped == .notAPurchase)
         #expect(try rows(ctx).isEmpty)
+        let noApp = try await notify(nil, nil, "$5.50 at Seven Seeds", app: "", ctx: store(), book: book())
+        #expect(noApp.transaction?.rawMerchant == "Seven Seeds")
     }
 
     @Test func aBanksSentenceIsABankRow() async throws {
@@ -645,6 +650,59 @@ struct ApplePayOnlineNotificationTests {
     @Test func aStatusLineFromWalletIsStillRefused() async throws {
         let ctx = store(), b = book()
         let r = try await notify("Low balance", nil, "$12.40", app: "Wallet", ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
+    }
+
+    // MARK: - Review round 3, 8 Oct 2026
+
+    /// Wallet is matched by its exact name or bundle id, never by "wallet"
+    /// inside another app's name: "TNG eWallet" is a money app.
+    @Test(arguments: ["TNG eWallet", "Wallet Co"])
+    func anAppWithWalletInItsNameIsABank(app: String) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("TNG eWallet", nil, "Payment received: $120.00 from TAN WEI MING", app: app, ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
+        #expect(WalletNotification(body: "x", app: app).source == .bank)
+    }
+
+    /// Wallet's name on a phone in another language is still Wallet.
+    @Test(arguments: ["Cartera", "Portefeuille", "钱包", "ウォレット", "Apple Pay", "com.apple.Passbook"])
+    func walletInAnotherLanguageIsWallet(app: String) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("NAB Visa Debit", "DoorDash", "A$23.40", app: app, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.tapOrigins == "n")
+    }
+
+    /// Shortcuts' own placeholder "App" is no app, but only for the app:
+    /// a shop called "App" is still a shop.
+    @Test func appIsAPlaceholderOnlyForTheApp() async throws {
+        #expect(WalletNotification(body: "x", app: "App").source == .unknown)
+        let ctx = store(), b = book()
+        let n = try await notify("NAB Visa Debit", "App", "A$4.99", ctx: ctx, book: b)
+        #expect(n.transaction?.rawMerchant == "App")
+        let tap = try await notify("", "", "", amount: "A$4.99", merchant: "App", card: "NAB Visa Debit",
+                                   ctx: store(), book: book())
+        #expect(tap.transaction?.rawMerchant == "App")
+    }
+
+    static let leftovers: [[String]] = [
+        ["Westpac", "Osko from SARAH LEE", "$45.00"],
+        ["UOB", "Reward", "S$10.00"],
+        ["", "", "Authorisation of $1.00 at UBER"],
+        ["", "", "Your UOB card was charged S$1.00 at APPLE.COM/BILL for verification"],
+        ["", "", "Rewards: you earned 230 points on your $23.40 purchase at DOORDASH"],
+        ["Westpac", "Direct debit", "$15.99 NETFLIX"],
+        ["NAB", "Overseas fee", "$0.92"],
+    ]
+
+    /// Wrong purchases the review found, with no app and from a bank's app.
+    @Test(arguments: leftovers, ["", "CommBank"])
+    func aBankNoticeTheReviewFoundSavesNothing(parts: [String], app: String) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify(parts[0], parts[1], parts[2], app: app, ctx: ctx, book: b)
         #expect(r.transaction == nil)
         #expect(try rows(ctx).isEmpty)
     }
