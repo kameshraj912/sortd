@@ -58,6 +58,48 @@ struct FreeAppTests {
         #expect(!CategoryBudgets.sentAlerts(limits).isEmpty, "expected an over-limit alert with no Pro purchased")
     }
 
+    /// The category limit check follows its own switch (`CategoryNudge.enabledKey`,
+    /// read from the `defaults` it is given), not the bills toggle
+    /// (`Reminders.enabledKey`, read from `.standard`). Same stand-in as above:
+    /// `sentAlerts` shows whether the alert fired.
+    @Test func categoryLimitCheckFollowsTheCategorySwitch() async throws {
+        let standardDefaults = UserDefaults.standard
+        let was = standardDefaults.object(forKey: Reminders.enabledKey)
+        defer {
+            if let was { standardDefaults.set(was, forKey: Reminders.enabledKey) }
+            else { standardDefaults.removeObject(forKey: Reminders.enabledKey) }
+        }
+        standardDefaults.set(true, forKey: Reminders.enabledKey)
+
+        let context = try store()
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 180, currency: Money.home,
+                                        card: .other, source: .email)
+        let txn = try TransactionLogger.log(purchase, in: context).transaction
+        let near = CategoryBudgets.alertKey(month: CategoryBudgets.monthKey(now), category: txn.category, threshold: .near)
+
+        // Switch off: no alert, even with the bills toggle on.
+        let off = UserDefaults(suiteName: "FreeAppTests-off-\(UUID().uuidString)")!
+        CategoryBudgets.set(200, for: txn.category, off)
+        off.set(false, forKey: CategoryNudge.enabledKey)
+        await Reminders.checkCategoryLimits([txn], now: now, defaults: off)
+        #expect(CategoryBudgets.sentAlerts(off).isEmpty, "the category switch was off")
+
+        // Switch on: the 80% alert is recorded.
+        let on = UserDefaults(suiteName: "FreeAppTests-on-\(UUID().uuidString)")!
+        CategoryBudgets.set(200, for: txn.category, on)
+        on.set(true, forKey: CategoryNudge.enabledKey)
+        await Reminders.checkCategoryLimits([txn], now: now, defaults: on)
+        #expect(CategoryBudgets.sentAlerts(on).contains(near))
+
+        // Bills toggle off does not stop it.
+        standardDefaults.set(false, forKey: Reminders.enabledKey)
+        let billsOff = UserDefaults(suiteName: "FreeAppTests-bills-\(UUID().uuidString)")!
+        CategoryBudgets.set(200, for: txn.category, billsOff)
+        await Reminders.checkCategoryLimits([txn], now: now, defaults: billsOff)
+        #expect(CategoryBudgets.sentAlerts(billsOff).contains(near), "the bills toggle should not gate this")
+    }
+
     // MARK: Upcoming bills, Siri
 
     /// `UpcomingBillsIntent.perform()` (`Spend/Intents/SpendQuestionIntents.swift:124`
