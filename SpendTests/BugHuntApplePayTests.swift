@@ -205,3 +205,143 @@ struct BugHuntApplePayTests {
         #expect(!TapQueue.enqueue(entry, into: [bad]))
     }
 }
+
+// MARK: - Bug hunt 8 Oct 2026 (onboarding-and-applepay)
+
+/// Bug hunt 8 Oct 2026, area onboarding-and-applepay. Each case fails on
+/// `hunt-20261008` and documents an unfixed bug; fixing one means removing
+/// its known-bug traits. Same shape as above: the real intent path
+/// (`LogWalletTapIntent.handle`), a pinned `now:`, an in-memory store and
+/// a card book of its own.
+@MainActor
+struct BugHuntApplePayHunt1008Tests {
+    private func store() -> ModelContext {
+        let container = try! ModelContainer(for: Transaction.self, MerchantRule.self, FXRate.self, ImportedRecord.self,
+                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        return ModelContext(container)
+    }
+    private func book() -> CardBook { CardBook(defaults: UserDefaults(suiteName: "hunt1008-applepay-\(UUID().uuidString)")!) }
+    private let now = Date(timeIntervalSince1970: 1_790_000_000)
+    private let day: TimeInterval = 86_400
+
+    private func rows(_ ctx: ModelContext) throws -> [Transaction] {
+        try ctx.fetch(FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\.date)]))
+    }
+
+    /// The Wallet tap trigger: Amount, Merchant and Card straight from the tap.
+    @discardableResult
+    private func tap(_ merchant: String, _ amount: String, card: String = "NAB Visa Debit",
+                     at seconds: TimeInterval, ctx: ModelContext, book: CardBook) async throws -> LogPurchaseIntent.Outcome {
+        try await LogWalletTapIntent.handle(nil, amount: amount, merchant: merchant, card: card,
+                                            in: ctx, book: book, now: now.addingTimeInterval(seconds))
+    }
+
+    /// The Notification trigger: Title, Subtitle, Body, tap fields blank.
+    @discardableResult
+    private func notified(_ title: String, _ subtitle: String, _ body: String, app: String? = nil,
+                          at seconds: TimeInterval, ctx: ModelContext, book: CardBook) async throws -> LogPurchaseIntent.Outcome {
+        try await LogWalletTapIntent.handle(nil, amount: "", merchant: "", card: "",
+                                            notificationTitle: title, notificationSubtitle: subtitle, notificationBody: body,
+                                            notificationApp: app, in: ctx, book: book, now: now.addingTimeInterval(seconds))
+    }
+
+    // MARK: - H1 A shop that starts with a number is dropped as a date
+
+    /// Wallet's shop line "7-ELEVEN 2034" (a chain with its store number,
+    /// as Wallet shows unknown merchants) matches `WalletTapText.looksLikeDate`'s
+    /// day-month-year shape and is thrown away, so an in-app payment at
+    /// 7-Eleven, 99 Ranch or 5 Guys is saved with no shop ("needs a check").
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug("looksLikeDate reads a number-word-number shop line (7-ELEVEN 2034) as a date"),
+          arguments: ["7-ELEVEN 2034", "99 Ranch 1234", "5 Guys 10"])
+    func aShopLineThatStartsWithANumberIsNotADate(shop: String) async throws {
+        let ctx = store(), b = book()
+        let r = try await notified("NAB Visa Debit", shop, "A$12.50", at: 0, ctx: ctx, book: b)
+        let t = try #require(r.transaction, "\(r.message)")
+        #expect(t.rawMerchant == shop, "the shop was dropped: saved as \(t.rawMerchant)")
+        #expect(!t.needsCheck)
+        #expect(t.amount == Decimal(string: "12.50"))
+    }
+
+    // MARK: - H2 A refund notice more than a week after the till refund
+
+    /// A till refund is taken off by the tap; the bank's refund notice
+    /// arrives 8 days later (refunds post in 5 to 10 business days).
+    /// `sameRefund` only looks back `notificationRefundWindow` (7 days), so
+    /// the notice is read as a new refund and `Refunds.markRefundedPurchase`
+    /// takes the next same-amount purchase at that shop off: a re-purchase
+    /// that was never refunded drops out of the total.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug("a bank refund notice 8 days after the till refund refunds a second, unrefunded purchase"))
+    func aRefundNoticeEightDaysLateDoesNotRefundTheRepurchase() async throws {
+        let ctx = store(), b = book()
+        try await tap("Coles", "A$45.00", at: 0, ctx: ctx, book: b)
+        try await tap("Coles", "-A$45.00", at: day, ctx: ctx, book: b)             // the till refund
+        let again = try await tap("Coles", "A$45.00", at: 2 * day, ctx: ctx, book: b)
+        let second = try #require(again.transaction)
+        #expect(!again.merged)
+        try await notified("CommBank", "", "Refund of A$45.00 from COLES.", at: 9 * day, ctx: ctx, book: b)
+        #expect(!second.refunded, "the bank's late report of the first refund took the re-purchase off")
+        #expect(try rows(ctx).filter { !$0.refunded }.count == 1)
+    }
+
+    // MARK: - H3 The health check counts as the first auto-logged purchase
+
+    /// "Check the Shortcut" logs a A$0.01 "Sortd Check" row through
+    /// `LogPurchaseIntent.handle`, which then fires the once-per-install
+    /// `activation_first_auto_purchase` event (`countsAsActivation` only
+    /// excludes the legacy "Sortd Test" merchant) and `apple_pay_tap_logged`
+    /// (`LogWalletTapIntent.handle`, same check). The person's real first
+    /// purchase is then never counted as the activation.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug("countsAsActivation treats the health check's 'Sortd Check' row as a real first purchase"))
+    func theHealthCheckIsNotTheFirstAutoLoggedPurchase() {
+        #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: ApplePayHealthCheck.merchant))
+    }
+
+    // MARK: - H4 A budget typed after an offline currency change
+
+    /// Home currency changed from AUD to SGD while offline: the A$1,000
+    /// budget is left as is (to convert next time), but the budget screen
+    /// now shows it as S$1,000 and the person types S$1,200. Back online,
+    /// `ensureConverted` still thinks the budget is in AUD and converts the
+    /// 1,200 to S$1,320.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug("a budget edited between an offline currency change and the retry is converted as the old currency"))
+    func aBudgetTypedAfterAnOfflineCurrencyChangeIsNotConvertedLater() async throws {
+        let ctx = store()
+        let d = UserDefaults(suiteName: "hunt1008-fx-\(UUID().uuidString)")!
+        d.set("AUD", forKey: FXService.convertedKey)
+        d.set("AUD", forKey: Money.homeKey)
+        d.set(1000.0, forKey: FXService.budgetKey)
+
+        await FXService.rebase(to: "SGD", in: ctx, defaults: d, rate: { _, _ in throw URLError(.notConnectedToInternet) })
+        #expect(d.string(forKey: Money.homeKey) == "SGD")
+        #expect(d.double(forKey: FXService.budgetKey) == 1000)
+        // The budget step (Run Setup Again) or Settings › Budget shows "S$1,000"; the person types 1200.
+        d.set(1200.0, forKey: FXService.budgetKey)
+
+        await FXService.ensureConverted(in: ctx, defaults: d, rate: { _, _ in 1.1 })
+        #expect(d.double(forKey: FXService.budgetKey) == 1200,
+                "a budget typed in SGD was converted as if it were AUD: \(d.double(forKey: FXService.budgetKey))")
+    }
+
+    // MARK: - H5 An unknown card with no card word becomes the shop
+
+    /// Wallet's notification is Title = card, Subtitle = shop, Body = amount.
+    /// A card the person has not added, named without a card word or digits
+    /// ("Monzo", "Wise", "Up", "Revolut"), is not recognised as a card, so
+    /// the parser takes the first leftover line, the title, as the shop:
+    /// a £4.50 coffee at Pret is saved at "Monzo".
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug("a notification title naming an unknown card with no card word is saved as the shop"))
+    func anUnknownCardTitleIsNotTheShop() async throws {
+        let ctx = store(), b = book()
+        b.upsert(CardInfo(name: "NAB Visa Debit", shortName: "NAB", bank: "NAB", walletWords: ["nab"]))
+        let r = try await notified("Monzo", "Pret A Manger", "£4.50", at: 0, ctx: ctx, book: b)
+        let t = try #require(r.transaction, "\(r.message)")
+        #expect(t.rawMerchant == "Pret A Manger", "saved at \(t.rawMerchant)")
+        #expect(t.amount == Decimal(string: "4.50"))
+        #expect(t.currencyCode == "GBP")
+    }
+}

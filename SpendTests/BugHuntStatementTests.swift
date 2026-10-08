@@ -602,3 +602,236 @@ struct BugHuntStatement1003Tests {
         """) == "Pastel Bakery")
     }
 }
+
+/// Bug hunt, 8 Oct 2026: statement import. New findings only; the 26 Sep and
+/// 3 Oct ones above are not repeated. Each test fails today and runs only
+/// with `scripts/test.sh --known-bugs`. The parser cases were reproduced by
+/// compiling `StatementImport.swift` (save functions removed) with `swiftc`
+/// and feeding it the same input.
+@MainActor
+struct BugHuntStatement1008Tests {
+
+    private func date(_ ymd: String, _ hm: String = "12:00", zone: TimeZone = .current) -> Date {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        f.timeZone = zone
+        return f.date(from: "\(ymd) \(hm)")!
+    }
+
+    private func ymd(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
+        return f.string(from: date)
+    }
+
+    private func money(_ s: String) -> Decimal { Decimal(string: s)! }
+
+    // MARK: 1. Summary lines in a PDF statement are purchases
+
+    /// `parse(text:)` keeps any line with a date and a number, and only the
+    /// screenshot fallback skips summary lines (`isSummaryLine`). A PDF
+    /// credit-card statement's "Statement Period", "Closing Balance" and
+    /// "Minimum Payment Due" lines are listed as ticked purchases of $30,
+    /// $1,234.56 and $35.00.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-1", "PDF summary lines (period, closing balance, minimum payment) are read as purchases"))
+    func pdfSummaryLinesAreNotPurchases() {
+        let pdf = """
+        Statement Period 01/09/2026 - 30/09/2026
+        Closing Balance as at 30/09/2026 $1,234.56
+        Payment Due Date 25/10/2026 Minimum Payment Due $35.00
+        02/09/2026 WOOLWORTHS 3342 58.30
+        03/09/2026 SEVEN SEEDS 5.50
+        """
+        #expect(StatementImport.reader(for: pdf) == .text)
+        let spend = StatementImport.parse(statement: pdf).rows.filter { $0.kind == .spend }
+        #expect(spend.count == 2)
+        #expect(spend.reduce(Decimal(0)) { $0 + $1.amount } == money("63.80"))
+        #expect(!spend.contains { $0.detail.lowercased().contains("balance") })
+        #expect(!spend.contains { $0.detail.lowercased().contains("minimum payment") })
+        #expect(!spend.contains { $0.detail.lowercased().contains("statement period") })
+    }
+
+    // MARK: 2. Quoted thousands send a CSV to the text reader
+
+    /// `reader(for:)` counts every comma on a line, including the ones inside
+    /// quoted cells ("1,141.70"). A Debit/Credit CSV whose balance crosses
+    /// $1,000 has uneven counts, so it goes to the free-text reader, where an
+    /// unsigned number is spending: the $3,200 salary in the Credit column is
+    /// a ticked purchase and every shop name carries commas and the balance.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-2", "reader(for:) counts commas inside quotes; a CSV with quoted thousands is read as text"))
+    func aCSVWithQuotedThousandsIsStillACSV() {
+        let csv = """
+        Date,Description,Debit,Credit,Balance
+        01/09/2026,WOOLWORTHS 3342,58.30,,"1,141.70"
+        02/09/2026,SEVEN SEEDS,5.50,,"1,136.20"
+        03/09/2026,RENT PAYMENT,"1,000.00",,136.20
+        04/09/2026,KMART BURWOOD,22.00,,114.20
+        05/09/2026,COLES CARLTON,40.00,,74.20
+        06/09/2026,SALARY ACME PTY LTD,,"3,200.00","3,274.20"
+        07/09/2026,MYKI TOPUP,20.00,,"3,254.20"
+        08/09/2026,ALDI BRUNSWICK,30.00,,"3,224.20"
+        09/09/2026,BP CARLTON,60.00,,"3,164.20"
+        """
+        #expect(StatementImport.reader(for: csv) == .csv)
+        let rows = StatementImport.parse(statement: csv).rows
+        let spend = rows.filter { $0.kind == .spend }
+        #expect(!spend.contains { $0.detail.contains("SALARY") })
+        #expect(spend.reduce(Decimal(0)) { $0 + $1.amount } == money("1235.80"))
+        #expect(rows.first?.detail == "WOOLWORTHS 3342")
+    }
+
+    // MARK: 3. Decimal commas in a PDF or screenshot
+
+    /// The ";" CSV fix (S3) taught `signedAmount` decimal commas, but
+    /// `lastAmount` (PDF text and screenshots) still only knows "." for
+    /// cents. "CARREFOUR 12,50" is booked as 50.00, "-8,20" as 8.00 and
+    /// "1.234,50" as 50.00.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-3", "lastAmount reads 12,50 as 50 and -8,20 as 8 in PDF and screenshot text"))
+    func decimalCommasInTextAreRead() {
+        let rows = StatementImport.rows(fromText: """
+        01/09/2026 CARREFOUR PARIS 12,50
+        02/09/2026 MONOPRIX -8,20
+        03/09/2026 LIDL BERLIN 1.234,50
+        """)
+        #expect(rows.count == 3)
+        #expect(rows.map(\.amount) == [money("12.50"), money("8.20"), money("1234.50")])
+        #expect(rows.allSatisfy { !$0.detail.contains(",") })
+    }
+
+    // MARK: 4. A Currency column is ignored
+
+    /// Revolut and Wise export the amount and its currency in separate
+    /// columns. `layout(for:)` has no currency column, so a EUR card payment
+    /// has no currency and `save` books it in the home currency: EUR 12.50
+    /// becomes A$12.50 (or S$12.50), one for one.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-4", "a CSV Currency column is ignored; foreign rows are booked in the home currency"))
+    func aCurrencyColumnIsRead() {
+        let revolut = """
+        Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
+        CARD_PAYMENT,Current,2026-09-01 10:00:00,2026-09-02 10:00:00,Carrefour,-12.50,0.00,EUR,COMPLETED,100.00
+        CARD_PAYMENT,Current,2026-09-03 18:30:00,2026-09-04 09:00:00,Tesco,-8.00,0.00,GBP,COMPLETED,50.00
+        """
+        let rows = StatementImport.rows(fromCSV: revolut)
+        #expect(rows.count == 2)
+        #expect(rows.first?.amount == money("12.50"))
+        #expect(rows.first?.currency == "EUR")
+        #expect(rows.last?.currency == "GBP")
+    }
+
+    // MARK: 5. A number at the start of a shop name becomes the year
+
+    /// On a statement with year-less dates ("27 Sep"), a shop name starting
+    /// with digits is read as the year. "29 Sep 1300 SMILES" fails as year
+    /// 1300, then the "Sep 13" + "00" pattern dates it 13 Sep 2000;
+    /// "30 Sep 99 BIKES" is dated 30 Sep 1999. Both fall out of every month's
+    /// total.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-5", "a year-less line whose shop starts with digits takes them as the year"))
+    func aShopNameStartingWithDigitsIsNotTheYear() {
+        let rows = StatementImport.rows(fromText: """
+        27 Sep WOOLWORTHS 3342 58.30
+        29 Sep 1300 SMILES DENTAL 120.00
+        30 Sep 99 BIKES RICHMOND 45.00
+        """, today: date("2026-10-03"))
+        #expect(rows.count == 3)
+        #expect(rows.map { ymd($0.date) } == ["2026-09-27", "2026-09-29", "2026-09-30"])
+    }
+
+    // MARK: 6. "2 hours ago" in a Wallet list
+
+    /// For a purchase made today, Wallet's list shows how long ago it was
+    /// (from memory; no real Wallet screenshot is in the repo). In
+    /// `groupedByDay` that line is not a day, and `lastAmount` reads the "2"
+    /// as money: a ticked $2.00 purchase called "hours ago", and today's
+    /// coffee is filed under the next day line, yesterday.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-6", "Wallet's '2 hours ago' is read as a $2 purchase and today's row takes yesterday's date"))
+    func aWalletRowFromTodayIsReadAsToday() {
+        let rows = StatementImport.rows(fromText: """
+        Latest Transactions
+        Seven Seeds Coffee $5.50
+        Carlton VIC
+        2 hours ago
+        Woolworths $58.30
+        Richmond VIC
+        Yesterday
+        """, today: date("2026-10-03", "15:00"))
+        #expect(rows.map(\.detail) == ["Seven Seeds Coffee", "Woolworths"])
+        #expect(rows.map(\.amount) == [money("5.50"), money("58.30")])
+        #expect(rows.first.map { ymd($0.date) } == "2026-10-03")
+    }
+
+    // MARK: 7. Credits in a PDF statement's Credit column
+
+    /// A PDF statement with Debit, Credit and Balance columns loses the
+    /// columns in its text. `lastAmount` treats an amount with no sign as
+    /// spending, so the salary and the JB Hi-Fi refund are ticked purchases,
+    /// though the balance on the same line goes up. The balance is also left
+    /// in every shop name. The right rule is a design call (the balance
+    /// movement says which way the money went).
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-7", "a PDF credit with no CR or + is a purchase even when the balance goes up"))
+    func aPDFCreditIsNotAPurchase() {
+        let rows = StatementImport.rows(fromText: """
+        01 Sep 2026 OPENING BALANCE $2,451.70 CR
+        02 Sep 2026 WOOLWORTHS 3342 58.30 $2,393.40 CR
+        03 Sep 2026 SALARY ACME PTY LTD 3,200.00 $5,593.40 CR
+        04 Sep 2026 SEVEN SEEDS 5.50 $5,587.90 CR
+        05 Sep 2026 REFUND JB HI-FI 199.00 $5,786.90 CR
+        """)
+        let spend = rows.filter { $0.kind == .spend }
+        #expect(spend.map(\.amount) == [money("58.30"), money("5.50")])
+        #expect(!spend.contains { $0.detail.contains("SALARY") || $0.detail.contains("REFUND") })
+        #expect(spend.allSatisfy { !$0.detail.contains("$") })
+    }
+
+    // MARK: 8. Re-importing after a long flight
+
+    /// Statement rows are saved at noon on the phone's clock, and a re-import
+    /// is only a re-send on the same calendar day. Imported in Melbourne,
+    /// then again in New York, noon 1 Sep AEST is 31 Aug in New York, so
+    /// every row of the overlapping statement is added a second time.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-8", "a statement re-imported after a 14-hour time-zone move doubles every row"))
+    func reimportingInAnotherTimeZoneDoesNotDouble() throws {
+        let melbourne = try #require(TimeZone(identifier: "Australia/Melbourne"))
+        let newYork = try #require(TimeZone(identifier: "America/New_York"))
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = newYork
+        var mel = Calendar(identifier: .gregorian)
+        mel.timeZone = melbourne
+
+        let csv = "Date,Description,Amount\n01/09/2026,SEVEN SEEDS COFFEE CARLTON,-5.50"
+        let first = try #require(StatementImport.rows(fromCSV: csv, calendar: mel).first)
+        let again = try #require(StatementImport.rows(fromCSV: csv, calendar: ny).first)
+
+        let saved = Deduper.Candidate(date: first.date, merchant: first.detail, amount: first.amount,
+                                      currency: "AUD", card: .nab, source: .csv, seenIn: [.csv])
+        let reimport = Deduper.Candidate(date: again.date, merchant: again.detail, amount: again.amount,
+                                         currency: "AUD", card: .nab, source: .csv)
+        #expect(Deduper.match(reimport, in: [saved], calendar: ny) == 0)
+    }
+
+    // MARK: 9. US card statements with month/day dates
+
+    /// US card statements print "09/28" with no year. `firstDate` needs a
+    /// year for a numeric date, so no line has a date, the day-header
+    /// fallback finds none either, and the import says "No purchases found"
+    /// with nothing counted as unreadable.
+    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
+          .bug(id: "hunt-1008-stmt-9", "numeric dates with no year (09/28) are never read; a US card statement imports nothing"))
+    func monthDayDatesWithNoYearAreRead() {
+        let parsed = StatementImport.parse(text: """
+        09/28 STARBUCKS STORE 12345 SEATTLE WA 5.75
+        09/29 AMAZON.COM 24.99
+        09/30 SHELL OIL 57444 45.10
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.count == 3)
+        #expect(parsed.rows.map { ymd($0.date) } == ["2026-09-28", "2026-09-29", "2026-09-30"])
+    }
+}
