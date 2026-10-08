@@ -12,7 +12,7 @@ nonisolated enum TapField {
     /// Case-insensitive: Shortcuts' own capitalisation is not guaranteed to
     /// survive every code path that touches this text.
     private static let placeholders: Set<String> = [
-        "amount", "merchant", "card or pass", "name", "title", "subtitle", "body",
+        "amount", "merchant", "card or pass", "name", "title", "subtitle", "body", "app",
         "(null)", "nil", "\"\"",
     ]
 
@@ -52,6 +52,25 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     var title: String?
     var subtitle: String?
     var body: String?
+    /// Notification › App: which app sent it (9 Oct 2026). Blank from a
+    /// shortcut made before then. Whether iOS hands over the app's name or
+    /// its bundle id is not known yet, so `source` takes either.
+    var app: String? = nil
+
+    /// Which app sent it, as far as `app` says.
+    enum Source: Equatable { case wallet, bank, unknown }
+
+    /// Blank: unknown (an old shortcut). Wallet by its name or bundle id
+    /// ("Wallet", "com.apple.Passbook"). Any other app: one the person
+    /// added to the trigger, so their bank's.
+    var source: Source {
+        let name = TapField.normalize(app).lowercased()
+        if name.isEmpty { return .unknown }
+        if ["wallet", "apple wallet", "com.apple.passbook", "passbook"].contains(name) || name.contains("wallet") {
+            return .wallet
+        }
+        return .bank
+    }
 
     var isPresent: Bool { !TapField.isBlank(title) || !TapField.isBlank(subtitle) || !TapField.isBlank(body) }
 
@@ -69,12 +88,19 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// run log keeps.
     var shape: String {
         "title \(TapField.shape(title)) · subtitle \(TapField.shape(subtitle)) · body \(TapField.shape(body))"
+            + " · app \(TapField.shape(app))"
     }
 
-    /// The text reads as a bank app's sentence, not Wallet's short lines
-    /// (`BankNotice.isSentence`): the person added their bank's app to the
-    /// shortcut (8 Oct 2026). Its run is logged as a bank run (`TapTrigger.bank`).
-    var isBankNotice: Bool { BankNotice.isSentence(joined) }
+    /// Read by the bank's reader (`BankNotice`): sent by a bank's app, or,
+    /// with no app (an old shortcut), text that reads as a bank's sentence.
+    /// Its run is a bank run (`TapTrigger.bank`, run log kind "bank").
+    var isBankNotice: Bool {
+        switch source {
+        case .bank: true
+        case .wallet: false
+        case .unknown: BankNotice.isSentence(joined)
+        }
+    }
 
     /// What one notification says: Wallet's short lines, or a bank app's
     /// sentence (`BankNotice`, 8 Oct 2026).
@@ -107,7 +133,9 @@ nonisolated struct WalletNotification: Equatable, Sendable {
 
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
-    /// what is left. A bank app's sentence goes to `BankNotice` instead.
+    /// what is left. A bank's notification goes to `BankNotice` instead:
+    /// one from a bank's app always, even a short line (9 Oct 2026), and
+    /// with no app a sentence. Wallet's own is never read as a bank's.
     /// On Wallet's short lines, `BankNotice`'s refusal phrases run first,
     /// line by line, and once there is an amount a bank's status line
     /// ("Payment received", "Low balance") is refused too (review, 8 Oct
@@ -117,7 +145,7 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     @MainActor
     func read(isKnownCard: (String) -> Bool = { _ in false }, bankNames: Set<String> = []) -> Reading {
         let text = joined
-        if BankNotice.isSentence(text) { return BankNotice.read(text, isKnownCard: isKnownCard) }
+        if isBankNotice { return BankNotice.read(text, isKnownCard: isKnownCard) }
         if let refused = BankNotice.lineRefusal(text) { return refused }
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
@@ -182,6 +210,11 @@ struct LogWalletTapIntent: AppIntent {
     @Parameter(title: "Notification Body", description: "The Wallet notification's body.")
     var notificationBody: String?
 
+    /// Which app sent the notification (9 Oct 2026): Wallet's is read as
+    /// Wallet's, any other app's as a bank's.
+    @Parameter(title: "Notification App", description: "The app that sent the notification. Set it to Notification › App.")
+    var notificationApp: String?
+
     static var parameterSummary: some ParameterSummary {
         Summary("Log \(\.$amount) at \(\.$merchant) in Sortd") {
             \.$card
@@ -189,6 +222,7 @@ struct LogWalletTapIntent: AppIntent {
             \.$notificationTitle
             \.$notificationSubtitle
             \.$notificationBody
+            \.$notificationApp
         }
     }
 
@@ -197,7 +231,8 @@ struct LogWalletTapIntent: AppIntent {
         let r = await Self.performAndLog(transaction: transaction, amount: amount, merchant: merchant, card: card,
                                          notification: WalletNotification(title: notificationTitle,
                                                                           subtitle: notificationSubtitle,
-                                                                          body: notificationBody))
+                                                                          body: notificationBody,
+                                                                          app: notificationApp))
         return .result(dialog: IntentDialog(stringLiteral: r.message))
     }
 
@@ -263,6 +298,7 @@ struct LogWalletTapIntent: AppIntent {
                                             notificationTitle: notification.title,
                                             notificationSubtitle: notification.subtitle,
                                             notificationBody: notification.body,
+                                            notificationApp: notification.app,
                                             in: container.mainContext, book: .shared, now: now)
         } catch {
             // `handle` never actually throws (its own do/catch queues
@@ -315,11 +351,12 @@ struct LogWalletTapIntent: AppIntent {
     @MainActor
     static func handle(_ text: String?, amount: String? = nil, merchant: String? = nil, card: String? = nil,
                        notificationTitle: String? = nil, notificationSubtitle: String? = nil,
-                       notificationBody: String? = nil,
+                       notificationBody: String? = nil, notificationApp: String? = nil,
                        in context: ModelContext, book: CardBook,
                        now: Date = .now, debugForceSaveFailure: Bool = false,
                        queueURL: URL? = nil) async throws -> LogPurchaseIntent.Outcome {
-        let notification = WalletNotification(title: notificationTitle, subtitle: notificationSubtitle, body: notificationBody)
+        let notification = WalletNotification(title: notificationTitle, subtitle: notificationSubtitle, body: notificationBody,
+                                              app: notificationApp)
         let record = Self.record(transaction: text, amount: amount, merchant: merchant, card: card,
                                  notification: notification, at: now)
         let result: LogPurchaseIntent.Outcome
@@ -387,10 +424,11 @@ struct LogWalletTapIntent: AppIntent {
     }
 
     /// The `apple_pay_run` properties for one run: what kind it was ("tap",
-    /// "notification" for Wallet's, "bank" for a bank app's sentence), what
+    /// "notification" for Wallet's, "bank" for one from a bank's app or read as a bank's sentence), what
     /// came of it, and which fields arrived. Fixed words and booleans only,
     /// never an amount, a shop or a card name. The `has_*` flags are the
-    /// fields as they arrived, before any parsing; `has_text` is the old
+    /// fields as they arrived, before any parsing; `has_app` is Notification ›
+    /// App (9 Oct 2026); `has_text` is the old
     /// free-text `transaction` field.
     @MainActor
     static func runEvent(outcome: LogPurchaseIntent.Outcome, transaction: String?, amount: String?, merchant: String?,
@@ -422,6 +460,7 @@ struct LogWalletTapIntent: AppIntent {
             "has_amount": .bool(!TapField.isBlank(amount)),
             "has_shop": .bool(!TapField.isBlank(merchant)),
             "has_card": .bool(!TapField.isBlank(card)),
+            "has_app": .bool(!TapField.isBlank(notification.app)),
             "has_title": .bool(!TapField.isBlank(notification.title)),
             "has_subtitle": .bool(!TapField.isBlank(notification.subtitle)),
             "has_body": .bool(!TapField.isBlank(notification.body)),

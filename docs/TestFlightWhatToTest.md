@@ -79,3 +79,19 @@ This build is for iPhones on iOS 26. Setup there was too hard, and people got st
 If you are on iOS 26 and step 3 still beats you, record your screen and send it with
 TestFlight's feedback button. That is the most useful thing you can send us.
 
+
+## What to Test (next build, bank app notifications, 9 Oct 2026)
+
+Sortd can now read your bank app's purchase alerts, for banks that send Wallet no
+notification (some ANZ and CommBank cards do this).
+
+1. Got the shortcut before 9 October? Get it again from the setup page. The new one tells
+   Sortd which app each notification came from.
+
+2. Add your bank's app to the notification trigger. In Shortcuts, open the Sortd automation,
+   tap + next to Wallet under "When I receive a notification" and add your bank's app. Turn
+   on purchase alerts in that app. Then pay for something in an app or on a website. Did it
+   show up once, with the right shop and amount?
+
+3. Your bank also sends balances, codes and money-in alerts. None of those should appear in
+   Activity. If one does, send a screenshot of the alert with TestFlight's feedback button.

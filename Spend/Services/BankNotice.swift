@@ -232,12 +232,6 @@ nonisolated enum BankNotice {
 
     // MARK: - Reading
 
-    /// Money coming in that `refusal` leaves alone because Wallet's short
-    /// lines could carry it. A bank's sentence can't: a bare "received" is
-    /// money in, and so is a bare "deposit" with no spend word (paying a
-    /// booking deposit is spending).
-    private static let receivedPattern = #"\breceived\b"#
-    private static let depositPattern = #"\bdeposit\b"#
     /// Words that say money left the account. Not "spend": that is an
     /// offer's word ("Spend $50 and get 10% back").
     private static let spendPattern =
@@ -249,7 +243,9 @@ nonisolated enum BankNotice {
         if let refused = refusal(text) { return refused }
         let spend = has(spendPattern, in: text)
         let refund = has(WalletNotification.refundPattern, in: text)
-        if !refund, has(receivedPattern, in: text) || (!spend && has(depositPattern, in: text)) { return .moneyIn }
+        // No spend word is not a purchase: "Payment received · $120.00"
+        // from a bank's app (9 Oct 2026; it used to read as money in, which
+        // also saved nothing).
         guard refund || spend, let amount = WalletTapText.money(in: text),
               let value = AmountParser.parse(amount)?.amount, value > 0 else { return .notAPurchase }
         // Two amounts are not one purchase ("$23.40 at DOORDASH and $5.00

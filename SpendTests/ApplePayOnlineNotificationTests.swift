@@ -29,11 +29,12 @@ struct ApplePayOnlineNotificationTests {
     /// sends an unset variable, unless a test says otherwise.
     @discardableResult
     private func notify(_ title: String?, _ subtitle: String?, _ body: String?,
-                        amount: String? = "", merchant: String? = "", card: String? = "",
+                        amount: String? = "", merchant: String? = "", card: String? = "", app: String? = nil,
                         ctx: ModelContext, book: CardBook, at date: Date? = nil) async throws -> LogPurchaseIntent.Outcome {
         try await LogWalletTapIntent.handle(nil, amount: amount, merchant: merchant, card: card,
                                             notificationTitle: title, notificationSubtitle: subtitle,
-                                            notificationBody: body, in: ctx, book: book, now: date ?? now)
+                                            notificationBody: body, notificationApp: app,
+                                            in: ctx, book: book, now: date ?? now)
     }
 
     // MARK: - Title, Subtitle and Body in any order
@@ -578,6 +579,74 @@ struct ApplePayOnlineNotificationTests {
         let t = try #require(r.transaction)
         #expect(t.rawMerchant == shop)
         #expect(t.amount == 20)
+    }
+
+    // MARK: - Which app sent it (9 Oct 2026)
+
+    /// The shortcut passes Notification › App. Its run-time form (name or
+    /// bundle id) is not known yet, so both are tried.
+    @Test(arguments: ["Wallet", "com.apple.Passbook"])
+    func walletsOwnNotificationIsAWalletRow(app: String) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("NAB Visa Debit", "DoorDash", "A$23.40", app: app, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.rawMerchant == "DoorDash")
+        #expect(t.tapOrigins == "n")
+    }
+
+    /// From a bank's app, a terse line is never a purchase.
+    @Test func aBanksTerseLineSavesNothing() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("Payment received", nil, "$120.00", app: "CommBank", ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(r.dropped == .notAPurchase)
+        #expect(try rows(ctx).isEmpty)
+    }
+
+    @Test func aBanksSentenceIsABankRow() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify(nil, nil, bankSentence, app: "CommBank", ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.tapOrigins == "b")
+        let event = LogWalletTapIntent.runEvent(outcome: r, transaction: nil, amount: "", merchant: "", card: "",
+                                                notification: WalletNotification(body: bankSentence, app: "CommBank"))
+        guard case .string(let kind)? = event["kind"] else { Issue.record("no kind"); return }
+        #expect(kind == "bank")
+    }
+
+    /// From a bank's app, Wallet's short shape with no spend word is not a
+    /// purchase either.
+    @Test func aBanksShortLineWithNoSpendWordSavesNothing() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify(nil, nil, "$23.40 at DOORDASH", app: "ANZ", ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
+    }
+
+    /// No app (a shortcut from before 9 Oct 2026): exactly the old reading.
+    @Test func noAppKeepsTheOldReading() async throws {
+        let ctx = store(), b = book()
+        let wallet = try await notify("NAB Visa Debit", "DoorDash", "A$23.40", app: "", ctx: ctx, book: b)
+        #expect(wallet.transaction?.tapOrigins == "n")
+        let terse = try await notify("Payment received", nil, "$120.00", app: "", ctx: ctx, book: b,
+                                     at: now.addingTimeInterval(3600))
+        #expect(terse.transaction == nil)
+        let sentence = try await notify(nil, nil, "You spent $9.00 at KMART with your card ending 4821.", app: "",
+                                        ctx: ctx, book: b, at: now.addingTimeInterval(7200))
+        #expect(sentence.transaction?.tapOrigins == "b")
+        let short = try await notify(nil, nil, "$12.00 at COLES", app: "", ctx: ctx, book: b,
+                                     at: now.addingTimeInterval(10_800))
+        #expect(short.transaction?.rawMerchant == "COLES")
+        #expect(short.transaction?.tapOrigins == "n")
+    }
+
+    /// From Wallet, the line guards still run: a bank's status line that
+    /// somehow comes through Wallet is refused.
+    @Test func aStatusLineFromWalletIsStillRefused() async throws {
+        let ctx = store(), b = book()
+        let r = try await notify("Low balance", nil, "$12.40", app: "Wallet", ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
     }
 }
 

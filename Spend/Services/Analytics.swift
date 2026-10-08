@@ -43,7 +43,7 @@ final class Analytics {
         /// no_amount|not_completed|money_in|not_purchase (a bank app's
         /// notification that is not a purchase)|refund|health_check|queued|
         /// not_saved, and `has_amount`/`has_shop`/`has_card`/`has_title`/
-        /// `has_subtitle`/`has_body`/`has_text` say which fields arrived.
+        /// `has_subtitle`/`has_body`/`has_app`/`has_text` say which fields arrived.
         /// Never an amount, a shop or a card name
         /// (`LogWalletTapIntent.runEvent`).
         case applePayRun = "apple_pay_run"

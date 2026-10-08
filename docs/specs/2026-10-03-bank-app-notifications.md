@@ -149,3 +149,13 @@ Review round 2, same day:
   counts only under a bank's title: "Myki · Top up · A$20.00" is a purchase.
 - **Shop names.** "is", "in", "and", "of" end a shop's name only in lower case, and "balance"
   only before an amount: "The Balance Yoga Studio", "Bread In Common" stay whole.
+
+**Which app sent it (9 Oct 2026).** The shortcut now also passes Notification › App to Sortd
+(new "Notification App" parameter on Log Wallet Tap; `site/apple-pay.shortcut` rebuilt and
+signed, the iOS 26 file unchanged). Whether iOS hands over the app's name or its bundle id is
+not known yet, so both work. Wallet ("Wallet", "com.apple.Passbook", anything with "wallet")
+is read by Wallet's reader with its line guards. Any other app is read as the bank's: by
+`BankNotice` only, so a terse line with no spend word ("Payment received · $120.00") is never
+a purchase, and a saved row is a bank row ("b") even from a short line. No app (a shortcut
+from before 9 Oct) keeps the old guess: a sentence is the bank's, short lines are Wallet's.
+The run log keeps the app's length only, and `apple_pay_run` gains `has_app`.
