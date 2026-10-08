@@ -224,4 +224,35 @@ struct BankNoticeTests {
         #expect(BankNotice.read("DOORDASH refunded $5.00 to your card ending 4821")
                 == .payment(amount: "-$5.00", merchant: "DOORDASH", card: "4821"))
     }
+
+    // MARK: - Review round 2, 8 Oct 2026
+
+    @Test(arguments: [
+        "Your payment of $89.00 to TELSTRA will be made tomorrow",
+        "Your $15.99 payment to NETFLIX is coming up on 12 Oct",
+        "Heads up: a payment of $15.99 to NETFLIX goes out tomorrow",
+        "Confirm your payment of €31.80 at UBER",
+        "Your card payment of S$45.00 to SHOPEE requires authentication",
+        "Your transaction of S$80.00 at ZARA was voided",
+        "Payment to Amazon of €23.40 was reverted",
+        "You've paid $500.00 to ANZ Credit Card ending 4821",
+        "You paid $400.00 to NAB Low Rate Card",
+    ])
+    func paymentsToComeUndoneOrToYourOwnCardAreNotAPurchase(_ text: String) {
+        #expect(BankNotice.read(text) == .notAPurchase)
+    }
+
+    /// "in", "is", "and", "of" and "balance" end a shop's name only as
+    /// sentence words, never inside the name.
+    @Test(arguments: [
+        ("You spent $30.00 at The Balance Yoga Studio", "The Balance Yoga Studio"),
+        ("Purchase of $12.00 at Bread In Common", "Bread In Common"),
+        ("Purchase of $8.00 at House Of Pho", "House Of Pho"),
+        ("You spent $5.50 at Starbucks and earned 4 points", "Starbucks"),
+        ("Purchase of $9.00 at KMART of Carlton", "KMART"),
+    ])
+    func sentenceWordsEndTheShopButNamesKeepTheirWords(_ text: String, _ shop: String) {
+        #expect(payment(text)?.merchant == shop)
+    }
 }
+

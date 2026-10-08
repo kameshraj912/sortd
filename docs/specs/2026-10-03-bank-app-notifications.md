@@ -132,3 +132,20 @@ Review fixes, same day:
 - A card named only by the bank counts only when one saved card fits it.
 - The run log's `kind` is `bank` for a bank sentence. Purchase History says "Bank
   notification" or "Wallet notification" for a row no tap reported.
+
+Review round 2, same day:
+
+- **Phrases and bare words.** Refusal phrases ("available balance", "is pending", "interest
+  paid", "was cancelled", "salary credited", "will be made", "confirm your") run on every
+  notification, Wallet's short lines one line at a time, never across a line break. Bare words
+  ("pending", "interest", "offer", "win", "scheduled", "hold", "cancelled", "salary",
+  "blocked", "upcoming", "coming up", "goes out", "requires", "voided", "reverted",
+  "authorisation", "$25.00 interest", "to … Card") run only on a bank's sentence, so shops like
+  "The Pending Co", "Interest Cafe" and "Hold On Pizza" still log from Wallet's lines.
+- **A bank's status on Wallet's lines.** Once Wallet's reader has an amount, it refuses when a
+  line is only a bank status ("Payment received", "Money in", "Low balance", "Fee charged",
+  "Hold placed", "Salary"), when there are two clear amounts, or when the title is just a
+  bank's name and no line under it could be a shop ("YouTrip · Top up successful"). "Top up"
+  counts only under a bank's title: "Myki · Top up · A$20.00" is a purchase.
+- **Shop names.** "is", "in", "and", "of" end a shop's name only in lower case, and "balance"
+  only before an amount: "The Balance Yoga Studio", "Bread In Common" stay whole.

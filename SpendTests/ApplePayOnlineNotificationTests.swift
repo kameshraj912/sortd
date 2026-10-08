@@ -524,4 +524,60 @@ struct ApplePayOnlineNotificationTests {
         #expect(TransactionDetailView.historyLine(source: .tap, tapOrigins: nil)
                 == .init(title: "Apple Pay tap", detail: "Logged the moment you paid"))
     }
+
+    // MARK: - Review round 2, 8 Oct 2026
+
+    /// A bank's terse lines, not sentences: none is a purchase.
+    @Test(arguments: [
+        ["ANZ", "Payment received", "$120.00"],
+        ["CommBank", "Money in", "$250.00 from J SMITH"],
+        ["NAB", "Incoming payment", "$1,500.00"],
+        ["UOB", "Incoming PayNow", "S$88.00"],
+        ["DBS", "PayNow received", "S$50.00"],
+        ["YouTrip", "Top up successful", "S$200.00"],
+        ["Revolut", "Top-up", "€100.00"],
+        ["Wise", "Money added", "100 EUR"],
+        ["Westpac", "Low balance", "$12.40"],
+        ["DBS", "Bal", "S$1,204.11"],
+        ["CommBank", "Interest", "$2.11"],
+        ["ANZ", "Fee charged", "$5.00"],
+        ["CommBank", "Spending this week", "$412.30"],
+        ["Revolut", "Weekly spend", "£60.00"],
+        ["CommBank", "Transfer sent", "$300.00 to Saver"],
+        ["ANZ", "Card repayment", "$500.00"],
+        ["ANZ", "Authorisation", "$1.00 UBER"],
+        ["NAB", "Hold placed", "$150.00 HILTON"],
+        ["Westpac", "Reminder", "Telstra $89.00 tomorrow"],
+        ["CommBank", "Upcoming", "NETFLIX $15.99"],
+        ["Revolut", "Payment reverted", "€23.40 Amazon"],
+        ["CommBank", "Transaction voided", "$80.00 ZARA"],
+        ["", "", "$300.00 moved to NetBank Saver"],
+        ["", "", "You exchanged £100.00 to €115.20"],
+        ["", "", "You exchanged S$100.00 to ¥11,000"],
+    ])
+    func aTerseBankLineIsNotAPurchase(_ parts: [String]) async throws {
+        let ctx = store(), b = book()
+        let r = try await notify(parts[0], parts[1], parts[2], ctx: ctx, book: b)
+        #expect(r.transaction == nil)
+        #expect(try rows(ctx).isEmpty)
+    }
+
+    static let wordyShops = ["The Pending Co", "Interest Cafe", "Offer Bar", "Win Win Noodles", "Scheduled Coffee",
+                             "Hold On Pizza", "Cancelled Plans Bar", "Earn 2 Learn Tutoring", "Salary Men Ramen",
+                             "Blocked Ears Bar"]
+
+    /// A real shop whose name holds a refusal word still logs, on Wallet's
+    /// lines in any common layout.
+    @Test(arguments: wordyShops, [0, 1, 2])
+    func aShopNamedWithARefusalWordStillLogs(shop: String, layout: Int) async throws {
+        let ctx = store(), b = book()
+        let parts = [["NAB Visa Debit", shop, "A$20.00"],
+                     [shop, "A$20.00", "NAB Visa Debit"],
+                     ["A$20.00", shop, "NAB Visa Debit"]][layout]
+        let r = try await notify(parts[0], parts[1], parts[2], ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(t.rawMerchant == shop)
+        #expect(t.amount == 20)
+    }
 }
+

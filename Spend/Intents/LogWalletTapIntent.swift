@@ -108,14 +108,17 @@ nonisolated struct WalletNotification: Equatable, Sendable {
     /// Reads the parts in any order: the amount by its money pattern, the
     /// card by card words, masked digits or `isKnownCard`, the shop from
     /// what is left. A bank app's sentence goes to `BankNotice` instead.
-    /// `BankNotice.refusal` runs first on every notification, so a short
-    /// bank line ("Available balance $1,204.11") is never logged by either
-    /// reader (review, 8 Oct 2026). The tap fields are never looked at.
+    /// On Wallet's short lines, `BankNotice`'s refusal phrases run first,
+    /// line by line, and once there is an amount a bank's status line
+    /// ("Payment received", "Low balance") is refused too (review, 8 Oct
+    /// 2026), so a bank's terse alert is never logged. `bankNames`: the
+    /// banks of the person's own cards, lower case. The tap fields are
+    /// never looked at.
     @MainActor
-    func read(isKnownCard: (String) -> Bool = { _ in false }) -> Reading {
+    func read(isKnownCard: (String) -> Bool = { _ in false }, bankNames: Set<String> = []) -> Reading {
         let text = joined
-        if let refused = BankNotice.refusal(text) { return refused }
         if BankNotice.isSentence(text) { return BankNotice.read(text, isKnownCard: isKnownCard) }
+        if let refused = BankNotice.lineRefusal(text) { return refused }
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
         }
@@ -123,6 +126,8 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         guard let amount = parts.amount, let value = AmountParser.parse(amount)?.amount, value > 0 else {
             return .noAmount
         }
+        let rest = [subtitle, body].map(TapField.normalize).flatMap { $0.split(whereSeparator: \.isNewline).map(String.init) }
+        if BankNotice.isBankStatus(title: TapField.normalize(title), rest: rest, bankNames: bankNames) { return .notAPurchase }
         let refund = text.range(of: Self.refundPattern, options: [.regularExpression, .caseInsensitive]) != nil
         if !refund, text.range(of: Self.moneyInPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .moneyIn
@@ -233,7 +238,8 @@ struct LogWalletTapIntent: AppIntent {
         guard case .success(let container) = SpendStore.containerForIntent() else {
             if notification.isPresent {
                 // Read now, so only a real payment is queued.
-                let reading = notification.read(isKnownCard: { CardBook.shared.isOneCard(named: $0) })
+                let reading = notification.read(isKnownCard: { CardBook.shared.isOneCard(named: $0) },
+                                                bankNames: CardBook.shared.bankNames)
                 switch reading {
                 case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                     LogPurchaseIntent.recordReach(Self.record(transaction: transaction, amount: amount, merchant: merchant,
@@ -319,7 +325,7 @@ struct LogWalletTapIntent: AppIntent {
         let result: LogPurchaseIntent.Outcome
         let shop: String?
         if notification.isPresent {
-            let reading = notification.read(isKnownCard: { book.isOneCard(named: $0) })
+            let reading = notification.read(isKnownCard: { book.isOneCard(named: $0) }, bankNames: book.bankNames)
             switch reading {
             case .notCompleted, .noAmount, .moneyIn, .notAPurchase:
                 // Shortcuts reached Sortd, but there is nothing to save:
