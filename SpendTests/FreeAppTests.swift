@@ -19,13 +19,9 @@ struct FreeAppTests {
         return ModelContext(container)
     }
 
-    /// `Reminders.checkCategoryLimits` (`Spend/Services/Reminders.swift:105`
-    /// today) still guards on `ProStore.shared.isPro`. In the test process
-    /// nothing is ever purchased, so with the gate still in place this stays
-    /// red: it never records the over-limit alert even though a category is
-    /// well over its limit. (Since 8 Oct 2026 the check follows its own
-    /// switch, `CategoryNudge.enabledKey`, on by default; the bills toggle
-    /// set below no longer matters.)
+    /// `Reminders.checkCategoryLimits` has no Pro condition: in the test
+    /// process nothing is ever purchased, and a category well over its limit
+    /// must still record the over-limit alert.
     ///
     /// Asserts on `CategoryBudgets.sentAlerts`, not on
     /// `UNUserNotificationCenter.pendingNotificationRequests()`: the unit
@@ -35,11 +31,6 @@ struct FreeAppTests {
     /// `saveSentAlerts` runs right after the same gate this test is about,
     /// before the OS call, so it is a reliable stand-in for "an alert fired".
     @Test func categoryLimitCheckHasNoProCondition() async throws {
-        let standardDefaults = UserDefaults.standard
-        let wasEnabled = standardDefaults.bool(forKey: Reminders.enabledKey)
-        standardDefaults.set(true, forKey: Reminders.enabledKey)
-        defer { standardDefaults.set(wasEnabled, forKey: Reminders.enabledKey) }
-
         // The test host's home currency depends on the simulator's region
         // (e.g. SGD on en_SG); logging in a hardcoded "AUD" would leave
         // audValue at 0 on a non-AUD host and fail for FX reasons, not the
@@ -61,18 +52,9 @@ struct FreeAppTests {
     }
 
     /// The category limit check follows its own switch (`CategoryNudge.enabledKey`,
-    /// read from the `defaults` it is given), not the bills toggle
-    /// (`Reminders.enabledKey`, read from `.standard`). Same stand-in as above:
-    /// `sentAlerts` shows whether the alert fired.
+    /// read from the `defaults` it is given), not the bills toggle. Same
+    /// stand-in as above: `sentAlerts` shows whether the alert fired.
     @Test func categoryLimitCheckFollowsTheCategorySwitch() async throws {
-        let standardDefaults = UserDefaults.standard
-        let was = standardDefaults.object(forKey: Reminders.enabledKey)
-        defer {
-            if let was { standardDefaults.set(was, forKey: Reminders.enabledKey) }
-            else { standardDefaults.removeObject(forKey: Reminders.enabledKey) }
-        }
-        standardDefaults.set(true, forKey: Reminders.enabledKey)
-
         let context = try store()
         let now = Date(timeIntervalSince1970: 1_790_000_000)
         let purchase = IncomingPurchase(date: now, merchant: "Woolworths", amount: 180, currency: Money.home,
@@ -80,7 +62,7 @@ struct FreeAppTests {
         let txn = try TransactionLogger.log(purchase, in: context).transaction
         let near = CategoryBudgets.alertKey(month: CategoryBudgets.monthKey(now), category: txn.category, threshold: .near)
 
-        // Switch off: no alert, even with the bills toggle on.
+        // Switch off: no alert.
         let off = UserDefaults(suiteName: "FreeAppTests-off-\(UUID().uuidString)")!
         CategoryBudgets.set(200, for: txn.category, off)
         off.set(false, forKey: CategoryNudge.enabledKey)
@@ -93,13 +75,6 @@ struct FreeAppTests {
         on.set(true, forKey: CategoryNudge.enabledKey)
         await Reminders.checkCategoryLimits([txn], now: now, defaults: on)
         #expect(CategoryBudgets.sentAlerts(on).contains(near))
-
-        // Bills toggle off does not stop it.
-        standardDefaults.set(false, forKey: Reminders.enabledKey)
-        let billsOff = UserDefaults(suiteName: "FreeAppTests-bills-\(UUID().uuidString)")!
-        CategoryBudgets.set(200, for: txn.category, billsOff)
-        await Reminders.checkCategoryLimits([txn], now: now, defaults: billsOff)
-        #expect(CategoryBudgets.sentAlerts(billsOff).contains(near), "the bills toggle should not gate this")
     }
 
     // MARK: Upcoming bills, Siri

@@ -41,7 +41,7 @@
 <main id="main" class="doc">
   <h1>Privacy Policy</h1>
   <div class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-  <p class="muted">Last updated: 8 October 2026</p>
+  <p class="muted">Last updated: 9 October 2026</p>
   <p>This policy explains what the Sortd iPhone app ("Sortd") does with your information. "We", "us" and "Sortd" mean the makers of Sortd. You can reach us at <a href="mailto:support@sortd.page">support@sortd.page</a>.</p>
 
   <h2>In short</h2>
@@ -88,7 +88,7 @@
   <p>If you find a security problem in Sortd, please email <a href="mailto:support@sortd.page">support@sortd.page</a>. We will look into it and fix it as fast as we can.</p>
 
   <h2>Logging Apple Pay taps</h2>
-  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the payment (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. On iOS 27 or later, the shortcut also has a second automation that runs on Wallet's notification. That is how payments in apps and on websites are logged, if your card sends a notification. It passes the shop, amount and card from the notification to Sortd, on your iPhone. Sortd keeps a copy of the last few payments it received (up to ten), on your iPhone, so you can check the setup. Usage data notes only that a tap was logged, never its shop, amount or card. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
+  <p>Sortd does not read your Apple Wallet by itself. If you choose, you create an automation in Apple's Shortcuts app on your iPhone. When you pay with Apple Pay, that automation passes the payment (merchant, amount and card name) to Sortd's "Log Wallet Tap" or "Log Purchase" action. This happens on your iPhone. On iOS 27 or later, the shortcut also has a second automation that runs on Wallet's notification. That is how payments in apps and on websites are logged, if your card sends a notification. It passes the shop, amount and card from the notification to Sortd, on your iPhone. If you add your bank's app to that automation, its notifications are passed to Sortd the same way, on your iPhone. Sortd keeps the ones that are purchases and ignores the rest (codes, balances, offers). Nothing from a notification is sent anywhere. Sortd keeps a copy of the last few payments it received (up to ten), on your iPhone, so you can check the setup. Usage data notes only that a tap was logged, never its shop, amount or card. You can turn the automation off or delete it in the Shortcuts app at any time.</p>
   <p><strong>Card digits:</strong> you can give Sortd the last 4 digits of each card and of its Apple Pay number (the&nbsp;Device Account Number). Sortd uses them only to match purchases to the right card. They stay on your iPhone. Sortd never asks for or stores a full card number.</p>
 
   <h2 id="setup">Setup questions</h2>
@@ -248,6 +248,7 @@
   <h2>Changes to this policy</h2>
   <p>If we change this policy, we'll update this page and the "Last updated" date, and list what changed here.</p>
   <ul>
+    <li><strong>9 October 2026:</strong> On iOS 27 or later, Sortd can read your bank app's notifications, if you add the app to the automation. It keeps purchases and ignores the rest. Usage data has a new event that notes only whether a run saved a purchase, and if not, why not. It never holds words or amounts. Category limit alerts can come right after a tap, and have their own switch.</li>
     <li><strong>8 October 2026:</strong> Category limit alerts no longer need bill reminders on. They have their own switch and can come right after the purchase that crosses the limit.</li>
     <li><strong>6 October 2026:</strong> The beta sign&#8209;up form now asks which iPhone you have. A sign&#8209;up also tells us the kind of device, screen size, system version and browser it was sent from. We use these to know which iPhones and iOS versions to test.</li>
     <li><strong>5 October 2026:</strong> The beta is open. The sign&#8209;up form now takes you straight to TestFlight, and we use your sign&#8209;up to know who is testing and to email you about the beta.</li>
