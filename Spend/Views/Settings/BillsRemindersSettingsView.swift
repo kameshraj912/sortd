@@ -1,12 +1,15 @@
 import SwiftUI
 import SwiftData
 
-/// Settings › Bills & Reminders: recurring subscriptions/bills and the
-/// day-before notification.
+/// Settings › Bills & Reminders: recurring subscriptions/bills, the
+/// day-before notification, the budget pace alert and the category limit
+/// alerts.
 struct BillsRemindersSettingsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Reminders.enabledKey) private var reminders = false
     @AppStorage(Reminders.paceAlertKey) private var paceAlert = true
+    /// Default on, the same as `CategoryNudge.isOn`.
+    @AppStorage(CategoryNudge.enabledKey) private var categoryAlerts = true
     @AppStorage(SetupProfile.checkInKey) private var checkIn = SetupProfile.CheckIn.needed.rawValue
     @State private var notificationsBlocked = false
     /// What iOS allows now. Assumed yes until checked, so the switch does not
@@ -66,7 +69,7 @@ struct BillsRemindersSettingsView: View {
             }
             Section {
                 Toggle(isOn: Binding(
-                    get: { Reminders.paceAlertShownOn(stored: paceAlert, notificationsAllowed: notificationsAllowed) },
+                    get: { Reminders.alertShownOn(stored: paceAlert, notificationsAllowed: notificationsAllowed) },
                     set: { on in
                         paceAlert = on
                         guard on else { return }
@@ -79,13 +82,29 @@ struct BillsRemindersSettingsView: View {
                     })) {
                     Label("Budget Pace Alert", systemImage: "gauge.with.needle")
                 }
+                // Its own switch since 8 Oct 2026; the bills one no longer
+                // decides it. Shown off while iOS blocks notifications, like
+                // the pace alert above.
+                Toggle(isOn: Binding(
+                    get: { Reminders.alertShownOn(stored: categoryAlerts, notificationsAllowed: notificationsAllowed) },
+                    set: { on in
+                        categoryAlerts = on
+                        guard on else { return }
+                        Task {
+                            let allowed = await Reminders.requestPermission()
+                            notificationsAllowed = allowed
+                            if !allowed { notificationsBlocked = true }
+                        }
+                    })) {
+                    Label("Category Limit Alerts", systemImage: "chart.bar.xaxis")
+                }
             } header: {
                 BoldHeader("Budget")
             } footer: {
                 if notificationsAllowed {
-                    Text("One alert a month if you're on track to pass your budget.")
+                    Text("One alert a month if you're on track to pass your budget.\n\nAn alert when a category reaches 80% and 100% of its monthly limit, right after the tap or when you next open Sortd. At most three a week.")
                 } else {
-                    Text("Turn on notifications for Sortd in Settings to get this alert.")
+                    Text("Turn on notifications for Sortd in Settings to get these alerts.")
                 }
             }
         }

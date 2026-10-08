@@ -8,16 +8,16 @@ import UserNotifications
 /// The stored choice itself is not touched.
 struct PaceAlertSwitchTests {
     @Test func onAndAllowedShowsOn() {
-        #expect(Reminders.paceAlertShownOn(stored: true, notificationsAllowed: true))
+        #expect(Reminders.alertShownOn(stored: true, notificationsAllowed: true))
     }
 
     @Test func onButBlockedShowsOff() {
-        #expect(!Reminders.paceAlertShownOn(stored: true, notificationsAllowed: false))
+        #expect(!Reminders.alertShownOn(stored: true, notificationsAllowed: false))
     }
 
     @Test func offStaysOffWhateverIosSays() {
-        #expect(!Reminders.paceAlertShownOn(stored: false, notificationsAllowed: true))
-        #expect(!Reminders.paceAlertShownOn(stored: false, notificationsAllowed: false))
+        #expect(!Reminders.alertShownOn(stored: false, notificationsAllowed: true))
+        #expect(!Reminders.alertShownOn(stored: false, notificationsAllowed: false))
     }
 
     @Test(arguments: [(UNAuthorizationStatus.authorized, true), (.provisional, true), (.ephemeral, true),
