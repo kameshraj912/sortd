@@ -80,20 +80,21 @@ If you are on iOS 26 and step 3 still beats you, record your screen and send it 
 TestFlight's feedback button. That is the most useful thing you can send us.
 
 
-## What to Test (next build, bank app notifications, 9 Oct 2026)
+## What to Test (Build 1.0 (10), 9 Oct 2026)
 
-Sortd can now read your bank app's purchase alerts, for banks that send Wallet no
-notification (some ANZ and CommBank cards do this).
+Bank app alerts, and category limit alerts.
 
-1. Got the shortcut before 9 October? Delete the old one first: in Shortcuts, press and hold
-   Log Apple Pay in Sortd and tap Delete. Then get the new one from the setup page, turn both
-   automations on, and add your bank's app again. If you skip the delete, two automations run.
-   The new one tells Sortd which app each notification came from.
+1. iPhone on iOS 27. In Shortcuts, press and hold the old Log Apple Pay in Sortd and tap
+   Delete. Get the new one from the setup page and turn both automations on. Under "When I
+   receive a notification", tap + next to Wallet and add your bank's app. In the bank app,
+   turn on purchase alerts. Then pay in an app, and tap in a shop. Each should show once.
 
-2. Add your bank's app to the notification trigger. In Shortcuts, open the Sortd automation,
-   tap + next to Wallet under "When I receive a notification" and add your bank's app. Turn
-   on purchase alerts in that app. Then pay for something in an app or on a website. Did it
-   show up once, with the right shop and amount?
+2. iPhone on iOS 26. Build the automation by hand. If Sortd isn't in the list, the note on
+   page 3 says what to do.
 
-3. Your bank also sends balances, codes and money-in alerts. None of those should appear in
-   Activity. If one does, send a screenshot of the alert with TestFlight's feedback button.
+3. Category limits. Settings › Bills & Reminders › Category Limit Alerts. Set a limit, then
+   log a purchase past 80%. A second notification should follow "Logged".
+
+What must not happen: a balance, a code or an offer from the bank app showing up as a
+purchase. A refund coming off twice. If you see either, send a screenshot with TestFlight's
+feedback button.
