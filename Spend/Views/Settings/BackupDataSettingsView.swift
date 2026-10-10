@@ -77,7 +77,7 @@ struct BackupDataSettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Encrypted on this iPhone before it goes to iCloud.")
-                    Link("Learn more", destination: URL(string: "https://sortd.page/help#icloud-backup")!)
+                    FooterLink("Learn more", destination: URL(string: "https://sortd.page/help#icloud-backup") ?? URL(fileURLWithPath: "/"))
                 }
             }
             #endif
