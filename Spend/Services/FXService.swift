@@ -20,6 +20,12 @@ enum FXService {
 
     static let budgetKey = "monthlyBudget"
 
+    /// The budget and category limits as they stood when a currency change
+    /// could not convert them (offline). The retry converts only a value
+    /// still equal to this: one typed since is already in the new currency.
+    static let unconvertedBudgetKey = "fxUnconvertedBudget"
+    static let unconvertedLimitsKey = "fxUnconvertedLimits"
+
     /// Where today's rate comes from. Tests pass their own.
     typealias RateSource = (_ from: String, _ to: String) async throws -> Double?
 
@@ -68,18 +74,34 @@ enum FXService {
         // Offline, leave them (and `convertedKey`) as they are so the next
         // `ensureConverted` tries again, rather than keep a SGD 1,000 budget
         // as USD 1,000 for good.
-        var settingsDone = old == home || (budget <= 0 && limits.isEmpty)
+        // An earlier try left these unconverted. A value that differs from
+        // what it left was typed since, in the currency on screen (the new
+        // one): leave that alone.
+        let waitingBudget = defaults.object(forKey: unconvertedBudgetKey) as? Double
+        let waitingLimits = defaults.dictionary(forKey: unconvertedLimitsKey) as? [String: Double]
+        let budgetToConvert = waitingBudget.map { $0 == budget ? budget : 0 } ?? budget
+        let limitsToConvert = waitingLimits.map { waiting in limits.filter { waiting[$0.key] == $0.value } } ?? limits
+
+        var settingsDone = old == home || (budgetToConvert <= 0 && limitsToConvert.isEmpty)
         if !settingsDone, let r = try? await rate(old, home), r > 0 {
             // Changed while the rate loaded: typed in the new currency already.
-            if budget > 0, defaults.double(forKey: budgetKey) == budget {
-                defaults.set(convertSetting(budget, rate: r), forKey: budgetKey)
+            if budgetToConvert > 0, defaults.double(forKey: budgetKey) == budgetToConvert {
+                defaults.set(convertSetting(budgetToConvert, rate: r), forKey: budgetKey)
             }
-            CategoryBudgets.convert(from: limits, rate: r, defaults)
+            CategoryBudgets.convert(from: limitsToConvert, rate: r, defaults)
             settingsDone = true
         }
 
         defaults.set(home, forKey: Money.homeKey)
-        if settingsDone { defaults.set(home, forKey: convertedKey) }
+        if settingsDone {
+            defaults.set(home, forKey: convertedKey)
+            defaults.removeObject(forKey: unconvertedBudgetKey)
+            defaults.removeObject(forKey: unconvertedLimitsKey)
+        } else if waitingBudget == nil, waitingLimits == nil {
+            // Offline: note what is still in the old currency.
+            defaults.set(budget, forKey: unconvertedBudgetKey)
+            defaults.set(limits, forKey: unconvertedLimitsKey)
+        }
         for t in (try? context.fetch(FetchDescriptor<Transaction>())) ?? [] {
             t.audAmount = t.currencyCode == home ? t.amount : nil
         }

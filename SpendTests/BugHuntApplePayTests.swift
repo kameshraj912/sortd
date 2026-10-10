@@ -303,8 +303,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// now shows it as S$1,000 and the person types S$1,200. Back online,
     /// `ensureConverted` still thinks the budget is in AUD and converts the
     /// 1,200 to S$1,320.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a budget edited between an offline currency change and the retry is converted as the old currency"))
+    @Test(.bug("a budget edited between an offline currency change and the retry is converted as the old currency"))
     func aBudgetTypedAfterAnOfflineCurrencyChangeIsNotConvertedLater() async throws {
         let ctx = store()
         let d = UserDefaults(suiteName: "hunt1008-fx-\(UUID().uuidString)")!

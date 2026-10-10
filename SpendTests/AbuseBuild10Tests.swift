@@ -309,10 +309,9 @@ struct AbuseBuild10Tests {
     /// this month's "near its limit" record is wiped. Clock fixed: the same
     /// crossing is announced a second time.
     ///
-    /// Known bug: `CategoryBudgets.dueAlerts` (Spend/Services/CategoryBudgets.swift:127) drops other months,
-    /// and `Reminders.checkCategoryLimits` saves the result even with nothing due.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A14", "a clock set back wipes this month's limit records, so the alert repeats"))
+    /// Fixed 10 Oct 2026, was: `CategoryBudgets.dueAlerts` dropped every other month, later ones
+    /// included, and `Reminders.checkCategoryLimits` saved that.
+    @Test(.bug(id: "b10-A14", "a clock set back wipes this month's limit records, so the alert repeats"))
     func aClockSetBackDoesNotRepeatALimitAlert() async throws {
         let d = suite()
         CategoryBudgets.set(200, for: .transport, d)

@@ -121,10 +121,13 @@ enum CategoryBudgets {
 
     /// Which alerts to send now, and the updated record. Each threshold fires
     /// once per category per month. If both are crossed at once only the
-    /// 100% one is sent, but both are recorded. Old months are dropped.
+    /// 100% one is sent, but both are recorded. Months before `month` are
+    /// dropped; a later one is kept, so a clock set back (a year, say) and
+    /// then fixed does not announce this month's crossings a second time.
     static func dueAlerts(_ progress: [SpendCategory: Progress], month: String,
                           sent: Set<String>) -> (alerts: [Alert], sent: Set<String>) {
-        var record = sent.filter { $0.hasPrefix(month + "|") }
+        // "2026-10|…" sorts by month as text: keys are "yyyy-MM|…".
+        var record = sent.filter { String($0.prefix(while: { $0 != "|" })) >= month }
         var alerts: [Alert] = []
         for (category, p) in progress.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             let crossed: [Threshold] = Threshold.allCases.filter {
