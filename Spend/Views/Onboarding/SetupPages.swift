@@ -422,6 +422,9 @@ struct PlanPage: View {
 struct SetupChecklistList: View {
     let tasks: [SetupTask]
     var open: ((SetupTask.Kind) -> Void)? = nil
+    /// Bumped by a tap on a row with nothing to open (the questions,
+    /// already answered): its tick bounces, so the tap is seen.
+    @State private var nudged = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -429,8 +432,13 @@ struct SetupChecklistList: View {
                 if i > 0 { Divider().padding(.leading, 56) }
                 // Rows only become buttons where they open something (Home),
                 // so the plan screen's list isn't greyed out as "disabled".
-                if let open, !task.done {
-                    Button { open(task.kind) } label: { row(task) }
+                // A done row still opens its screen: on Home a tap on a
+                // ticked row did nothing at all, and was tapped again and
+                // again (build 9, 10 Oct 2026).
+                if let open {
+                    Button {
+                        if Self.opens(task) { open(task.kind) } else { nudged += 1 }
+                    } label: { row(task) }
                         .buttonStyle(.pressable)
                 } else {
                     row(task)
@@ -438,7 +446,12 @@ struct SetupChecklistList: View {
             }
         }
         .background(Color.card, in: .rect(cornerRadius: 20, style: .continuous))
+        .feedback(.select, trigger: nudged)
     }
+
+    /// Whether a row has a screen to open. "Answer a few questions" is
+    /// always done and has none.
+    static func opens(_ task: SetupTask) -> Bool { task.kind != .answers }
 
     private func row(_ task: SetupTask) -> some View {
         HStack(spacing: 12) {
@@ -447,14 +460,17 @@ struct SetupChecklistList: View {
                 .foregroundStyle(task.done ? Color.up : Color.secondary.opacity(0.5))
                 .frame(width: 28)
                 .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: task.kind == .answers ? nudged : 0)
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).font(.body)
                     .foregroundStyle(task.done ? Color.secondary : Color.ink)
                     .strikethrough(task.done && task.kind != .answers, color: .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(task.detail).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            if open != nil, !task.done {
+            if open != nil, Self.opens(task) {
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
             }
         }

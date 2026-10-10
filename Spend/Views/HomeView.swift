@@ -581,7 +581,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .surface()
         } else {
-            let top = rows[0].total.double
+            let top = rows.first?.total.double ?? 0
             VStack(spacing: 10) {
                 SectionHeader(title: title("Where It Went")) { tab = .insights }
                 VStack(spacing: 0) {

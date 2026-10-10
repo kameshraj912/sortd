@@ -245,11 +245,43 @@ struct TransactionsScreen: View {
         }
     }
 
+    // MARK: Context menu
+
+    /// Runs `work` once the context menu has finished closing. Presenting a
+    /// sheet while the menu's preview is still animating away can be
+    /// dropped by UIKit, with no error and nothing on screen.
+    private func afterMenuCloses(_ work: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(Self.menuCloseDelay))
+            work()
+        }
+    }
+
+    /// About the length of the context menu's close animation.
+    static let menuCloseDelay = 350
+
+    /// Opens the category sheet for `t`. A sheet still closing for the same
+    /// row would ignore the same value again, so it is cleared first.
+    private func openCategories(for t: Transaction) {
+        guard !t.isDeleted else { return }
+        if recategorising != nil {
+            recategorising = nil
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(Self.menuCloseDelay))
+                recategorising = t
+            }
+        } else {
+            recategorising = t
+        }
+    }
+
     // MARK: Delete with undo
 
     private static let toastSpring = Animation.spring(duration: 0.35)
 
     private func delete(_ t: Transaction) {
+        // A second tap on Delete after the row went: nothing to do.
+        guard !t.isDeleted, t.modelContext != nil else { return }
         var staged = false
         withAnimation(Self.toastSpring) {
             // A swipe while the toast is fading brings it back for the batch.
@@ -611,9 +643,13 @@ struct TransactionsScreen: View {
             Button("Delete", systemImage: "trash", role: .destructive) { TipState.swipeUsed(); delete(t) }
                 .tint(.red)
         }
+        // The menu's own close animation is still running when its action
+        // fires; the sheet or the row's removal waits for it, so neither is
+        // lost under the closing preview (beta, 10 Oct 2026: a tester tapped
+        // a menu action six times).
         .contextMenu {
-            Button("Change Category", systemImage: "tag") { recategorising = t }
-            Button("Delete", systemImage: "trash", role: .destructive) { delete(t) }
+            Button("Change Category", systemImage: "tag") { afterMenuCloses { openCategories(for: t) } }
+            Button("Delete", systemImage: "trash", role: .destructive) { afterMenuCloses { delete(t) } }
         } preview: {
             TransactionPreview(transaction: t)
         }
