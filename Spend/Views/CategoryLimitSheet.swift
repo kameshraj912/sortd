@@ -41,20 +41,22 @@ struct CategoryLimitSheet: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            HStack {
-                Spacer()
-                Text("\(category.name) Limit")
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-            }
-            .overlay(alignment: .trailing) {
-                Button("Close", systemImage: "xmark") { dismiss() }
-                    .labelStyle(.iconOnly)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-            }
+            // The title keeps 44 pt clear on both sides, so it never runs
+            // under the close button; at AX5 it wraps instead (U12).
+            Text("\(category.name) Limit")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.horizontal, 48)
+                .overlay(alignment: .topTrailing) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
+                }
 
             VStack(spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {

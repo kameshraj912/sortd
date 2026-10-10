@@ -19,6 +19,7 @@ struct CurrencySettingsView: View {
                         Text("\(code) · \(Locale.current.localizedString(forCurrencyCode: code) ?? code)").tag(code)
                     }
                 }
+                .accessiblePickerStyle()
                 .onChange(of: home) { _, new in
                     Task {
                         refreshing = true

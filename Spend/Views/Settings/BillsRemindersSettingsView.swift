@@ -29,6 +29,7 @@ struct BillsRemindersSettingsView: View {
                 } label: {
                     Label("Check-In", systemImage: "calendar.badge.clock")
                 }
+                .accessiblePickerStyle()
                 .onChange(of: checkIn) { _, raw in
                     let choice = SetupProfile.CheckIn(rawValue: raw) ?? .needed
                     Task {

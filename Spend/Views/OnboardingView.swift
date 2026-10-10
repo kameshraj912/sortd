@@ -72,6 +72,8 @@ struct OnboardingView: View {
     @State private var usedSkip = false
     /// A tap on a locked Continue: the buzz, and the line saying why.
     @State private var lockedTaps = 0
+    /// The typed budget went past the most allowed and was set to it.
+    @State private var budgetCapped = false
     @State private var showingLockedWhy = false
     /// "I'm Done" on the iOS 26 automation pages (`ApplePaySetupSteps.isReady`).
     @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
@@ -1386,7 +1388,17 @@ struct OnboardingView: View {
                             // Same cap as the budget sheet, so a 19-digit
                             // typo can't be saved.
                             let limited = BudgetSheet.limitInput(text, currency: home)
+                            let most = BudgetSheet.maxBudget(home)
+                            // Past the most: the field shows the most and
+                            // says so. It used to keep the digits and set no
+                            // budget at all, with no word (U16).
+                            if let typed = Double(limited), typed > most {
+                                budgetCapped = true
+                                customBudget = BudgetSheet.text(for: most, currency: home)
+                                return
+                            }
                             if limited != text { customBudget = limited; return }
+                            if (Double(limited) ?? 0) < most { budgetCapped = false }
                             budget = BudgetSheet.sanitized(Double(limited) ?? 0, currency: home)
                         }
                 }
@@ -1397,6 +1409,13 @@ struct OnboardingView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
+                if budgetCapped {
+                    Text("The most you can set is \(Money.format(Decimal(BudgetSheet.maxBudget(home)), home, cents: false)).")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(Color.down)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)

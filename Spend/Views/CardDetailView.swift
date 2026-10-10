@@ -12,6 +12,7 @@ struct CardDetailView: View {
     private var all: [Transaction]
     /// The month-bar chart grows with Dynamic Type so its month letters keep room.
     @ScaledMetric(relativeTo: .caption) private var chartHeight: CGFloat = 64
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var cal: Calendar { .current }
 
@@ -44,53 +45,84 @@ struct CardDetailView: View {
 
     // MARK: Tiles
 
+    /// Two by two; one tile per row at the accessibility sizes, where two
+    /// side by side clipped their words (U14).
+    @ViewBuilder
     private var tiles: some View {
-        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
-            GridRow {
-                Tile(title: "Spent This Month") {
-                    Text(Money.format(thisMonth.audTotal, Money.home))
-                        .font(.moneySmall)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                    Text(thisMonth.count == 1 ? "1 purchase" : "\(thisMonth.count) purchases")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: 12) {
+                spentTile
+                topCategoryTile
+                activityTile
+                biggestTile
+            }
+        } else {
+            Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                GridRow {
+                    spentTile
+                    topCategoryTile
                 }
-                Tile(title: "Top Category") {
-                    if let top = topCategory {
-                        HStack(spacing: 8) {
-                            CategoryIcon(category: top.category, size: 28)
-                            Text(top.category.name)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        Text(Money.format(top.total, Money.home))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    } else {
-                        Text("—").font(.title2.weight(.bold)).foregroundStyle(.secondary)
-                    }
+                GridRow {
+                    activityTile
+                    biggestTile
                 }
             }
-            GridRow {
-                Tile(title: "6-Month Activity") {
-                    activityBars
+        }
+    }
+
+    private var spentTile: some View {
+        Tile(title: "Spent This Month") {
+            Text(Money.format(thisMonth.audTotal, Money.home))
+                .font(.moneySmall)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(thisMonth.count == 1 ? "1 purchase" : "\(thisMonth.count) purchases")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var topCategoryTile: some View {
+        Tile(title: "Top Category") {
+            if let top = topCategory {
+                HStack(spacing: 8) {
+                    CategoryIcon(category: top.category, size: 28)
+                    Text(top.category.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                        .minimumScaleFactor(0.8)
                 }
-                Tile(title: "Biggest Purchase") {
-                    if let big = thisMonth.max(by: { $0.audValue < $1.audValue }) {
-                        Text(Money.format(big.audValue, Money.home))
-                            .font(.title3.weight(.bold))
-                            .monospacedDigit()
-                        Text(big.merchant)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text("—").font(.title2.weight(.bold)).foregroundStyle(.secondary)
-                    }
-                }
+                Text(Money.format(top.total, Money.home))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            } else {
+                Text("—").font(.title2.weight(.bold)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var activityTile: some View {
+        Tile(title: "6-Month Activity") {
+            activityBars
+        }
+    }
+
+    private var biggestTile: some View {
+        Tile(title: "Biggest Purchase") {
+            if let big = thisMonth.max(by: { $0.audValue < $1.audValue }) {
+                Text(Money.format(big.audValue, Money.home))
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text(big.merchant)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+            } else {
+                Text("—").font(.title2.weight(.bold)).foregroundStyle(.secondary)
             }
         }
     }
@@ -133,6 +165,7 @@ struct CardDetailView: View {
                         Text(d.formatted(.dateTime.month(.narrow)))
                     }
                 }
+                .foregroundStyle(Color.secondary)
             }
         }
         .frame(height: chartHeight)

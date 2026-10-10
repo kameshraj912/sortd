@@ -791,12 +791,17 @@ struct CategoryPickerSheet: View {
     var footer: String = CategoryPickerSheet.moveAllFooter
     let onPick: (SpendCategory) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var picked = 0
+
+    /// Wider tiles at the accessibility sizes, so "Entertainment" is not
+    /// broken mid-word (U11).
+    private var tileWidth: CGFloat { typeSize.isAccessibilitySize ? 150 : 96 }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: tileWidth), spacing: 12)], spacing: 12) {
                     ForEach(SpendCategory.allCases) { category in
                         Button {
                             picked += 1
@@ -808,7 +813,9 @@ struct CategoryPickerSheet: View {
                                 Text(category.name)
                                     .font(.caption.weight(.medium))
                                     .multilineTextAlignment(.center)
-                                    .lineLimit(2, reservesSpace: true)
+                                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 2, reservesSpace: true)
+                                    .minimumScaleFactor(0.75)
+                                    .padding(.horizontal, 4)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
