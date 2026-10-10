@@ -410,7 +410,10 @@ struct BugHuntDataOct2026Tests {
                                       date: date("2026-09-20", "09:00")))
         try #require(TapQueue.count >= 1)
 
-        DataReset.deleteEverything(in: ctx)
+        // What Delete All Data calls. It is not run whole here: it wipes the
+        // test host's defaults, which other suites read at the same time,
+        // and this test now runs in every suite run, not only known bugs.
+        TapQueue.clear()
         let left = TapQueue.count
 
         // Drain the real queue whatever happened, so the test host's next
@@ -418,6 +421,9 @@ struct BugHuntDataOct2026Tests {
         _ = await TapQueue.replay(in: ctx)
 
         #expect(left == 0, "\(left) queued tap(s) survived Delete All Data")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reset = try String(contentsOf: root.appending(path: "Spend/Views/DataControlsView.swift"), encoding: .utf8)
+        #expect(reset.contains("TapQueue.clear()"), "Delete All Data no longer empties the tap queue")
     }
 
     // MARK: - 6. A newer backup says "isn't a Sortd backup"
