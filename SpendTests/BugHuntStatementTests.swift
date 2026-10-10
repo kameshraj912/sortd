@@ -689,17 +689,45 @@ struct BugHuntStatement1008Tests {
     /// `lastAmount` (PDF text and screenshots) still only knows "." for
     /// cents. "CARREFOUR 12,50" is booked as 50.00, "-8,20" as 8.00 and
     /// "1.234,50" as 50.00.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1008-stmt-3", "lastAmount reads 12,50 as 50 and -8,20 as 8 in PDF and screenshot text"))
+    @Test(.bug(id: "hunt-1008-stmt-3", "lastAmount reads 12,50 as 50 and -8,20 as 8 in PDF and screenshot text"))
     func decimalCommasInTextAreRead() {
         let rows = StatementImport.rows(fromText: """
         01/09/2026 CARREFOUR PARIS 12,50
         02/09/2026 MONOPRIX -8,20
         03/09/2026 LIDL BERLIN 1.234,50
+        04/09/2026 EDEKA HAMBURG -1.234,56
         """)
-        #expect(rows.count == 3)
-        #expect(rows.map(\.amount) == [money("12.50"), money("8.20"), money("1234.50")])
+        #expect(rows.count == 4)
+        #expect(rows.map(\.amount) == [money("12.50"), money("8.20"), money("1234.50"), money("1234.56")])
         #expect(rows.allSatisfy { !$0.detail.contains(",") })
+        // Unchanged: dot cents and comma thousands, with a balance after.
+        let au = StatementImport.rows(fromText: "05/09/2026 RENT PAYMENT 1,234.50 2,451.70")
+        #expect(au.map(\.amount) == [money("1234.50")])
+        #expect(au.first?.detail.hasPrefix("RENT PAYMENT") == true)
+    }
+
+    // MARK: 3b. Lakh-grouped rupees (S4)
+
+    /// "1,23,456.00" is how India writes 123,456.00. A CSV cell with it was
+    /// skipped, and the text reader read "₹1,23,456.00" as ₹1.
+    @Test(.bug(id: "hunt-1008-S4", "lakh amounts are skipped in a CSV and read as ₹1 in text"))
+    func lakhAmountsAreRead() {
+        let csv = StatementImport.parse(csv: """
+        Date,Description,Amount
+        01/09/2026,FLIPKART BENGALURU,"-1,23,456.00"
+        02/09/2026,SWIGGY,-450.00
+        """)
+        #expect(csv.skipped == 0)
+        #expect(csv.rows.map(\.amount) == [money("123456.00"), money("450.00")])
+        #expect(csv.rows.first?.kind == .spend)
+
+        let text = StatementImport.rows(fromText: """
+        01/09/2026 FLIPKART BENGALURU ₹1,23,456.00
+        02/09/2026 CROMA MUMBAI 12,34,567.50
+        """)
+        #expect(text.map(\.amount) == [money("123456.00"), money("1234567.50")])
+        #expect(text.first?.currency == "INR")
+        #expect(text.map(\.detail) == ["FLIPKART BENGALURU", "CROMA MUMBAI"])
     }
 
     // MARK: 4. A Currency column is ignored

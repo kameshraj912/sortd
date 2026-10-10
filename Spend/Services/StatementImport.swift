@@ -643,8 +643,17 @@ nonisolated enum StatementImport {
     /// all. Money out shows up as `(12.50)`, `12.50-`, `12.50 DR` or `-12.50`.
     /// A line with no sign at all is spending — that is what a statement is
     /// mostly made of.
+    ///
+    /// Cents after a comma ("12,50", "1.234,50") are read the European way,
+    /// tried first so "-12,50" is not cut to 12. That needs exactly two
+    /// digits after the comma and nothing number-like after them, so
+    /// "1,234.50" is still thousands. Indian lakh grouping ("1,23,456.00")
+    /// is one number too, not ₹1.
     static func lastAmount(in line: String) -> Amount? {
-        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
+        let european = #"(?<ewhole>\d{1,3}(?:\.\d{3})+|\d+),(?<ecents>\d{2})(?![\d]|[.,]\d)"#
+        let plain = #"(?<whole>\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})+,\d{3}|\d+)(?:\.(?<cents>\d{2}))?"#
+        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?:"#
+            + european + "|" + plain + #")\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = line as NSString
         let matches = regex.matches(in: line, range: NSRange(location: 0, length: ns.length))
@@ -658,7 +667,7 @@ nonisolated enum StatementImport {
         // "MCDONALDS 123 GEORGE ST 12.50" the street number isn't money.
         // When a line has two of those, the first is the purchase and the
         // later one is the running balance ("WOOLWORTHS 12.50 1,034.20").
-        let money = matches.filter { has($0, "cents") || has($0, "sym") || has($0, "sign") }
+        let money = matches.filter { has($0, "cents") || has($0, "ecents") || has($0, "sym") || has($0, "sign") }
         let best = money.first ?? matches.last!
 
         func group(_ name: String) -> String? {
@@ -666,8 +675,8 @@ nonisolated enum StatementImport {
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
 
-        let whole = (group("whole") ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group("cents") ?? "00"
+        let whole = (group("whole") ?? group("ewhole") ?? "0").filter(\.isNumber)
+        let cents = group("cents") ?? group("ecents") ?? "00"
         guard let value = Decimal(string: "\(whole).\(cents)") else { return nil }
         guard let range = Range(best.range, in: line) else { return nil }
 
@@ -701,7 +710,8 @@ nonisolated enum StatementImport {
         // before or after the number ("AUD -58.30", "12.00 SGD"). Cents after
         // a dot ("1,234.50"), or after a comma ("-12,50", "1.234,50"), the
         // European way, which is why `parseCSV` reads ";" files at all.
-        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
+        // Indian lakh grouping ("1,23,456.00") is thousands too.
+        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d{1,2}(?:,\d{2})+,\d{3}|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
         let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*"# + number
             + #"\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
