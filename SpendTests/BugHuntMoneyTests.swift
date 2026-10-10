@@ -131,10 +131,9 @@ struct BugHuntMoneyTests {
     /// purchase detail (`committedAmount`) both save it; BudgetSheet is fine
     /// because `limitInput` puts a "0" in front first.
     ///
-    /// Known bug: `AmountParser.parse` (Spend/Services/Parsing.swift:86-87) has no
+    /// Fixed 10 Oct 2026, was: `AmountParser.parse` (Spend/Services/Parsing.swift:86-87) has no
     /// alternative for `[.,][0-9]{1,2}` with nothing before it.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-06: .50 is read as 50 and saved as fifty dollars"))
+    @Test(.bug("hunt-money-06: .50 is read as 50 and saved as fifty dollars"))
     func aLeadingDotAmountIsCents() {
         #expect(AddTransactionView.isTypeable(".50"), "the field refuses it; then there is no bug")
         #expect(AmountParser.parse(".50")?.amount == Decimal(string: "0.50"),
