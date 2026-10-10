@@ -164,6 +164,7 @@ struct HomeView: View {
         }
         // Home tapped again: back to the top, any pushed screen gone.
         .popsToRootOnReselect(.home)
+        .analyticsScreen(.home)
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }

@@ -132,6 +132,7 @@ struct ApplePayAutomationGuide: View {
                 SafariSheet(url: page.url).ignoresSafeArea()
             }
         }
+        .analyticsScreen(.applePayGuide(page: page + 1))
     }
 
     /// One bar per page, filled up to this one.

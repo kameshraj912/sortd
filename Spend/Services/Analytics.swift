@@ -76,7 +76,14 @@ final class Analytics {
         case categoryChanged = "category_changed"
         case cardAdded = "card_added"
         case appLockTurnedOn = "app_lock_turned_on"
+        /// `topic` is `help` on open or the row tapped; `source` is where
+        /// it was opened from (10 Oct 2026).
         case helpOpened = "help_opened"
+        /// A named screen appeared (`ScreenName`). The same name is
+        /// registered as the `screen` super property, so every later event,
+        /// PostHog's own `$rageclick` included, says where it happened
+        /// (10 Oct 2026: rage clicks only named the UIKit hosting controller).
+        case screenViewed = "screen_viewed"
         /// Every tap on the Apple Pay setup step (6 Oct 2026): both iOS 26
         /// testers tapped out of it and the named steps alone could not say
         /// where. `action` names the button, `route` the iOS route, `step`
@@ -108,6 +115,33 @@ final class Analytics {
         /// line with it, since identify and reset calls made while sharing
         /// was off never reached the SDK. Optional; a spy leaves it out.
         func setOptedOut(_ out: Bool, identity: String?)
+        /// PostHog super properties: sent with every later event, the SDK's
+        /// own included. Optional; a spy leaves it out.
+        func register(_ properties: [String: Any])
+    }
+
+    /// A screen's name for `screen_viewed` and the `screen` super property.
+    /// Only the fixed names below exist, so no user text can become one.
+    struct ScreenName: Equatable, Sendable {
+        let rawValue: String
+        private init(_ raw: String) { rawValue = raw }
+
+        static let home = ScreenName("home")
+        static let activity = ScreenName("activity")
+        static let insights = ScreenName("insights")
+        static let settings = ScreenName("settings")
+        static let search = ScreenName("search")
+        static let setup = ScreenName("setup")
+        static let setupApplePay = ScreenName("setup.applePay")
+        static let addPurchase = ScreenName("addPurchase")
+        static let transactionDetail = ScreenName("transactionDetail")
+        static let cardDetail = ScreenName("cardDetail")
+        static let receiptScan = ScreenName("receiptScan")
+        static let founderNote = ScreenName("founderNote")
+        /// One setup page, by its `Step` case name ("setup.applePay").
+        static func setupStep(_ caseName: String) -> ScreenName { ScreenName("setup.\(caseName)") }
+        /// The Apple Pay walk-through, page 1-based.
+        static func applePayGuide(page: Int) -> ScreenName { ScreenName("applePayGuide.\(page)") }
     }
 
     /// Only scalars can be a property: no arrays, no dictionaries, nothing
@@ -232,6 +266,10 @@ final class Analytics {
     /// Privacy guard trail, for tests: "event.key" per property dropped.
     private(set) var violations: [String] = []
 
+    /// The screens on show, oldest first (`screenAppeared`): a sheet sits
+    /// on top of the tab under it, and when it goes the tab is current again.
+    private var screenStack: [(token: UUID, name: String)] = []
+
     /// `trackOncePerSession`'s memory: in-memory only, so it starts empty
     /// every launch (there is no other notion of "session" here).
     private var sessionFired: Set<Event> = []
@@ -274,6 +312,7 @@ final class Analytics {
                 enabled = true
                 defaults.set(true, forKey: Self.enabledKey)
                 sink.setOptedOut(false, identity: identityHash)
+                registerScreen()
             } else {
                 // Sent while still enabled, so the sink takes it.
                 sink.capture(Event.analyticsOptedOut.rawValue, properties: [:])
@@ -346,6 +385,35 @@ final class Analytics {
         sink.screen(name)
     }
 
+    /// The screen now on top. Off: nothing is sent, but the stack is kept so
+    /// the name is right once sharing comes back on.
+    var currentScreen: String? { screenStack.last?.name }
+
+    /// A named screen appeared: its name becomes the `screen` super
+    /// property. Returns the token to hand back to `screenDisappeared`.
+    /// `showScreen` (AnalyticsScreen.swift) also sends `screen_viewed`.
+    @discardableResult
+    func screenAppeared(_ name: ScreenName) -> UUID {
+        let token = UUID()
+        screenStack.append((token, name.rawValue))
+        registerScreen()
+        return token
+    }
+
+    /// That screen went. When it was on top, the one under it is current
+    /// again (no new `screen_viewed`: nothing new was seen).
+    func screenDisappeared(_ token: UUID) {
+        guard let index = screenStack.firstIndex(where: { $0.token == token }) else { return }
+        let wasTop = index == screenStack.count - 1
+        screenStack.remove(at: index)
+        if wasTop { registerScreen() }
+    }
+
+    private func registerScreen() {
+        guard enabled, let name = currentScreen else { return }
+        sink.register(["screen": name])
+    }
+
     /// Once per install, with how long after install it happened
     /// (`hours_bucket`). Used for activation: the first purchase the app
     /// logged by itself. Never for sample data; callers skip test taps.
@@ -399,6 +467,8 @@ final class Analytics {
         identityBox.withLock { $0 = nil }
         defaults.removeObject(forKey: Self.identityHashKey)
         sink.reset()
+        // PostHog's reset clears super properties too.
+        registerScreen()
     }
 
     /// Where analytics needs opt-in: the EU 27 (with its regions outside
@@ -451,6 +521,7 @@ final class Analytics {
 extension Analytics.Sink {
     func isFeatureEnabled(_ key: String) -> Bool { false }
     func setOptedOut(_ out: Bool, identity: String?) {}
+    func register(_ properties: [String: Any]) {}
 }
 
 /// No key in this build: nothing is sent anywhere.
@@ -473,6 +544,11 @@ protocol PostHogClient: AnyObject {
     func isFeatureEnabled(_ key: String) -> Bool
     func optIn()
     func optOut()
+    func register(_ properties: [String: Any])
+}
+
+extension PostHogClient {
+    func register(_ properties: [String: Any]) {}
 }
 
 /// The real thing. Session replay on only in a `SORTD_REPLAY` build (the
@@ -564,6 +640,11 @@ final class PostHogSink: Analytics.Sink {
         return client.isFeatureEnabled(key)
     }
 
+    func register(_ properties: [String: Any]) {
+        guard isSetUp else { return }
+        client.register(properties)
+    }
+
     func setOptedOut(_ out: Bool, identity: String?) {
         if out {
             guard isSetUp else { return }
@@ -617,4 +698,5 @@ final class LivePostHogClient: PostHogClient {
     func isFeatureEnabled(_ key: String) -> Bool { PostHogSDK.shared.isFeatureEnabled(key) }
     func optIn() { PostHogSDK.shared.optIn() }
     func optOut() { PostHogSDK.shared.optOut() }
+    func register(_ properties: [String: Any]) { PostHogSDK.shared.register(properties) }
 }

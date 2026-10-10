@@ -23,7 +23,9 @@ struct SetupGuideView: View {
         ApplePayStatus.resolve(lastReachedAt: LogPurchaseIntent.lastTapReceivedAt, taps: transactions)
     }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.setupApplePay) }
+
+    @ViewBuilder private var screenBody: some View {
         List {
             ListPageTitle(title: "Apple Pay Logging")
             Section {

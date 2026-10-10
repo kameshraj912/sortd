@@ -17,7 +17,9 @@ struct SearchView: View {
         nonmutating set { if let external { external.wrappedValue = newValue } else { own = newValue } }
     }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.search) }
+
+    @ViewBuilder private var screenBody: some View {
         NavigationStack {
             List {
                 if trimmed.isEmpty { landing } else { results }

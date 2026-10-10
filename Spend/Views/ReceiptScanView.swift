@@ -17,7 +17,9 @@ struct ReceiptScanView: View {
 
     private var cameraWorks: Bool { VNDocumentCameraViewController.isSupported }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.receiptScan) }
+
+    @ViewBuilder private var screenBody: some View {
         NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: "doc.text.viewfinder")

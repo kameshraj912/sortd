@@ -92,6 +92,7 @@ struct TransactionDetailView: View {
             }
         }
         .feedback(.delete, trigger: deleted)
+        .analyticsScreen(.transactionDetail)
         .saveFailedAlert($saveFailed)
         // An alert, like the other irreversible confirmations: a dialog on
         // this form anchored itself to the Card row at the top, nowhere near

@@ -22,7 +22,9 @@ struct CardDetailView: View {
         return transactions.filter { $0.date >= start }
     }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.cardDetail) }
+
+    @ViewBuilder private var screenBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 PageTitle(title: card.name)

@@ -158,6 +158,9 @@ struct ApplePaySetupPanel: View {
                     Link("Learn more", destination: ApplePayStatus.learnMoreURL)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.brand)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            HelpTopic.track(.learnMore, source: .setupPanel)
+                        })
                 }
             }
         }

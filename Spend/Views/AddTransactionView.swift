@@ -143,7 +143,9 @@ struct AddTransactionView: View {
         }
     }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.addPurchase) }
+
+    @ViewBuilder private var screenBody: some View {
         NavigationStack {
             Form {
                 if draftRestored {
