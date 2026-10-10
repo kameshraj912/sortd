@@ -862,4 +862,31 @@ struct BugHuntStatement1008Tests {
         #expect(parsed.rows.count == 3)
         #expect(parsed.rows.map { ymd($0.date) } == ["2026-09-28", "2026-09-29", "2026-09-30"])
     }
+
+    // MARK: 10. Thousands commas in PDF text (S3)
+
+    /// PDF text where every line has two amounts over 1,000 had two commas on
+    /// every line, so `reader(for:)` took it for a CSV and found nothing.
+    @Test(.bug(id: "hunt-1008-S3", "PDF text with two thousands commas on each line goes to the CSV reader"))
+    func pdfTextWithThousandsCommasIsText() {
+        let pdf = """
+        02/09/2026 RENT PAYMENT 1,200.00 2,393.40
+        03/09/2026 JB HI-FI MELBOURNE 1,099.00 1,294.40
+        04/09/2026 FLIGHT CENTRE 1,050.00 1,244.40
+        05/09/2026 APPLE STORE 1,249.00 1,995.40
+        """
+        #expect(StatementImport.reader(for: pdf) == .text)
+        let rows = StatementImport.parse(statement: pdf).rows
+        #expect(rows.map(\.amount) == [money("1200.00"), money("1099.00"), money("1050.00"), money("1249.00")])
+        #expect(rows.first?.detail.hasPrefix("RENT PAYMENT") == true)
+
+        // A real CSV with a quoted thousands amount on every line is still a CSV.
+        let csv = """
+        Date,Description,Amount
+        01/09/2026,RENT PAYMENT,"-1,200.00"
+        02/09/2026,JB HI-FI,"-1,099.00"
+        03/09/2026,APPLE STORE,"-1,249.00"
+        """
+        #expect(StatementImport.reader(for: csv) == .csv)
+    }
 }

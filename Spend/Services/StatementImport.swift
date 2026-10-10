@@ -83,7 +83,7 @@ nonisolated enum StatementImport {
             .filter { !$0.allSatisfy(\.isWhitespace) }
             .prefix(10)
         let counts = lines.map { line in
-            max(line.filter { $0 == "," }.count,
+            max(delimiterCommas(in: line),
                 max(line.filter { $0 == ";" }.count, line.filter { $0 == "\t" }.count))
         }
         for start in 0..<min(5, max(0, counts.count - 1)) {
@@ -93,6 +93,19 @@ nonisolated enum StatementImport {
             if run.filter({ $0 == reference }).count >= run.count - 1 { return .csv }
         }
         return .text
+    }
+
+    /// Commas that could split a CSV line. A PDF statement line such as
+    /// "02/09/2026 RENT 1,200.00 2,393.40" has commas only inside its
+    /// amounts; two on every line looked like a CSV and the file read as
+    /// nothing. Such a line counts none. A line with any other comma counts
+    /// them all, so a real CSV with a quoted "1,234.50" is unchanged.
+    private static func delimiterCommas(in line: Substring) -> Int {
+        let all = line.filter { $0 == "," }.count
+        guard all > 0 else { return 0 }
+        let amounts = #"(?<![\d.,])\d{1,3}(?:,\d{3})+\.\d{2}(?![\d,])"#
+        let rest = String(line).replacingOccurrences(of: amounts, with: "", options: .regularExpression)
+        return rest.contains(",") ? all : 0
     }
 
     /// Reads a file with the reader `reader(for:wasScanned:)` picks. This is
