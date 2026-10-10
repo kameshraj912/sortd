@@ -104,7 +104,9 @@ nonisolated enum GenericReceipts {
         let grouped = f.string(from: NSDecimalNumber(decimal: d)) ?? plain
         let n = NSDecimalNumber(decimal: d)
         let isWhole = n.doubleValue == n.doubleValue.rounded()
-        let whole = isWhole ? String(Int(n.doubleValue)) : nil
+        // The Decimal's own digits: `Int(n.doubleValue)` trapped on a
+        // 19-digit amount (C2).
+        let whole = isWhole ? n.stringValue : nil
         f.minimumFractionDigits = 0
         let groupedWhole = isWhole ? f.string(from: n) : nil
         let oneDecimal = String(format: "%.1f", NSDecimalNumber(decimal: d).doubleValue)

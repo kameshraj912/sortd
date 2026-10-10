@@ -9,7 +9,11 @@ enum Outcome {
     /// spent yet this month (day 1: "100% less" would be noise).
     static func line(thisMonth: Double, lastMonthToSameDay: Double) -> String? {
         guard lastMonthToSameDay > 0, thisMonth > 0 else { return nil }
-        let percent = Int(((thisMonth - lastMonthToSameDay) / lastMonthToSameDay * 100).rounded())
+        // Capped before `Int(...)`, which traps past Int.max: a month about
+        // 1e17 times the last crashed Insights (C3).
+        let change = ((thisMonth - lastMonthToSameDay) / lastMonthToSameDay * 100).rounded()
+        guard change.isFinite else { return nil }
+        let percent = Int(min(change, 1e12))
         if percent == 0 { return "About the same as last month by now" }
         return "\(abs(percent))% \(percent < 0 ? "less" : "more") than last month by now"
     }
