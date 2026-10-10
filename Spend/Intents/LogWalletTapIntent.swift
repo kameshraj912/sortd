@@ -709,17 +709,22 @@ nonisolated enum WalletTapText {
         // "CN¥" before the bare "¥" alternative, so yuan keep their "CN" and
         // aren't cut down to a yen sign. "JP¥" (how en_GB and en_SG phones
         // write yen) is listed too: the bare "¥" can't start inside a word.
-        let marker = #"(?:[A-Z]{0,2}\$|CN¥|JP¥|€|£|¥|₹|฿|₱|₩|₪|RM|Rs\.?|[A-Z]{3})"#
-        // Grouped thousands ("1,234.50", "1.234,50") or a plain run of digits
+        let marker = #"(?:[A-Z]{0,2}\$|CN¥|JP¥|€|£|¥|₹|฿|₱|₩|₪|RM|Rs\.?|Rp|[A-Z]{3})"#
+        // Grouped thousands ("1,234.50", "1.234,50", "12 345,67"), Indian
+        // lakh groups ("1,23,456.00", b10-A1) or a plain run of digits
         // ("1234.50" — the old pattern stopped at 3 digits and read A$123).
         // A group is exactly 3 digits: "A$45 1234" is A$45, not A$45 123.
-        let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
+        let number = #"(?:\d{1,2}(?:,\d{2})+,\d{3}(?!\d)|\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
+        // A sign written after the number, as French, German and Spanish
+        // phones do ("12,50 €", "1.234,50 €"; b10-A2 to A4).
+        let trailingSign = #"(?:€|£|¥|₹|฿|₱|₩|₪)"#
         let patterns = [
             // Not inside a word: "PANTRY 24" is not 24 Turkish lira.
             #"(?<![A-Za-z])"# + sign + marker + #"\s?"# + number, // A$4.50, SGD 6.20, -$5
             // Starts where a number starts, so a long run of digits is not
             // rescanned from every digit (b10-A13).
             sign + #"(?<![\d.,])"# + number + #"\s?(?:[A-Z]{3})\b"#, // 6.20 SGD
+            sign + #"(?<![\d.,])"# + number + #"\s?"# + trailingSign, // 12,50 €
             // 4.50, 1,234.50 — the whole number, not "234.50" out of it.
             sign + #"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)[.,]\d{2}\b"#,
         ]
@@ -778,6 +783,6 @@ nonisolated enum WalletTapText {
         if hit.unicodeScalars.contains(where: { $0.properties.generalCategory == .currencySymbol }) { return true }
         if hit.range(of: #"\d[.,]\d{2}(?!\d)"#, options: .regularExpression) != nil { return true }
         let marker = hit.trimmingCharacters(in: CharacterSet(charactersIn: "-−")).prefix(2)
-        return marker == "RM" || marker == "Rs"
+        return marker == "RM" || marker == "Rs" || marker == "Rp"
     }
 }

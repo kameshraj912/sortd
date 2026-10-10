@@ -49,6 +49,8 @@ nonisolated enum AmountParser {
         // "Rs500", "Rs 500": rupees only straight before a number, so a shop
         // called "RS Components" is not.
         if upper.range(of: #"(?<![A-Z])RS\s?[0-9]"#, options: .regularExpression) != nil { return "INR" }
+        // "Rp150.000": rupiah, the same way (b10-A4).
+        if upper.range(of: #"(?<![A-Z])RP\s?[0-9]"#, options: .regularExpression) != nil { return "IDR" }
         return upper.split(whereSeparator: { !$0.isLetter })
             .first { $0.count == 3 && isoCodes.contains(String($0)) }
             .map(String.init)

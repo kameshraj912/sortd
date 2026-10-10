@@ -72,10 +72,9 @@ struct AbuseBuild10Tests {
     /// "₹1,23,456.00" as ₹1.23 and "Rs. 1,50,000" as ₹1.50. The tap's own
     /// Amount field reads them right.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:667) only knows groups of
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:667) only knows groups of
     /// three, so it stops after "1" and takes ",23" as the cents.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A1", "lakh-grouped rupees in a notification are read as ₹1.23"),
+    @Test(.bug(id: "b10-A1", "lakh-grouped rupees in a notification are read as ₹1.23"),
           arguments: apps)
     func lakhRupeesInANotificationAreReadWhole(app: String) async throws {
         for (text, expected) in [("₹1,23,456.00", "123456"), ("Rs. 1,50,000", "150000")] {
@@ -93,10 +92,9 @@ struct AbuseBuild10Tests {
     /// and the wrong currency. (The U+202F tap-field case is hunt-money-03;
     /// this is the notification reader, and the plain space too.)
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:668-674): no pattern takes a
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:668-674): no pattern takes a
     /// trailing "€", and the cents pattern restarts after the space.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A2", "space-grouped euros with a trailing € are read as the last group in the card's currency"),
+    @Test(.bug(id: "b10-A2", "space-grouped euros with a trailing € are read as the last group in the card's currency"),
           arguments: apps)
     func spaceGroupedEurosInANotificationAreReadWhole(app: String) async throws {
         for (text, expected) in [("12\u{202F}345,67\u{00A0}€", "12345.67"), ("1 234,50 €", "1234.50")] {
@@ -111,10 +109,9 @@ struct AbuseBuild10Tests {
     /// "12,50 €" in a notification keeps the amount but drops the euro: it
     /// is saved as A$12.50 (the card's currency). The tap field gets EUR.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:673) returns only "12,50", so
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:673) returns only "12,50", so
     /// `AmountParser` never sees the "€".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A3", "a trailing € in a notification is dropped, so euros are saved as the card's currency"),
+    @Test(.bug(id: "b10-A3", "a trailing € in a notification is dropped, so euros are saved as the card's currency"),
           arguments: apps)
     func aTrailingEuroSignInANotificationIsKept(app: String) async throws {
         let r = try await notifyAmount("12,50 €", app: app, ctx: store(), book: book())
@@ -127,10 +124,9 @@ struct AbuseBuild10Tests {
     /// find no amount at all in a notification, so the purchase is lost
     /// ("no amount" / "not a purchase"). The tap field reads both.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:663-674): "Rp" is not a
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:663-674): "Rp" is not a
     /// marker and the cents-only pattern needs no digit before the dot.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A4", "dot-grouped amounts with no leading sign are missed in a notification"),
+    @Test(.bug(id: "b10-A4", "dot-grouped amounts with no leading sign are missed in a notification"),
           arguments: apps)
     func dotGroupedAmountsInANotificationAreNotMissed(app: String) async throws {
         for (text, expected, currency) in [("1.234,50 €", "1234.50", "EUR"), ("Rp150.000", "150000", "IDR")] {
