@@ -80,6 +80,11 @@ struct ApplePayAutomationGuide: View {
 
     var body: some View {
         NavigationStack {
+            // The bar sits under the page, not over it: floating over the
+            // page, it hid the last paragraph ("come back to Sortd…") until
+            // the person thought to scroll. The page and its scroll
+            // indicator now end above the bar, on every page and at AX5.
+            VStack(spacing: 0) {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -150,8 +155,10 @@ struct ApplePayAutomationGuide: View {
             // down, two pages with the same layout looked like nothing moved.
             .onChange(of: page) { proxy.scrollTo(Self.topID, anchor: .top) }
             }
+            bottomBar
+                .background(Color.page)
+            }
             .background(Color.page)
-            .safeAreaBar(edge: .bottom, spacing: 0) { bottomBar }
             .navigationTitle("Step \(page + 1) of \(steps.count)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
