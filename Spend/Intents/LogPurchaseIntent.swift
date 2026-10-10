@@ -498,6 +498,15 @@ struct LogPurchaseIntent: AppIntent {
     private static func shopsAgree(_ t: Transaction, _ name: String) -> Bool {
         name.isEmpty || lacksShop(t)
             || Deduper.similarity(t.rawMerchant, name) >= 0.8 || Deduper.similarity(t.merchant, name) >= 0.8
+            || sameSymbolName(t.rawMerchant, name)
+    }
+
+    /// Two names with no letters or digits ("🍕"), which `Deduper.similarity`
+    /// scores 0, agree when they are written the same (b10-A12).
+    private static func sameSymbolName(_ a: String, _ b: String) -> Bool {
+        guard MerchantName.key(a).isEmpty, MerchantName.key(b).isEmpty else { return false }
+        let x = MerchantName.clean(a), y = MerchantName.clean(b)
+        return !x.isEmpty && x == y
     }
 
     /// An unknown card on either side never disagrees; two known cards must match.

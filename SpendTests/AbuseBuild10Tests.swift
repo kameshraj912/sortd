@@ -272,10 +272,9 @@ struct AbuseBuild10Tests {
     /// A shop named only in emoji ("🍕"): the tap and Wallet's notification
     /// of one purchase never pair, so it is counted twice.
     ///
-    /// Known bug: `LogPurchaseIntent.shopsAgree` (Spend/Intents/LogPurchaseIntent.swift:488) uses
+    /// Fixed 10 Oct 2026, was: `LogPurchaseIntent.shopsAgree` (Spend/Intents/LogPurchaseIntent.swift:488) uses
     /// `Deduper.similarity`, which is 0 for two names with no letters or digits.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A12", "an emoji-only shop's tap and notification are two rows"))
+    @Test(.bug(id: "b10-A12", "an emoji-only shop's tap and notification are two rows"))
     func anEmojiOnlyShopsTapAndNotificationAreOneRow() async throws {
         let ctx = store(), b = book()
         try await tap("A$23.40", "🍕", ctx: ctx, book: b, at: now)
