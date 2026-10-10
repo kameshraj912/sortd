@@ -593,7 +593,9 @@ extension RootView {
     var tabSelection: Binding<AppTab> {
         Binding(get: { tab }, set: { new in
             guard Date.now.timeIntervalSince(setupClosedAt) > 0.6 else { return }
-            if new == .add { showingAdd = true } else { tab = new }
+            if new == .add { showingAdd = true; return }
+            // The tab already showing, tapped again: back to its root.
+            if new == tab { TabReselect.shared.reselect(new) } else { tab = new }
         })
     }
 

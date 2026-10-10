@@ -6,6 +6,7 @@ struct ActivityView: View {
         NavigationStack {
             TransactionsScreen(fixedCard: nil)
         }
+        .popsToRootOnReselect(.activity)
     }
 }
 

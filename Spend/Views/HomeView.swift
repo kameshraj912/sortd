@@ -162,6 +162,8 @@ struct HomeView: View {
             .sheet(isPresented: $showingFounderNote) { FounderNoteSheet(moment: .aha) }
             .refreshNote($refreshNote, bottomPadding: 16)
         }
+        // Home tapped again: back to the top, any pushed screen gone.
+        .popsToRootOnReselect(.home)
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
