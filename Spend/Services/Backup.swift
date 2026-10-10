@@ -249,9 +249,21 @@ nonisolated enum Backup {
         "\(count) row\(count == 1 ? "" : "s") skipped (dates that can't be right)"
     }
 
+    /// Only the two fields every format version keeps.
+    private struct Header: Decodable {
+        let format: String
+        let version: Int
+    }
+
     static func decode(_ data: Data) throws -> Snapshot {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        // The version first: a newer Sortd may have changed any other field,
+        // and that file is "update Sortd", not "not a backup".
+        if let header = try? decoder.decode(Header.self, from: data), header.format == formatName,
+           header.version > formatVersion {
+            throw Failure.tooNew(header.version)
+        }
         guard let snapshot = try? decoder.decode(Snapshot.self, from: data),
               snapshot.format == formatName else {
             throw Failure.notABackup
@@ -328,6 +340,11 @@ nonisolated enum Backup {
         if mode == .replace || homeAfter != homeBefore {
             if mode == .replace { defaults.set(homeAfter, forKey: Money.homeKey) }
             defaults.set(homeAfter, forKey: FXService.convertedKey)
+        }
+        // Replace took the sample rows out: this is no longer sample data, so
+        // the banner and the analytics pause end too.
+        if mode == .replace, defaults.bool(forKey: DemoData.activeKey), !DemoData.hasRows(in: context) {
+            defaults.set(false, forKey: DemoData.activeKey)
         }
 
         return result

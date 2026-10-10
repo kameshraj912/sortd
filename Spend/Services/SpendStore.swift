@@ -102,6 +102,24 @@ enum SpendStore {
         return try open()
     }
 
+    /// Where `setAsideAndOpenEmpty` keeps the stores it moved aside.
+    static var recoveredStoresFolder: URL {
+        // The on-disk store's place, even in a DEBUG in-memory run (whose
+        // own url is /dev/null).
+        ModelConfiguration(schema: Schema(versionedSchema: SchemaV1.self), cloudKitDatabase: .none).url
+            .deletingLastPathComponent().appending(path: "Recovered stores")
+    }
+
+    /// Delete All Data: a store set aside by the recovery screen holds every
+    /// purchase it had, so it goes too.
+    static func removeRecoveredStores() {
+        let folder = recoveredStoresFolder
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        do { try FileManager.default.removeItem(at: folder) } catch {
+            ErrorLog.report(error, where: "SpendStore.removeRecoveredStores")
+        }
+    }
+
     /// For an App Intent only: never crashes the process. A dry run
     /// (`open()`) checks the store still opens cleanly first; only then is
     /// the real, shared `container` touched (spec 2026-09-26, Apple Pay
@@ -169,12 +187,14 @@ enum TransactionLogger {
         let learned = try known ?? learnedRules(in: context)
         let cleanName = MerchantName.clean(p.merchant)
 
-        // Only look at purchases near this date.
+        // Only look at purchases near this date. Never a sample purchase
+        // (`DemoData`): a real one merged into it would be left out of the
+        // backup and deleted by "Clear sample data".
         let from = p.date.addingTimeInterval(-Deduper.window)
         let to = p.date.addingTimeInterval(Deduper.window)
         let nearby = try context.fetch(FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.date >= from && $0.date <= to }
-        )).filter { !excluding.contains($0.id) }
+        )).filter { !excluding.contains($0.id) && $0.note != DemoData.marker }
         let candidate = Deduper.Candidate(date: p.date, merchant: p.merchant, amount: p.amount,
                                           currency: p.currency, card: p.card, source: p.source,
                                           platform: p.platform)

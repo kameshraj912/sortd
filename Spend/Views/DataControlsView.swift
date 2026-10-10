@@ -110,10 +110,15 @@ enum DataReset {
             ErrorLog.report(error, where: "DataReset.delete")
         }
         context.saveReporting(where: "DataReset.save")
-        // Picks up Google revokes that failed earlier, which the wipe below
-        // would otherwise lose.
-        GoogleAuth.revokePending()
-        Keychain.deleteAll()
+        // Taps waiting to be saved would be logged into the empty store at
+        // the next launch; a store the recovery screen set aside still holds
+        // every purchase it had.
+        TapQueue.clear()
+        SpendStore.removeRecoveredStores()
+        // The Google sign-in's token joins the revoke list (as Sign Out does)
+        // with the revokes that failed earlier, and the list outlives the
+        // wipe, so no grant is left on with nothing to cancel it.
+        GoogleAuth.revokePending(across: { Keychain.deleteAll() })
         #if SORTD_SIGNIN
         // The account lives in its own Keychain service: sign out by name.
         // Signed in, the PostHog person goes too: its delete is queued here,

@@ -209,12 +209,17 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         if pending.isEmpty { Keychain.delete(pendingKey) } else { Keychain.set(pending.joined(separator: "\n"), for: pendingKey) }
     }
 
-    /// For Delete All. Reads the saved list of revokes that never reached
-    /// Google, so the Keychain can be wiped straight away, then asks Google
-    /// again for each one. (The wipe would otherwise lose that list and leave
-    /// the grant switched on.)
-    static func revokePending() {
+    /// Delete All. The Keychain wipe would otherwise lose the list of
+    /// revokes that never reached Google, and the sign-in's own token, and
+    /// leave those grants switched on. The sign-in's own token goes on the list first (Sign Out
+    /// does the same), `wipe` runs (the Keychain wipe), and the list is put
+    /// back after it, so a revoke that does not reach Google now is still
+    /// tried later. Then each one is asked for.
+    static func revokePending(across wipe: () -> Void) {
+        queueIdentityRevoke()
         let tokens = pendingTokens(Keychain.get(pendingKey))
+        wipe()
+        if !tokens.isEmpty { Keychain.set(tokens.joined(separator: "\n"), for: pendingKey) }
         Task { for token in tokens { await revoke(token) } }
     }
 
