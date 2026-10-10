@@ -507,7 +507,9 @@ nonisolated enum StatementImport {
                 .flatMap { calendar.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
         }
         let word = line.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
-        if word == "today" { return noon(0) }
+        // Bank apps list purchases that haven't settled under "Pending",
+        // above the first day. They are today's, or very nearly.
+        if word == "today" || word == "pending" || word == "pending transactions" { return noon(0) }
         if word == "yesterday" { return noon(1) }
         // Wallet names the day for the last week: the latest one before today.
         if let target = weekdays.firstIndex(of: word) {
@@ -524,11 +526,25 @@ nonisolated enum StatementImport {
         return date
     }
 
-    /// A balance or total at the top of a bank app's screen, not a purchase.
+    /// A balance or total at the top of a bank app's screen, not a purchase:
+    /// "Available balance $1,234.56", "Credit limit $5,000.00". Every word
+    /// must be one a summary uses, so a shop called "TotalEnergies", "Speed
+    /// Limit Cafe" or "Balance Pilates" is still a purchase.
     private static func isSummaryLine(_ line: String) -> Bool {
-        let lower = line.lowercased()
-        return ["balance", "available", "limit", "total", "owing"].contains { lower.contains($0) }
+        let words = line.lowercased().split { !$0.isLetter }.map(String.init)
+        guard words.contains(where: { summaryKeys.contains($0) }) else { return false }
+        return words.allSatisfy { summaryKeys.contains($0) || summaryWords.contains($0) || summaryCodes.contains($0) }
     }
+
+    private static let summaryKeys: Set<String> = ["balance", "available", "limit", "total", "owing"]
+    private static let summaryWords: Set<String> = [
+        "account", "accounts", "everyday", "savings", "transaction", "credit", "debit", "card", "cards",
+        "current", "closing", "opening", "statement", "outstanding", "remaining", "funds", "cash",
+        "spent", "spending", "amount", "due", "minimum", "payment", "new", "last", "this", "month",
+        "your", "of", "to", "in", "at", "as", "on", "is", "a", "the", "and", "cr", "dr",
+    ]
+    /// Currency codes and symbols' letters that sit beside the amount ("A$", "RM").
+    private static let summaryCodes: Set<String> = ["a", "s", "us", "nz", "rm", "aud", "sgd", "usd", "nzd", "myr", "inr", "gbp", "eur"]
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
         var text = line

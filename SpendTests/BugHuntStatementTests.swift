@@ -915,6 +915,52 @@ struct BugHuntStatement1008Tests {
         #expect(only.first?.detail == "SEVEN SEEDS")
     }
 
+    // MARK: 12. A Pending group above the first day (S6)
+
+    /// A bank app lists unsettled purchases under "Pending" above "Today".
+    /// The pending purchase came first, so the list was read the Wallet way
+    /// (day under each purchase): every row took the next day down and the
+    /// last group was dropped.
+    @Test(.bug(id: "hunt-1008-S6", "a Pending purchase above the first day header shifts every date and drops the last group"))
+    func aPendingGroupKeepsEveryDate() {
+        let parsed = StatementImport.parse(text: """
+        Everyday Account
+        Available balance $1,234.56
+        Pending
+        Uber Eats -$31.40
+        Today
+        Woolworths Richmond -$58.30
+        Yesterday
+        Seven Seeds Coffee -$5.50
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.map(\.detail) == ["Uber Eats", "Woolworths Richmond", "Seven Seeds Coffee"])
+        #expect(parsed.rows.map { ymd($0.date) } == ["2026-10-03", "2026-10-03", "2026-10-02"])
+        #expect(parsed.skipped == 0)
+    }
+
+    // MARK: 13. Shops named like a summary line (S7)
+
+    /// `isSummaryLine` dropped any line containing "total", "limit",
+    /// "balance", "available" or "owing", so TotalEnergies and Speed Limit
+    /// Cafe vanished from a screenshot import.
+    @Test(.bug(id: "hunt-1008-S7", "a shop with total, limit, balance, available or owing in its name is dropped"))
+    func shopsWithSummaryWordsAreKept() {
+        let parsed = StatementImport.parse(text: """
+        Everyday Account
+        Available balance $1,234.56
+        Credit limit $5,000.00
+        Today
+        TotalEnergies Burwood -$60.00
+        Speed Limit Cafe -$12.00
+        Yesterday
+        Balance Pilates Studio -$25.00
+        Available Light Gallery -$9.00
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.map(\.detail) == ["TotalEnergies Burwood", "Speed Limit Cafe",
+                                              "Balance Pilates Studio", "Available Light Gallery"])
+        #expect(parsed.rows.map(\.amount) == [money("60.00"), money("12.00"), money("25.00"), money("9.00")])
+    }
+
     // MARK: 14. A headerless CSV with "time" or "date" in a shop (S8)
 
     /// NAB's headerless export: "TIMEZONE" has "time" in it and "EFTPOS
