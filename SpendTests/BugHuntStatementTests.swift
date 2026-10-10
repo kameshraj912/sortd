@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreGraphics
 import SwiftData
 @testable import Spend
 
@@ -1002,5 +1003,30 @@ struct BugHuntStatement1008Tests {
         """)
         #expect(headerless.map(\.kind) == [.spend, .moneyIn, .spend])
         #expect(headerless.map(\.detail) == ["WOOLWORTHS 3342", "SALARY ACME PTY LTD", "SEVEN SEEDS"])
+    }
+
+    // MARK: 16. A password-protected PDF (S10)
+
+    /// A locked PDF was told "Try saving it to Files first", which does not
+    /// help. It now says the file has a password.
+    @Test(.bug(id: "hunt-1008-S10", "a password-protected PDF is told to try saving it to Files first"))
+    func aLockedPDFSaysItHasAPassword() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("locked-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var box = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let info: [CFString: Any] = [kCGPDFContextUserPassword: "secret", kCGPDFContextOwnerPassword: "secret"]
+        let pdf = try #require(CGContext(url as CFURL, mediaBox: &box, info as CFDictionary))
+        pdf.beginPDFPage(nil)
+        pdf.endPDFPage()
+        pdf.closePDF()
+
+        do {
+            _ = try await StatementReader.read(fileAt: url)
+            Issue.record("a locked PDF was read")
+        } catch {
+            let message = error.localizedDescription
+            #expect(message.contains("password"))
+            #expect(!message.contains("Files first"))
+        }
     }
 }
