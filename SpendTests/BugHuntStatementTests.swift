@@ -131,8 +131,7 @@ struct BugHuntStatementTests {
     /// "EFTPOS DEBIT". Those rows then never merge with the Apple Pay tap for
     /// the same coffee (no name overlap), so each tapped purchase is counted
     /// twice after the import.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-stmt-4", "layout(for:) takes 'Transaction Type' as the description column"))
+    @Test(.bug(id: "hunt-stmt-4", "layout(for:) takes 'Transaction Type' as the description column"))
     func aTransactionTypeColumnIsNotTheMerchant() {
         let nab = """
         Date,Amount,Account Number,Empty,Transaction Type,Transaction Details,Balance,Category,Merchant Name
