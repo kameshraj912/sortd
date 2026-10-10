@@ -17,6 +17,7 @@ nonisolated enum StatementReader {
     enum Failure: LocalizedError {
         case unreadable
         case noPermission
+        case passwordProtected
         case empty
         case tooBig(Int)
 
@@ -24,6 +25,7 @@ nonisolated enum StatementReader {
             switch self {
             case .unreadable: "Sortd couldn't read that file."
             case .noPermission: "Sortd couldn't open that file. Try saving it to Files first, then pick it from there."
+            case .passwordProtected: "That PDF has a password, so Sortd can't read it. Save a copy without the password, then import that copy."
             case .empty: "That file has no text in it."
             case .tooBig(let mb): "That file is \(mb) MB. Try a single statement rather than a year of them."
             }
@@ -106,7 +108,9 @@ nonisolated enum StatementReader {
 
     static func readPDF(at url: URL) async throws -> Reading {
         guard let document = PDFDocument(url: url) else { throw Failure.unreadable }
-        if document.isLocked { throw Failure.noPermission }
+        // A statement locked with a password. Saving it to Files would not
+        // help, so say what the problem is.
+        if document.isLocked { throw Failure.passwordProtected }
 
         var text = ""
         for i in 0..<document.pageCount {

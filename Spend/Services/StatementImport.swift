@@ -83,7 +83,7 @@ nonisolated enum StatementImport {
             .filter { !$0.allSatisfy(\.isWhitespace) }
             .prefix(10)
         let counts = lines.map { line in
-            max(line.filter { $0 == "," }.count,
+            max(delimiterCommas(in: line),
                 max(line.filter { $0 == ";" }.count, line.filter { $0 == "\t" }.count))
         }
         for start in 0..<min(5, max(0, counts.count - 1)) {
@@ -93,6 +93,19 @@ nonisolated enum StatementImport {
             if run.filter({ $0 == reference }).count >= run.count - 1 { return .csv }
         }
         return .text
+    }
+
+    /// Commas that could split a CSV line. A PDF statement line such as
+    /// "02/09/2026 RENT 1,200.00 2,393.40" has commas only inside its
+    /// amounts; two on every line looked like a CSV and the file read as
+    /// nothing. Such a line counts none. A line with any other comma counts
+    /// them all, so a real CSV with a quoted "1,234.50" is unchanged.
+    private static func delimiterCommas(in line: Substring) -> Int {
+        let all = line.filter { $0 == "," }.count
+        guard all > 0 else { return 0 }
+        let amounts = #"(?<![\d.,])\d{1,3}(?:,\d{3})+\.\d{2}(?![\d,])"#
+        let rest = String(line).replacingOccurrences(of: amounts, with: "", options: .regularExpression)
+        return rest.contains(",") ? all : 0
     }
 
     /// Reads a file with the reader `reader(for:wasScanned:)` picks. This is
@@ -160,6 +173,10 @@ nonisolated enum StatementImport {
         var debit: Int?
         var credit: Int?
         var balance: Int?
+        /// A Currency column (Revolut, Wise): the code for each row's amount.
+        var currency: Int?
+        /// A column of DR / CR markers beside an unsigned amount.
+        var sign: Int?
         var hasAmount: Bool { amount != nil || debit != nil || credit != nil }
     }
 
@@ -169,11 +186,20 @@ nonisolated enum StatementImport {
         // A header row names its columns. Look at the first few rows only:
         // some exports put the account name and a blank line on top.
         for (i, row) in grid.prefix(5).enumerated() {
+            // A header names its columns and holds no data. A headerless
+            // row whose shop says "TIMEZONE" or "UPDATE" next to "EFTPOS
+            // DEBIT" is not a header: it has a date and an amount in it.
+            if row.contains(where: { looksLikeData($0) }) { continue }
             var found = Layout()
+            var strongDetail = false
             for (j, cell) in row.enumerated() {
                 let key = cell.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty else { continue }
-                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
+                if found.currency == nil, ["currency", "ccy", "currency code", "curr"].contains(key) {
+                    found.currency = j
+                } else if found.sign == nil, signHeaders.contains(key) {
+                    found.sign = j
+                } else if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
                                                        "time", "timestamp", "settled"]) {
                     found.date = j
                 } else if found.debit == nil, matches(key, ["debit", "withdrawal", "money out", "paid out", "spent"]) {
@@ -185,8 +211,12 @@ nonisolated enum StatementImport {
                 } else if found.amount == nil, matches(key, ["amount", "value", "total", "transaction amount"]),
                           !key.contains("round up"), !key.contains("roundup") {
                     found.amount = j
-                } else if found.detail == nil, matches(key, ["description", "details", "narrative", "merchant",
-                                                            "particulars", "reference", "transaction", "payee", "name"]) {
+                } else if !strongDetail, matches(key, strongDetailHeaders) {
+                    // "Description" or "Merchant" beats a "Reference" or
+                    // "Transaction Type" column that came before it.
+                    found.detail = j
+                    strongDetail = true
+                } else if found.detail == nil, matches(key, ["reference", "transaction", "name"]) {
                     found.detail = j
                 }
             }
@@ -204,6 +234,8 @@ nonisolated enum StatementImport {
         var dateHits = [Int](repeating: 0, count: width)
         var moneyHits = [Int](repeating: 0, count: width)
         var textLength = [Int](repeating: 0, count: width)
+        var signHits = [Int](repeating: 0, count: width)
+        var filled = [Int](repeating: 0, count: width)
 
         for row in sample {
             for (j, cell) in row.enumerated() where j < width {
@@ -214,6 +246,8 @@ nonisolated enum StatementImport {
                 let isMoney = signedAmount(trimmed) != nil
                 if isDate { dateHits[j] += 1 }
                 if isMoney { moneyHits[j] += 1 }
+                if !trimmed.isEmpty { filled[j] += 1 }
+                if signMarker(trimmed) != nil { signHits[j] += 1 }
                 if !isMoney, !isDate {
                     textLength[j] += trimmed.count
                 }
@@ -226,8 +260,10 @@ nonisolated enum StatementImport {
         let moneyColumns = moneyHits.enumerated().filter { $0.element > 0 }.map(\.offset)
         out.amount = moneyColumns.first
         if moneyColumns.count > 1 { out.balance = moneyColumns.last }
-        // The shop is text: never the date, the amount or the balance.
-        let taken = Set([out.date, out.amount, out.balance].compactMap { $0 })
+        // A column holding nothing but DR and CR says which way each amount went.
+        out.sign = signHits.indices.first { signHits[$0] > 0 && signHits[$0] == filled[$0] }
+        // The shop is text: never the date, the amount, the balance or the marker.
+        let taken = Set([out.date, out.amount, out.balance, out.sign].compactMap { $0 })
         out.detail = textLength.enumerated().filter { !taken.contains($0.offset) }
             .max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
         return out
@@ -235,6 +271,34 @@ nonisolated enum StatementImport {
 
     private static func matches(_ key: String, _ options: [String]) -> Bool {
         options.contains { key == $0 || key.contains($0) }
+    }
+
+    /// Header words for the shop that win over a weaker "Reference",
+    /// "Transaction Type" or "Name" column found earlier in the row.
+    private static let strongDetailHeaders = ["description", "details", "narrative", "merchant",
+                                              "particulars", "payee"]
+
+    /// Whole header names for a column of DR / CR markers.
+    private static let signHeaders: Set<String> = [
+        "dr/cr", "cr/dr", "dr / cr", "cr / dr", "dr cr", "drcr", "d/c", "c/d",
+        "debit/credit", "credit/debit", "debit / credit", "credit / debit",
+        "dr/cr indicator", "debit/credit indicator", "credit/debit indicator",
+    ]
+
+    /// A cell that is a date or an amount, so its row is data, not a header.
+    private static func looksLikeData(_ cell: String) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return isWholeDate(trimmed) || signedAmount(trimmed) != nil
+    }
+
+    /// "DR" or "DEBIT" is money out, "CR" or "CREDIT" money in; anything else nil.
+    private static func signMarker(_ cell: String) -> Kind? {
+        switch cell.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "DR", "D", "DEBIT": .spend
+        case "CR", "C", "CREDIT": .moneyIn
+        default: nil
+        }
     }
 
     private struct Money {
@@ -249,24 +313,31 @@ nonisolated enum StatementImport {
             let t = fields[index].trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? nil : t
         }
+        // The Currency column, when it holds a real code. A code or symbol
+        // in the amount cell itself still wins.
+        let currency = cell(layout.currency).map { $0.uppercased() }.flatMap {
+            isoCurrencyCodes.contains($0) ? $0 : nil
+        }
 
         // Separate Debit / Credit columns: whichever is filled says which way
         // the money went, so the sign in the cell doesn't matter. Some banks
         // fill the unused one with "0.00": that is empty, not a $0 purchase.
         if layout.debit != nil || layout.credit != nil {
             if let debit = cell(layout.debit), let parsed = signedAmount(debit), parsed.amount != 0 {
-                return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .spend)
+                return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency, kind: .spend)
             }
             if let credit = cell(layout.credit), let parsed = signedAmount(credit), parsed.amount != 0 {
-                return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .moneyIn)
+                return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency, kind: .moneyIn)
             }
             return nil
         }
 
-        // One signed column: out is negative, in is positive.
+        // One signed column: out is negative, in is positive. A DR / CR
+        // column beside it says so instead, when the amount has no sign.
         guard let raw = cell(layout.amount), let parsed = signedAmount(raw) else { return nil }
-        return Money(amount: abs(parsed.amount), currency: parsed.currency,
-                     kind: parsed.amount < 0 ? .spend : .moneyIn)
+        let kind = cell(layout.sign).flatMap(signMarker) ?? (parsed.amount < 0 ? .spend : .moneyIn)
+        return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency,
+                     kind: kind)
     }
 
     private static func longestText(in fields: [String], skipping: Set<Int>) -> String {
@@ -436,7 +507,9 @@ nonisolated enum StatementImport {
                 .flatMap { calendar.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
         }
         let word = line.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
-        if word == "today" { return noon(0) }
+        // Bank apps list purchases that haven't settled under "Pending",
+        // above the first day. They are today's, or very nearly.
+        if word == "today" || word == "pending" || word == "pending transactions" { return noon(0) }
         if word == "yesterday" { return noon(1) }
         // Wallet names the day for the last week: the latest one before today.
         if let target = weekdays.firstIndex(of: word) {
@@ -453,11 +526,25 @@ nonisolated enum StatementImport {
         return date
     }
 
-    /// A balance or total at the top of a bank app's screen, not a purchase.
+    /// A balance or total at the top of a bank app's screen, not a purchase:
+    /// "Available balance $1,234.56", "Credit limit $5,000.00". Every word
+    /// must be one a summary uses, so a shop called "TotalEnergies", "Speed
+    /// Limit Cafe" or "Balance Pilates" is still a purchase.
     private static func isSummaryLine(_ line: String) -> Bool {
-        let lower = line.lowercased()
-        return ["balance", "available", "limit", "total", "owing"].contains { lower.contains($0) }
+        let words = line.lowercased().split { !$0.isLetter }.map(String.init)
+        guard words.contains(where: { summaryKeys.contains($0) }) else { return false }
+        return words.allSatisfy { summaryKeys.contains($0) || summaryWords.contains($0) || summaryCodes.contains($0) }
     }
+
+    private static let summaryKeys: Set<String> = ["balance", "available", "limit", "total", "owing"]
+    private static let summaryWords: Set<String> = [
+        "account", "accounts", "everyday", "savings", "transaction", "credit", "debit", "card", "cards",
+        "current", "closing", "opening", "statement", "outstanding", "remaining", "funds", "cash",
+        "spent", "spending", "amount", "due", "minimum", "payment", "new", "last", "this", "month",
+        "your", "of", "to", "in", "at", "as", "on", "is", "a", "the", "and", "cr", "dr",
+    ]
+    /// Currency codes and symbols' letters that sit beside the amount ("A$", "RM").
+    private static let summaryCodes: Set<String> = ["a", "s", "us", "nz", "rm", "aud", "sgd", "usd", "nzd", "myr", "inr", "gbp", "eur"]
 
     private static func detail(in line: String, without range: Range<String.Index>) -> String? {
         var text = line
@@ -643,8 +730,17 @@ nonisolated enum StatementImport {
     /// all. Money out shows up as `(12.50)`, `12.50-`, `12.50 DR` or `-12.50`.
     /// A line with no sign at all is spending — that is what a statement is
     /// mostly made of.
+    ///
+    /// Cents after a comma ("12,50", "1.234,50") are read the European way,
+    /// tried first so "-12,50" is not cut to 12. That needs exactly two
+    /// digits after the comma and nothing number-like after them, so
+    /// "1,234.50" is still thousands. Indian lakh grouping ("1,23,456.00")
+    /// is one number too, not ₹1.
     static func lastAmount(in line: String) -> Amount? {
-        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{2}))?\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
+        let european = #"(?<ewhole>\d{1,3}(?:\.\d{3})+|\d+),(?<ecents>\d{2})(?![\d]|[.,]\d)"#
+        let plain = #"(?<whole>\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})+,\d{3}|\d+)(?:\.(?<cents>\d{2}))?"#
+        let pattern = #"(?<![\w.])(?<open>\()?\s*(?<sign>[-+\x{2212}])?\s*(?<sym>A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*(?:"#
+            + european + "|" + plain + #")\s*(?<close>\))?\s*(?<suffix>CR|DR|-)?(?![\w])"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let ns = line as NSString
         let matches = regex.matches(in: line, range: NSRange(location: 0, length: ns.length))
@@ -658,7 +754,7 @@ nonisolated enum StatementImport {
         // "MCDONALDS 123 GEORGE ST 12.50" the street number isn't money.
         // When a line has two of those, the first is the purchase and the
         // later one is the running balance ("WOOLWORTHS 12.50 1,034.20").
-        let money = matches.filter { has($0, "cents") || has($0, "sym") || has($0, "sign") }
+        let money = matches.filter { has($0, "cents") || has($0, "ecents") || has($0, "sym") || has($0, "sign") }
         let best = money.first ?? matches.last!
 
         func group(_ name: String) -> String? {
@@ -666,8 +762,8 @@ nonisolated enum StatementImport {
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
 
-        let whole = (group("whole") ?? "0").replacingOccurrences(of: ",", with: "")
-        let cents = group("cents") ?? "00"
+        let whole = (group("whole") ?? group("ewhole") ?? "0").filter(\.isNumber)
+        let cents = group("cents") ?? group("ecents") ?? "00"
         guard let value = Decimal(string: "\(whole).\(cents)") else { return nil }
         guard let range = Range(best.range, in: line) else { return nil }
 
@@ -701,7 +797,8 @@ nonisolated enum StatementImport {
         // before or after the number ("AUD -58.30", "12.00 SGD"). Cents after
         // a dot ("1,234.50"), or after a comma ("-12,50", "1.234,50"), the
         // European way, which is why `parseCSV` reads ";" files at all.
-        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
+        // Indian lakh grouping ("1,23,456.00") is thousands too.
+        let number = #"(?:(\d{1,3}(?:,\d{3})*|\d{1,2}(?:,\d{2})+,\d{3}|\d+)(?:\.(\d{1,2}))?|(\d{1,3}(?:\.\d{3})*|\d+),(\d{1,2}))"#
         let pattern = #"^\(?\s*[-+]?\s*(?:([A-Za-z]{3})\s*)?(A\$|S\$|US\$|NZ\$|RM|₹|£|€|\$)?\s*[-+]?\s*"# + number
             + #"\s*\)?\s*(CR|DR)?\s*([A-Za-z]{3})?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }

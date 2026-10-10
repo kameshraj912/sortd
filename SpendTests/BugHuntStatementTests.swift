@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreGraphics
 import SwiftData
 @testable import Spend
 
@@ -130,8 +131,7 @@ struct BugHuntStatementTests {
     /// "EFTPOS DEBIT". Those rows then never merge with the Apple Pay tap for
     /// the same coffee (no name overlap), so each tapped purchase is counted
     /// twice after the import.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-stmt-4", "layout(for:) takes 'Transaction Type' as the description column"))
+    @Test(.bug(id: "hunt-stmt-4", "layout(for:) takes 'Transaction Type' as the description column"))
     func aTransactionTypeColumnIsNotTheMerchant() {
         let nab = """
         Date,Amount,Account Number,Empty,Transaction Type,Transaction Details,Balance,Category,Merchant Name
@@ -689,17 +689,45 @@ struct BugHuntStatement1008Tests {
     /// `lastAmount` (PDF text and screenshots) still only knows "." for
     /// cents. "CARREFOUR 12,50" is booked as 50.00, "-8,20" as 8.00 and
     /// "1.234,50" as 50.00.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1008-stmt-3", "lastAmount reads 12,50 as 50 and -8,20 as 8 in PDF and screenshot text"))
+    @Test(.bug(id: "hunt-1008-stmt-3", "lastAmount reads 12,50 as 50 and -8,20 as 8 in PDF and screenshot text"))
     func decimalCommasInTextAreRead() {
         let rows = StatementImport.rows(fromText: """
         01/09/2026 CARREFOUR PARIS 12,50
         02/09/2026 MONOPRIX -8,20
         03/09/2026 LIDL BERLIN 1.234,50
+        04/09/2026 EDEKA HAMBURG -1.234,56
         """)
-        #expect(rows.count == 3)
-        #expect(rows.map(\.amount) == [money("12.50"), money("8.20"), money("1234.50")])
+        #expect(rows.count == 4)
+        #expect(rows.map(\.amount) == [money("12.50"), money("8.20"), money("1234.50"), money("1234.56")])
         #expect(rows.allSatisfy { !$0.detail.contains(",") })
+        // Unchanged: dot cents and comma thousands, with a balance after.
+        let au = StatementImport.rows(fromText: "05/09/2026 RENT PAYMENT 1,234.50 2,451.70")
+        #expect(au.map(\.amount) == [money("1234.50")])
+        #expect(au.first?.detail.hasPrefix("RENT PAYMENT") == true)
+    }
+
+    // MARK: 3b. Lakh-grouped rupees (S4)
+
+    /// "1,23,456.00" is how India writes 123,456.00. A CSV cell with it was
+    /// skipped, and the text reader read "₹1,23,456.00" as ₹1.
+    @Test(.bug(id: "hunt-1008-S4", "lakh amounts are skipped in a CSV and read as ₹1 in text"))
+    func lakhAmountsAreRead() {
+        let csv = StatementImport.parse(csv: """
+        Date,Description,Amount
+        01/09/2026,FLIPKART BENGALURU,"-1,23,456.00"
+        02/09/2026,SWIGGY,-450.00
+        """)
+        #expect(csv.skipped == 0)
+        #expect(csv.rows.map(\.amount) == [money("123456.00"), money("450.00")])
+        #expect(csv.rows.first?.kind == .spend)
+
+        let text = StatementImport.rows(fromText: """
+        01/09/2026 FLIPKART BENGALURU ₹1,23,456.00
+        02/09/2026 CROMA MUMBAI 12,34,567.50
+        """)
+        #expect(text.map(\.amount) == [money("123456.00"), money("1234567.50")])
+        #expect(text.first?.currency == "INR")
+        #expect(text.map(\.detail) == ["FLIPKART BENGALURU", "CROMA MUMBAI"])
     }
 
     // MARK: 4. A Currency column is ignored
@@ -708,8 +736,7 @@ struct BugHuntStatement1008Tests {
     /// columns. `layout(for:)` has no currency column, so a EUR card payment
     /// has no currency and `save` books it in the home currency: EUR 12.50
     /// becomes A$12.50 (or S$12.50), one for one.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1008-stmt-4", "a CSV Currency column is ignored; foreign rows are booked in the home currency"))
+    @Test(.bug(id: "hunt-1008-stmt-4", "a CSV Currency column is ignored; foreign rows are booked in the home currency"))
     func aCurrencyColumnIsRead() {
         let revolut = """
         Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
@@ -721,6 +748,15 @@ struct BugHuntStatement1008Tests {
         #expect(rows.first?.amount == money("12.50"))
         #expect(rows.first?.currency == "EUR")
         #expect(rows.last?.currency == "GBP")
+
+        // A code inside the amount cell still wins; a blank or odd cell is no currency.
+        let mixed = StatementImport.rows(fromCSV: """
+        Date,Description,Amount,Currency
+        01/09/2026,CARREFOUR,EUR -12.50,GBP
+        02/09/2026,SEVEN SEEDS,-5.50,
+        03/09/2026,WOOLWORTHS,-58.30,N/A
+        """)
+        #expect(mixed.map(\.currency) == ["EUR", nil, nil])
     }
 
     // MARK: 5. A number at the start of a shop name becomes the year
@@ -833,5 +869,163 @@ struct BugHuntStatement1008Tests {
         """, today: date("2026-10-03"))
         #expect(parsed.rows.count == 3)
         #expect(parsed.rows.map { ymd($0.date) } == ["2026-09-28", "2026-09-29", "2026-09-30"])
+    }
+
+    // MARK: 10. Thousands commas in PDF text (S3)
+
+    /// PDF text where every line has two amounts over 1,000 had two commas on
+    /// every line, so `reader(for:)` took it for a CSV and found nothing.
+    @Test(.bug(id: "hunt-1008-S3", "PDF text with two thousands commas on each line goes to the CSV reader"))
+    func pdfTextWithThousandsCommasIsText() {
+        let pdf = """
+        02/09/2026 RENT PAYMENT 1,200.00 2,393.40
+        03/09/2026 JB HI-FI MELBOURNE 1,099.00 1,294.40
+        04/09/2026 FLIGHT CENTRE 1,050.00 1,244.40
+        05/09/2026 APPLE STORE 1,249.00 1,995.40
+        """
+        #expect(StatementImport.reader(for: pdf) == .text)
+        let rows = StatementImport.parse(statement: pdf).rows
+        #expect(rows.map(\.amount) == [money("1200.00"), money("1099.00"), money("1050.00"), money("1249.00")])
+        #expect(rows.first?.detail.hasPrefix("RENT PAYMENT") == true)
+
+        // A real CSV with a quoted thousands amount on every line is still a CSV.
+        let csv = """
+        Date,Description,Amount
+        01/09/2026,RENT PAYMENT,"-1,200.00"
+        02/09/2026,JB HI-FI,"-1,099.00"
+        03/09/2026,APPLE STORE,"-1,249.00"
+        """
+        #expect(StatementImport.reader(for: csv) == .csv)
+    }
+
+    // MARK: 11. A Reference column before the shop (S5)
+
+    /// "Reference" matched the shop keywords first and kept the column, so
+    /// every row was named "REF…" and never merged with its tap.
+    @Test(.bug(id: "hunt-1008-S5", "a Reference column before the shop columns becomes the shop name"))
+    func aReferenceColumnIsNotTheShop() {
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Reference,Description,Amount
+        01/09/2026,REF000123456,SEVEN SEEDS COFFEE CARLTON,-5.50
+        02/09/2026,REF000123457,WOOLWORTHS 3342 RICHMOND,-58.30
+        """)
+        #expect(rows.map(\.detail) == ["SEVEN SEEDS COFFEE CARLTON", "WOOLWORTHS 3342 RICHMOND"])
+        // Reference alone is still used when there is nothing better.
+        let only = StatementImport.rows(fromCSV: "Date,Reference,Amount\n01/09/2026,SEVEN SEEDS,-5.50")
+        #expect(only.first?.detail == "SEVEN SEEDS")
+    }
+
+    // MARK: 12. A Pending group above the first day (S6)
+
+    /// A bank app lists unsettled purchases under "Pending" above "Today".
+    /// The pending purchase came first, so the list was read the Wallet way
+    /// (day under each purchase): every row took the next day down and the
+    /// last group was dropped.
+    @Test(.bug(id: "hunt-1008-S6", "a Pending purchase above the first day header shifts every date and drops the last group"))
+    func aPendingGroupKeepsEveryDate() {
+        let parsed = StatementImport.parse(text: """
+        Everyday Account
+        Available balance $1,234.56
+        Pending
+        Uber Eats -$31.40
+        Today
+        Woolworths Richmond -$58.30
+        Yesterday
+        Seven Seeds Coffee -$5.50
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.map(\.detail) == ["Uber Eats", "Woolworths Richmond", "Seven Seeds Coffee"])
+        #expect(parsed.rows.map { ymd($0.date) } == ["2026-10-03", "2026-10-03", "2026-10-02"])
+        #expect(parsed.skipped == 0)
+    }
+
+    // MARK: 13. Shops named like a summary line (S7)
+
+    /// `isSummaryLine` dropped any line containing "total", "limit",
+    /// "balance", "available" or "owing", so TotalEnergies and Speed Limit
+    /// Cafe vanished from a screenshot import.
+    @Test(.bug(id: "hunt-1008-S7", "a shop with total, limit, balance, available or owing in its name is dropped"))
+    func shopsWithSummaryWordsAreKept() {
+        let parsed = StatementImport.parse(text: """
+        Everyday Account
+        Available balance $1,234.56
+        Credit limit $5,000.00
+        Today
+        TotalEnergies Burwood -$60.00
+        Speed Limit Cafe -$12.00
+        Yesterday
+        Balance Pilates Studio -$25.00
+        Available Light Gallery -$9.00
+        """, today: date("2026-10-03"))
+        #expect(parsed.rows.map(\.detail) == ["TotalEnergies Burwood", "Speed Limit Cafe",
+                                              "Balance Pilates Studio", "Available Light Gallery"])
+        #expect(parsed.rows.map(\.amount) == [money("60.00"), money("12.00"), money("25.00"), money("9.00")])
+    }
+
+    // MARK: 14. A headerless CSV with "time" or "date" in a shop (S8)
+
+    /// NAB's headerless export: "TIMEZONE" has "time" in it and "EFTPOS
+    /// DEBIT" has "debit", so the first row was taken for a header and the
+    /// file read as nothing.
+    @Test(.bug(id: "hunt-1008-S8", "a headerless CSV row with time or date in the shop is read as the header"))
+    func aHeaderlessShopNamedLikeAHeaderIsData() {
+        let parsed = StatementImport.parse(csv: """
+        01/09/2026,-25.00,,,EFTPOS DEBIT,TIMEZONE CHADSTONE,2451.70
+        02/09/2026,-5.50,,,EFTPOS DEBIT,UPDATE CAFE CARLTON,2446.20
+        03/09/2026,-58.30,,,EFTPOS DEBIT,WOOLWORTHS 3342 RICHMOND,2387.90
+        """)
+        #expect(parsed.rows.map(\.amount) == [money("25.00"), money("5.50"), money("58.30")])
+        #expect(parsed.rows.first?.detail == "TIMEZONE CHADSTONE")
+        #expect(parsed.rows.allSatisfy { $0.kind == .spend })
+        #expect(parsed.skipped == 0)
+    }
+
+    // MARK: 15. A DR / CR column (S9)
+
+    /// Some banks print an unsigned amount and a separate DR / CR column.
+    /// The marker was ignored and an unsigned amount is money in, so every
+    /// purchase landed in "Money In".
+    @Test(.bug(id: "hunt-1008-S9", "a DR/CR marker in its own column is ignored, so every row is money in"))
+    func aDrCrColumnSaysWhichWay() {
+        let headed = StatementImport.rows(fromCSV: """
+        Date,Description,Amount,Dr/Cr
+        01/09/2026,WOOLWORTHS 3342,58.30,DR
+        02/09/2026,SALARY ACME PTY LTD,3200.00,CR
+        03/09/2026,SEVEN SEEDS,5.50,DR
+        """)
+        #expect(headed.map(\.kind) == [.spend, .moneyIn, .spend])
+        #expect(headed.map(\.detail) == ["WOOLWORTHS 3342", "SALARY ACME PTY LTD", "SEVEN SEEDS"])
+
+        let headerless = StatementImport.rows(fromCSV: """
+        01/09/2026,WOOLWORTHS 3342,58.30,DR
+        02/09/2026,SALARY ACME PTY LTD,3200.00,CR
+        03/09/2026,SEVEN SEEDS,5.50,DR
+        """)
+        #expect(headerless.map(\.kind) == [.spend, .moneyIn, .spend])
+        #expect(headerless.map(\.detail) == ["WOOLWORTHS 3342", "SALARY ACME PTY LTD", "SEVEN SEEDS"])
+    }
+
+    // MARK: 16. A password-protected PDF (S10)
+
+    /// A locked PDF was told "Try saving it to Files first", which does not
+    /// help. It now says the file has a password.
+    @Test(.bug(id: "hunt-1008-S10", "a password-protected PDF is told to try saving it to Files first"))
+    func aLockedPDFSaysItHasAPassword() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("locked-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var box = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let info: [CFString: Any] = [kCGPDFContextUserPassword: "secret", kCGPDFContextOwnerPassword: "secret"]
+        let pdf = try #require(CGContext(url as CFURL, mediaBox: &box, info as CFDictionary))
+        pdf.beginPDFPage(nil)
+        pdf.endPDFPage()
+        pdf.closePDF()
+
+        do {
+            _ = try await StatementReader.read(fileAt: url)
+            Issue.record("a locked PDF was read")
+        } catch {
+            let message = error.localizedDescription
+            #expect(message.contains("password"))
+            #expect(!message.contains("Files first"))
+        }
     }
 }
