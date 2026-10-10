@@ -260,13 +260,19 @@ struct LogPurchaseIntent: AppIntent {
                     // tap joins it, and its shop and card win.
                     if let absorbed = try Self.absorbNotificationRow(name: name, parsed: parsed, missingAmount: missingAmount,
                                                                      cardID: cardID, now: now, in: context) {
+                        await FXService.backfill(in: context)
                         return absorbed
                     }
                     companion = try Self.mergeTapCompanion(name: name, missingAmount: missingAmount, missingShop: missingShop,
                                                            parsed: parsed, cardID: cardID, seen: seen, now: now, in: context)
                 }
                 switch companion {
-                case .merged(let outcome): return outcome
+                case .merged(let outcome):
+                    // A merge can fill in an amount or change the currency,
+                    // which leaves the row without a home value: rate it
+                    // now, not when the app next opens (U23).
+                    await FXService.backfill(in: context)
+                    return outcome
                 case .notMerged(let excluding): excludeFromLog = excluding
                 }
             }

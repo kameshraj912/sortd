@@ -343,4 +343,29 @@ struct BugHuntApplePayHunt1008Tests {
         #expect(t.amount == Decimal(string: "4.50"))
         #expect(t.currencyCode == "GBP")
     }
+
+    // MARK: - U23 A merged tap waits for a rate until the app opens
+
+    /// A tap with no amount, then the full tap a minute later in a foreign
+    /// currency: `mergeTapCompanion` fills the amount and currency in and
+    /// clears the home value, but returned before `FXService.backfill`, so
+    /// the purchase sat out of every total until the app next opened. The
+    /// day's rate is saved first, so no network is needed.
+    @Test(.bug("U23: a merged tap gets no exchange rate until the app opens"))
+    func aMergedForeignTapGetsItsRateAtOnce() async throws {
+        let ctx = store(), b = book()
+        let foreign = Money.home == "SGD" ? "USD" : "SGD"
+        let typed = foreign == "SGD" ? "S$20.00" : "US$20.00"
+        let day = FXService.dayString(now)
+        ctx.insert(FXRate(key: Money.home == "AUD" ? "\(foreign)-\(day)" : "\(foreign)>\(Money.home)-\(day)", rate: 1.1))
+        try ctx.save()
+
+        try await tap("Toast Box", "", at: 0, ctx: ctx, book: b)
+        let r = try await tap("Toast Box", typed, at: 60, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(r.merged)
+        #expect(t.currencyCode == foreign)
+        #expect(t.audAmount == Decimal(string: "22.00"), "home value \(String(describing: t.audAmount))")
+        #expect(try rows(ctx).count == 1)
+    }
 }
