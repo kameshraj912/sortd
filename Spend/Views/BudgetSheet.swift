@@ -5,6 +5,7 @@ import SwiftUI
 struct BudgetSheet: View {
     @Binding var budget: Double
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @State private var text = ""
     @State private var saved = 0
     @FocusState private var focused: Bool
@@ -180,7 +181,7 @@ struct BudgetSheet: View {
 
             VStack(spacing: 12) {
                 Button {
-                    budget = value
+                    commit(value)
                     saved += 1
                     Analytics.shared.track(.budgetSet)
                     dismiss()
@@ -193,7 +194,7 @@ struct BudgetSheet: View {
 
                 if budget > 0 {
                     Button {
-                        budget = 0
+                        commit(0)
                         dismiss()
                     } label: {
                         Text("Remove Budget")
@@ -208,5 +209,12 @@ struct BudgetSheet: View {
             }
             .buttonStyle(.pressable)
         }
+    }
+
+    /// Saves the budget and redraws the widgets, which show what is left of
+    /// it: a save to the store refreshes them, a budget change does not.
+    private func commit(_ value: Double) {
+        budget = value
+        WidgetBridge.refresh(from: context)
     }
 }

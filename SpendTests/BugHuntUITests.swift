@@ -304,8 +304,7 @@ struct BugHuntUITests1008 {
     /// host as the id, so `UUID(uuidString:)` in `follow`
     /// (Router.swift:97) gets "<uuid>/extra/parts", fails, and Activity
     /// opens with nothing selected.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-ui-1008-02", "sortd://purchase/<uuid>/extra/parts opens nothing"))
+    @Test(.bug(id: "hunt-ui-1008-02", "sortd://purchase/<uuid>/extra/parts opens nothing"))
     func aPurchaseLinkWithExtraPathPartsStillNamesThePurchase() throws {
         let id = UUID()
         let url = try #require(URL(string: "sortd://purchase/\(id.uuidString)/extra/parts"))
@@ -324,8 +323,7 @@ struct BugHuntUITests1008 {
     /// `hasAnyPurchases` from every row, while its totals (line 76-80) and
     /// Activity (`Transaction.excludingLegacyTest`) leave the health-check
     /// and legacy test rows out.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-ui-1008-03", "the widgets show $0 instead of “Nothing logged” when only the health check ran"))
+    @Test(.bug(id: "hunt-ui-1008-03", "the widgets show $0 instead of “Nothing logged” when only the health check ran"))
     func aStoreWithOnlyTheHealthCheckRowReadsAsNothingLogged() async throws {
         let ctx = try store()
         _ = try await LogWalletTapIntent.handle(ApplePayHealthCheck.payloadText, in: ctx, book: book(), now: start)
@@ -336,3 +334,46 @@ struct BugHuntUITests1008 {
         #expect(!s.hasAnyPurchases, "hasAnyPurchases is true with no real purchase, so the widgets draw $0")
     }
 }
+
+// MARK: - Fixes, 10 Oct 2026 (branch fix-data)
+
+/// The traced UI items fixed on 10 Oct 2026.
+@MainActor
+struct BugHuntUIFixesOct10Tests {
+    private func source(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    /// U18: the budget is a setting, not a save to the store, so the
+    /// widgets' "left this month" stayed on the old budget until the next
+    /// purchase. Save and Remove now redraw them.
+    @Test(.bug("U18: changing or removing the monthly budget does not refresh the widgets"))
+    func changingTheBudgetRefreshesTheWidgets() throws {
+        let sheet = try source("Spend/Views/BudgetSheet.swift")
+        let commit = try #require(sheet.range(of: "private func commit(_ value: Double)"))
+        #expect(sheet[commit.upperBound...].prefix(200).contains("WidgetBridge.refresh"))
+        #expect(sheet.components(separatedBy: "commit(").count - 1 == 3, "Save and Remove both go through commit")
+    }
+
+    /// U21: Control Center, a notification pulled down or a Face ID sheet
+    /// make the scene inactive for a moment, and that ended Activity's Undo.
+    @Test(.bug("U21: Activity's Undo ends on any scene interruption"))
+    func undoSurvivesAMomentaryInterruption() {
+        #expect(!TransactionsScreen.endsUndo(.inactive))
+        #expect(!TransactionsScreen.endsUndo(.active))
+        #expect(TransactionsScreen.endsUndo(.background))
+    }
+
+    /// U22: with the store unopenable the app runs on an empty stand-in, and
+    /// Siri answered "nothing spent" from it. It now says so instead.
+    @Test(.bug("U22: Siri on a store that failed to open answers as if empty"))
+    func siriSaysTheStoreDidNotOpen() throws {
+        #expect(throws: SpendQuestions.Refusal.storeUnavailable) {
+            try SpendQuestions.checkAccess(appLockOn: false, storeFailed: true)
+        }
+        let words = String(localized: SpendQuestions.Refusal.storeUnavailable.localizedStringResource)
+        #expect(!words.isEmpty && !words.contains("Apple"))
+    }
+}
+

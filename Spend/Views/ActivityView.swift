@@ -243,7 +243,7 @@ struct TransactionsScreen: View {
         // Leaving the app ends the Undo window: save the delete now, or the
         // 8-second timer may never fire and the widgets keep the purchase.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { commitDelete() }
+            if Self.endsUndo(phase) { commitDelete() }
         }
     }
 
@@ -278,6 +278,11 @@ struct TransactionsScreen: View {
     }
 
     // MARK: Delete with undo
+
+    /// Only going to the background ends the Undo window. A pull-down of
+    /// Control Center or a notification, Face ID or a system sheet makes the
+    /// scene inactive for a moment; Undo must still be there after it.
+    static func endsUndo(_ phase: ScenePhase) -> Bool { phase == .background }
 
     private static let toastSpring = Animation.spring(duration: 0.35)
 

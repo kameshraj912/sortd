@@ -77,11 +77,12 @@ final class Router {
     /// parsing can be tested without a screen. Nil for any other scheme.
     nonisolated static func target(for url: URL) -> Target? {
         guard url.scheme == "sortd" else { return nil }
-        // "sortd://add" puts "add" in the host, not the path; whatever
-        // follows the host ("/<id>") is the id.
+        // "sortd://add" puts "add" in the host, not the path; the first part
+        // after the host ("/<id>") is the id. Anything after that
+        // ("/<id>/extra/parts") is ignored, so the link still opens the row.
         if let host = url.host() {
-            let id = url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            return Target(name: host, id: id.isEmpty ? nil : id)
+            let id = url.path().split(separator: "/").first.map(String.init)
+            return Target(name: host, id: id)
         }
         let parts = url.path().split(separator: "/").map(String.init)
         return Target(name: parts.first ?? "", id: parts.dropFirst().first)
