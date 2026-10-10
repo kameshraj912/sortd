@@ -145,6 +145,8 @@ final class Analytics {
         static func setupStep(_ caseName: String) -> ScreenName { ScreenName("setup.\(caseName)") }
         /// The Apple Pay walk-through, page 1-based.
         static func applePayGuide(page: Int) -> ScreenName { ScreenName("applePayGuide.\(page)") }
+        /// Sends the queued events now. Optional; a spy leaves it out.
+        func flush()
     }
 
     /// Only scalars can be a property: no arrays, no dictionaries, nothing
@@ -472,6 +474,10 @@ final class Analytics {
         sink.identify(hash)
     }
 
+    /// Sends what the SDK still holds now. Before a person is deleted, so
+    /// no queued event reaches PostHog after the delete and makes it again.
+    func flush() { sink.flush() }
+
     /// Sign-out and Delete All: back to an anonymous id.
     func signedOut() {
         identityBox.withLock { $0 = nil }
@@ -533,6 +539,7 @@ extension Analytics.Sink {
     func setOptedOut(_ out: Bool, identity: String?) {}
     func register(_ properties: [String: Any]) {}
     func unregister(_ key: String) {}
+    func flush() {}
 }
 
 /// No key in this build: nothing is sent anywhere.
@@ -557,11 +564,13 @@ protocol PostHogClient: AnyObject {
     func optOut()
     func register(_ properties: [String: Any])
     func unregister(_ key: String)
+    func flush()
 }
 
 extension PostHogClient {
     func register(_ properties: [String: Any]) {}
     func unregister(_ key: String) {}
+    func flush() {}
 }
 
 /// The real thing. Session replay on only in a `SORTD_REPLAY` build (the
@@ -652,6 +661,11 @@ final class PostHogSink: Analytics.Sink {
         client.screen(name)
     }
 
+    func flush() {
+        guard isSetUp else { return }
+        client.flush()
+    }
+
     func isFeatureEnabled(_ key: String) -> Bool {
         guard isSetUp else { return false }
         return client.isFeatureEnabled(key)
@@ -722,4 +736,5 @@ final class LivePostHogClient: PostHogClient {
     func optOut() { PostHogSDK.shared.optOut() }
     func register(_ properties: [String: Any]) { PostHogSDK.shared.register(properties) }
     func unregister(_ key: String) { PostHogSDK.shared.unregister(key) }
+    func flush() { PostHogSDK.shared.flush() }
 }

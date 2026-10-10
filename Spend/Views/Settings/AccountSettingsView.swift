@@ -29,6 +29,8 @@ struct AccountSettingsView: View {
     struct Notice {
         let title: String
         let message: String
+        /// Runs when the person taps OK.
+        var then: (() -> Void)? = nil
     }
 
     var body: some View {
@@ -57,8 +59,15 @@ struct AccountSettingsView: View {
             Text(BackupDataSettingsView.deleteAllMessage(
                 deletesCloudCopy: CloudBackup.shared.deletesCloudCopyOnReset))
         }
+        .task {
+            // A delete queued offline and refused later, at a retry: say so
+            // once, then let it go.
+            guard notice == nil, let reason = store.refusedDeletes.first else { return }
+            notice = Notice(title: "A delete didn't finish", message: reason,
+                            then: { store.acknowledgeRefusedDeletes() })
+        }
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            Button("OK") {}
+            Button("OK") { notice?.then?() }
         } message: {
             Text(notice?.message ?? "")
         }
@@ -149,12 +158,29 @@ struct AccountSettingsView: View {
         // Cancel on Apple's confirmation stops everything: no message, and
         // above all no wipe of the purchases and the iCloud copy.
         guard !result.cancelled else { return }
-        if let first = result.problems.first {
-            notice = Notice(title: "Account deleted, with one thing left", message: first)
+        // A different Apple Account answered: nothing was deleted, so the
+        // data stays too.
+        if result.kept {
+            notice = Notice(title: "Account not deleted", message: result.problems.first ?? "")
+            return
         }
-        guard alsoData else { return }
+        guard alsoData else {
+            if let first = result.problems.first {
+                notice = Notice(title: "Account deleted, with one thing left", message: first)
+            }
+            return
+        }
         DataReset.deleteEverything(in: context)
-        // Setup can't open over the Settings sheet: close it.
+        // Setup can't open over the Settings sheet: close it, but after the
+        // person has read what was left, or the notice closes with it unseen.
+        if let first = result.problems.first {
+            notice = Notice(title: "Account deleted, with one thing left", message: first, then: Self.closeSettings)
+        } else {
+            Self.closeSettings()
+        }
+    }
+
+    private static func closeSettings() {
         Router.shared.settingsPath = []
         Router.shared.showingSettings = false
     }
