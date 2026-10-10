@@ -511,17 +511,31 @@ struct LogWalletTapIntent: AppIntent {
     /// fields as they arrived, before any parsing; `has_app` is Notification ›
     /// App (9 Oct 2026); `has_text` is the old
     /// free-text `transaction` field.
+    ///
+    /// A tap run that brought nothing at all (no amount, shop, card, text or
+    /// notification part) is `health_check` when "Check the Shortcut" was
+    /// tapped up to `ApplePayHealthCheck.timeout` seconds before
+    /// (`checkStartedAt`), else `empty_run` (10 Oct 2026: every check run
+    /// arrived empty and read as "blank"). `blank` is left for a run whose
+    /// fields came but saved nothing.
     @MainActor
     static func runEvent(outcome: LogPurchaseIntent.Outcome, transaction: String?, amount: String?, merchant: String?,
-                         card: String?, notification: WalletNotification) -> [String: Analytics.AnalyticsValue] {
+                         card: String?, notification: WalletNotification,
+                         checkStartedAt: Date? = ApplePayHealthCheck.lastStartedAt(),
+                         now: Date = .now) -> [String: Analytics.AnalyticsValue] {
+        let arrivedEmpty = TapField.isBlank(transaction) && TapField.isBlank(amount) && TapField.isBlank(merchant)
+            && TapField.isBlank(card) && !notification.isPresent && !notification.hasApp
         let result: String
         if outcome.saveFailed {
             result = outcome.kept ? "queued" : "not_saved"
         } else if let dropped = outcome.dropped, let word = Self.droppedWord(dropped) {
             result = word
         } else if outcome.transaction?.rawMerchant == ApplePayHealthCheck.merchant {
-            // "Check the Shortcut" (`ApplePaySetupPanel`): not a purchase.
+            // A shortcut that passes the check's text on: not a purchase.
             result = "health_check"
+        } else if outcome.transaction == nil, arrivedEmpty {
+            // What "Check the Shortcut" really sends today: nothing.
+            result = ApplePayHealthCheck.isWithinCheck(startedAt: checkStartedAt, now: now) ? "health_check" : "empty_run"
         } else if outcome.refund {
             result = "refund"
         } else if let t = outcome.transaction {

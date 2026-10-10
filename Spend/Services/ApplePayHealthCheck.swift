@@ -5,13 +5,22 @@ import Foundation
 /// shortcut through Shortcuts' own `run-shortcut` URL scheme with a known
 /// payload, then waits to see whether it actually reaches Sortd.
 ///
-/// The payload is text, exactly like the by-hand Transaction route already
-/// sends (`WalletTapText.parse`): "Sortd Check A$0.01 Test Card" reads as
-/// merchant "Sortd Check", amount A$0.01, card "Test Card". `merchant` is
-/// its own excluded test constant — kept separate from
-/// `LogPurchaseIntent.legacyTestMerchant` (the removed test button's own
-/// marker) but excluded everywhere the same way: never a real tap, never
-/// real spending, never activation.
+/// What really arrives (beta data, 10 Oct 2026): the ready-made shortcut
+/// (`scripts/build-apple-pay-shortcut.py`) has no Text step and reads its
+/// input as a Wallet transaction, so the text payload below never reaches
+/// Sortd. The run lands with every field empty: no amount, shop, card, text
+/// or notification part. That still proves the chain (Shortcuts ran the
+/// shortcut, and the shortcut reached Sortd), which is all the check needs;
+/// `resolve` only looks at when Sortd was last reached. The run event tells
+/// such a run apart by time: an empty run within `timeout` of
+/// `markStarted` is `health_check`, any other is `empty_run`
+/// (`LogWalletTapIntent.runEvent`).
+///
+/// If a future shortcut does pass the text on, "Sortd Check A$0.01 Test
+/// Card" reads as merchant "Sortd Check" (`WalletTapText.parse`). `merchant`
+/// is its own excluded test constant, kept apart from
+/// `LogPurchaseIntent.legacyTestMerchant` but excluded everywhere the same
+/// way: never a real tap, never real spending, never activation.
 enum ApplePayHealthCheck {
     static let payloadText = "Sortd Check A$0.01 Test Card"
     static let merchant = "Sortd Check"
@@ -23,6 +32,28 @@ enum ApplePayHealthCheck {
 
     /// How long to wait before honestly saying nothing arrived.
     static let timeout: TimeInterval = 20
+
+    /// When "Check the Shortcut" was last tapped, in the same defaults the
+    /// intent writes its "last reached" time to
+    /// (`LogPurchaseIntent.reachDefaults`), so the run it starts can be
+    /// named in the run event.
+    static let startedAtKey = "healthCheckStartedAt"
+
+    static func markStarted(at now: Date = .now, defaults: UserDefaults = LogPurchaseIntent.reachDefaults) {
+        defaults.set(now, forKey: startedAtKey)
+    }
+
+    static func lastStartedAt(_ defaults: UserDefaults = LogPurchaseIntent.reachDefaults) -> Date? {
+        defaults.object(forKey: startedAtKey) as? Date
+    }
+
+    /// Pure: whether a run at `now` falls inside a check started at
+    /// `startedAt` (from the tap, up to `timeout` seconds later).
+    static func isWithinCheck(startedAt: Date?, now: Date) -> Bool {
+        guard let startedAt else { return false }
+        let gap = now.timeIntervalSince(startedAt)
+        return gap >= 0 && gap <= timeout
+    }
 
     /// `shortcuts://run-shortcut?name=...&input=text&text=...` — this runs
     /// the person's own automation, not Sortd's intent directly, so it

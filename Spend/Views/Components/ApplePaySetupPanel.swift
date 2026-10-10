@@ -182,6 +182,7 @@ struct ApplePaySetupPanel: View {
         trackAction("check_shortcut")
         let now = Date.now
         healthCheckStartedAt = now
+        ApplePayHealthCheck.markStarted(at: now)
         healthCheck = .waiting
         openURL(url)
         Task { await pollHealthCheck() }
