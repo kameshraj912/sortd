@@ -330,8 +330,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// ("Monzo", "Wise", "Up", "Revolut"), is not recognised as a card, so
     /// the parser takes the first leftover line, the title, as the shop:
     /// a £4.50 coffee at Pret is saved at "Monzo".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a notification title naming an unknown card with no card word is saved as the shop"))
+    @Test(.bug("a notification title naming an unknown card with no card word is saved as the shop"))
     func anUnknownCardTitleIsNotTheShop() async throws {
         let ctx = store(), b = book()
         b.upsert(CardInfo(name: "NAB Visa Debit", shortName: "NAB", bank: "NAB", walletWords: ["nab"]))

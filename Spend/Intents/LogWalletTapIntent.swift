@@ -207,7 +207,18 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
         }
-        let parts = WalletTapText.parse(text, notification: true, isKnownCard: isKnownCard)
+        var parts = WalletTapText.parse(text, notification: true, isKnownCard: isKnownCard)
+        // Wallet's Title is the card. One the person has not added, named
+        // with no card word ("Monzo", "Wise"), was taken for the shop while
+        // the Subtitle held the real one (O3). With a Subtitle there, and
+        // the title read as the shop, the title is the card when another
+        // line is left to be the shop.
+        let titleText = TapField.normalize(title)
+        if parts.card == nil, !titleText.isEmpty, !TapField.isBlank(subtitle), parts.merchant == titleText {
+            let again = WalletTapText.parse(text, notification: true,
+                                            isKnownCard: { isKnownCard($0) || $0 == titleText })
+            if again.card == titleText, again.merchant != nil { parts = again }
+        }
         guard let amount = parts.amount, let value = AmountParser.parse(amount)?.amount, value > 0 else {
             return .noAmount
         }
