@@ -233,8 +233,7 @@ struct BugHuntSecurityHunt2Tests {
     /// and with `personProfiles = .always` PostHog makes the person again.
     /// Steps: Google account, open Sortd, Settings › Account › Delete Account
     /// within 30 s. Not run against the live PostHog project.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-1008-2", "events queued under the deleted hash are sent after Delete Account and recreate the PostHog person"))
+    @Test(.bug(id: "sec-1008-2", "events queued under the deleted hash are sent after Delete Account and recreate the PostHog person"))
     func deleteAccountSendsQueuedEventsBeforeThePersonIsDeleted() throws {
         let store = try source("Spend/Services/AccountStore.swift")
         let analytics = try source("Spend/Services/Analytics.swift")
@@ -254,8 +253,7 @@ struct BugHuntSecurityHunt2Tests {
     /// iOS's own "Require Face ID" (which Settings suggests next to it)
     /// hides the app from Siri. Expected words are Raj's call; this pins
     /// "no value while locked".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-1008-3", "Siri questions answer with shop and amount while App Lock is on"))
+    @Test(.bug(id: "sec-1008-3", "Siri questions answer with shop and amount while App Lock is on"))
     func siriQuestionsRespectAppLock() throws {
         let intents = try source("Spend/Intents/SpendQuestionIntents.swift")
         #expect(intents.contains("LastPurchaseIntent"), "premise: the question intents live here")
@@ -285,3 +283,73 @@ struct BugHuntSecurityHunt2Tests {
         }
     }
 }
+
+// MARK: - Fixes, 10 Oct 2026 (branch fix-data)
+
+/// P2 and P3: what Siri, the widgets and Sortd's own notices give away
+/// while App Lock is on, or on a Lock Screen that shows every preview.
+@MainActor
+struct BugHuntSecurityFixesOct10Tests {
+    /// P2: App Lock on, Siri's questions answer with words, not figures.
+    @Test(.bug("P2: Siri questions give shop and amount while App Lock is on"))
+    func siriQuestionsGiveNoFiguresWhileAppLockIsOn() throws {
+        #expect(throws: SpendQuestions.Refusal.appLocked) {
+            try SpendQuestions.checkAccess(appLockOn: true, storeFailed: false)
+        }
+        #expect(throws: SpendQuestions.Refusal.appLocked) {
+            try SpendQuestions.checkAccess(appLockOn: true, storeFailed: true)
+        }
+        try SpendQuestions.checkAccess(appLockOn: false, storeFailed: false)
+    }
+
+    /// P2: App Lock on, the widgets hide shop and amount on an unlocked
+    /// iPhone too, whatever "Show Amounts When Locked" says. An older file
+    /// with no `appLocked` reads as off.
+    @Test(.bug("P2: widgets give shop and amount while App Lock is on"))
+    func widgetsHideFiguresWhileAppLockIsOn() throws {
+        var s = WidgetSummary()
+        s.showWhenLocked = true
+        #expect(!s.hidesWhenLocked)
+        s.appLocked = true
+        #expect(s.hidesWhenLocked)
+
+        let back = try JSONDecoder().decode(WidgetSummary.self, from: try JSONEncoder().encode(s))
+        #expect(back.appLocked == true)
+        let old = try JSONDecoder().decode(WidgetSummary.self, from: Data(#"{"showWhenLocked":true}"#.utf8))
+        #expect(old.appLocked == nil)
+        #expect(!old.hidesWhenLocked)
+
+        let widget = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appending(path: "SortdWidget/SortdWidget.swift"), encoding: .utf8)
+        #expect(widget.contains(".redacted(reason: appLocked ? .privacy : [])"), "the widgets do not redact under App Lock")
+    }
+
+    /// P3: the "Logged" notice and bill reminders name the shop and amount
+    /// only where the Lock Screen hides them (Show Previews "When Unlocked"),
+    /// or where Settings › "Show Amounts When Locked" allows it. Never
+    /// with App Lock on.
+    @Test(.bug("P3: the Logged notice and bill reminders show shop and amount on the Lock Screen"))
+    func noticesKeepShopAndAmountOffAnOpenLockScreen() throws {
+        #expect(LoggedNotice.showsDetails(previewsAlways: false, showWhenLocked: false, appLocked: false))
+        #expect(!LoggedNotice.showsDetails(previewsAlways: true, showWhenLocked: false, appLocked: false))
+        #expect(LoggedNotice.showsDetails(previewsAlways: true, showWhenLocked: true, appLocked: false))
+        #expect(!LoggedNotice.showsDetails(previewsAlways: false, showWhenLocked: true, appLocked: true))
+
+        let saved = LoggedNotice.Saved.purchase(id: UUID(), amount: Decimal(string: "5.50")!, currency: "AUD",
+                                                merchant: "Seven Seeds")
+        let hidden = try #require(LoggedNotice.content(for: saved, settingOn: true, authorized: true, details: false))
+        #expect(!hidden.body.contains("Seven Seeds") && !hidden.body.contains("5.50"), "\(hidden.body)")
+        let shown = try #require(LoggedNotice.content(for: saved, settingOn: true, authorized: true, details: true))
+        #expect(shown.body.contains("Seven Seeds"))
+
+        let bill = Recurring(key: "netflix", merchant: "Netflix", category: .subscriptions, card: .other,
+                             cadence: .monthly, amount: Decimal(string: "18.99")!, currency: "AUD",
+                             audAmount: Decimal(string: "18.99")!, lastDate: .now,
+                             nextDate: .now.addingTimeInterval(86_400), charges: 3, previousAmount: nil,
+                             status: .active, chargedAfterCancel: false)
+        let words = Reminders.billWords(bill, details: false)
+        #expect(!(words.title + words.body).contains("Netflix") && !(words.title + words.body).contains("18.99"))
+        #expect(Reminders.billWords(bill, details: true).title.contains("Netflix"))
+    }
+}
+

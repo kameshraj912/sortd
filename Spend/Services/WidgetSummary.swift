@@ -43,6 +43,10 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     /// Settings › "Show Amounts When Locked". Nil or false: amounts are
     /// hidden on the Lock Screen and in StandBy until the iPhone is unlocked.
     var showWhenLocked: Bool?
+    /// App Lock is on: the widgets hide shop names and amounts even on an
+    /// unlocked iPhone, as the app itself does until Face ID. Nil or false
+    /// for a file from an older build.
+    var appLocked: Bool?
 
     /// The summary as it stands at `now`. The file is written when Sortd runs;
     /// past midnight, a new week or a new month, the old totals aren't true any
@@ -81,7 +85,7 @@ nonisolated struct WidgetSummary: Codable, Equatable, Sendable {
     }
 
     /// Whether widgets should redact their numbers while the phone is locked.
-    var hidesWhenLocked: Bool { showWhenLocked != true }
+    var hidesWhenLocked: Bool { showWhenLocked != true || appLocked == true }
 
     static let showWhenLockedKey = "widgetShowWhenLocked"
 
@@ -187,5 +191,6 @@ extension WidgetSummary {
         style = try c.decodeIfPresent(String.self, forKey: .style) ?? style
         hasAnyPurchases = try c.decodeIfPresent(Bool.self, forKey: .hasAnyPurchases) ?? hasAnyPurchases
         showWhenLocked = try c.decodeIfPresent(Bool.self, forKey: .showWhenLocked)
+        appLocked = try c.decodeIfPresent(Bool.self, forKey: .appLocked)
     }
 }

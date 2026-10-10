@@ -54,7 +54,31 @@ enum SpendQuestions {
     static var budget: Double { UserDefaults.standard.double(forKey: "monthlyBudget") }
 
     static func transactions() throws -> [Transaction] {
-        try transactions(in: SpendStore.container.mainContext)
+        try checkAccess(appLockOn: UserDefaults.standard.bool(forKey: AppLock.enabledKey),
+                        storeFailed: SpendStore.openFailure != nil)
+        return try transactions(in: SpendStore.container.mainContext)
+    }
+
+    /// Why a question gets no figures. App Lock covers only the app's
+    /// window, and `.requiresAuthentication` only needs the iPhone unlocked,
+    /// so with App Lock on Siri would read shop and amount to anyone holding
+    /// the unlocked phone. A store that failed to open is an empty stand-in:
+    /// its answer ("nothing spent") would be wrong, not just empty.
+    enum Refusal: Error, Equatable, CustomLocalizedStringResourceConvertible {
+        case appLocked, storeUnavailable
+
+        var localizedStringResource: LocalizedStringResource {
+            switch self {
+            case .appLocked: "App Lock is on. Open Sortd to see your spending."
+            case .storeUnavailable: "Sortd couldn't open your purchases. Open Sortd to sort it out."
+            }
+        }
+    }
+
+    /// Throws the refusal that applies, App Lock first. Pure, for tests.
+    static func checkAccess(appLockOn: Bool, storeFailed: Bool) throws {
+        if appLockOn { throw Refusal.appLocked }
+        if storeFailed { throw Refusal.storeUnavailable }
     }
 
     /// The rows Home and Activity count: never the hidden "Check the
