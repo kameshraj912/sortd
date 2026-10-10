@@ -173,6 +173,10 @@ nonisolated enum StatementImport {
         var debit: Int?
         var credit: Int?
         var balance: Int?
+        /// A Currency column (Revolut, Wise): the code for each row's amount.
+        var currency: Int?
+        /// A column of DR / CR markers beside an unsigned amount.
+        var sign: Int?
         var hasAmount: Bool { amount != nil || debit != nil || credit != nil }
     }
 
@@ -182,11 +186,20 @@ nonisolated enum StatementImport {
         // A header row names its columns. Look at the first few rows only:
         // some exports put the account name and a blank line on top.
         for (i, row) in grid.prefix(5).enumerated() {
+            // A header names its columns and holds no data. A headerless
+            // row whose shop says "TIMEZONE" or "UPDATE" next to "EFTPOS
+            // DEBIT" is not a header: it has a date and an amount in it.
+            if row.contains(where: { looksLikeData($0) }) { continue }
             var found = Layout()
+            var strongDetail = false
             for (j, cell) in row.enumerated() {
                 let key = cell.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !key.isEmpty else { continue }
-                if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
+                if found.currency == nil, ["currency", "ccy", "currency code", "curr"].contains(key) {
+                    found.currency = j
+                } else if found.sign == nil, signHeaders.contains(key) {
+                    found.sign = j
+                } else if found.date == nil, matches(key, ["date", "posted", "posting", "value date", "transaction date",
                                                        "time", "timestamp", "settled"]) {
                     found.date = j
                 } else if found.debit == nil, matches(key, ["debit", "withdrawal", "money out", "paid out", "spent"]) {
@@ -198,8 +211,12 @@ nonisolated enum StatementImport {
                 } else if found.amount == nil, matches(key, ["amount", "value", "total", "transaction amount"]),
                           !key.contains("round up"), !key.contains("roundup") {
                     found.amount = j
-                } else if found.detail == nil, matches(key, ["description", "details", "narrative", "merchant",
-                                                            "particulars", "reference", "transaction", "payee", "name"]) {
+                } else if !strongDetail, matches(key, strongDetailHeaders) {
+                    // "Description" or "Merchant" beats a "Reference" or
+                    // "Transaction Type" column that came before it.
+                    found.detail = j
+                    strongDetail = true
+                } else if found.detail == nil, matches(key, ["reference", "transaction", "name"]) {
                     found.detail = j
                 }
             }
@@ -217,6 +234,8 @@ nonisolated enum StatementImport {
         var dateHits = [Int](repeating: 0, count: width)
         var moneyHits = [Int](repeating: 0, count: width)
         var textLength = [Int](repeating: 0, count: width)
+        var signHits = [Int](repeating: 0, count: width)
+        var filled = [Int](repeating: 0, count: width)
 
         for row in sample {
             for (j, cell) in row.enumerated() where j < width {
@@ -227,6 +246,8 @@ nonisolated enum StatementImport {
                 let isMoney = signedAmount(trimmed) != nil
                 if isDate { dateHits[j] += 1 }
                 if isMoney { moneyHits[j] += 1 }
+                if !trimmed.isEmpty { filled[j] += 1 }
+                if signMarker(trimmed) != nil { signHits[j] += 1 }
                 if !isMoney, !isDate {
                     textLength[j] += trimmed.count
                 }
@@ -239,8 +260,10 @@ nonisolated enum StatementImport {
         let moneyColumns = moneyHits.enumerated().filter { $0.element > 0 }.map(\.offset)
         out.amount = moneyColumns.first
         if moneyColumns.count > 1 { out.balance = moneyColumns.last }
-        // The shop is text: never the date, the amount or the balance.
-        let taken = Set([out.date, out.amount, out.balance].compactMap { $0 })
+        // A column holding nothing but DR and CR says which way each amount went.
+        out.sign = signHits.indices.first { signHits[$0] > 0 && signHits[$0] == filled[$0] }
+        // The shop is text: never the date, the amount, the balance or the marker.
+        let taken = Set([out.date, out.amount, out.balance, out.sign].compactMap { $0 })
         out.detail = textLength.enumerated().filter { !taken.contains($0.offset) }
             .max { $0.element < $1.element }.flatMap { $0.element > 0 ? $0.offset : nil }
         return out
@@ -248,6 +271,34 @@ nonisolated enum StatementImport {
 
     private static func matches(_ key: String, _ options: [String]) -> Bool {
         options.contains { key == $0 || key.contains($0) }
+    }
+
+    /// Header words for the shop that win over a weaker "Reference",
+    /// "Transaction Type" or "Name" column found earlier in the row.
+    private static let strongDetailHeaders = ["description", "details", "narrative", "merchant",
+                                              "particulars", "payee"]
+
+    /// Whole header names for a column of DR / CR markers.
+    private static let signHeaders: Set<String> = [
+        "dr/cr", "cr/dr", "dr / cr", "cr / dr", "dr cr", "drcr", "d/c", "c/d",
+        "debit/credit", "credit/debit", "debit / credit", "credit / debit",
+        "dr/cr indicator", "debit/credit indicator", "credit/debit indicator",
+    ]
+
+    /// A cell that is a date or an amount, so its row is data, not a header.
+    private static func looksLikeData(_ cell: String) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return isWholeDate(trimmed) || signedAmount(trimmed) != nil
+    }
+
+    /// "DR" or "DEBIT" is money out, "CR" or "CREDIT" money in; anything else nil.
+    private static func signMarker(_ cell: String) -> Kind? {
+        switch cell.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "DR", "D", "DEBIT": .spend
+        case "CR", "C", "CREDIT": .moneyIn
+        default: nil
+        }
     }
 
     private struct Money {
@@ -262,24 +313,31 @@ nonisolated enum StatementImport {
             let t = fields[index].trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? nil : t
         }
+        // The Currency column, when it holds a real code. A code or symbol
+        // in the amount cell itself still wins.
+        let currency = cell(layout.currency).map { $0.uppercased() }.flatMap {
+            isoCurrencyCodes.contains($0) ? $0 : nil
+        }
 
         // Separate Debit / Credit columns: whichever is filled says which way
         // the money went, so the sign in the cell doesn't matter. Some banks
         // fill the unused one with "0.00": that is empty, not a $0 purchase.
         if layout.debit != nil || layout.credit != nil {
             if let debit = cell(layout.debit), let parsed = signedAmount(debit), parsed.amount != 0 {
-                return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .spend)
+                return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency, kind: .spend)
             }
             if let credit = cell(layout.credit), let parsed = signedAmount(credit), parsed.amount != 0 {
-                return Money(amount: abs(parsed.amount), currency: parsed.currency, kind: .moneyIn)
+                return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency, kind: .moneyIn)
             }
             return nil
         }
 
-        // One signed column: out is negative, in is positive.
+        // One signed column: out is negative, in is positive. A DR / CR
+        // column beside it says so instead, when the amount has no sign.
         guard let raw = cell(layout.amount), let parsed = signedAmount(raw) else { return nil }
-        return Money(amount: abs(parsed.amount), currency: parsed.currency,
-                     kind: parsed.amount < 0 ? .spend : .moneyIn)
+        let kind = cell(layout.sign).flatMap(signMarker) ?? (parsed.amount < 0 ? .spend : .moneyIn)
+        return Money(amount: abs(parsed.amount), currency: parsed.currency ?? currency,
+                     kind: kind)
     }
 
     private static func longestText(in fields: [String], skipping: Set<Int>) -> String {

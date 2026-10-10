@@ -736,8 +736,7 @@ struct BugHuntStatement1008Tests {
     /// columns. `layout(for:)` has no currency column, so a EUR card payment
     /// has no currency and `save` books it in the home currency: EUR 12.50
     /// becomes A$12.50 (or S$12.50), one for one.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "hunt-1008-stmt-4", "a CSV Currency column is ignored; foreign rows are booked in the home currency"))
+    @Test(.bug(id: "hunt-1008-stmt-4", "a CSV Currency column is ignored; foreign rows are booked in the home currency"))
     func aCurrencyColumnIsRead() {
         let revolut = """
         Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
@@ -749,6 +748,15 @@ struct BugHuntStatement1008Tests {
         #expect(rows.first?.amount == money("12.50"))
         #expect(rows.first?.currency == "EUR")
         #expect(rows.last?.currency == "GBP")
+
+        // A code inside the amount cell still wins; a blank or odd cell is no currency.
+        let mixed = StatementImport.rows(fromCSV: """
+        Date,Description,Amount,Currency
+        01/09/2026,CARREFOUR,EUR -12.50,GBP
+        02/09/2026,SEVEN SEEDS,-5.50,
+        03/09/2026,WOOLWORTHS,-58.30,N/A
+        """)
+        #expect(mixed.map(\.currency) == ["EUR", nil, nil])
     }
 
     // MARK: 5. A number at the start of a shop name becomes the year
@@ -888,5 +896,65 @@ struct BugHuntStatement1008Tests {
         03/09/2026,APPLE STORE,"-1,249.00"
         """
         #expect(StatementImport.reader(for: csv) == .csv)
+    }
+
+    // MARK: 11. A Reference column before the shop (S5)
+
+    /// "Reference" matched the shop keywords first and kept the column, so
+    /// every row was named "REF…" and never merged with its tap.
+    @Test(.bug(id: "hunt-1008-S5", "a Reference column before the shop columns becomes the shop name"))
+    func aReferenceColumnIsNotTheShop() {
+        let rows = StatementImport.rows(fromCSV: """
+        Date,Reference,Description,Amount
+        01/09/2026,REF000123456,SEVEN SEEDS COFFEE CARLTON,-5.50
+        02/09/2026,REF000123457,WOOLWORTHS 3342 RICHMOND,-58.30
+        """)
+        #expect(rows.map(\.detail) == ["SEVEN SEEDS COFFEE CARLTON", "WOOLWORTHS 3342 RICHMOND"])
+        // Reference alone is still used when there is nothing better.
+        let only = StatementImport.rows(fromCSV: "Date,Reference,Amount\n01/09/2026,SEVEN SEEDS,-5.50")
+        #expect(only.first?.detail == "SEVEN SEEDS")
+    }
+
+    // MARK: 14. A headerless CSV with "time" or "date" in a shop (S8)
+
+    /// NAB's headerless export: "TIMEZONE" has "time" in it and "EFTPOS
+    /// DEBIT" has "debit", so the first row was taken for a header and the
+    /// file read as nothing.
+    @Test(.bug(id: "hunt-1008-S8", "a headerless CSV row with time or date in the shop is read as the header"))
+    func aHeaderlessShopNamedLikeAHeaderIsData() {
+        let parsed = StatementImport.parse(csv: """
+        01/09/2026,-25.00,,,EFTPOS DEBIT,TIMEZONE CHADSTONE,2451.70
+        02/09/2026,-5.50,,,EFTPOS DEBIT,UPDATE CAFE CARLTON,2446.20
+        03/09/2026,-58.30,,,EFTPOS DEBIT,WOOLWORTHS 3342 RICHMOND,2387.90
+        """)
+        #expect(parsed.rows.map(\.amount) == [money("25.00"), money("5.50"), money("58.30")])
+        #expect(parsed.rows.first?.detail == "TIMEZONE CHADSTONE")
+        #expect(parsed.rows.allSatisfy { $0.kind == .spend })
+        #expect(parsed.skipped == 0)
+    }
+
+    // MARK: 15. A DR / CR column (S9)
+
+    /// Some banks print an unsigned amount and a separate DR / CR column.
+    /// The marker was ignored and an unsigned amount is money in, so every
+    /// purchase landed in "Money In".
+    @Test(.bug(id: "hunt-1008-S9", "a DR/CR marker in its own column is ignored, so every row is money in"))
+    func aDrCrColumnSaysWhichWay() {
+        let headed = StatementImport.rows(fromCSV: """
+        Date,Description,Amount,Dr/Cr
+        01/09/2026,WOOLWORTHS 3342,58.30,DR
+        02/09/2026,SALARY ACME PTY LTD,3200.00,CR
+        03/09/2026,SEVEN SEEDS,5.50,DR
+        """)
+        #expect(headed.map(\.kind) == [.spend, .moneyIn, .spend])
+        #expect(headed.map(\.detail) == ["WOOLWORTHS 3342", "SALARY ACME PTY LTD", "SEVEN SEEDS"])
+
+        let headerless = StatementImport.rows(fromCSV: """
+        01/09/2026,WOOLWORTHS 3342,58.30,DR
+        02/09/2026,SALARY ACME PTY LTD,3200.00,CR
+        03/09/2026,SEVEN SEEDS,5.50,DR
+        """)
+        #expect(headerless.map(\.kind) == [.spend, .moneyIn, .spend])
+        #expect(headerless.map(\.detail) == ["WOOLWORTHS 3342", "SALARY ACME PTY LTD", "SEVEN SEEDS"])
     }
 }
