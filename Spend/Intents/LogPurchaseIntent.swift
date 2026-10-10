@@ -423,7 +423,14 @@ struct LogPurchaseIntent: AppIntent {
         }
 
         guard let t = nearby.first(where: matches) else {
-            return .notMerged(excluding: Set(nearby.map(\.id)))
+            // A refunded purchase is done with: a tap of the same amount
+            // after it is a new purchase (an exchange at the till), never a
+            // re-send to fold into the refunded row (b10-A8).
+            let lo = now.addingTimeInterval(-Deduper.window), hi = now.addingTimeInterval(Deduper.window)
+            let refunded = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate {
+                $0.date >= lo && $0.date <= hi && $0.refunded == true
+            }))
+            return .notMerged(excluding: Set(nearby.map(\.id)).union(refunded.map(\.id)))
         }
 
         // Fill whatever the kept row was missing from the newcomer — a

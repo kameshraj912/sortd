@@ -197,10 +197,9 @@ struct AbuseBuild10Tests {
     /// lost (the row stays refunded). Same root as abuse-28, reached here
     /// through the tap route.
     ///
-    /// Known bug: `TransactionLogger.log`/`Deduper` (Spend/Services/Deduper.swift) merge into a refunded row;
+    /// Fixed 10 Oct 2026, was: `TransactionLogger.log`/`Deduper` (Spend/Services/Deduper.swift) merge into a refunded row;
     /// `mergeTapCompanion` (Spend/Intents/LogPurchaseIntent.swift:404) only excludes taps within 3 minutes.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A8", "a re-purchase right after a till refund merges into the refunded row"))
+    @Test(.bug(id: "b10-A8", "a re-purchase right after a till refund merges into the refunded row"))
     func aRepurchaseAfterATillRefundIsCounted() async throws {
         let ctx = store(), b = book()
         try await tap("A$20.00", "Uniqlo", ctx: ctx, book: b, at: now)
