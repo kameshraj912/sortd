@@ -155,10 +155,9 @@ struct BugHuntMoneyTests {
     /// amount with `Money.home`. Same for "TOTAL 12.50 EUR", "TOTAL 12.50€"
     /// and "Total: 45.00 SGD".
     ///
-    /// Known bug: `GenericReceipts.total` money regex (Spend/Services/GenericReceipts.swift:18-19)
+    /// Fixed 10 Oct 2026, was: `GenericReceipts.total` money regex (Spend/Services/GenericReceipts.swift:18-19)
     /// and the fallback in `ReceiptScanner.total` (Spend/Services/ReceiptScanner.swift:142-150).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-07: a currency written after the total is ignored and the home currency is used"))
+    @Test(.bug("hunt-money-07: a currency written after the total is ignored and the home currency is used"))
     func aCurrencyAfterTheTotalIsKept() {
         let cases: [(String, String)] = [("TOTAL 350.00 THB", "THB"), ("TOTAL 12.50 EUR", "EUR"),
                                          ("TOTAL 12.50€", "EUR"), ("Total: 45.00 SGD", "SGD")]
