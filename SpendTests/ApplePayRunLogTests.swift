@@ -318,3 +318,27 @@ struct ApplePayRunLogTests {
         #expect(Analytics.Event.applePayRun.rawValue == "apple_pay_run")
     }
 }
+
+/// The Card row on a purchase (beta, build 9): the purchase's own card is
+/// always one of the choices, so the picker never shows nothing.
+@MainActor
+struct TransactionDetailCardOptionsTests {
+    private let mine = [Card(rawValue: "a"), Card(rawValue: "b")]
+
+    @Test func aKnownCardIsNotAddedTwice() {
+        #expect(TransactionDetailView.cardOptions(current: mine[1], mine: mine) == mine + [.other])
+    }
+
+    @Test func anArchivedOrUnknownCardIsStillOffered() {
+        let gone = Card(rawValue: "archived-card")
+        let options = TransactionDetailView.cardOptions(current: gone, mine: mine)
+        #expect(options.first == gone)
+        #expect(options.contains(.other))
+        #expect(options.count == 4)
+    }
+
+    @Test func cardNotKnownIsOfferedOnce() {
+        let options = TransactionDetailView.cardOptions(current: .other, mine: mine)
+        #expect(options.filter { $0 == .other }.count == 1)
+    }
+}

@@ -27,6 +27,15 @@ struct TransactionDetailView: View {
     /// a 200-character name never reaches `merchant` as typed.
     @State private var merchantText = ""
     @FocusState private var merchantFocused: Bool
+    /// "$6.20 at Starbucks", taken when Delete is tapped. The alert's
+    /// message is drawn again after its Delete runs; reading the purchase
+    /// there, once SwiftData had deleted it, trapped (build 9 crash, a Swift
+    /// assertion inside the alert's button action).
+    @State private var deleteMessage = ""
+    /// Set the moment Delete is confirmed. From then on nothing on this
+    /// screen reads the purchase: the form is swapped for a plain page and
+    /// the leave-the-screen saves are skipped.
+    @State private var isGone = false
 
     /// Amounts must be under this: the same 9 whole digits the field lets
     /// you type (`AmountEntry.detailWholeDigits`). Imports have no cap, so
@@ -51,10 +60,69 @@ struct TransactionDetailView: View {
     }
 
     private static var currencies: [String] {
-        Array(NSOrderedSet(array: [Money.home, LocalCurrency.current()] + Money.supported)) as! [String]
+        var seen = Set<String>()
+        return ([Money.home, LocalCurrency.current()] + Money.supported).filter { seen.insert($0).inserted }
+    }
+
+    /// The cards the Card row offers: the person's cards, "Card not known",
+    /// and the purchase's own card when it is none of those (a card since
+    /// archived, or an id from an older build). Without it the picker had
+    /// no row for the current value, showed nothing, and a pick could look
+    /// as if it did not take (beta, build 9). Pure.
+    static func cardOptions(current: Card, mine: [Card]) -> [Card] {
+        var options = mine
+        if !options.contains(.other) { options.append(.other) }
+        if !options.contains(current) { options.insert(current, at: 0) }
+        return options
+    }
+
+    /// True while the purchase may be read: not deleted from this screen,
+    /// and not deleted or detached by anything else meanwhile.
+    private var isLive: Bool {
+        !isGone && !transaction.isDeleted && transaction.modelContext != nil
     }
 
     var body: some View {
+        Group {
+            if !isLive {
+                // Shown for the moment between the delete and the pop.
+                Color.page.ignoresSafeArea()
+            } else {
+                form
+            }
+        }
+        .feedback(.delete, trigger: deleted)
+        .saveFailedAlert($saveFailed)
+        // An alert, like the other irreversible confirmations: a dialog on
+        // this form anchored itself to the Card row at the top, nowhere near
+        // the Delete button (UI pass, 25 Sep).
+        .alert("Delete this purchase?", isPresented: $confirmingDelete) {
+            Button("Delete", role: .destructive) { deletePurchase() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(deleteMessage)
+        }
+    }
+
+    /// Deletes and leaves. Nothing reads the purchase after
+    /// `context.delete`: `isGone` swaps the form out first. A save that
+    /// fails puts the purchase back (`rollback`) and stays, saying so.
+    private func deletePurchase() {
+        guard !isGone, isLive else { return }
+        let target = transaction
+        isGone = true
+        context.delete(target)
+        if context.saveReporting(where: "TransactionDetail.delete") {
+            deleted += 1
+            dismiss()
+        } else {
+            context.rollback()
+            isGone = false
+            saveFailed = true
+        }
+    }
+
+    private var form: some View {
         Form {
             Section {
                 header
@@ -64,6 +132,8 @@ struct TransactionDetailView: View {
             Section(bold: "Details") {
                 TextField("Paid to", text: $merchantText)
                     .textInputAutocapitalization(.words)
+                    // The keyboard must not learn shop names (P4).
+                    .autocorrectionDisabled()
                     .focused($merchantFocused)
                     .onSubmit(commitMerchant)
                     .postHogMask()
@@ -94,6 +164,8 @@ struct TransactionDetailView: View {
                             .monospacedDigit()
                     }
                 }
+                // The whole row is the button, the gap between the label and
+                // the value included (beta: taps there seemed to do nothing).
                 Button { showingCategories = true } label: {
                     LabeledContent("Category") {
                         HStack(spacing: 8) {
@@ -102,15 +174,20 @@ struct TransactionDetailView: View {
                         }
                     }
                     .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
                 }
                 Picker("Card", selection: $transaction.cardRaw) {
-                    ForEach(Card.mine + [.other]) { Text($0.name).tag($0.rawValue) }
+                    ForEach(Self.cardOptions(current: transaction.card, mine: Card.mine)) {
+                        Text($0.name).tag($0.rawValue)
+                    }
                 }
                 DatePicker("Date", selection: $transaction.date)
             }
 
             Section(bold: "Note") {
                 TextField("Add a note", text: $transaction.note, axis: .vertical)
+                    .autocorrectionDisabled()
                     .lineLimit(1...5)
                     .postHogMask()
             }
@@ -130,6 +207,7 @@ struct TransactionDetailView: View {
 
             Section {
                 Button("Delete Purchase", systemImage: "trash", role: .destructive) {
+                    deleteMessage = "\(Money.format(transaction.amount, transaction.currencyCode)) at \(transaction.merchant)"
                     confirmingDelete = true
                 }
                 .tint(.red)
@@ -165,6 +243,13 @@ struct TransactionDetailView: View {
         .onChange(of: transaction.currencyCode) { _, _ in refreshAUD() }
         // A corrected date has its own day's rate.
         .onChange(of: transaction.date) { _, _ in refreshAUD() }
+        // A card picked from the menu is written at once, so it is there
+        // even if the app is closed straight after.
+        .onChange(of: transaction.cardRaw) { _, _ in
+            guard isLive else { return }
+            if !context.saveReporting(where: "TransactionDetail.card") { saveFailed = true }
+            Analytics.shared.track(.purchaseEdited, ["field": .string("card")])
+        }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
                 recategorise(to: category)
@@ -174,26 +259,6 @@ struct TransactionDetailView: View {
         // its window.
         .recategoriseUndoToast()
         .feedback(.select, trigger: recategorised)
-        .feedback(.delete, trigger: deleted)
-        .saveFailedAlert($saveFailed)
-        // An alert, like the other irreversible confirmations: a dialog on
-        // this form anchored itself to the Card row at the top, nowhere near
-        // the Delete button (UI pass, 25 Sep).
-        .alert("Delete this purchase?", isPresented: $confirmingDelete) {
-            Button("Delete", role: .destructive) {
-                context.delete(transaction)
-                if context.saveReporting(where: "TransactionDetail.delete") {
-                    deleted += 1
-                    dismiss()
-                } else {
-                    // The delete did not reach disk: stay here and say so.
-                    saveFailed = true
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(Money.format(transaction.amount, transaction.currencyCode)) at \(transaction.merchant)")
-        }
     }
 
     private var header: some View {
@@ -298,6 +363,7 @@ struct TransactionDetailView: View {
     /// Saves a valid amount; otherwise keeps the old one and puts its text back.
     /// Unchanged text is left alone so it cannot undo a sync's newer amount.
     private func commitAmount() {
+        guard isLive else { return }
         if amountText != loadedAmountText, let amount = Self.committedAmount(from: amountText),
            amount != transaction.amount {
             transaction.amount = amount
@@ -313,6 +379,7 @@ struct TransactionDetailView: View {
     /// rule as Amount on this screen. Unchanged text is left alone so it
     /// cannot undo a name a sync merged in while the screen was open.
     private func commitMerchant() {
+        guard isLive else { return }
         if merchantText != loadedMerchant {
             let name = MerchantName.clean(merchantText)
             if !name.isEmpty, name != transaction.merchant {
@@ -328,6 +395,7 @@ struct TransactionDetailView: View {
 
     /// Moves the shop and, when others moved too, offers Undo for a while.
     private func recategorise(to category: SpendCategory) {
+        guard isLive else { return }
         let from = transaction.category
         let change: RecategoriseChange
         do {
@@ -346,6 +414,7 @@ struct TransactionDetailView: View {
     }
 
     private func refreshAUD() {
+        guard isLive else { return }
         transaction.audAmount = transaction.currencyCode == Money.home ? transaction.amount : nil
         context.saveReporting(where: "TransactionDetail.refreshAUD")
         Task { await FXService.backfill(in: context) }

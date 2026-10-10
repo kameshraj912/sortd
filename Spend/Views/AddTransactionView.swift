@@ -59,8 +59,8 @@ struct AddTransactionView: View {
 
     /// Home and local currency first, then the rest.
     private static var currencies: [String] {
-        let first = [Money.home, LocalCurrency.current()]
-        return Array(NSOrderedSet(array: first + Money.supported)) as! [String]
+        var seen = Set<String>()
+        return ([Money.home, LocalCurrency.current()] + Money.supported).filter { seen.insert($0).inserted }
     }
 
     /// One line instead of four fields. Whatever it works out goes into the
@@ -182,6 +182,8 @@ struct AddTransactionView: View {
                 Section {
                     TextField("Paid to", text: $merchant)
                         .textInputAutocapitalization(.words)
+                        // The keyboard must not learn shop names (P4).
+                        .autocorrectionDisabled()
                         .onChange(of: merchant) { _, name in
                             // Shop names stop at 80 characters; a longer paste is cut quietly.
                             if name.count > MerchantName.maxLength {
@@ -248,6 +250,7 @@ struct AddTransactionView: View {
                 Section(bold: "Note") {
                     TextField("Optional", text: $note, axis: .vertical)
                         .lineLimit(1...4)
+                        .autocorrectionDisabled()
                 }
             }
             .scrollContentBackground(.hidden)
