@@ -20,6 +20,14 @@ protocol CloudBackupStore: AnyObject {
     func save(_ blob: Data, modified: Date) async throws
     func fetch() async throws -> (blob: Data, modified: Date)?
     func delete() async throws
+    /// Which iCloud account the store is signed in to, as an opaque id. Nil
+    /// when it can't be told (offline, no account). Optional: a fake leaves
+    /// it out, and then no account switch is ever seen.
+    func accountID() async -> String?
+}
+
+extension CloudBackupStore {
+    func accountID() async -> String? { nil }
 }
 
 /// Where the encryption key lives. The real one is a synchronizable Keychain
@@ -59,7 +67,9 @@ enum CloudBackupError: Error, Equatable, LocalizedError {
         case .quotaExceeded:
             "iCloud is full. Backup is paused."
         case .rateLimited(let seconds):
-            "Trying again in \(Int(seconds.rounded(.up))) s"
+            // Not "trying again": only an automatic backup tries again by
+            // itself. A restore or a delete is the person's to tap again.
+            "iCloud is busy. Try again in \(Int(seconds.rounded(.up))) s."
         case .notSignedIn:
             "Not signed in to iCloud. Sign in from the Settings app to back up."
         case .restoreFirst:
@@ -89,6 +99,12 @@ final class CloudBackup {
     /// after this moment: it is a new, wanted one, not the copy that Delete
     /// All Data meant to remove.
     nonisolated static let deleteQueuedAtKey = "cloudBackupDeleteQueuedAt"
+    /// The iCloud account (`CloudBackupStore.accountID`) this iPhone last
+    /// backed up to or restored from. Another one now means the account was
+    /// switched: what this iPhone knew about the copy is about the old one.
+    nonisolated static let accountKey = "cloudBackupAccount"
+    /// The iCloud account a pending delete was meant for.
+    nonisolated static let deleteAccountKey = "cloudBackupDeleteAccount"
     /// This iPhone wrote the iCloud copy (a backup, not only a restore), so
     /// Delete All Data deletes it even with the switch off. Cleared when the
     /// copy is deleted.
@@ -156,6 +172,13 @@ final class CloudBackup {
     /// The last automatic try, pass or fail, so a failing store isn't hit on
     /// every save.
     @ObservationIgnored private var lastAttempt: Date?
+    /// When iCloud's rate-limit wait ends. A `.paused(.rateLimited)` is over
+    /// at this moment, whatever set it (a backup, a restore or a delete).
+    @ObservationIgnored private var pausedUntil: Date?
+    /// The launch's one try at a pending delete has run (`retryPendingDeleteAtLaunch`).
+    @ObservationIgnored private var triedPendingDeleteThisLaunch = false
+    /// A failed pending delete was reported this launch: once is enough.
+    @ObservationIgnored private var reportedPendingDeleteFailure = false
     /// The store changed since the last backup, so a catch-up is worth it.
     private var dirty: Bool {
         get { defaults.bool(forKey: Self.behindKey) }
@@ -198,7 +221,11 @@ final class CloudBackup {
     /// ends), and never an empty snapshot.
     func backUpIfDue(from context: ModelContext) async {
         guard isEnabled, !status.isBusy else { return }
-        if case .paused = status { return }
+        if case .paused(let reason) = status {
+            // iCloud's wait is over: the pause is too.
+            guard case .rateLimited = reason, let until = pausedUntil, clock() >= until else { return }
+            status = .idle
+        }
         let now = clock()
         let since = [lastBackup, lastAttempt].compactMap { $0 }.map { now.timeIntervalSince($0) }.min()
         if let since, since < Self.minimumGap {
@@ -346,6 +373,7 @@ final class CloudBackup {
     /// iCloud holds a backup; and a new key is only ever made when iCloud is
     /// empty, since a new key would lock the old backup for ever.
     private func usableKey() async throws -> SymmetricKey {
+        await noticeAccountSwitch()
         let existing = try keys.load()
         // Delete All Data wipes the saved date but not this one in memory: a
         // phone that was wiped has never backed up, whatever it remembers.
@@ -403,6 +431,7 @@ final class CloudBackup {
         status = .restoring
         lastRestoreBadDates = 0
         do {
+            await noticeAccountSwitch()
             guard let record = try await store.fetch() else {
                 status = .idle
                 return nil
@@ -450,6 +479,12 @@ final class CloudBackup {
     /// Removes the record from iCloud. The key stays: it is harmless on its
     /// own and the next backup reuses it.
     func deleteCloudCopy() async throws {
+        try await deleteCopy(showingFailure: true)
+    }
+
+    /// `showingFailure` false: the launch retry, which nobody is watching.
+    /// A failure leaves the status line alone and is reported by the caller.
+    private func deleteCopy(showingFailure: Bool) async throws {
         // A backup still uploading was started before this delete: it must
         // not put the copy back (it takes itself out again when it lands).
         resets += 1
@@ -459,7 +494,7 @@ final class CloudBackup {
             lastBackup = nil
             status = .idle
         } catch {
-            fail(with: error, context: nil)
+            if showingFailure { fail(with: error, context: nil) }
             throw error
         }
     }
@@ -476,17 +511,38 @@ final class CloudBackup {
         catchUp?.cancel()
         retry?.cancel()
         queuePendingDelete()
+        // Which iCloud account the copy to delete is in, so a later retry
+        // never deletes another account's backup after a switch.
+        if let account = await store.accountID() { defaults.set(account, forKey: Self.deleteAccountKey) }
         await retryPendingDelete()
     }
 
     private func queuePendingDelete() {
         defaults.set(true, forKey: Self.deletePendingKey)
         defaults.set(clock(), forKey: Self.deleteQueuedAtKey)
+        if let account = defaults.string(forKey: Self.accountKey) {
+            defaults.set(account, forKey: Self.deleteAccountKey)
+        }
     }
 
     private func clearPendingDelete() {
         defaults.removeObject(forKey: Self.deletePendingKey)
         defaults.removeObject(forKey: Self.deleteQueuedAtKey)
+        defaults.removeObject(forKey: Self.deleteAccountKey)
+    }
+
+    /// iCloud is signed in to another account than the one this iPhone last
+    /// backed up to or restored from. Everything known about "the copy" was
+    /// about the old account's: this iPhone has never backed up here, so
+    /// the restore-first guard applies before anything is written over the
+    /// new account's own backup, and Delete All leaves that backup alone.
+    private func noticeAccountSwitch() async {
+        guard let account = await store.accountID() else { return }
+        if let known = defaults.string(forKey: Self.accountKey), known != account {
+            lastBackup = nil
+            defaults.removeObject(forKey: Self.backedUpHereKey)
+        }
+        defaults.set(account, forKey: Self.accountKey)
     }
 
     /// Whether Delete All Data must delete the iCloud copy: whenever this
@@ -505,9 +561,27 @@ final class CloudBackup {
         Self.deletesCloudCopyOnReset(switchOn: isEnabled, backedUpHere: backedUpFromThisPhone, deletePending: isDeletePending)
     }
 
+    /// The app came to the front: finish a pending delete, at most one try
+    /// per launch. It runs on every scene-active, and a phone with no
+    /// iCloud account or no network failed it every time (183 reports from
+    /// one phone in two days, 10 Oct 2026). A delete left pending is tried
+    /// again at the next launch.
+    func retryPendingDeleteAtLaunch() async {
+        guard !triedPendingDeleteThisLaunch else { return }
+        triedPendingDeleteThisLaunch = true
+        await retryPendingDelete()
+    }
+
     func retryPendingDelete() async {
         guard isDeletePending else { return }
         do {
+            // Another iCloud account now: the copy Delete All meant is out of
+            // reach, and this account's backup is not it.
+            if let meant = defaults.string(forKey: Self.deleteAccountKey),
+               let account = await store.accountID(), account != meant {
+                clearPendingDelete()
+                return
+            }
             // A copy saved after the delete was queued is a new backup the
             // person wanted (made from this iPhone or another), not the one
             // Delete All Data meant to remove: leave it. A delete queued
@@ -524,12 +598,27 @@ final class CloudBackup {
                     return
                 }
             }
-            try await deleteCloudCopy()
+            try await deleteCopy(showingFailure: false)
             clearPendingDelete()
         } catch {
-            // Still pending; the next launch tries again.
-            ErrorLog.report(error, where: "CloudBackup.retryPendingDelete")
+            // Still pending; the next launch tries again. No iCloud account or
+            // no network is expected, not a fault; anything else once a launch.
+            guard !Self.isExpected(error), !reportedPendingDeleteFailure else { return }
+            reportedPendingDeleteFailure = true
+            ErrorLog.report(error, where: "CloudBackup.retryPendingDelete", defaults: defaults)
         }
+    }
+
+    /// A failure that says nothing is wrong with Sortd: no network, no
+    /// iCloud account (or not now), or no iCloud in this build.
+    nonisolated static func isExpected(_ error: Error) -> Bool {
+        if Connectivity.isNetworkDown(error) { return true }
+        if error is CloudKitBackupStore.Unavailable { return true }
+        if let known = error as? CloudBackupError { return known == .notSignedIn }
+        if let failure = error as? CloudKitBackupStore.Failure {
+            return failure.code == .accountTemporarilyUnavailable || failure.code == .notAuthenticated
+        }
+        return false
     }
 
     // MARK: - Failure
@@ -537,23 +626,26 @@ final class CloudBackup {
     private func fail(with error: Error, context: ModelContext?) {
         retry?.cancel()
         guard let known = error as? CloudBackupError else {
-            // No connection is expected, not a fault: the backup is still
-            // behind and `resumeAfterReconnect` carries on.
-            if !Connectivity.isNetworkDown(error) { ErrorLog.report(error, where: "CloudBackup.backUp") }
+            // No connection or no iCloud account is expected, not a fault:
+            // the backup is still behind and `resumeAfterReconnect` carries on.
+            if !Self.isExpected(error) { ErrorLog.report(error, where: "CloudBackup.backUp", defaults: defaults) }
             status = .failed(error.localizedDescription)
             return
         }
         status = .paused(known)
-        // iCloud said when to come back: wait that long, then try once more.
-        if case .rateLimited(let seconds) = known, let context {
-            retry = Task { [weak self] in
-                guard let self else { return }
-                try? await self.sleep(.seconds(max(seconds, 1)))
-                guard !Task.isCancelled, self.isEnabled, self.status == .paused(known) else { return }
-                self.status = .idle
-                self.lastAttempt = nil
-                try? await self.backUp(from: context, automatic: true)
-            }
+        guard case .rateLimited(let seconds) = known else { return }
+        pausedUntil = clock().addingTimeInterval(max(seconds, 1))
+        retry = Task { [weak self] in
+            guard let self else { return }
+            try? await self.sleep(.seconds(max(seconds, 1)))
+            guard !Task.isCancelled, self.status == .paused(known) else { return }
+            self.status = .idle
+            // iCloud said when to come back: try the backup once more. A
+            // restore or a delete has nothing to retry with; its pause just
+            // ends, so automatic backups are not held up for the session.
+            guard let context, self.isEnabled else { return }
+            self.lastAttempt = nil
+            try? await self.backUp(from: context, automatic: true)
         }
     }
 
