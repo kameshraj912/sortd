@@ -334,10 +334,9 @@ struct AbuseBuild10Tests {
     /// says "Refund of $0.00 from Coles noted". A zero amount is a missing
     /// amount, not a refund.
     ///
-    /// Known bug: `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:196, 336) takes the sign
+    /// Fixed 10 Oct 2026, was: `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:196, 336) takes the sign
     /// from the text even when the amount is 0.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A15", "a minus-zero tap is saved as a refunded A$0.00 row"))
+    @Test(.bug(id: "b10-A15", "a minus-zero tap is saved as a refunded A$0.00 row"))
     func aMinusZeroTapIsNotARefund() async throws {
         let r = try await tap("-0.00", "Coles", ctx: store(), book: book(), at: now)
         #expect(!r.refund, "\(r.message)")

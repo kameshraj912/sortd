@@ -195,7 +195,8 @@ struct LogPurchaseIntent: AppIntent {
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let missingShop = name.isEmpty
-        let refund = AmountParser.isNegative(amount ?? "")
+        // "-0.00" is a missing amount, not a refund of nothing (b10-A15).
+        let refund = AmountParser.isNegative(amount ?? "") && !missingAmount
         // A notification names the card in its own words. Match it to a card
         // the person has, but only make a new card once this is sure to be
         // its own row: a purchase the tap already logged must not leave a
