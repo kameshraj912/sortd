@@ -179,14 +179,15 @@ struct BugHuntMoneyTests {
     /// crashes Home on every open from the 7th of the month. The test checks
     /// the restore, not Pace, so a failure does not abort the run.
     ///
-    /// Known bug: `Pace.projectedOverDay` (Spend/Services/Pace.swift:21) trusts
-    /// `budget`; `Backup.restore` (Spend/Services/Backup.swift:315) does not sanitise it.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-08: a restored budget over the cap reaches Pace and traps"))
+    /// Fixed 10 Oct 2026 (the restore half; Pace itself is fixed on the money
+    /// branch): `Backup.restore` holds the budget and every category limit to
+    /// `BudgetSheet.maxBudget`, the most the budget field takes.
+    @Test(.bug("hunt-money-08: a restored budget over the cap reaches Pace and traps"))
     func aRestoredBudgetIsCappedBeforeItReachesPace() throws {
         let from = try store()
         let fromDefaults = scratch()
         fromDefaults.set(1e300, forKey: FXService.budgetKey)
+        fromDefaults.set(["eatingOut": 1e300, "transport": 200.0, "travel": -5.0], forKey: CategoryBudgets.key)
         let data = try Backup.data(in: from, defaults: fromDefaults)
 
         let to = try store()
@@ -196,6 +197,12 @@ struct BugHuntMoneyTests {
         let restored = toDefaults.double(forKey: FXService.budgetKey)
         #expect(restored <= BudgetSheet.maxBudget(), "restored budget \(restored) is over the cap; Home's pace line would trap")
         #expect(BudgetSheet.sanitized(restored) == restored, "restore wrote a budget BudgetSheet would throw away")
+        #expect(restored == BudgetSheet.maxBudget())
+
+        let limits = CategoryBudgets.stored(toDefaults)
+        #expect(limits["eatingOut"] == BudgetSheet.maxBudget(), "a category limit over the cap was kept: \(limits)")
+        #expect(limits["transport"] == 200)
+        #expect(limits["travel"] == nil)
     }
 
     // MARK: 9. A China-region phone's yuan are read as yen
