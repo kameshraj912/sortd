@@ -550,8 +550,11 @@ struct LogPurchaseIntent: AppIntent {
     /// How far back a notification's refund (Wallet's or a bank's) looks for
     /// the same refund reported by another trigger. A bank often sends its
     /// refund notice long after the till refund (bug hunt 8 Oct 2026,
-    /// b10-A5 to A7), so it gets a week; a tap keeps `triggerPairWindow`.
-    static let notificationRefundWindow: TimeInterval = 7 * 86_400
+    /// b10-A5 to A7): refunds post in 5 to 10 business days, which with
+    /// weekends and public holidays runs past two weeks, so it gets three
+    /// (O2: a week let an 8-day-late notice refund a second purchase). A
+    /// tap keeps `triggerPairWindow`.
+    static let notificationRefundWindow: TimeInterval = 21 * 86_400
 
     /// The row an earlier report of this same refund already changed: a
     /// trigger that has not reported it yet, within `triggerPairWindow` for

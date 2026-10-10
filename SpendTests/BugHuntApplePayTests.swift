@@ -271,8 +271,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// the notice is read as a new refund and `Refunds.markRefundedPurchase`
     /// takes the next same-amount purchase at that shop off: a re-purchase
     /// that was never refunded drops out of the total.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a bank refund notice 8 days after the till refund refunds a second, unrefunded purchase"))
+    @Test(.bug("a bank refund notice 8 days after the till refund refunds a second, unrefunded purchase"))
     func aRefundNoticeEightDaysLateDoesNotRefundTheRepurchase() async throws {
         let ctx = store(), b = book()
         try await tap("Coles", "A$45.00", at: 0, ctx: ctx, book: b)
