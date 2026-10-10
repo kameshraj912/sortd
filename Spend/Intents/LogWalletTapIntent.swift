@@ -763,10 +763,31 @@ nonisolated enum WalletTapText {
     /// tap text ("Coles A$23.50 9:41 am NAB Visa Debit") is the whole
     /// purchase, not a date.
     static func looksLikeDate(_ s: String) -> Bool {
-        if s.range(of: #"^\d{1,2}[ /.-](\d{1,2}|[A-Za-z]{3,9})[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}"#,
+        if s.range(of: #"^\d{1,2}[ /.-]\d{1,2}[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}"#,
                    options: .regularExpression) != nil { return true }
+        // "8 Oct 2026": the word must be a month. "7-ELEVEN 2034", "99 Ranch
+        // 1234" and "5 Guys 10" are shops (O1).
+        if let r = s.range(of: #"^\d{1,2}[ /.-]\p{L}{3,9}\.?[ /.-]\d{2,4}"#, options: .regularExpression) {
+            let word = s[r].drop(while: \.isNumber).dropFirst().prefix(while: \.isLetter).lowercased()
+            if monthWords.contains(word) { return true }
+        }
         return s.range(of: clockTime, options: .regularExpression) != nil && money(in: withoutClockTimes(s)) == nil
     }
+
+    /// Month names and their short forms, in English and the phone's own
+    /// language, lower case and without a closing dot.
+    private static let monthWords: Set<String> = {
+        var words: Set<String> = []
+        for id in ["en_US_POSIX", Locale.current.identifier] {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: id)
+            for list in [f.monthSymbols, f.shortMonthSymbols, f.standaloneMonthSymbols, f.shortStandaloneMonthSymbols] {
+                for name in list ?? [] { words.insert(name.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))) }
+            }
+        }
+        words.insert("sept")
+        return words
+    }()
 
     /// "9:41", "9:41 am", "21:05:33", "9:41 p.m.".
     private static let clockTime = #"\b\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AaPp]\.?[Mm]\b\.?)?"#

@@ -251,8 +251,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// as Wallet shows unknown merchants) matches `WalletTapText.looksLikeDate`'s
     /// day-month-year shape and is thrown away, so an in-app payment at
     /// 7-Eleven, 99 Ranch or 5 Guys is saved with no shop ("needs a check").
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("looksLikeDate reads a number-word-number shop line (7-ELEVEN 2034) as a date"),
+    @Test(.bug("looksLikeDate reads a number-word-number shop line (7-ELEVEN 2034) as a date"),
           arguments: ["7-ELEVEN 2034", "99 Ranch 1234", "5 Guys 10"])
     func aShopLineThatStartsWithANumberIsNotADate(shop: String) async throws {
         let ctx = store(), b = book()
