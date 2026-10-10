@@ -92,7 +92,13 @@ enum Deduper {
             // calendar day, not when it is within 10 minutes.
             if sameSourceSeenBefore {
                 if dateOnly.contains(new.source) {
-                    if !calendar.isDate(old.date, inSameDayAs: new.date) { continue }
+                    // A row that merged with a tap keeps the tap's day, not
+                    // the bank's: a line the bank posted the next day must
+                    // still find it, or every re-import doubles it (D2). The
+                    // 2-day window above, which let it merge the first time,
+                    // is the limit then.
+                    let tapDated = everSeenIn.contains(where: timed.contains)
+                    if !tapDated, !calendar.isDate(old.date, inSameDayAs: new.date) { continue }
                 } else if abs(old.date.timeIntervalSince(new.date)) > 10 * 60 { continue }
             }
             // A hand-typed purchase and an Apple Pay tap both carry the real

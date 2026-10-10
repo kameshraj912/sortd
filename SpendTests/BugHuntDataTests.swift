@@ -284,12 +284,11 @@ struct BugHuntDataOct2026Tests {
     /// second time. Every tap the bank posted the next day doubles on a
     /// re-import; a weekend's taps all do.
     ///
-    /// Known bug: `Deduper.match` (Spend/Services/Deduper.swift:93-96)
+    /// Fixed 10 Oct 2026, was: `Deduper.match` (Spend/Services/Deduper.swift:93-96)
     /// compares a re-imported statement row with the merged row by calendar
     /// day, but the merged row carries the tap's date, not the bank's
     /// (`TransactionLogger.merge`, Spend/Services/SpendStore.swift:255).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("re-importing a statement doubles every tap the bank posted the day after"))
+    @Test(.bug("re-importing a statement doubles every tap the bank posted the day after"))
     func reimportingAStatementPostedTheDayAfterTheTapDoesNotDouble() throws {
         let ctx = try store()
         _ = try TransactionLogger.log(
