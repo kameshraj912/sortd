@@ -70,6 +70,9 @@ struct OnboardingView: View {
     /// used. Never what was answered.
     @State private var stepsSeen = 0
     @State private var usedSkip = false
+    /// A tap on a locked Continue: the buzz, and the line saying why.
+    @State private var lockedTaps = 0
+    @State private var showingLockedWhy = false
     /// "I'm Done" on the iOS 26 automation pages (`ApplePaySetupSteps.isReady`).
     @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var automationBuilt = false
     @State private var askingNoApplePay = false
@@ -107,7 +110,9 @@ struct OnboardingView: View {
     private var book: CardBook { .shared }
     private var region: String { Locale.current.region?.identifier ?? "AU" }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.setupStep(String(describing: step))) }
+
+    @ViewBuilder private var screenBody: some View {
         ScrollView {
             VStack(spacing: 0) {
             page
@@ -209,6 +214,7 @@ struct OnboardingView: View {
         // Where people get to, for the drop-off funnel: the step's name and
         // place, never an answer. `initial` counts the first screen.
         .onChange(of: step, initial: true) {
+            showingLockedWhy = false
             Analytics.shared.track(.setupStepViewed, ["step": .string(String(describing: step)),
                                                       "index": .int(step.rawValue)])
         }
@@ -486,9 +492,11 @@ struct OnboardingView: View {
                 // Locked: the button itself says what is missing, so the bar
                 // stays one button tall and nothing sits over the page.
                 case .cards where newFlow && book.active.isEmpty:
-                    lockedButton("Add a Card to Continue")
+                    lockedButton("Add a Card to Continue", why: "Add the card you pay with above.")
+                    skipForNowButton
                 case .applePay where newFlow && !applePayReady:
-                    lockedButton(applePayRequirement)
+                    lockedButton(applePayRequirement, why: applePayWhy)
+                    skipForNowButton
                 // Step 3 is still the filled button on the page ("Show Me
                 // How"). This one is quieter and says what is being put off.
                 case .applePay where newFlow && applePayStepThreeLeft:
@@ -531,20 +539,57 @@ struct OnboardingView: View {
         }
     }
 
-    /// Continue while it is locked: readable, plainly not the filled button,
-    /// and not tappable. A disabled filled button drew white words on pale
-    /// grey (Raj's screenshot, iOS 26, 5 Oct 2026).
-    private func lockedButton(_ title: String) -> some View {
-        Button {} label: {
-            Label(title, systemImage: "lock.fill")
-                .font(.headline)
-                .foregroundStyle(Color.ink.opacity(0.6))
-                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+    /// Continue while it is locked: readable, plainly not the filled button.
+    /// A disabled filled button drew white words on pale grey (Raj's
+    /// screenshot, iOS 26, 5 Oct 2026). It used to ignore taps too, and two
+    /// testers tapped it again and again (10 Oct 2026): a tap now says why
+    /// in one line under it, with a buzz, and Skip for Now sits below.
+    private func lockedButton(_ title: String, why: String) -> some View {
+        VStack(spacing: 6) {
+            Button {
+                lockedTaps += 1
+                withAnimation(.snappy) { showingLockedWhy = true }
+                ApplePaySetupSteps.trackAction("locked_continue", status: applePayStatus, saysBuilt: automationBuilt)
+            } label: {
+                Label(title, systemImage: "lock.fill")
+                    .font(.headline)
+                    .foregroundStyle(Color.ink.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            .feedback(.blocked, trigger: lockedTaps)
+            .accessibilityLabel("\(title). Not available yet")
+            .accessibilityHint(why)
+            if showingLockedWhy {
+                Text(why)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
         }
-        .buttonStyle(.glass)
-        .controlSize(.large)
-        .allowsHitTesting(false)
-        .accessibilityLabel("\(title). Not available yet")
+    }
+
+    /// Always works, on the two steps that lock Continue. Not the same as
+    /// "I don't use Apple Pay": the Apple Pay reminder still comes later.
+    private var skipForNowButton: some View {
+        tertiaryButton("Skip for Now") {
+            if step == .applePay {
+                ApplePaySetupSteps.trackAction("skip_for_now", status: applePayStatus, saysBuilt: automationBuilt)
+            }
+            usedSkip = true
+            go(1)
+        }
+    }
+
+    /// The one line under a tapped locked Continue on the Apple Pay step.
+    private var applePayWhy: String {
+        if ApplePaySetupSteps.route == .automation { return "Make the automation with the steps above, then tap I'm Done." }
+        return applePayStatus.isConnected ? "Switch both automations on in Shortcuts, then tap I Switched Both On."
+            : "Do steps 1 to 3 above first."
     }
 
     private var applePayReady: Bool {
