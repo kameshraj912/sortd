@@ -207,7 +207,18 @@ nonisolated struct WalletNotification: Equatable, Sendable {
         if text.range(of: Self.notCompletedPattern, options: [.regularExpression, .caseInsensitive]) != nil {
             return .notCompleted
         }
-        let parts = WalletTapText.parse(text, notification: true, isKnownCard: isKnownCard)
+        var parts = WalletTapText.parse(text, notification: true, isKnownCard: isKnownCard)
+        // Wallet's Title is the card. One the person has not added, named
+        // with no card word ("Monzo", "Wise"), was taken for the shop while
+        // the Subtitle held the real one (O3). With a Subtitle there, and
+        // the title read as the shop, the title is the card when another
+        // line is left to be the shop.
+        let titleText = TapField.normalize(title)
+        if parts.card == nil, !titleText.isEmpty, !TapField.isBlank(subtitle), parts.merchant == titleText {
+            let again = WalletTapText.parse(text, notification: true,
+                                            isKnownCard: { isKnownCard($0) || $0 == titleText })
+            if again.card == titleText, again.merchant != nil { parts = again }
+        }
         guard let amount = parts.amount, let value = AmountParser.parse(amount)?.amount, value > 0 else {
             return .noAmount
         }
@@ -460,8 +471,9 @@ struct LogWalletTapIntent: AppIntent {
                                                         queueURL: queueURL)
         }
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
-        // purchase; a legacy "Send a Test Tap" row is not a real tap).
-        if result.transaction != nil, shop != LogPurchaseIntent.legacyTestMerchant {
+        // purchase; a legacy "Send a Test Tap" row and "Check the Shortcut"
+        // are not real taps, O5).
+        if result.transaction != nil, !LogPurchaseIntent.isTestMerchant(shop ?? "") {
             Analytics.shared.track(.applePayTapLogged, ["merged": .bool(result.merged)])
         }
         return result
@@ -709,17 +721,22 @@ nonisolated enum WalletTapText {
         // "CN¥" before the bare "¥" alternative, so yuan keep their "CN" and
         // aren't cut down to a yen sign. "JP¥" (how en_GB and en_SG phones
         // write yen) is listed too: the bare "¥" can't start inside a word.
-        let marker = #"(?:[A-Z]{0,2}\$|CN¥|JP¥|€|£|¥|₹|฿|₱|₩|₪|RM|Rs\.?|[A-Z]{3})"#
-        // Grouped thousands ("1,234.50", "1.234,50") or a plain run of digits
+        let marker = #"(?:[A-Z]{0,2}\$|CN¥|JP¥|€|£|¥|₹|฿|₱|₩|₪|RM|Rs\.?|Rp|[A-Z]{3})"#
+        // Grouped thousands ("1,234.50", "1.234,50", "12 345,67"), Indian
+        // lakh groups ("1,23,456.00", b10-A1) or a plain run of digits
         // ("1234.50" — the old pattern stopped at 3 digits and read A$123).
         // A group is exactly 3 digits: "A$45 1234" is A$45, not A$45 123.
-        let number = #"(?:\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
+        let number = #"(?:\d{1,2}(?:,\d{2})+,\d{3}(?!\d)|\d{1,3}(?:[,.\s]\d{3})+(?!\d)|\d+)(?:[.,]\d{2})?"#
+        // A sign written after the number, as French, German and Spanish
+        // phones do ("12,50 €", "1.234,50 €"; b10-A2 to A4).
+        let trailingSign = #"(?:€|£|¥|₹|฿|₱|₩|₪)"#
         let patterns = [
             // Not inside a word: "PANTRY 24" is not 24 Turkish lira.
             #"(?<![A-Za-z])"# + sign + marker + #"\s?"# + number, // A$4.50, SGD 6.20, -$5
             // Starts where a number starts, so a long run of digits is not
             // rescanned from every digit (b10-A13).
             sign + #"(?<![\d.,])"# + number + #"\s?(?:[A-Z]{3})\b"#, // 6.20 SGD
+            sign + #"(?<![\d.,])"# + number + #"\s?"# + trailingSign, // 12,50 €
             // 4.50, 1,234.50 — the whole number, not "234.50" out of it.
             sign + #"(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)[.,]\d{2}\b"#,
         ]
@@ -757,10 +774,31 @@ nonisolated enum WalletTapText {
     /// tap text ("Coles A$23.50 9:41 am NAB Visa Debit") is the whole
     /// purchase, not a date.
     static func looksLikeDate(_ s: String) -> Bool {
-        if s.range(of: #"^\d{1,2}[ /.-](\d{1,2}|[A-Za-z]{3,9})[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}"#,
+        if s.range(of: #"^\d{1,2}[ /.-]\d{1,2}[ /.-]\d{2,4}|^\d{4}-\d{2}-\d{2}"#,
                    options: .regularExpression) != nil { return true }
+        // "8 Oct 2026": the word must be a month. "7-ELEVEN 2034", "99 Ranch
+        // 1234" and "5 Guys 10" are shops (O1).
+        if let r = s.range(of: #"^\d{1,2}[ /.-]\p{L}{3,9}\.?[ /.-]\d{2,4}"#, options: .regularExpression) {
+            let word = s[r].drop(while: \.isNumber).dropFirst().prefix(while: \.isLetter).lowercased()
+            if monthWords.contains(word) { return true }
+        }
         return s.range(of: clockTime, options: .regularExpression) != nil && money(in: withoutClockTimes(s)) == nil
     }
+
+    /// Month names and their short forms, in English and the phone's own
+    /// language, lower case and without a closing dot.
+    private static let monthWords: Set<String> = {
+        var words: Set<String> = []
+        for id in ["en_US_POSIX", Locale.current.identifier] {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: id)
+            for list in [f.monthSymbols, f.shortMonthSymbols, f.standaloneMonthSymbols, f.shortStandaloneMonthSymbols] {
+                for name in list ?? [] { words.insert(name.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))) }
+            }
+        }
+        words.insert("sept")
+        return words
+    }()
 
     /// "9:41", "9:41 am", "21:05:33", "9:41 p.m.".
     private static let clockTime = #"\b\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AaPp]\.?[Mm]\b\.?)?"#
@@ -778,6 +816,6 @@ nonisolated enum WalletTapText {
         if hit.unicodeScalars.contains(where: { $0.properties.generalCategory == .currencySymbol }) { return true }
         if hit.range(of: #"\d[.,]\d{2}(?!\d)"#, options: .regularExpression) != nil { return true }
         let marker = hit.trimmingCharacters(in: CharacterSet(charactersIn: "-−")).prefix(2)
-        return marker == "RM" || marker == "Rs"
+        return marker == "RM" || marker == "Rs" || marker == "Rp"
     }
 }

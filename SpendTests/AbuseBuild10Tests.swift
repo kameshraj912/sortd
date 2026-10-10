@@ -72,10 +72,9 @@ struct AbuseBuild10Tests {
     /// "₹1,23,456.00" as ₹1.23 and "Rs. 1,50,000" as ₹1.50. The tap's own
     /// Amount field reads them right.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:667) only knows groups of
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:667) only knows groups of
     /// three, so it stops after "1" and takes ",23" as the cents.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A1", "lakh-grouped rupees in a notification are read as ₹1.23"),
+    @Test(.bug(id: "b10-A1", "lakh-grouped rupees in a notification are read as ₹1.23"),
           arguments: apps)
     func lakhRupeesInANotificationAreReadWhole(app: String) async throws {
         for (text, expected) in [("₹1,23,456.00", "123456"), ("Rs. 1,50,000", "150000")] {
@@ -93,10 +92,9 @@ struct AbuseBuild10Tests {
     /// and the wrong currency. (The U+202F tap-field case is hunt-money-03;
     /// this is the notification reader, and the plain space too.)
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:668-674): no pattern takes a
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:668-674): no pattern takes a
     /// trailing "€", and the cents pattern restarts after the space.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A2", "space-grouped euros with a trailing € are read as the last group in the card's currency"),
+    @Test(.bug(id: "b10-A2", "space-grouped euros with a trailing € are read as the last group in the card's currency"),
           arguments: apps)
     func spaceGroupedEurosInANotificationAreReadWhole(app: String) async throws {
         for (text, expected) in [("12\u{202F}345,67\u{00A0}€", "12345.67"), ("1 234,50 €", "1234.50")] {
@@ -111,10 +109,9 @@ struct AbuseBuild10Tests {
     /// "12,50 €" in a notification keeps the amount but drops the euro: it
     /// is saved as A$12.50 (the card's currency). The tap field gets EUR.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:673) returns only "12,50", so
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:673) returns only "12,50", so
     /// `AmountParser` never sees the "€".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A3", "a trailing € in a notification is dropped, so euros are saved as the card's currency"),
+    @Test(.bug(id: "b10-A3", "a trailing € in a notification is dropped, so euros are saved as the card's currency"),
           arguments: apps)
     func aTrailingEuroSignInANotificationIsKept(app: String) async throws {
         let r = try await notifyAmount("12,50 €", app: app, ctx: store(), book: book())
@@ -127,10 +124,9 @@ struct AbuseBuild10Tests {
     /// find no amount at all in a notification, so the purchase is lost
     /// ("no amount" / "not a purchase"). The tap field reads both.
     ///
-    /// Known bug: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:663-674): "Rp" is not a
+    /// Fixed 10 Oct 2026, was: `WalletTapText.money` (Spend/Intents/LogWalletTapIntent.swift:663-674): "Rp" is not a
     /// marker and the cents-only pattern needs no digit before the dot.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A4", "dot-grouped amounts with no leading sign are missed in a notification"),
+    @Test(.bug(id: "b10-A4", "dot-grouped amounts with no leading sign are missed in a notification"),
           arguments: apps)
     func dotGroupedAmountsInANotificationAreNotMissed(app: String) async throws {
         for (text, expected, currency) in [("1.234,50 €", "1234.50", "EUR"), ("Rp150.000", "150000", "IDR")] {
@@ -201,10 +197,9 @@ struct AbuseBuild10Tests {
     /// lost (the row stays refunded). Same root as abuse-28, reached here
     /// through the tap route.
     ///
-    /// Known bug: `TransactionLogger.log`/`Deduper` (Spend/Services/Deduper.swift) merge into a refunded row;
+    /// Fixed 10 Oct 2026, was: `TransactionLogger.log`/`Deduper` (Spend/Services/Deduper.swift) merge into a refunded row;
     /// `mergeTapCompanion` (Spend/Intents/LogPurchaseIntent.swift:404) only excludes taps within 3 minutes.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A8", "a re-purchase right after a till refund merges into the refunded row"))
+    @Test(.bug(id: "b10-A8", "a re-purchase right after a till refund merges into the refunded row"))
     func aRepurchaseAfterATillRefundIsCounted() async throws {
         let ctx = store(), b = book()
         try await tap("A$20.00", "Uniqlo", ctx: ctx, book: b, at: now)
@@ -277,10 +272,9 @@ struct AbuseBuild10Tests {
     /// A shop named only in emoji ("🍕"): the tap and Wallet's notification
     /// of one purchase never pair, so it is counted twice.
     ///
-    /// Known bug: `LogPurchaseIntent.shopsAgree` (Spend/Intents/LogPurchaseIntent.swift:488) uses
+    /// Fixed 10 Oct 2026, was: `LogPurchaseIntent.shopsAgree` (Spend/Intents/LogPurchaseIntent.swift:488) uses
     /// `Deduper.similarity`, which is 0 for two names with no letters or digits.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A12", "an emoji-only shop's tap and notification are two rows"))
+    @Test(.bug(id: "b10-A12", "an emoji-only shop's tap and notification are two rows"))
     func anEmojiOnlyShopsTapAndNotificationAreOneRow() async throws {
         let ctx = store(), b = book()
         try await tap("A$23.40", "🍕", ctx: ctx, book: b, at: now)
@@ -338,10 +332,9 @@ struct AbuseBuild10Tests {
     /// says "Refund of $0.00 from Coles noted". A zero amount is a missing
     /// amount, not a refund.
     ///
-    /// Known bug: `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:196, 336) takes the sign
+    /// Fixed 10 Oct 2026, was: `LogPurchaseIntent.handle` (Spend/Intents/LogPurchaseIntent.swift:196, 336) takes the sign
     /// from the text even when the amount is 0.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A15", "a minus-zero tap is saved as a refunded A$0.00 row"))
+    @Test(.bug(id: "b10-A15", "a minus-zero tap is saved as a refunded A$0.00 row"))
     func aMinusZeroTapIsNotARefund() async throws {
         let r = try await tap("-0.00", "Coles", ctx: store(), book: book(), at: now)
         #expect(!r.refund, "\(r.message)")

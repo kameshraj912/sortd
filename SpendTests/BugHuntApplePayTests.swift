@@ -251,8 +251,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// as Wallet shows unknown merchants) matches `WalletTapText.looksLikeDate`'s
     /// day-month-year shape and is thrown away, so an in-app payment at
     /// 7-Eleven, 99 Ranch or 5 Guys is saved with no shop ("needs a check").
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("looksLikeDate reads a number-word-number shop line (7-ELEVEN 2034) as a date"),
+    @Test(.bug("looksLikeDate reads a number-word-number shop line (7-ELEVEN 2034) as a date"),
           arguments: ["7-ELEVEN 2034", "99 Ranch 1234", "5 Guys 10"])
     func aShopLineThatStartsWithANumberIsNotADate(shop: String) async throws {
         let ctx = store(), b = book()
@@ -271,8 +270,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// the notice is read as a new refund and `Refunds.markRefundedPurchase`
     /// takes the next same-amount purchase at that shop off: a re-purchase
     /// that was never refunded drops out of the total.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a bank refund notice 8 days after the till refund refunds a second, unrefunded purchase"))
+    @Test(.bug("a bank refund notice 8 days after the till refund refunds a second, unrefunded purchase"))
     func aRefundNoticeEightDaysLateDoesNotRefundTheRepurchase() async throws {
         let ctx = store(), b = book()
         try await tap("Coles", "A$45.00", at: 0, ctx: ctx, book: b)
@@ -293,8 +291,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// excludes the legacy "Sortd Test" merchant) and `apple_pay_tap_logged`
     /// (`LogWalletTapIntent.handle`, same check). The person's real first
     /// purchase is then never counted as the activation.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("countsAsActivation treats the health check's 'Sortd Check' row as a real first purchase"))
+    @Test(.bug("countsAsActivation treats the health check's 'Sortd Check' row as a real first purchase"))
     func theHealthCheckIsNotTheFirstAutoLoggedPurchase() {
         #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: ApplePayHealthCheck.merchant))
     }
@@ -333,8 +330,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// ("Monzo", "Wise", "Up", "Revolut"), is not recognised as a card, so
     /// the parser takes the first leftover line, the title, as the shop:
     /// a £4.50 coffee at Pret is saved at "Monzo".
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("a notification title naming an unknown card with no card word is saved as the shop"))
+    @Test(.bug("a notification title naming an unknown card with no card word is saved as the shop"))
     func anUnknownCardTitleIsNotTheShop() async throws {
         let ctx = store(), b = book()
         b.upsert(CardInfo(name: "NAB Visa Debit", shortName: "NAB", bank: "NAB", walletWords: ["nab"]))
@@ -343,5 +339,30 @@ struct BugHuntApplePayHunt1008Tests {
         #expect(t.rawMerchant == "Pret A Manger", "saved at \(t.rawMerchant)")
         #expect(t.amount == Decimal(string: "4.50"))
         #expect(t.currencyCode == "GBP")
+    }
+
+    // MARK: - U23 A merged tap waits for a rate until the app opens
+
+    /// A tap with no amount, then the full tap a minute later in a foreign
+    /// currency: `mergeTapCompanion` fills the amount and currency in and
+    /// clears the home value, but returned before `FXService.backfill`, so
+    /// the purchase sat out of every total until the app next opened. The
+    /// day's rate is saved first, so no network is needed.
+    @Test(.bug("U23: a merged tap gets no exchange rate until the app opens"))
+    func aMergedForeignTapGetsItsRateAtOnce() async throws {
+        let ctx = store(), b = book()
+        let foreign = Money.home == "SGD" ? "USD" : "SGD"
+        let typed = foreign == "SGD" ? "S$20.00" : "US$20.00"
+        let day = FXService.dayString(now)
+        ctx.insert(FXRate(key: Money.home == "AUD" ? "\(foreign)-\(day)" : "\(foreign)>\(Money.home)-\(day)", rate: 1.1))
+        try ctx.save()
+
+        try await tap("Toast Box", "", at: 0, ctx: ctx, book: b)
+        let r = try await tap("Toast Box", typed, at: 60, ctx: ctx, book: b)
+        let t = try #require(r.transaction)
+        #expect(r.merged)
+        #expect(t.currencyCode == foreign)
+        #expect(t.audAmount == Decimal(string: "22.00"), "home value \(String(describing: t.audAmount))")
+        #expect(try rows(ctx).count == 1)
     }
 }

@@ -107,9 +107,15 @@ struct LogPurchaseIntent: AppIntent {
     }
 
     /// A tap counts as the first auto-logged purchase only when it was
-    /// added (not merged) and is not a legacy "Send a Test Tap" purchase.
-    nonisolated static func countsAsActivation(added: Bool, merchant: String) -> Bool {
-        added && merchant != legacyTestMerchant
+    /// added (not merged) and is not a legacy "Send a Test Tap" purchase or
+    /// the "Check the Shortcut" row (O5, as `Activation.detect` already says).
+    static func countsAsActivation(added: Bool, merchant: String) -> Bool {
+        added && !isTestMerchant(merchant)
+    }
+
+    /// A shop name only Sortd's own checks write: never real spending.
+    static func isTestMerchant(_ merchant: String) -> Bool {
+        merchant == legacyTestMerchant || merchant == ApplePayHealthCheck.merchant
     }
 
     /// The last few raw lines, newest first, for the developer menu's
@@ -195,7 +201,8 @@ struct LogPurchaseIntent: AppIntent {
         }
         let missingAmount = parsed == nil || parsed!.amount == 0
         let missingShop = name.isEmpty
-        let refund = AmountParser.isNegative(amount ?? "")
+        // "-0.00" is a missing amount, not a refund of nothing (b10-A15).
+        let refund = AmountParser.isNegative(amount ?? "") && !missingAmount
         // A notification names the card in its own words. Match it to a card
         // the person has, but only make a new card once this is sure to be
         // its own row: a purchase the tap already logged must not leave a
@@ -259,13 +266,19 @@ struct LogPurchaseIntent: AppIntent {
                     // tap joins it, and its shop and card win.
                     if let absorbed = try Self.absorbNotificationRow(name: name, parsed: parsed, missingAmount: missingAmount,
                                                                      cardID: cardID, now: now, in: context) {
+                        await FXService.backfill(in: context)
                         return absorbed
                     }
                     companion = try Self.mergeTapCompanion(name: name, missingAmount: missingAmount, missingShop: missingShop,
                                                            parsed: parsed, cardID: cardID, seen: seen, now: now, in: context)
                 }
                 switch companion {
-                case .merged(let outcome): return outcome
+                case .merged(let outcome):
+                    // A merge can fill in an amount or change the currency,
+                    // which leaves the row without a home value: rate it
+                    // now, not when the app next opens (U23).
+                    await FXService.backfill(in: context)
+                    return outcome
                 case .notMerged(let excluding): excludeFromLog = excluding
                 }
             }
@@ -422,7 +435,14 @@ struct LogPurchaseIntent: AppIntent {
         }
 
         guard let t = nearby.first(where: matches) else {
-            return .notMerged(excluding: Set(nearby.map(\.id)))
+            // A refunded purchase is done with: a tap of the same amount
+            // after it is a new purchase (an exchange at the till), never a
+            // re-send to fold into the refunded row (b10-A8).
+            let lo = now.addingTimeInterval(-Deduper.window), hi = now.addingTimeInterval(Deduper.window)
+            let refunded = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate {
+                $0.date >= lo && $0.date <= hi && $0.refunded == true
+            }))
+            return .notMerged(excluding: Set(nearby.map(\.id)).union(refunded.map(\.id)))
         }
 
         // Fill whatever the kept row was missing from the newcomer — a
@@ -490,6 +510,15 @@ struct LogPurchaseIntent: AppIntent {
     private static func shopsAgree(_ t: Transaction, _ name: String) -> Bool {
         name.isEmpty || lacksShop(t)
             || Deduper.similarity(t.rawMerchant, name) >= 0.8 || Deduper.similarity(t.merchant, name) >= 0.8
+            || sameSymbolName(t.rawMerchant, name)
+    }
+
+    /// Two names with no letters or digits ("🍕"), which `Deduper.similarity`
+    /// scores 0, agree when they are written the same (b10-A12).
+    private static func sameSymbolName(_ a: String, _ b: String) -> Bool {
+        guard MerchantName.key(a).isEmpty, MerchantName.key(b).isEmpty else { return false }
+        let x = MerchantName.clean(a), y = MerchantName.clean(b)
+        return !x.isEmpty && x == y
     }
 
     /// An unknown card on either side never disagrees; two known cards must match.
@@ -533,8 +562,11 @@ struct LogPurchaseIntent: AppIntent {
     /// How far back a notification's refund (Wallet's or a bank's) looks for
     /// the same refund reported by another trigger. A bank often sends its
     /// refund notice long after the till refund (bug hunt 8 Oct 2026,
-    /// b10-A5 to A7), so it gets a week; a tap keeps `triggerPairWindow`.
-    static let notificationRefundWindow: TimeInterval = 7 * 86_400
+    /// b10-A5 to A7): refunds post in 5 to 10 business days, which with
+    /// weekends and public holidays runs past two weeks, so it gets three
+    /// (O2: a week let an 8-day-late notice refund a second purchase). A
+    /// tap keeps `triggerPairWindow`.
+    static let notificationRefundWindow: TimeInterval = 21 * 86_400
 
     /// The row an earlier report of this same refund already changed: a
     /// trigger that has not reported it yet, within `triggerPairWindow` for

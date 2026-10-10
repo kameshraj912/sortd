@@ -49,6 +49,8 @@ nonisolated enum AmountParser {
         // "Rs500", "Rs 500": rupees only straight before a number, so a shop
         // called "RS Components" is not.
         if upper.range(of: #"(?<![A-Z])RS\s?[0-9]"#, options: .regularExpression) != nil { return "INR" }
+        // "Rp150.000": rupiah, the same way (b10-A4).
+        if upper.range(of: #"(?<![A-Z])RP\s?[0-9]"#, options: .regularExpression) != nil { return "IDR" }
         return upper.split(whereSeparator: { !$0.isLetter })
             .first { $0.count == 3 && isoCodes.contains(String($0)) }
             .map(String.init)
@@ -82,9 +84,12 @@ nonisolated enum AmountParser {
         // "." from "RS." and read 0.5. Spaced thousands count: with a no-break
         // space ("12 345", how a formatter writes them), or with a plain space
         // only when cents follow ("1 234,50"). "A$45 120" is A$45 and the
-        // next number, not A$45,120.
+        // next number, not A$45,120. A leading separator with one or two
+        // digits and nothing before it (".50", ",5", "$.50") is cents: the
+        // amount field lets it in, and skipping the "." read fifty dollars (M1).
         let pattern = #"[0-9]{1,3}(?:[\x{00A0}\x{202F}][0-9]{3})+(?![0-9])(?:[.,][0-9]{1,2})?"#
             + #"|[0-9]{1,3}(?: [0-9]{3})+(?![0-9])[.,][0-9]{1,2}|[0-9][0-9.,]*[0-9]|[0-9]"#
+            + #"|(?<![0-9A-Z.,])[.,][0-9]{1,2}(?![0-9.,])"#
         guard let r = upper.range(of: pattern, options: .regularExpression) else { return nil }
         let number = upper[r].filter { $0 != " " && $0 != "\u{00A0}" && $0 != "\u{202F}" }
 
@@ -93,7 +98,8 @@ nonisolated enum AmountParser {
         let cleaned: String
         if let last = number.lastIndex(where: { $0 == "." || $0 == "," }),
            (1...2).contains(number.distance(from: last, to: number.endIndex) - 1) {
-            cleaned = number[..<last].filter(\.isNumber) + "." + number[number.index(after: last)...]
+            let whole = number[..<last].filter(\.isNumber)
+            cleaned = (whole.isEmpty ? "0" : whole) + "." + number[number.index(after: last)...]
         } else {
             cleaned = number.filter(\.isNumber)
         }

@@ -131,10 +131,9 @@ struct BugHuntMoneyTests {
     /// purchase detail (`committedAmount`) both save it; BudgetSheet is fine
     /// because `limitInput` puts a "0" in front first.
     ///
-    /// Known bug: `AmountParser.parse` (Spend/Services/Parsing.swift:86-87) has no
+    /// Fixed 10 Oct 2026, was: `AmountParser.parse` (Spend/Services/Parsing.swift:86-87) has no
     /// alternative for `[.,][0-9]{1,2}` with nothing before it.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-06: .50 is read as 50 and saved as fifty dollars"))
+    @Test(.bug("hunt-money-06: .50 is read as 50 and saved as fifty dollars"))
     func aLeadingDotAmountIsCents() {
         #expect(AddTransactionView.isTypeable(".50"), "the field refuses it; then there is no bug")
         #expect(AmountParser.parse(".50")?.amount == Decimal(string: "0.50"),
@@ -156,10 +155,9 @@ struct BugHuntMoneyTests {
     /// amount with `Money.home`. Same for "TOTAL 12.50 EUR", "TOTAL 12.50€"
     /// and "Total: 45.00 SGD".
     ///
-    /// Known bug: `GenericReceipts.total` money regex (Spend/Services/GenericReceipts.swift:18-19)
+    /// Fixed 10 Oct 2026, was: `GenericReceipts.total` money regex (Spend/Services/GenericReceipts.swift:18-19)
     /// and the fallback in `ReceiptScanner.total` (Spend/Services/ReceiptScanner.swift:142-150).
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("hunt-money-07: a currency written after the total is ignored and the home currency is used"))
+    @Test(.bug("hunt-money-07: a currency written after the total is ignored and the home currency is used"))
     func aCurrencyAfterTheTotalIsKept() {
         let cases: [(String, String)] = [("TOTAL 350.00 THB", "THB"), ("TOTAL 12.50 EUR", "EUR"),
                                          ("TOTAL 12.50€", "EUR"), ("Total: 45.00 SGD", "SGD")]
@@ -288,5 +286,40 @@ struct BugHuntMoneyTests {
             let r = try #require(QuickEntryAI.merge(fields(merchant, amount, code), typed: typed))
             #expect(r.currency == nil, "\(typed) filled in \(r.currency ?? "nil")")
         }
+    }
+
+    // MARK: 13. Number sizes that trapped (C1, C2, C3)
+
+    /// A budget of 1e21 or 1e300 (a bad backup) made `Pace.projectedOverDay`
+    /// call `Int(...)` on a number past Int.max and crash Home on every open.
+    /// It now gives no projection. (`aRestoredBudgetIsCappedBeforeItReachesPace`
+    /// stays a known bug: the restore itself still writes the raw budget.)
+    @Test(.bug("C1: a huge budget makes Pace trap"))
+    func aHugeBudgetGivesNoPaceInsteadOfACrash() {
+        for budget in [1e21, 1e300, Double.infinity, Double.greatestFiniteMagnitude] {
+            #expect(Pace.projectedOverDay(spent: 10, budget: budget, day: 7, daysInMonth: 31) == nil, "budget \(budget)")
+        }
+        #expect(Pace.projectedOverDay(spent: 10, budget: 1e-300, day: 7, daysInMonth: 31) == nil)
+        // An ordinary month still projects: $70 by the 7th of a $200 budget.
+        #expect(Pace.projectedOverDay(spent: 70, budget: 200, day: 7, daysInMonth: 31) == 21)
+    }
+
+    /// A 19-digit whole amount trapped in `Int(n.doubleValue)`.
+    @Test(.bug("C2: GenericReceipts.appears traps on a 19-digit whole amount"))
+    func aNineteenDigitAmountDoesNotTrap() {
+        #expect(GenericReceipts.appears("9999999999999999999", in: "Total 9999999999999999999"))
+        #expect(!GenericReceipts.appears("9999999999999999999", in: "Total 12.00"))
+        #expect(GenericReceipts.appears("42.00", in: "Total $42"))
+        #expect(!GenericReceipts.appears("5.00", in: "Total $15.00"))
+    }
+
+    /// This month about 1e17 times last month made the percent too big for
+    /// an Int, and Insights trapped.
+    @Test(.bug("C3: Outcome.line traps on a huge month"))
+    func aHugeMonthGivesALineInsteadOfACrash() {
+        #expect(Outcome.line(thisMonth: 1e17, lastMonthToSameDay: 1) != nil)
+        #expect(Outcome.line(thisMonth: 1e300, lastMonthToSameDay: 1e-300) == nil)
+        #expect(Outcome.line(thisMonth: 88, lastMonthToSameDay: 100) == "12% less than last month by now")
+        #expect(Outcome.line(thisMonth: 100, lastMonthToSameDay: 100) == "About the same as last month by now")
     }
 }

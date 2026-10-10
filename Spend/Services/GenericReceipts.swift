@@ -22,20 +22,30 @@ nonisolated enum GenericReceipts {
             #"(?:order total|total amount|total due|amount due|total \(incl[^)]*\))"#,
             #"(?:total)"#,
         ]
+        // The currency after the number ("TOTAL 350.00 THB", "TOTAL 12.50€"),
+        // as receipts in much of Europe and Asia write it (M2). Groups swap:
+        // the number is 1, the currency 2.
+        let after = #"(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})\s?((?-i:[A-Z]{3})\b|€|£|¥|₹)"#
+        let ns = text as NSString
         for label in tiers {
             // A whole word: "SUBTOTAL" and "SUB TOTAL" are not the total.
-            let pattern = notInsideWord + label + #"\s*[:\-–]?\s*"# + money
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
-            let ns = text as NSString
-            let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+            let head = notInsideWord + label + #"\s*[:\-–]?\s*"#
+            guard let before = try? NSRegularExpression(pattern: head + money, options: [.caseInsensitive]),
+                  let trailing = try? NSRegularExpression(pattern: head + after, options: [.caseInsensitive]) else { continue }
+            let range = NSRange(location: 0, length: ns.length)
+            // (where, symbol group, amount group). On one label, a sign in
+            // front wins over a code after.
+            let matches = (before.matches(in: text, range: range).map { ($0, 1, 2, 1) }
+                + trailing.matches(in: text, range: range).map { ($0, 2, 1, 0) })
+                .sorted { ($0.0.range.location, $0.3) < ($1.0.range.location, $1.3) }
             // Last valid match wins (receipts list subtotals first).
-            for m in matches.reversed() {
-                var symbol = ns.substring(with: m.range(at: 1)).filter { !$0.isWhitespace }
+            for (m, symbolGroup, amountGroup, _) in matches.reversed() {
+                var symbol = ns.substring(with: m.range(at: symbolGroup)).filter { !$0.isWhitespace }
                 if symbol.count > 3, symbol.prefix(3).allSatisfy({ $0.isLetter && $0.isUppercase }) {
                     symbol = String(symbol.prefix(3))
                 }
                 if symbol.count == 3, symbol.allSatisfy(\.isLetter), !Locale.commonISOCurrencyCodes.contains(symbol) { continue }
-                let value = ns.substring(with: m.range(at: 2)).replacingOccurrences(of: ",", with: "")
+                let value = ns.substring(with: m.range(at: amountGroup)).replacingOccurrences(of: ",", with: "")
                 guard let d = Decimal(string: value), d > 0 else { continue }
                 return (currencyCode(symbol), value)
             }
@@ -94,7 +104,9 @@ nonisolated enum GenericReceipts {
         let grouped = f.string(from: NSDecimalNumber(decimal: d)) ?? plain
         let n = NSDecimalNumber(decimal: d)
         let isWhole = n.doubleValue == n.doubleValue.rounded()
-        let whole = isWhole ? String(Int(n.doubleValue)) : nil
+        // The Decimal's own digits: `Int(n.doubleValue)` trapped on a
+        // 19-digit amount (C2).
+        let whole = isWhole ? n.stringValue : nil
         f.minimumFractionDigits = 0
         let groupedWhole = isWhole ? f.string(from: n) : nil
         let oneDecimal = String(format: "%.1f", NSDecimalNumber(decimal: d).doubleValue)

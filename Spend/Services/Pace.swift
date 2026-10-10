@@ -18,9 +18,11 @@ enum Pace {
         guard budget > 0, spent > 0, day >= minimumDay, daysInMonth > 0, spent < budget else { return nil }
         let rate = spent / Double(day)
         // Day d has spent rate * d; the first d where that is over the budget.
-        let over = Int((budget / rate).rounded(.down)) + 1
-        guard over > day, over <= daysInMonth else { return nil }
-        return over
+        // Checked as a Double first: a huge budget (one restored from a
+        // backup) made `Int(...)` trap and crashed Home on every open (C1).
+        let over = (budget / rate).rounded(.down) + 1
+        guard over.isFinite, over > Double(day), over <= Double(daysInMonth) else { return nil }
+        return Int(over)
     }
 
     /// The same, for a date: day of month and days in that month from `calendar`.
