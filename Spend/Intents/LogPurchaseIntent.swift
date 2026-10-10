@@ -107,9 +107,15 @@ struct LogPurchaseIntent: AppIntent {
     }
 
     /// A tap counts as the first auto-logged purchase only when it was
-    /// added (not merged) and is not a legacy "Send a Test Tap" purchase.
+    /// added (not merged) and is not a legacy "Send a Test Tap" purchase or
+    /// the "Check the Shortcut" row (O5, as `Activation.detect` already says).
     nonisolated static func countsAsActivation(added: Bool, merchant: String) -> Bool {
-        added && merchant != legacyTestMerchant
+        added && !isTestMerchant(merchant)
+    }
+
+    /// A shop name only Sortd's own checks write: never real spending.
+    nonisolated static func isTestMerchant(_ merchant: String) -> Bool {
+        merchant == legacyTestMerchant || merchant == ApplePayHealthCheck.merchant
     }
 
     /// The last few raw lines, newest first, for the developer menu's

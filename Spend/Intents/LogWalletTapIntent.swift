@@ -460,8 +460,9 @@ struct LogWalletTapIntent: AppIntent {
                                                         queueURL: queueURL)
         }
         // A real Wallet tap reached the app and was kept (a ▶ test run has no
-        // purchase; a legacy "Send a Test Tap" row is not a real tap).
-        if result.transaction != nil, shop != LogPurchaseIntent.legacyTestMerchant {
+        // purchase; a legacy "Send a Test Tap" row and "Check the Shortcut"
+        // are not real taps, O5).
+        if result.transaction != nil, !LogPurchaseIntent.isTestMerchant(shop ?? "") {
             Analytics.shared.track(.applePayTapLogged, ["merged": .bool(result.merged)])
         }
         return result

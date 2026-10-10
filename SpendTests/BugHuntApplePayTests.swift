@@ -292,8 +292,7 @@ struct BugHuntApplePayHunt1008Tests {
     /// excludes the legacy "Sortd Test" merchant) and `apple_pay_tap_logged`
     /// (`LogWalletTapIntent.handle`, same check). The person's real first
     /// purchase is then never counted as the activation.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug("countsAsActivation treats the health check's 'Sortd Check' row as a real first purchase"))
+    @Test(.bug("countsAsActivation treats the health check's 'Sortd Check' row as a real first purchase"))
     func theHealthCheckIsNotTheFirstAutoLoggedPurchase() {
         #expect(!LogPurchaseIntent.countsAsActivation(added: true, merchant: ApplePayHealthCheck.merchant))
     }
