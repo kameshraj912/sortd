@@ -256,7 +256,7 @@ struct CategoryNudgeTests {
     @Test func withoutDetailsTheAlertShowsNoAmounts() throws {
         let alert = CategoryBudgets.Alert(category: .transport, threshold: .near, progress: .init(spent: 180, limit: 200))
         let hidden = CategoryNudge.request(for: alert, now: now, details: false)
-        #expect(!hidden.content.body.contains("180") && !hidden.content.body.contains("20"), hidden.content.body)
+        #expect(!hidden.content.body.contains("180") && !hidden.content.body.contains("20"), "\(hidden.content.body)")
         #expect(hidden.content.title == "Transport is near its limit")
         #expect(CategoryNudge.request(for: alert, now: now).content.body.contains("left"))
 
