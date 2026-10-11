@@ -127,6 +127,8 @@ enum Reminders {
 
         let cal = Calendar.current
         let horizon = cal.date(byAdding: .day, value: 45, to: now)!
+        // No shop or amount where the Lock Screen would show them (`LoggedNotice.showsDetails`).
+        let details = await LoggedNotice.showsDetails()
         // iOS keeps at most 64 pending; stay well under.
         for r in recurring.filter({ $0.status == .active && $0.nextDate <= horizon }).prefix(40) {
             guard let dayBefore = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: r.nextDate)),
@@ -135,13 +137,20 @@ enum Reminders {
             // Superseded: the newer call clears whatever this one added.
             if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
-            content.title = "\(r.merchant) tomorrow"
-            content.body = "\(Money.format(r.amount, r.currency)) on \(r.card.shortLabel). \(r.cadence.name)."
+            let words = billWords(r, details: details)
+            content.title = words.title
+            content.body = words.body
             content.sound = .default
             let trigger = UNCalendarNotificationTrigger(
                 dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: fireAt), repeats: false)
             try? await center.add(UNNotificationRequest(identifier: prefix + r.key, content: content, trigger: trigger))
         }
+    }
+
+    /// A bill reminder's words. Without details: no shop, no amount.
+    static func billWords(_ r: Recurring, details: Bool) -> (title: String, body: String) {
+        guard details else { return ("A bill is due tomorrow", "Open Sortd to see which one.") }
+        return ("\(r.merchant) tomorrow", "\(Money.format(r.amount, r.currency)) on \(r.card.shortLabel). \(r.cadence.name).")
     }
 
     // MARK: Budget pace

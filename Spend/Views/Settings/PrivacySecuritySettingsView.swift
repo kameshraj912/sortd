@@ -37,6 +37,8 @@ struct PrivacySecuritySettingsView: View {
                 )) {
                     Label("Require \(AppLock.methodName)", systemImage: AppLock.methodSymbol)
                 }
+                // The widgets hide shop and amount while App Lock is on.
+                .onChange(of: lockEnabled) { _, _ in WidgetBridge.refresh(from: context) }
                 if lockEnabled {
                     Picker("Require after", selection: Binding(
                         get: { AppLock.RequireAfter(rawValue: requireAfterRaw) ?? .immediately },

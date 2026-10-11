@@ -65,7 +65,10 @@ enum AccountError: LocalizedError, Equatable {
         case .offline: "Sortd couldn't reach the server. It will finish when you're back online."
         case .noIdentity: "Sign-in didn't finish. Please try again."
         case .rejected(let text): text
-        case .notSupported: "This device can't prove it is running Sortd, so the server was not asked. " + WorkerRevoker.appleManualSteps
+        // Only the usage record's delete goes through App Attest (an Apple
+        // revoke turns any failure into Apple's own steps), so that is what
+        // to say, to an Apple or a Google user alike.
+        case .notSupported: "This device can't prove it is running Sortd, so the server was not asked. " + WorkerRevoker.usageRecordNotDeleted
         case .server(let text): text
         }
     }
@@ -119,11 +122,15 @@ protocol IdentitySink {
     func reset()
     func signedIn(provider: AccountProvider)
     func signedOut()
+    /// Sends the events still queued under the current id now, so none
+    /// arrives after the person is deleted and makes it again.
+    func flush()
 }
 
 extension IdentitySink {
     func signedIn(provider: AccountProvider) {}
     func signedOut() {}
+    func flush() {}
 }
 
 /// Asks the provider whether the sign-in still stands (Apple: Settings ›
@@ -219,6 +226,10 @@ final class AccountStore {
         /// once more" sheet). Nothing was deleted, here or on a server, and
         /// the caller must not wipe anything either.
         var cancelled = false
+        /// The account was not deleted (a different Apple Account answered
+        /// the confirmation): still signed in, nothing deleted, and the
+        /// caller must not wipe anything. `problems` says why.
+        var kept = false
         /// What could not be done for good, in words for the user.
         var problems: [String] = []
     }
@@ -235,6 +246,9 @@ final class AccountStore {
         guard let account = current else { return DeleteResult() }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
         let subjectHash = Self.subjectHash(account.subject)
+        // Events queued under the hash go out before the reset and the
+        // person delete, not after it, where they would make the person again.
+        sink.flush()
         sink.reset()
         var failed: [PendingDelete] = []
         var problems: [String] = []
@@ -245,6 +259,13 @@ final class AccountStore {
             sink.identify(hash)
             log.notice("account: delete cancelled at the provider's confirmation, nothing deleted")
             return DeleteResult(cancelled: true)
+        } catch AccountError.rejected(let text) where text == WorkerRevoker.wrongAppleAccount {
+            // Apple's sheet was answered with another Apple Account: nothing
+            // was cancelled, so stay signed in and keep the usage record,
+            // and the right Apple Account can be used next time.
+            sink.identify(hash)
+            log.notice("account: a different Apple Account confirmed the delete, nothing deleted")
+            return DeleteResult(kept: true, problems: [text])
         } catch {
             sort(error, job: PendingDelete(kind: .revoke, provider: account.provider, subjectHash: subjectHash, hash: hash),
                  failed: &failed, problems: &problems)
@@ -268,6 +289,7 @@ final class AccountStore {
     func signOutForDeleteAll() {
         guard let account = current else { return }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
+        sink.flush()
         sink.reset()
         forgetLocally()
         queue(pending + [PendingDelete(kind: .person, provider: account.provider,
@@ -290,10 +312,11 @@ final class AccountStore {
         guard !retrying else { return }
         retrying = true
         defer { retrying = false }
-        let jobs = pending
+        // A job refused before waits for the person to be told, not for a retry.
+        let jobs = pending.filter { $0.refusal == nil }
         guard !jobs.isEmpty else { return }
         var stillOffline: [PendingDelete] = []
-        var problems: [String] = []
+        var refused: [PendingDelete] = []
         for job in jobs {
             do {
                 switch job.kind {
@@ -301,11 +324,27 @@ final class AccountStore {
                 case .person: try await revoker.deletePerson(hash: job.hash)
                 }
             } catch {
+                var problems: [String] = []
                 sort(error, job: job, failed: &stillOffline, problems: &problems)
+                // Refused for good: the person was never told (a delete
+                // queued offline shows no notice), so keep it with the reason
+                // until `refusedDeletes` is shown and acknowledged.
+                if let reason = problems.first { refused.append(job.refused(reason)) }
             }
         }
         let done = Set(jobs).subtracting(stillOffline)
-        queue(pending.filter { !done.contains($0) })
+        queue(pending.filter { !done.contains($0) } + refused)
+    }
+
+    /// Why queued deletes were refused at a retry, once each, for a notice.
+    var refusedDeletes: [String] {
+        var seen = Set<String>()
+        return pending.compactMap(\.refusal).filter { seen.insert($0).inserted }
+    }
+
+    /// The person has read `refusedDeletes`: those jobs leave the queue.
+    func acknowledgeRefusedDeletes() {
+        queue(pending.filter { $0.refusal == nil })
     }
 
     /// Signed in, but the provider says the sign-in was withdrawn: sign out
@@ -360,6 +399,15 @@ final class AccountStore {
         let provider: AccountProvider
         let subjectHash: String
         let hash: String
+        /// Set when a retry was refused for good: the words for the person.
+        /// Such a job is not retried; it waits to be shown.
+        var refusal: String? = nil
+
+        func refused(_ reason: String) -> PendingDelete {
+            var job = self
+            job.refusal = reason
+            return job
+        }
 
         var encoded: String {
             // Sorted keys: the queue is compared as strings, and key order
@@ -606,17 +654,22 @@ final class WorkerRevoker: AccountRevoker {
         }
     }
 
-    /// 2xx is done. 429 and 503 are the Worker's own "try later". 502 is
-    /// Apple's or PostHog's no, and any other 4xx is ours: neither is retried.
+    /// 2xx is done. 429 and 503 are the Worker's own "try later". A 502
+    /// with the Worker's own code is Apple's or PostHog's no, and any 4xx is
+    /// ours: neither is retried. Any other 5xx (the Worker's `internal` 500,
+    /// an edge error page with no code) is a fault on the way, not a no:
+    /// queued and retried like a 503.
     private static func check(_ response: HTTPURLResponse, data: Data) throws {
-        switch response.statusCode {
-        case 200..<300: return
-        case 429, 503: throw AccountError.offline
-        default:
-            let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            log.error("account: the Worker refused (HTTP \(response.statusCode, privacy: .public), \(code ?? "no code", privacy: .public))")
-            throw AccountError.rejected(usageRecordNotDeleted)
+        let status = response.statusCode
+        if (200..<300).contains(status) { return }
+        let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+        let workersNo = status == 502 && code != nil && code != "internal"
+        if status == 429 || (500..<600).contains(status) && !workersNo {
+            log.notice("account: the Worker could not finish (HTTP \(status, privacy: .public), \(code ?? "no code", privacy: .public)), queued")
+            throw AccountError.offline
         }
+        log.error("account: the Worker refused (HTTP \(status, privacy: .public), \(code ?? "no code", privacy: .public))")
+        throw AccountError.rejected(usageRecordNotDeleted)
     }
 }
 
@@ -639,6 +692,7 @@ final class DeviceAppAttester: AppAttester {
 final class AnalyticsIdentitySink: IdentitySink {
     func identify(_ hash: String) { Analytics.shared.signedIn(hash: hash) }
     func reset() { Analytics.shared.signedOut() }
+    func flush() { Analytics.shared.flush() }
     func signedIn(provider: AccountProvider) {
         Analytics.shared.track(.signedIn, ["provider": .string(provider.rawValue)])
     }

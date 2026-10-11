@@ -251,6 +251,21 @@ struct CategoryNudgeTests {
         #expect(dates(d).isEmpty)
     }
 
+    /// App Lock on, or Show Previews "Always" with amounts hidden: no amounts
+    /// on the Lock Screen, the same rule as "Logged".
+    @Test func withoutDetailsTheAlertShowsNoAmounts() throws {
+        let alert = CategoryBudgets.Alert(category: .transport, threshold: .near, progress: .init(spent: 180, limit: 200))
+        let hidden = CategoryNudge.request(for: alert, now: now, details: false)
+        #expect(!hidden.content.body.contains("180") && !hidden.content.body.contains("20"), "\(hidden.content.body)")
+        #expect(hidden.content.title == "Transport is near its limit")
+        #expect(CategoryNudge.request(for: alert, now: now).content.body.contains("left"))
+
+        let services = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Spend/Services")
+        let nudge = try String(contentsOf: services.appendingPathComponent("CategoryNudge.swift"), encoding: .utf8)
+        #expect(nudge.contains("LoggedNotice.showsDetails(defaults: defaults)"))
+    }
+
     /// One request builder, so the tap nudge and the foreground check can
     /// never announce the same crossing under two ids.
     @Test func bothPathsUseOneNotification() throws {

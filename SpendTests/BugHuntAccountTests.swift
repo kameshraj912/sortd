@@ -363,8 +363,8 @@ struct BugHuntAccountTests {
 
 // MARK: - Bug hunt 8 Oct 2026 (appended; the tests above are the fixed 3 Oct ones)
 //
-// Each test below was written to fail on the code of 8 Oct 2026. They are
-// tagged `.knownBug` and run only with `scripts/test.sh --known-bugs`.
+// Each test below was written to fail on the code of 8 Oct 2026. All were
+// fixed on 10 Oct 2026 (branch fix-data) and run in the normal suite.
 
 /// App Attest "not supported", for a device that cannot attest.
 private final class HuntUnsupportedAttester: AppAttester {
@@ -386,8 +386,7 @@ extension BugHuntAccountTests {
     /// page, a Worker exception as 500 `internal`) is treated like a 502 "no
     /// for good": the person delete is dropped and the user is told to email
     /// support, instead of being queued and retried like a 503.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-1", "WorkerRevoker.check: an edge 5xx or a 500 drops the delete for good"))
+    @Test(.bug(id: "account-1008-1", "WorkerRevoker.check: an edge 5xx or a 500 drops the delete for good"))
     func anEdgeErrorPageQueuesThePersonDeleteInsteadOfDroppingIt() async throws {
         // Cloudflare's own error page: HTML, no {"error": ...} code.
         let edge = HuntTransport([Self.challengeReply, (502, "<html><body><h1>502 Bad Gateway</h1>cloudflare</body></html>")])
@@ -409,13 +408,13 @@ extension BugHuntAccountTests {
     }
 
     /// Delete All Data while signed in with Google: `DataReset.deleteEverything`
-    /// runs `GoogleAuth.revokePending()`, `Keychain.deleteAll()`, then
-    /// `signOutForDeleteAll()` (DataControlsView.swift:115-122). The identity
-    /// token is wiped by `deleteAll` before anything puts it on the revoke
-    /// list, so the Google grant stays live for good with no handle left to
-    /// cancel it. Sign Out (fixed 3 Oct, A5) moves the token to the list first.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-2", "Delete All Data with Google signed in leaves the Google grant on, token gone"))
+    /// ran `GoogleAuth.revokePending()`, `Keychain.deleteAll()`, then
+    /// `signOutForDeleteAll()`. The identity token was wiped by `deleteAll`
+    /// before anything put it on the revoke list, so the Google grant stayed
+    /// live for good with no handle left to cancel it. Fixed 10 Oct 2026:
+    /// `revokePending(across:)` moves the token to the list, as Sign Out
+    /// does, and puts the list back after the wipe.
+    @Test(.bug(id: "account-1008-2", "Delete All Data with Google signed in leaves the Google grant on, token gone"))
     func deleteAllWhileSignedInWithGoogleKeepsTheGrantOnTheRevokeList() async throws {
         let tokenKey = "google-identity-token"   // GoogleAuth.identityTokenKey (private)
         let pendingKey = "google-revoke-pending" // GoogleAuth.pendingKey (private)
@@ -427,9 +426,8 @@ extension BugHuntAccountTests {
         let store = accountStore(revoker(HuntTransport([])), defaults: defaults)
         try await store.signIn(with: ResolvedIdentityProvider(result: .success(Self.google)))
 
-        // The same three steps, in the same order, as DataReset.deleteEverything.
-        GoogleAuth.revokePending()
-        Keychain.deleteAll()
+        // The same steps, in the same order, as DataReset.deleteEverything.
+        GoogleAuth.revokePending(across: { Keychain.deleteAll() })
         store.signOutForDeleteAll()
 
         #expect(store.current == nil)
@@ -442,8 +440,7 @@ extension BugHuntAccountTests {
     /// Account. The alert says "nothing was cancelled", yet the sign-in is
     /// forgotten and the usage record deleted, so there is no second try with
     /// the right Apple ID and the grant can only be stopped by hand.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-3", "a wrong Apple Account at the confirm sheet signs out and deletes the record anyway"))
+    @Test(.bug(id: "account-1008-3", "a wrong Apple Account at the confirm sheet signs out and deletes the record anyway"))
     func aWrongAppleAccountAtTheConfirmSheetLeavesTheSignInInPlace() async throws {
         let transport = HuntTransport([Self.challengeReply, (204, "")])
         let r = revoker(transport, appleCode: { _ in
@@ -464,8 +461,7 @@ extension BugHuntAccountTests {
     /// account: the one problem shown is Apple's "Sign in with Apple › Stop
     /// Using" steps, which have nothing to do with a Google sign-in or with
     /// the usage record that was not deleted.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-4", "AccountError.notSupported shows Apple's manual steps to a Google user"))
+    @Test(.bug(id: "account-1008-4", "AccountError.notSupported shows Apple's manual steps to a Google user"))
     func anUnsupportedDeviceDoesNotShowAppleStepsToAGoogleUser() async throws {
         let r = WorkerRevoker(url: Self.workerURL, deps: WorkerRevoker.Dependencies(
             transport: { _ in throw URLError(.badServerResponse) },
@@ -488,8 +484,7 @@ extension BugHuntAccountTests {
     /// `posthog_auth`): `retryPendingDeletes` drops it and throws the reason
     /// away. The person was never told anything (offline queues without a
     /// notice), so the usage record stays and nobody knows.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-5", "retryPendingDeletes drops a refused job with no word to the user"))
+    @Test(.bug(id: "account-1008-5", "retryPendingDeletes drops a refused job with no word to the user"))
     func aQueuedDeleteRefusedAtRetryIsNotDroppedInSilence() async throws {
         let (defaults, _) = scratch()
         let offline = WorkerRevoker(url: Self.workerURL, deps: WorkerRevoker.Dependencies(
@@ -511,14 +506,24 @@ extension BugHuntAccountTests {
 
         #expect(queued(defaults).count == 1,
                 "until the person can be told, a refused job must not vanish from the queue")
+
+        // Settings › Account shows the reason once; the person reads it and
+        // the job goes. A refused job is not sent again meanwhile.
+        #expect(launch.refusedDeletes == [WorkerRevoker.usageRecordNotDeleted])
+        let again = HuntTransport([])
+        let later = accountStore(revoker(again), defaults: defaults)
+        await later.retryPendingDeletes()
+        #expect(again.requests.isEmpty, "a refused job was sent again")
+        later.acknowledgeRefusedDeletes()
+        #expect(queued(defaults).isEmpty)
+        #expect(later.refusedDeletes.isEmpty)
     }
 
     /// Restore hits iCloud's rate limit: the status line says "Trying again in
     /// 30 s", but no retry is scheduled (a restore has no context to retry
     /// with), and the `.paused` status blocks every automatic backup for the
     /// rest of the session, long after the 30 s have passed.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-6", "a rate-limited restore pauses automatic backups for the whole session"))
+    @Test(.bug(id: "account-1008-6", "a rate-limited restore pauses automatic backups for the whole session"))
     func aRateLimitedRestoreDoesNotBlockBackupsForTheSession() async throws {
         let cloudStore = FakeCloudBackupStore()
         let keys = FakeBackupKeyStore()
@@ -555,8 +560,7 @@ extension BugHuntAccountTests {
     /// and `.paused(.rateLimited)` is never cleared. Switching backup back on
     /// does not clear it either, so no automatic backup runs for the rest of
     /// the session. Same root cause as account-1008-6.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "account-1008-6b", "a rate-limited Delete iCloud Copy blocks automatic backups after switching back on"))
+    @Test(.bug(id: "account-1008-6b", "a rate-limited Delete iCloud Copy blocks automatic backups after switching back on"))
     func aRateLimitedCopyDeleteDoesNotBlockBackupsAfterSwitchingBackOn() async throws {
         let cloudStore = FakeCloudBackupStore()
         let keys = FakeBackupKeyStore()

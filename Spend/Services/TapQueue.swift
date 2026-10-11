@@ -137,6 +137,12 @@ enum TapQueue {
         return false
     }
 
+    /// Delete All Data: every queued tap goes, from every place the queue
+    /// may be, so none comes back at the next launch.
+    nonisolated static func clear(url: URL? = nil) {
+        for target in locations(url) { update(target) { $0.removeAll() } }
+    }
+
     static let notSavedMessage = "This tap couldn't be saved. Add it in Sortd by hand."
 
     /// Queues the tap, tells the one-per-queue local notification to fire

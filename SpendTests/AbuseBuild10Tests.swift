@@ -304,15 +304,14 @@ struct AbuseBuild10Tests {
 
     // MARK: - A14 Nudge
 
-    /// The phone's clock set back a year and the app opened: the
+    /// The phone's clock set back a month and the app opened: the
     /// foreground check keeps only that month's records and saves them, so
     /// this month's "near its limit" record is wiped. Clock fixed: the same
     /// crossing is announced a second time.
     ///
-    /// Known bug: `CategoryBudgets.dueAlerts` (Spend/Services/CategoryBudgets.swift:127) drops other months,
-    /// and `Reminders.checkCategoryLimits` saves the result even with nothing due.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "b10-A14", "a clock set back wipes this month's limit records, so the alert repeats"))
+    /// Fixed 10 Oct 2026, was: `CategoryBudgets.dueAlerts` dropped every other month, later ones
+    /// included, and `Reminders.checkCategoryLimits` saved that.
+    @Test(.bug(id: "b10-A14", "a clock set back wipes this month's limit records, so the alert repeats"))
     func aClockSetBackDoesNotRepeatALimitAlert() async throws {
         let d = suite()
         CategoryBudgets.set(200, for: .transport, d)
@@ -321,7 +320,11 @@ struct AbuseBuild10Tests {
         await Reminders.checkCategoryLimits(spent, now: now, defaults: d, allowed: { true })
         #expect((d.array(forKey: CategoryNudge.datesKey) as? [Date])?.count == 1)
 
-        await Reminders.checkCategoryLimits(spent, now: now - 365 * 86_400, defaults: d, allowed: { true })
+        // A month back: next month's records are kept (not a year: records
+        // more than a month ahead are dropped, so a clock set months forward
+        // can't block that month's real alert).
+        let monthBack = Calendar.current.date(byAdding: .month, value: -1, to: now)!
+        await Reminders.checkCategoryLimits(spent, now: monthBack, defaults: d, allowed: { true })
         await Reminders.checkCategoryLimits(spent, now: now + 60, defaults: d, allowed: { true })
         #expect((d.array(forKey: CategoryNudge.datesKey) as? [Date])?.count == 1, "the same crossing was posted twice")
     }

@@ -42,6 +42,21 @@ import Foundation
         #expect(CategoryBudgets.dueAlerts(p, month: "2026-10", sent: a.sent).alerts.count == 1)
     }
 
+    /// The clock set forward to March 2027 and back: the "2027-03" record
+    /// is dropped, so the real March 2027 crossing still alerts.
+    @Test func aClockSetMonthsAheadDoesNotBlockThatMonthsAlert() {
+        let p: [SpendCategory: CategoryBudgets.Progress] = [.travel: .init(spent: 85, limit: 100)]
+        let ahead = CategoryBudgets.dueAlerts(p, month: "2027-03", sent: [])
+        let back = CategoryBudgets.dueAlerts(p, month: "2026-10", sent: ahead.sent)
+        #expect(!back.sent.contains { $0.hasPrefix("2027-03|") })
+        #expect(CategoryBudgets.dueAlerts(p, month: "2027-03", sent: back.sent).alerts.count == 1)
+        // Next month's record is kept (a clock set back a few weeks).
+        let next = CategoryBudgets.dueAlerts(p, month: "2026-11", sent: [])
+        #expect(CategoryBudgets.dueAlerts(p, month: "2026-10", sent: next.sent).sent.isSuperset(of: next.sent))
+        #expect(CategoryBudgets.nextMonthKey("2026-12") == "2027-01")
+        #expect(CategoryBudgets.nextMonthKey("2026-09") == "2026-10")
+    }
+
     @Test func crossingBothAtOnceSendsOnlyTheOverAlert() {
         let r = CategoryBudgets.dueAlerts([.travel: .init(spent: 150, limit: 100)], month: "2026-09", sent: [])
         #expect(r.alerts.map(\.threshold) == [.over])

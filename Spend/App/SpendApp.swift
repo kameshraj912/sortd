@@ -523,8 +523,9 @@ struct RootView: View {
             }
             #endif
             #if SORTD_ICLOUD
-            // A Delete All Data that couldn't reach iCloud last time.
-            Task { await CloudBackup.shared.retryPendingDelete() }
+            // A Delete All Data that couldn't reach iCloud last time. This
+            // runs on every scene-active; the retry itself runs once a launch.
+            Task { await CloudBackup.shared.retryPendingDeleteAtLaunch() }
             #endif
             // Bill reminders asked for during setup and still pending.
             SetupProfile.applyPendingBillReminders()

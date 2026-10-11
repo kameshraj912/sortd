@@ -100,6 +100,9 @@ struct SortdProvider: TimelineProvider {
 /// text on black, white text on white, depending which half you looked at.
 private struct Chrome<Content: View>: View {
     var look: SortdLook
+    /// App Lock is on (`WidgetSummary.appLocked`): every shop name and
+    /// amount is hidden, as on a locked iPhone, even when it is unlocked.
+    var appLocked = false
     @Environment(\.colorScheme) private var systemScheme
     @ViewBuilder var content: Content
 
@@ -107,6 +110,7 @@ private struct Chrome<Content: View>: View {
 
     var body: some View {
         content
+            .redacted(reason: appLocked ? .privacy : [])
             .environment(\.colorScheme, scheme)
             .containerBackground(Sortd.card(scheme), for: .widget)
     }
@@ -446,7 +450,7 @@ struct SortdSpendingWidget: Widget {
         AppIntentConfiguration(kind: "SortdSpending",
                                intent: SpendingConfiguration.self,
                                provider: SpendingProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 SpendingView(entry: entry)
             }
             .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
@@ -546,7 +550,7 @@ struct SortdQuickAddWidget: Widget {
         AppIntentConfiguration(kind: "SortdQuickAdd",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 QuickAddView(entry: entry)
             }
             .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
@@ -600,7 +604,7 @@ struct SortdBillsWidget: Widget {
         AppIntentConfiguration(kind: "SortdBills",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 BillsView(entry: entry)
             }
             .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
@@ -801,7 +805,7 @@ struct SortdBudgetRingWidget: Widget {
         AppIntentConfiguration(kind: "SortdBudgetRing",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 BudgetRingView(entry: entry)
             }
             // No budget yet: the tap goes to where one is set.
@@ -956,7 +960,7 @@ struct SortdTodayWidget: Widget {
         AppIntentConfiguration(kind: "SortdToday",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 TodayView(entry: entry)
             }
             .widgetURL(SortdLink.activity)
@@ -1029,7 +1033,7 @@ struct SortdRecentWidget: Widget {
         AppIntentConfiguration(kind: "SortdRecent",
                                intent: LookConfiguration.self,
                                provider: LookProvider()) { entry in
-            Chrome(look: entry.configuration.look) {
+            Chrome(look: entry.configuration.look, appLocked: entry.summary?.appLocked == true) {
                 RecentView(entry: entry)
             }
             .widgetURL(SortdLink.activity)
@@ -1161,6 +1165,7 @@ struct SortdLockScreenWidget: Widget {
         StaticConfiguration(kind: "SortdLockScreen", provider: SortdProvider()) { entry in
             LockScreenView(entry: entry)
                 .privacySensitive(entry.summary?.hidesWhenLocked ?? true)
+                .redacted(reason: entry.summary?.appLocked == true ? .privacy : [])
                 .containerBackground(.clear, for: .widget)
                 .widgetURL(SortdLink.home)
         }

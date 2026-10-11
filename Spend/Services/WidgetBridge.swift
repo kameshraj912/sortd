@@ -67,13 +67,17 @@ enum WidgetBridge {
         var out = WidgetSummary()
         out.updatedAt = now
         out.currency = Money.home
-        out.hasAnyPurchases = !transactions.isEmpty
+
+        // The test-tap and "Check the Shortcut" rows are hidden everywhere in
+        // the app (Home, Activity, Insights); the widgets count the same way.
+        // With only those, nothing is logged yet: "Nothing logged", not $0.
+        let testRows = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
+        out.hasAnyPurchases = transactions.contains {
+            !testRows.contains($0.merchant) && !testRows.contains($0.rawMerchant)
+        }
 
         // Same rule as Home's `audTotal`: refunds and transfers (a top-up,
         // money moved between your own accounts) aren't spending.
-        // The test-tap and "Check the Shortcut" rows are hidden everywhere in
-        // the app (Home, Activity, Insights); the widgets count the same way.
-        let testRows = [LogPurchaseIntent.legacyTestMerchant, ApplePayHealthCheck.merchant]
         let live = transactions.filter {
             !$0.refunded && $0.category != .transfers
                 && !testRows.contains($0.merchant) && !testRows.contains($0.rawMerchant)
@@ -101,6 +105,7 @@ enum WidgetBridge {
         out.budget = budget > 0 ? Decimal(budget) : nil
         out.style = UserDefaults.standard.string(forKey: "cardStyle") ?? "satin"
         out.showWhenLocked = UserDefaults.standard.bool(forKey: WidgetSummary.showWhenLockedKey)
+        out.appLocked = UserDefaults.standard.bool(forKey: AppLock.enabledKey)
 
         // Monday to now. Finance widgets that only show a daily number read
         // as a telling-off on a bad day; a week is easier to live with.

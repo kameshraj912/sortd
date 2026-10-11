@@ -74,15 +74,34 @@ enum LoggedNotice {
         return .purchase(id: t.id, amount: t.amount, currency: t.currencyCode, merchant: t.merchant)
     }
 
+    /// Whether a notice may name the shop and the amount. iOS hides a
+    /// notice's words on the Lock Screen only when Show Previews is "When
+    /// Unlocked" or "Never"; with "Always" they show to anyone holding the
+    /// phone, so then Settings › "Show Amounts When Locked" decides. App
+    /// Lock on: never, the same as Siri and the widgets. Pure.
+    nonisolated static func showsDetails(previewsAlways: Bool, showWhenLocked: Bool, appLocked: Bool) -> Bool {
+        if appLocked { return false }
+        return !previewsAlways || showWhenLocked
+    }
+
+    /// `showsDetails` for this iPhone now.
+    static func showsDetails(defaults: UserDefaults = .standard) async -> Bool {
+        let previews = await UNUserNotificationCenter.current().notificationSettings().showPreviewsSetting
+        return showsDetails(previewsAlways: previews == .always,
+                            showWhenLocked: defaults.bool(forKey: WidgetSummary.showWhenLockedKey),
+                            appLocked: defaults.bool(forKey: AppLock.enabledKey))
+    }
+
     /// Post or not, and the words. Pure: the setting and the permission
-    /// come in as values.
+    /// come in as values. `details` false: no shop and no amount
+    /// (`showsDetails`).
     @MainActor
-    static func content(for saved: Saved?, settingOn: Bool, authorized: Bool) -> Content? {
+    static func content(for saved: Saved?, settingOn: Bool, authorized: Bool, details: Bool = true) -> Content? {
         guard settingOn, authorized, let saved else { return nil }
         switch saved {
         case .purchase(let id, let amount, let currency, let merchant):
             return Content(id: idPrefix + id.uuidString, title: "Logged",
-                           body: "\(Money.format(amount, currency)) at \(merchant)")
+                           body: details ? "\(Money.format(amount, currency)) at \(merchant)" : "A purchase was logged. Tap to see it.")
         case .needsCheck(let id, let missingShop, let missingAmount):
             let without = switch (missingShop, missingAmount) {
             case (true, true): "a shop or an amount"
@@ -109,7 +128,8 @@ enum LoggedNotice {
     @MainActor
     static func post(for outcome: LogPurchaseIntent.Outcome, defaults: UserDefaults = .standard) async {
         guard isOn(defaults), let saved = saved(from: outcome) else { return }
-        guard let content = content(for: saved, settingOn: true, authorized: await notificationsAllowed()) else { return }
+        guard let content = content(for: saved, settingOn: true, authorized: await notificationsAllowed(),
+                                    details: await showsDetails(defaults: defaults)) else { return }
         let note = UNMutableNotificationContent()
         note.title = content.title
         note.body = content.body

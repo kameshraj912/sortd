@@ -249,9 +249,21 @@ nonisolated enum Backup {
         "\(count) row\(count == 1 ? "" : "s") skipped (dates that can't be right)"
     }
 
+    /// Only the two fields every format version keeps.
+    private struct Header: Decodable {
+        let format: String
+        let version: Int
+    }
+
     static func decode(_ data: Data) throws -> Snapshot {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        // The version first: a newer Sortd may have changed any other field,
+        // and that file is "update Sortd", not "not a backup".
+        if let header = try? decoder.decode(Header.self, from: data), header.format == formatName,
+           header.version > formatVersion {
+            throw Failure.tooNew(header.version)
+        }
         guard let snapshot = try? decoder.decode(Snapshot.self, from: data),
               snapshot.format == formatName else {
             throw Failure.notABackup
@@ -304,6 +316,7 @@ nonisolated enum Backup {
             }
         }
 
+        var capped: Set<String> = []
         for key in settingKeys {
             if let setting = snapshot.settings[key] {
                 // On merge, don't stomp a setting the user has already chosen here.
@@ -314,6 +327,7 @@ nonisolated enum Backup {
                 if key == appLockKey, defaults.bool(forKey: key) { continue }
                 defaults.set(setting.value, forKey: key)
                 result.settings += 1
+                if key == FXService.budgetKey || key == CategoryBudgets.key { capped.insert(key) }
             } else if mode == .replace, key != appLockKey {
                 // The backup phone never set this, so it had the default. Keep
                 // this phone's value and a budget or limit set here in one
@@ -328,6 +342,26 @@ nonisolated enum Backup {
         if mode == .replace || homeAfter != homeBefore {
             if mode == .replace { defaults.set(homeAfter, forKey: Money.homeKey) }
             defaults.set(homeAfter, forKey: FXService.convertedKey)
+        }
+        // A budget or limit from the file is held to what the budget field
+        // lets anyone type (`BudgetSheet.maxBudget`): a huge one reached
+        // Home's pace line and crashed it on every open.
+        let cap = BudgetSheet.maxBudget(homeAfter)
+        func held(_ value: Double) -> Double? { value.isFinite && value > 0 ? min(value, cap) : nil }
+        if capped.contains(FXService.budgetKey) {
+            if let budget = held(defaults.double(forKey: FXService.budgetKey)) {
+                defaults.set(budget, forKey: FXService.budgetKey)
+            } else {
+                defaults.removeObject(forKey: FXService.budgetKey)
+            }
+        }
+        if capped.contains(CategoryBudgets.key) {
+            defaults.set(CategoryBudgets.stored(defaults).compactMapValues(held), forKey: CategoryBudgets.key)
+        }
+        // Replace took the sample rows out: this is no longer sample data, so
+        // the banner and the analytics pause end too.
+        if mode == .replace, defaults.bool(forKey: DemoData.activeKey), !DemoData.hasRows(in: context) {
+            defaults.set(false, forKey: DemoData.activeKey)
         }
 
         return result

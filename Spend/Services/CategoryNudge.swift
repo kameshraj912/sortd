@@ -85,14 +85,17 @@ enum CategoryNudge {
         let dates = defaults.array(forKey: datesKey) as? [Date] ?? []
         guard underWeeklyCap(dates: dates, now: now) else { return }
         defaults.set(recent(dates, now: now) + [now], forKey: datesKey)
-        try? await UNUserNotificationCenter.current().add(request(for: alert, now: now))
+        let details = await LoggedNotice.showsDetails(defaults: defaults)
+        try? await UNUserNotificationCenter.current().add(request(for: alert, now: now, details: details))
     }
 
-    /// The notification for one alert. Tapping it opens Insights.
-    static func request(for alert: CategoryBudgets.Alert, now: Date) -> UNNotificationRequest {
+    /// The notification for one alert. Tapping it opens Insights. `details`
+    /// false: no amounts, the same rule as "Logged" (`LoggedNotice.showsDetails`).
+    static func request(for alert: CategoryBudgets.Alert, now: Date, details: Bool = true) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = CategoryBudgets.title(for: alert.category, alert.threshold)
-        content.body = CategoryBudgets.statusLine(alert.category, alert.progress)
+        content.body = details ? CategoryBudgets.statusLine(alert.category, alert.progress)
+                               : "Open Sortd to see this month's spending."
         content.interruptionLevel = .active
         content.sound = .default
         content.userInfo = ["url": "sortd://insights"]
