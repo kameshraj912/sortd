@@ -109,6 +109,14 @@ enum CategoryBudgets {
         return String(format: "%04d-%02d", c.year ?? 0, c.month ?? 0)
     }
 
+    /// "2026-12" → "2027-01". A key that doesn't parse comes back as it is.
+    static func nextMonthKey(_ month: String) -> String {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return month }
+        let (year, m) = parts[1] >= 12 ? (parts[0] + 1, 1) : (parts[0], parts[1] + 1)
+        return String(format: "%04d-%02d", year, m)
+    }
+
     static func alertKey(month: String, category: SpendCategory, threshold: Threshold) -> String {
         "\(month)|\(category.rawValue)|\(threshold.rawValue)"
     }
@@ -121,13 +129,18 @@ enum CategoryBudgets {
 
     /// Which alerts to send now, and the updated record. Each threshold fires
     /// once per category per month. If both are crossed at once only the
-    /// 100% one is sent, but both are recorded. Months before `month` are
-    /// dropped; a later one is kept, so a clock set back (a year, say) and
-    /// then fixed does not announce this month's crossings a second time.
+    /// 100% one is sent, but both are recorded. Only this month and the next
+    /// are kept: a clock set back a few weeks and then fixed does not announce
+    /// this month's crossings a second time, and a clock set months ahead and
+    /// back leaves no record that would block that month's real alert.
     static func dueAlerts(_ progress: [SpendCategory: Progress], month: String,
                           sent: Set<String>) -> (alerts: [Alert], sent: Set<String>) {
         // "2026-10|…" sorts by month as text: keys are "yyyy-MM|…".
-        var record = sent.filter { String($0.prefix(while: { $0 != "|" })) >= month }
+        let next = nextMonthKey(month)
+        var record = sent.filter {
+            let m = String($0.prefix(while: { $0 != "|" }))
+            return m >= month && m <= next
+        }
         var alerts: [Alert] = []
         for (category, p) in progress.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             let crossed: [Threshold] = Threshold.allCases.filter {
