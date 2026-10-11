@@ -341,4 +341,17 @@ struct TransactionDetailCardOptionsTests {
         let options = TransactionDetailView.cardOptions(current: .other, mine: mine)
         #expect(options.filter { $0 == .other }.count == 1)
     }
+
+    /// An empty `cardRaw` drew a blank row, and an id with no `CardInfo`
+    /// drew the raw UUID. Both read as words now and stay offered.
+    @Test func anEmptyOrUnknownCardReadsAsWords() {
+        let empty = Card(rawValue: "")
+        let unknown = Card(rawValue: "6F1C2B0A-3D4E-4F50-8A9B-0C1D2E3F4A5B")
+        #expect(TransactionDetailView.cardLabel(empty, info: nil) == "Other")
+        #expect(TransactionDetailView.cardLabel(unknown, info: nil) == "Unknown card")
+        #expect(TransactionDetailView.cardOptions(current: empty, mine: mine).first == empty)
+        #expect(TransactionDetailView.cardOptions(current: unknown, mine: mine).first == unknown)
+        let info = CardInfo.legacy[0]
+        #expect(TransactionDetailView.cardLabel(info.card, info: info) == info.card.name)
+    }
 }

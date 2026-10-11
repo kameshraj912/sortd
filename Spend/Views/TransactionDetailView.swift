@@ -76,6 +76,16 @@ struct TransactionDetailView: View {
         return options
     }
 
+    /// The Card row's text for one choice. An empty `cardRaw` drew a blank
+    /// row and an id with no `CardInfo` drew the raw UUID: they read
+    /// "Other" and "Unknown card" instead, and stay selectable. `info` is
+    /// `CardBook.shared.info(card)`.
+    @MainActor static func cardLabel(_ card: Card, info: CardInfo?) -> String {
+        if card.rawValue.isEmpty { return "Other" }
+        if info == nil && card != .other { return "Unknown card" }
+        return card.name
+    }
+
     /// True while the purchase may be read: not deleted from this screen,
     /// and not deleted or detached by anything else meanwhile.
     private var isLive: Bool {
@@ -178,9 +188,18 @@ struct TransactionDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
                 }
-                Picker("Card", selection: $transaction.cardRaw) {
+                // `purchase_edited(card)` goes from here, the picker's own
+                // pick, so a `cardRaw` changed by anything else is not
+                // counted as an edit.
+                Picker("Card", selection: Binding(
+                    get: { transaction.cardRaw },
+                    set: { picked in
+                        guard picked != transaction.cardRaw else { return }
+                        transaction.cardRaw = picked
+                        Analytics.shared.track(.purchaseEdited, ["field": .string("card")])
+                    })) {
                     ForEach(Self.cardOptions(current: transaction.card, mine: Card.mine)) {
-                        Text($0.name).tag($0.rawValue)
+                        Text(Self.cardLabel($0, info: CardBook.shared.info($0))).tag($0.rawValue)
                     }
                 }
                 DatePicker("Date", selection: $transaction.date)
@@ -249,7 +268,6 @@ struct TransactionDetailView: View {
         .onChange(of: transaction.cardRaw) { _, _ in
             guard isLive else { return }
             if !context.saveReporting(where: "TransactionDetail.card") { saveFailed = true }
-            Analytics.shared.track(.purchaseEdited, ["field": .string("card")])
         }
         .sheet(isPresented: $showingCategories) {
             CategoryPickerSheet(selected: transaction.category) { category in
