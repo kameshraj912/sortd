@@ -121,6 +121,8 @@ final class Analytics {
         /// Drops one super property. PostHog keeps them on disk, so one
         /// left set rides on later events, even next launch. Optional.
         func unregister(_ key: String)
+        /// Sends the queued events now. Optional; a spy leaves it out.
+        func flush()
     }
 
     /// A screen's name for `screen_viewed` and the `screen` super property.
@@ -145,8 +147,6 @@ final class Analytics {
         static func setupStep(_ caseName: String) -> ScreenName { ScreenName("setup.\(caseName)") }
         /// The Apple Pay walk-through, page 1-based.
         static func applePayGuide(page: Int) -> ScreenName { ScreenName("applePayGuide.\(page)") }
-        /// Sends the queued events now. Optional; a spy leaves it out.
-        func flush()
     }
 
     /// Only scalars can be a property: no arrays, no dictionaries, nothing
