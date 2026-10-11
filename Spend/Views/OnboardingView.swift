@@ -487,9 +487,11 @@ struct OnboardingView: View {
                     }
                 case .plan:
                     primaryButton(primaryTitle, action: primaryAction)
-                    // The cards and Apple Pay steps that follow are required
-                    // (Raj, 5 Oct 2026: people tapped past them and then had
-                    // an app that logged nothing). "Do this later" went with that.
+                    // The cards and Apple Pay steps that follow were made
+                    // required on 5 Oct 2026 (Raj: people tapped past them and
+                    // then had an app that logged nothing), and "Do this later"
+                    // went. Since 11 Oct 2026 both can be skipped again with
+                    // "Skip for Now" under the locked Continue. Flagged for Raj.
                     if !newFlow { tertiaryButton("Do this later and look around") { finish() } }
                 // Locked: the button itself says what is missing, so the bar
                 // stays one button tall and nothing sits over the page.
@@ -551,7 +553,9 @@ struct OnboardingView: View {
             Button {
                 lockedTaps += 1
                 withAnimation(.snappy) { showingLockedWhy = true }
-                ApplePaySetupSteps.trackAction("locked_continue", status: applePayStatus, saysBuilt: automationBuilt)
+                if step == .applePay {
+                    ApplePaySetupSteps.trackAction("locked_continue", status: applePayStatus, saysBuilt: automationBuilt)
+                }
             } label: {
                 Label(title, systemImage: "lock.fill")
                     .font(.headline)
@@ -583,7 +587,7 @@ struct OnboardingView: View {
                 ApplePaySetupSteps.trackAction("skip_for_now", status: applePayStatus, saysBuilt: automationBuilt)
             }
             usedSkip = true
-            go(1)
+            go(1, skipped: true)
         }
     }
 
@@ -667,7 +671,9 @@ struct OnboardingView: View {
         }
     }
 
-    private func go(_ delta: Int) {
+    /// `skipped`: Skip for Now on cards or Apple Pay. Those steps are never
+    /// `untouched`, so without it the skip went out as `skipped: false`.
+    private func go(_ delta: Int, skipped: Bool = false) {
         guard !finished else { return }
         autoAdvancing = false
         budgetFocused = false
@@ -676,7 +682,7 @@ struct OnboardingView: View {
             if delta > 0 { finish() }
             return
         }
-        if delta > 0 { stepDone(step, skipped: newFlow && untouched(step)) }
+        if delta > 0 { stepDone(step, skipped: skipped || (newFlow && untouched(step))) }
         withAnimation(.snappy) { step = next }
     }
 
