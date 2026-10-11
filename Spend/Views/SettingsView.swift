@@ -15,7 +15,9 @@ struct SettingsView: View {
     @State private var account = AccountStore.shared
     #endif
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.settings) }
+
+    @ViewBuilder private var screenBody: some View {
         NavigationStack(path: Bindable(Router.shared).settingsPath) {
             List {
                 ListPageTitle(title: "Settings")

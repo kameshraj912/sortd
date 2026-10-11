@@ -42,8 +42,8 @@ enum Feedback: CaseIterable {
         case .fail: return .error
         case .blocked: return .warning
         case .delete, .undo:
-            guard let weight = impactWeight else { preconditionFailure("\(self) needs an impact weight") }
-            return .impact(weight: weight)
+            // Never traps: a haptic is not worth a crash.
+            return .impact(weight: impactWeight ?? .medium)
         }
     }
 }

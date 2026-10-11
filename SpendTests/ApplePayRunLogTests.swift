@@ -104,7 +104,7 @@ struct ApplePayRunLogTests {
          try await moneyIn(), try await refundAfterPurchase(), try await queuedNotification()]
     }
 
-    private let allowedWords: Set<String> = ["tap", "notification", "saved", "merged", "needs_check", "blank",
+    private let allowedWords: Set<String> = ["tap", "notification", "saved", "merged", "needs_check", "blank", "empty_run",
                                              "no_amount", "not_completed", "money_in", "refund", "health_check",
                                              "queued", "not_saved", "not_purchase", "bank"]
     /// Ten since 9 Oct 2026 (`has_app`).
@@ -141,10 +141,12 @@ struct ApplePayRunLogTests {
         #expect(flag(r.event, "has_card") == true)
     }
 
-    @Test func aBlankRunIsBlank() async throws {
+    /// A run with no field at all and no check running is `empty_run`
+    /// (10 Oct 2026: it used to read as "blank").
+    @Test func anEmptyRunWithNoCheckIsEmptyRun() async throws {
         let r = try await blankRun()
         #expect(string(r.event, "kind") == "tap")
-        #expect(string(r.event, "result") == "blank")
+        #expect(string(r.event, "result") == "empty_run")
         for key in ["has_amount", "has_shop", "has_card", "has_title", "has_subtitle", "has_body", "has_text"] {
             #expect(flag(r.event, key) == false, "\(key) should be false")
         }
@@ -165,6 +167,46 @@ struct ApplePayRunLogTests {
         let r = try await healthCheck()
         #expect(string(r.event, "kind") == "tap")
         #expect(string(r.event, "result") == "health_check")
+    }
+
+    /// What "Check the Shortcut" really sends: the ready-made shortcut has
+    /// no Text step, so the run arrives with every field empty. Inside the
+    /// check's window it is `health_check`; before the tap or after the
+    /// window it is `empty_run` (beta data, 10 Oct 2026).
+    @Test func anEmptyRunDuringACheckIsHealthCheck() async throws {
+        let ctx = store()
+        let outcome = try await LogWalletTapIntent.handle(nil, amount: nil, merchant: nil, card: nil,
+                                                          in: ctx, book: book(), now: now)
+        func result(startedAt: Date?, at date: Date) -> String? {
+            string(LogWalletTapIntent.runEvent(outcome: outcome, transaction: nil, amount: nil, merchant: nil, card: nil,
+                                               notification: WalletNotification(),
+                                               checkStartedAt: startedAt, now: date), "result")
+        }
+        #expect(result(startedAt: now, at: now.addingTimeInterval(3)) == "health_check")
+        #expect(result(startedAt: now, at: now.addingTimeInterval(ApplePayHealthCheck.timeout)) == "health_check")
+        #expect(result(startedAt: now, at: now.addingTimeInterval(ApplePayHealthCheck.timeout + 1)) == "empty_run")
+        #expect(result(startedAt: now, at: now.addingTimeInterval(-5)) == "empty_run")
+        #expect(result(startedAt: nil, at: now) == "empty_run")
+    }
+
+    /// A run that brought a field is never taken for the check, even
+    /// during one.
+    @Test func aRunWithAFieldDuringACheckIsNotHealthCheck() async throws {
+        let ctx = store()
+        let outcome = try await LogWalletTapIntent.handle(nil, amount: "A$5.50", merchant: "Seven Seeds", card: "NAB Visa Debit",
+                                                          in: ctx, book: book(), now: now)
+        let event = LogWalletTapIntent.runEvent(outcome: outcome, transaction: nil, amount: "A$5.50", merchant: "Seven Seeds",
+                                                card: "NAB Visa Debit", notification: WalletNotification(),
+                                                checkStartedAt: now, now: now.addingTimeInterval(2))
+        #expect(string(event, "result") == "saved")
+    }
+
+    /// The check's start time goes to the intent's own defaults and back.
+    @Test func theCheckStartIsKeptWhereTheIntentReadsIt() {
+        let d = UserDefaults(suiteName: "runlog-check-\(UUID().uuidString)")!
+        #expect(ApplePayHealthCheck.lastStartedAt(d) == nil)
+        ApplePayHealthCheck.markStarted(at: now, defaults: d)
+        #expect(ApplePayHealthCheck.lastStartedAt(d) == now)
     }
 
     // MARK: - Runs that were dropped
@@ -274,5 +316,42 @@ struct ApplePayRunLogTests {
 
     @Test func theEventIsNamedApplePayRun() {
         #expect(Analytics.Event.applePayRun.rawValue == "apple_pay_run")
+    }
+}
+
+/// The Card row on a purchase (beta, build 9): the purchase's own card is
+/// always one of the choices, so the picker never shows nothing.
+@MainActor
+struct TransactionDetailCardOptionsTests {
+    private let mine = [Card(rawValue: "a"), Card(rawValue: "b")]
+
+    @Test func aKnownCardIsNotAddedTwice() {
+        #expect(TransactionDetailView.cardOptions(current: mine[1], mine: mine) == mine + [.other])
+    }
+
+    @Test func anArchivedOrUnknownCardIsStillOffered() {
+        let gone = Card(rawValue: "archived-card")
+        let options = TransactionDetailView.cardOptions(current: gone, mine: mine)
+        #expect(options.first == gone)
+        #expect(options.contains(.other))
+        #expect(options.count == 4)
+    }
+
+    @Test func cardNotKnownIsOfferedOnce() {
+        let options = TransactionDetailView.cardOptions(current: .other, mine: mine)
+        #expect(options.filter { $0 == .other }.count == 1)
+    }
+
+    /// An empty `cardRaw` drew a blank row, and an id with no `CardInfo`
+    /// drew the raw UUID. Both read as words now and stay offered.
+    @Test func anEmptyOrUnknownCardReadsAsWords() {
+        let empty = Card(rawValue: "")
+        let unknown = Card(rawValue: "6F1C2B0A-3D4E-4F50-8A9B-0C1D2E3F4A5B")
+        #expect(TransactionDetailView.cardLabel(empty, info: nil) == "Other")
+        #expect(TransactionDetailView.cardLabel(unknown, info: nil) == "Unknown card")
+        #expect(TransactionDetailView.cardOptions(current: empty, mine: mine).first == empty)
+        #expect(TransactionDetailView.cardOptions(current: unknown, mine: mine).first == unknown)
+        let info = CardInfo.legacy[0]
+        #expect(TransactionDetailView.cardLabel(info.card, info: info) == info.card.name)
     }
 }

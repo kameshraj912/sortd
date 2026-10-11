@@ -270,9 +270,9 @@ struct BugHuntSecurityHunt2Tests {
     /// offers them in other apps (MASTG-TEST-0055, attacks.md STORAGE-2
     /// "keyboard cache"). It also "corrects" real shop names (ZEBRACAFE).
     /// The quick-entry field and Activity's search already use
-    /// `.autocorrectionDisabled()`.
-    @Test(.tags(.knownBug), .enabled(if: KnownBugs.run),
-          .bug(id: "sec-1008-4", "the shop field feeds the keyboard's learned words"))
+    /// `.autocorrectionDisabled()`. Fixed 10 Oct 2026 (P4): both shop
+    /// fields and both note fields turn it off.
+    @Test(.bug(id: "sec-1008-4", "the shop field feeds the keyboard's learned words"))
     func theShopFieldDoesNotFeedTheKeyboardDictionary() throws {
         for path in ["Spend/Views/AddTransactionView.swift", "Spend/Views/TransactionDetailView.swift"] {
             let text = try source(path)

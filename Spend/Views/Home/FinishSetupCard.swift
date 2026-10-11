@@ -17,6 +17,7 @@ struct FinishSetupCard: View {
     /// Read so the card re-checks when the app comes back (the widget may
     /// have been added from the Home Screen meanwhile).
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var refresh = 0
     @State private var widgetAdded = false
     @State private var opening: SetupTask.Kind?
@@ -39,11 +40,17 @@ struct FinishSetupCard: View {
         let tasks = tasks
         if !SetupChecklist.isComplete(tasks), !(canHide && hidden) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
+                // U9: at AX5 the title and the count stack, so "Finish
+                // Setup" never breaks mid-word.
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+                layout {
                     Text("Finish Setup").font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text("\(SetupChecklist.doneCount(tasks)) of \(tasks.count) done")
                         .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
-                    Spacer()
+                    Spacer(minLength: 0)
                     if canHide {
                         Button("Hide") { withAnimation(.snappy) { hidden = true } }
                             .font(.subheadline.weight(.medium))

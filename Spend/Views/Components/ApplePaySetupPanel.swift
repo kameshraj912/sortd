@@ -158,6 +158,9 @@ struct ApplePaySetupPanel: View {
                     Link("Learn more", destination: ApplePayStatus.learnMoreURL)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.brand)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            HelpTopic.track(.learnMore, source: .setupPanel)
+                        })
                 }
             }
         }
@@ -182,6 +185,7 @@ struct ApplePaySetupPanel: View {
         trackAction("check_shortcut")
         let now = Date.now
         healthCheckStartedAt = now
+        ApplePayHealthCheck.markStarted(at: now)
         healthCheck = .waiting
         openURL(url)
         Task { await pollHealthCheck() }
@@ -423,10 +427,15 @@ struct ApplePaySetupPanel: View {
     }
 
     /// A full-width step button: filled when it is the next thing to do.
+    /// At AX5 the words wrap onto more lines instead of "Sho…" (U1) or a
+    /// clipped "Get It Again" (U4).
     @ViewBuilder
     private func actionButton(_ title: String, symbol: String, bold: Bool, action: @escaping () -> Void) -> some View {
         let label = Label(title, systemImage: symbol)
             .font(.headline)
+            .multilineTextAlignment(.center)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
         if bold {
             Button(action: action) { label.foregroundStyle(Color.onBrand) }
@@ -524,6 +533,9 @@ private struct StepBadge: View {
         .foregroundStyle(Color.onBrand)
         .frame(width: size, height: size)
         .background(done ? Color.up : Color.ink, in: .circle)
+        // Never squeezed by the words beside it (U4: the tick was squashed).
+        .fixedSize()
+        .layoutPriority(1)
         .accessibilityHidden(true)
     }
 }

@@ -23,6 +23,7 @@ struct ApplePayAutomationGuide: View {
     @AppStorage private var storedPage: Int
     @AppStorage(ApplePaySetupSteps.automationBuiltKey) private var built = false
     @ScaledMetric(relativeTo: .subheadline) private var scaledMockHeight: CGFloat = 215
+    @ScaledMetric(relativeTo: .subheadline) private var tapBadge: CGFloat = 26
     /// The drawing stops growing where its type does. At accessibility sizes
     /// it gives way: the words are what must stay on screen.
     private var mockHeight: CGFloat { typeSize.isAccessibilitySize ? 200 : min(scaledMockHeight, 320) }
@@ -58,11 +59,37 @@ struct ApplePayAutomationGuide: View {
     private var step: ApplePaySetupSteps.AutomationStep { steps[page] }
     private var isLast: Bool { page == steps.count - 1 }
 
+    /// Bumped by every Next and Back, for the haptic: the page changes the
+    /// moment the button is tapped, and the buzz says so even when the
+    /// words look alike (beta, 7 Oct 2026: Next was tapped again and again
+    /// on pages 3 and 4).
+    @State private var turns = 0
+
+    /// At the accessibility sizes the bar keeps only Back and Next; "Back
+    /// to Shortcuts" moves into the page (U2: the bar took a third of the
+    /// screen at AX5).
+    private var compactBar: Bool { typeSize.isAccessibilitySize }
+
+    /// Moves to `newPage` at once. Nothing is disabled while the page
+    /// changes and there is no animation to wait for, so a second tap is
+    /// a second page, never lost.
+    private func turn(to newPage: Int) {
+        storedPage = min(max(newPage, 0), steps.count - 1)
+        turns += 1
+    }
+
     var body: some View {
         NavigationStack {
+            // The bar sits under the page, not over it: floating over the
+            // page, it hid the last paragraph ("come back to Sortd…") until
+            // the person thought to scroll. The page and its scroll
+            // indicator now end above the bar, on every page and at AX5.
+            VStack(spacing: 0) {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     progress
+                        .id(Self.topID)
                     // The same heading as every setup page: bold title, the four dashes.
                     VStack(alignment: .leading, spacing: 8) {
                         Text(step.title)
@@ -83,8 +110,12 @@ struct ApplePayAutomationGuide: View {
                             HStack(alignment: .firstTextBaseline, spacing: 12) {
                                 Text("\(index + 1)")
                                     .font(.subheadline.weight(.bold))
+                                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                                     .foregroundStyle(.white)
-                                    .frame(width: 26, height: 26)
+                                    // Grows with the text: at a fixed 26 pt
+                                    // the digit spilled out at AX5.
+                                    .frame(width: min(tapBadge, 40), height: min(tapBadge, 40))
+                                    .fixedSize()
                                     .background(Color.brandPalette[0], in: .circle)
                                     .accessibilityHidden(true)
                                 Text(tap)
@@ -113,14 +144,21 @@ struct ApplePayAutomationGuide: View {
                         }
                     }
                     comeBackTip
+                    if compactBar { shortcutsButton }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
                 .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // A new page starts at its top, so the change is seen: scrolled
+            // down, two pages with the same layout looked like nothing moved.
+            .onChange(of: page) { proxy.scrollTo(Self.topID, anchor: .top) }
+            }
+            bottomBar
+                .background(Color.page)
+            }
             .background(Color.page)
-            .safeAreaBar(edge: .bottom, spacing: 0) { bottomBar }
             .navigationTitle("Step \(page + 1) of \(steps.count)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -132,7 +170,10 @@ struct ApplePayAutomationGuide: View {
                 SafariSheet(url: page.url).ignoresSafeArea()
             }
         }
+        .analyticsScreen(.applePayGuide(page: page + 1))
     }
+
+    private static let topID = "guide-top"
 
     /// One bar per page, filled up to this one.
     private var progress: some View {
@@ -169,40 +210,23 @@ struct ApplePayAutomationGuide: View {
     private var bottomBar: some View {
         GlassEffectContainer(spacing: 10) {
             VStack(spacing: 10) {
-                // Page 1 starts the automation; after that the same button goes
-                // back to Shortcuts, where the half-made automation is waiting
-                // (checked on iOS 26.5: it stays where it was left).
-                Button {
-                    trackAction(page == 0 ? "start_in_shortcuts" : "back_to_shortcuts", page: page + 1)
-                    let url = page == 0 ? ApplePaySetupSteps.createAutomationURL : ApplePaySetupSteps.shortcutsURL
-                    // If the direct link is refused, plain Shortcuts still opens.
-                    openURL(url) { accepted in
-                        if !accepted { openURL(ApplePaySetupSteps.shortcutsURL) }
-                    }
-                } label: {
-                    Label(page == 0 ? "Start in Shortcuts" : "Back to Shortcuts", systemImage: "arrow.up.forward.app")
-                        .font(.headline)
-                        .foregroundStyle(Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-
+                if !compactBar { shortcutsButton }
                 HStack(spacing: 10) {
                     if page > 0 {
+                    Button {
+                        trackAction("guide_back", page: page + 1)
+                        turn(to: page - 1)
+                    } label: {
                         // A chevron, not the word: at the largest text sizes
                         // "Back" wrapped to "Bac / k" and the bar ate the page.
-                        Button {
-                            storedPage = page - 1
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.headline)
-                                .foregroundStyle(Color.ink)
-                                .frame(width: 28, height: ButtonMetrics.labelHeight)
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.large)
-                        .accessibilityLabel("Back")
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundStyle(Color.ink)
+                            .frame(width: 28, height: ButtonMetrics.labelHeight)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.large)
+                    .accessibilityLabel("Back")
                     }
                     Button {
                         if isLast {
@@ -212,13 +236,16 @@ struct ApplePayAutomationGuide: View {
                             dismiss()
                         } else {
                             trackAction("guide_next", page: page + 1)
-                            storedPage = page + 1
+                            turn(to: page + 1)
                         }
                     } label: {
                         Text(isLast ? "I'm Done" : "Next")
                             .font(.headline)
                             .foregroundStyle(Color.onBrand)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.glassProminent)
                     .tint(Color.brand)
@@ -226,8 +253,35 @@ struct ApplePayAutomationGuide: View {
                 }
             }
         }
+        // The bar's words stop growing at AX2: past that it took a third of
+        // the screen (U2). The page above still scales fully.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .feedback(.select, trigger: turns)
         .padding(.horizontal, 24)
         .padding(.top, 8)
         .padding(.bottom, 8)
+    }
+
+    /// Page 1 starts the automation; after that the same button goes back
+    /// to Shortcuts, where the half-made automation is waiting (checked on
+    /// iOS 26.5: it stays where it was left).
+    private var shortcutsButton: some View {
+        Button {
+            trackAction(page == 0 ? "start_in_shortcuts" : "back_to_shortcuts", page: page + 1)
+            let url = page == 0 ? ApplePaySetupSteps.createAutomationURL : ApplePaySetupSteps.shortcutsURL
+            // If the direct link is refused, plain Shortcuts still opens.
+            openURL(url) { accepted in
+                if !accepted { openURL(ApplePaySetupSteps.shortcutsURL) }
+            }
+        } label: {
+            Label(page == 0 ? "Start in Shortcuts" : "Back to Shortcuts", systemImage: "arrow.up.forward.app")
+                .font(.headline)
+                .foregroundStyle(Color.ink)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: ButtonMetrics.labelHeight)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
     }
 }

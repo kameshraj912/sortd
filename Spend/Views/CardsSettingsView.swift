@@ -7,6 +7,7 @@ struct CardsSettingsView: View {
     @State private var editing: CardInfo?
     @State private var adding = false
     @State private var removed = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var book: CardBook { .shared }
 
     var body: some View {
@@ -16,15 +17,25 @@ struct CardsSettingsView: View {
                 ForEach(book.active) { info in
                     Button { editing = info } label: {
                         HStack(spacing: 12) {
-                            Text(CardInfo.flag(for: info.country)).font(.title3)
+                            // At AX5 the flag and chevron give their width
+                            // to the name, which breaks only between words
+                            // and sits above its badge (U10).
+                            if !typeSize.isAccessibilitySize {
+                                Text(CardInfo.flag(for: info.country)).font(.title3)
+                            }
                             VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 6) {
+                                let nameAndBadge = typeSize.isAccessibilitySize
+                                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                                    : AnyLayout(HStackLayout(spacing: 6))
+                                nameAndBadge {
                                     Text(info.name).foregroundStyle(Color.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     CardTypeBadge(isCredit: info.isCredit)
                                 }
                                 Text(detail(info)).font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            Spacer()
+                            Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.tertiary)

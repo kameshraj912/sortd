@@ -162,6 +162,9 @@ struct HomeView: View {
             .sheet(isPresented: $showingFounderNote) { FounderNoteSheet(moment: .aha) }
             .refreshNote($refreshNote, bottomPadding: 16)
         }
+        // Home tapped again: back to the top, any pushed screen gone.
+        .popsToRootOnReselect(.home)
+        .analyticsScreen(.home)
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
@@ -345,6 +348,10 @@ struct HomeView: View {
 
             // A ZStack, so the old and new totals overlap while one slides
             // out and the other in; in a VStack they would stack for a frame.
+            // The budget line's tap target hangs 12 pt past its text
+            // (`minTapTarget`), so the clip reaches 12 pt further each way
+            // and gives the room back outside: at AX5 the clip cut the
+            // descenders off "day" and "budget" (U8).
             ZStack(alignment: .leading) {
                 totals(spent: spent, over: over)
                     .id(month)
@@ -352,7 +359,9 @@ struct HomeView: View {
                     // left; a fade under Reduce Motion or Prefer Cross-Fade.
                     .transition(Motion.transition(monthDirection, crossFades: crossFades))
             }
+            .padding(.vertical, 12)
             .clipped()
+            .padding(.vertical, -12)
         }
     }
 
@@ -383,6 +392,8 @@ struct HomeView: View {
             Button { showingBudget = true } label: {
                 HStack(spacing: 4) {
                     Text(budgetLine(spent: spent))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     if budget == 0 { Image(systemName: "chevron.right").font(.caption.weight(.bold)) }
                 }
                 .font(.subheadline.weight(over ? .semibold : .regular))
@@ -581,7 +592,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .surface()
         } else {
-            let top = rows[0].total.double
+            let top = rows.first?.total.double ?? 0
             VStack(spacing: 10) {
                 SectionHeader(title: title("Where It Went")) { tab = .insights }
                 VStack(spacing: 0) {
@@ -1168,18 +1179,24 @@ struct SpendChart: View {
                     AxisValueLabel {
                         if let d = value.as(Date.self) { Text(d.formatted(.dateTime.weekday(.narrow))) }
                     }
+                    // The default grey was too dim in dark mode (U15).
+                    .foregroundStyle(Color.secondary)
                 }
             case .month:
                 AxisMarks(values: .stride(by: .day, count: 7)) { value in
                     AxisValueLabel {
                         if let d = value.as(Date.self) { Text(d.formatted(.dateTime.day().month(.abbreviated))) }
                     }
+                    // The default grey was too dim in dark mode (U15).
+                    .foregroundStyle(Color.secondary)
                 }
             case .quarter:
                 AxisMarks(values: .stride(by: .month)) { value in
                     AxisValueLabel {
                         if let d = value.as(Date.self) { Text(d.formatted(.dateTime.month(.abbreviated))) }
                     }
+                    // The default grey was too dim in dark mode (U15).
+                    .foregroundStyle(Color.secondary)
                 }
             }
         }
@@ -1189,6 +1206,7 @@ struct SpendChart: View {
                 AxisValueLabel {
                     if let v = value.as(Double.self) { Text(Money.format(Decimal(v), Money.home, cents: false)) }
                 }
+                .foregroundStyle(Color.secondary)
             }
         }
         .frame(height: chartHeight)

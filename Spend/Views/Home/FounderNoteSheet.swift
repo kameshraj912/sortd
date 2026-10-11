@@ -53,7 +53,9 @@ enum FounderNote {
 
 /// A 44pt circle with a "K" in the brand gradient. No photo.
 struct FounderAvatar: View {
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.founderNote) }
+
+    @ViewBuilder private var screenBody: some View {
         Circle()
             .fill(LinearGradient(colors: [Color.brandPalette[0], Color.brandPalette[2]],
                                   startPoint: .topLeading, endPoint: .bottomTrailing))

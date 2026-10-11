@@ -10,6 +10,9 @@ struct PrivacySecuritySettingsView: View {
     @AppStorage(WidgetSummary.showWhenLockedKey) private var widgetShowWhenLocked = false
 
     @State private var lockFailed = false
+    /// The row icons' column grows with the text: a fixed 24 pt let the
+    /// symbols spill out of it at AX5 (U5).
+    @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 24
 
     var body: some View {
         List {
@@ -56,7 +59,7 @@ struct PrivacySecuritySettingsView: View {
                     if #available(iOS 18, *) {
                         Text("You can also lock Sortd from the Home Screen: hold the app icon and choose Require Face ID.")
                     }
-                    Link("Learn more", destination: URL(string: "https://sortd.page/help#app-lock")!)
+                    FooterLink("Learn more", destination: Self.appLockHelpURL)
                 }
             }
 
@@ -80,7 +83,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 BoldHeader("Stays on This iPhone")
             } footer: {
-                Link("Learn more", destination: URL(string: "https://sortd.page/help#stays-on-iphone")!)
+                FooterLink("Learn more", destination: Self.staysOnIPhoneURL)
             }
 
             Section {
@@ -103,17 +106,44 @@ struct PrivacySecuritySettingsView: View {
         }
     }
 
+    static let appLockHelpURL = URL(string: "https://sortd.page/help#app-lock") ?? URL(fileURLWithPath: "/")
+    static let staysOnIPhoneURL = URL(string: "https://sortd.page/help#stays-on-iphone") ?? URL(fileURLWithPath: "/")
+
     private func row(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol).frame(width: 24).foregroundStyle(Color.ink).padding(.top, 2)
+            Image(systemName: symbol).frame(width: iconWidth).foregroundStyle(Color.ink).padding(.top, 2)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.body.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A link in a grouped list's footer. The footer's grey made a plain Link
+/// read as more footer text, worst in dark mode (U3): this one is in the
+/// ink colour, semibold and underlined.
+struct FooterLink: View {
+    let title: String
+    let destination: URL
+
+    init(_ title: String, destination: URL) {
+        self.title = title
+        self.destination = destination
+    }
+
+    var body: some View {
+        Link(destination: destination) {
+            Text(title)
+                .fontWeight(.semibold)
+                .underline()
+                .foregroundStyle(Color.ink)
+        }
+        .accessibilityAddTraits(.isLink)
     }
 }

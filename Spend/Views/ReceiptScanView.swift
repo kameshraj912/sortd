@@ -10,6 +10,7 @@ struct ReceiptScanView: View {
     let onRead: (ReceiptReading) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showingCamera = false
     @State private var photo: PhotosPickerItem?
     @State private var reading = false
@@ -17,8 +18,11 @@ struct ReceiptScanView: View {
 
     private var cameraWorks: Bool { VNDocumentCameraViewController.isSupported }
 
-    var body: some View {
+    var body: some View { screenBody.analyticsScreen(.receiptScan) }
+
+    @ViewBuilder private var screenBody: some View {
         NavigationStack {
+            ScrollView {
             VStack(spacing: 20) {
                 Image(systemName: "doc.text.viewfinder")
                     .font(.largeTitle)
@@ -44,6 +48,8 @@ struct ReceiptScanView: View {
                         if cameraWorks {
                             Button { showingCamera = true } label: {
                                 Label("Use Camera", systemImage: "camera")
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .primaryPill()
                             }
                             .primaryGlass()
@@ -51,6 +57,9 @@ struct ReceiptScanView: View {
                         PhotosPicker(selection: $photo, matching: .images) {
                             Label("Choose Photo", systemImage: "photo")
                                 .font(.headline)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, typeSize.isAccessibilitySize ? 10 : 0)
                                 .frame(maxWidth: .infinity, minHeight: ButtonMetrics.height)
                                 .foregroundStyle(Color.ink)
                                 .surface(radius: 26)
@@ -68,6 +77,8 @@ struct ReceiptScanView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 20)
+            }
+            .scrollBounceBehavior(.basedOnSize)
             .background(Color.page)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -88,7 +99,8 @@ struct ReceiptScanView: View {
                 Task { await load(item) }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Full height at the accessibility sizes, so both buttons fit (U7).
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color.page)
     }

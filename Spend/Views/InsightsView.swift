@@ -57,6 +57,11 @@ struct InsightsView: View {
             }
             .sheet(isPresented: $showingAdd) { AddTransactionView() }
         }
+        // Insights tapped again: back to the top. The pushed category lives
+        // in this view's state, so it is cleared as well as the stack.
+        .popsToRootOnReselect(.insights)
+        .analyticsScreen(.insights)
+        .onChange(of: TabReselect.shared.generation(for: .insights)) { selectedCategory = nil }
         .onCategoryLimitsChange {
             let now = CategoryBudgets.all()
             if now != limits { limits = now }
