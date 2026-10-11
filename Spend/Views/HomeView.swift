@@ -31,6 +31,8 @@ struct HomeView: View {
     @State private var showingFounderNote = false
     /// Card in view in the carousel: "all" or a Card rawValue.
     @State private var focused: String? = "all"
+    /// Width of the card carousel's scroll view, for its trailing margin.
+    @State private var cardRowWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .largeTitle) private var totalSize: CGFloat = 52
     /// What the last pull-to-refresh found.
     @State private var refreshNote: RefreshNote?
@@ -299,6 +301,19 @@ struct HomeView: View {
         accessibility ? min(screen * 0.86, 360) : min(screen * 0.54, 300)
     }
 
+    /// Gap between cards in the carousel.
+    static let cardSpacing: CGFloat = 10
+
+    /// Empty room after the last card so it can scroll to the leading edge
+    /// like the others. Without it the scroll stops when the content's end
+    /// meets the screen edge, the last card never lands at the leading
+    /// anchor, and the dots and "Where It Went · <card>" stay on the card
+    /// before it. `container` is the scroll view's width, `card` one card's
+    /// width, `inset` any leading margin the cards align to (none today).
+    static func cardTrailingMargin(container: CGFloat, card: CGFloat, inset: CGFloat = 0) -> CGFloat {
+        max(0, container - card - inset)
+    }
+
     // MARK: Header
 
     /// Setup-style title: the month (tap to change), logo bar, a round "+",
@@ -536,7 +551,7 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 10) {
             SectionHeader(title: "Your Cards")
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: Self.cardSpacing) {
                     Button { tab = .activity } label: {
                         WalletCard(card: nil, transactions: monthItems)
                             .containerRelativeFrame(.horizontal) { w, _ in Self.cardWidth(w, accessibility: typeSize.isAccessibilitySize) }
@@ -554,7 +569,15 @@ struct HomeView: View {
                     }
                 }
                 .scrollTargetLayout()
+                // Room after the last card so it too snaps to the leading
+                // edge and becomes `focused`. Padding on the row, not
+                // `.contentMargins`, which can be taken off the size that
+                // `containerRelativeFrame` sizes the cards from.
+                .padding(.trailing, Self.cardTrailingMargin(
+                    container: cardRowWidth,
+                    card: Self.cardWidth(cardRowWidth, accessibility: typeSize.isAccessibilitySize)))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardRowWidth = $0 }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $focused, anchor: .leading)
             .scrollClipDisabled()
