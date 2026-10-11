@@ -535,7 +535,7 @@ struct OnboardingView: View {
                 // Kept: the Apple Pay reminder stays quiet for this person.
                 UserDefaults.standard.set(true, forKey: ApplePayStepNudge.noApplePayKey)
                 usedSkip = true
-                go(1)
+                go(1, skipped: true)
             }
             Button("Set It Up", role: .cancel) {}
         } message: {
