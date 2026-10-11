@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import PostHog
 
 /// Bring in a bank statement, or put a backup back.
 ///
@@ -197,9 +198,11 @@ struct ImportView: View {
                 ForEach(moneyIn) { picked in
                     HStack {
                         Text(picked.row.detail).lineLimit(1)
+                            .postHogMask()
                         Spacer()
                         Text(Money.format(picked.row.amount, picked.row.currency ?? Money.home))
                             .monospacedDigit().foregroundStyle(.secondary)
+                            .postHogMask()
                     }
                     .font(.footnote)
                 }
@@ -243,6 +246,7 @@ struct ImportView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(picked.wrappedValue.row.detail)
                         .foregroundStyle(Color.ink).lineLimit(1)
+                        .postHogMask()
                     Text(picked.wrappedValue.row.date.formatted(date: .abbreviated, time: .omitted))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -251,6 +255,7 @@ struct ImportView: View {
                                   picked.wrappedValue.row.currency ?? Money.home))
                     .monospacedDigit()
                     .foregroundStyle(Color.ink)
+                    .postHogMask()
             }
         }
         .accessibilityLabel("\(picked.wrappedValue.row.detail), \(Money.spoken(picked.wrappedValue.row.amount, picked.wrappedValue.row.currency ?? Money.home)) on \(picked.wrappedValue.row.date.formatted(date: .abbreviated, time: .omitted))")

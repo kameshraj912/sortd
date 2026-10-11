@@ -122,8 +122,9 @@ protocol IdentitySink {
     func reset()
     func signedIn(provider: AccountProvider)
     func signedOut()
-    /// Sends the events still queued under the current id now, so none
-    /// arrives after the person is deleted and makes it again.
+    /// Asks for the events still queued under the current id to be sent
+    /// now. It only starts the send: one that hasn't landed when the person
+    /// is deleted can still arrive later and make the person again.
     func flush()
 }
 
@@ -246,8 +247,10 @@ final class AccountStore {
         guard let account = current else { return DeleteResult() }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
         let subjectHash = Self.subjectHash(account.subject)
-        // Events queued under the hash go out before the reset and the
-        // person delete, not after it, where they would make the person again.
+        // Sends what it can of the events queued under the hash before the
+        // reset and the person delete. The flush only starts the send, so a
+        // late event can still arrive after the delete and make the person
+        // again (the Worker has no delayed delete yet).
         sink.flush()
         sink.reset()
         var failed: [PendingDelete] = []
@@ -289,6 +292,8 @@ final class AccountStore {
     func signOutForDeleteAll() {
         guard let account = current else { return }
         let hash = Self.hash(salt: salt, provider: account.provider, subject: account.subject)
+        // Sends what it can first; a late event can still arrive after the
+        // person delete (see `deleteAccount`).
         sink.flush()
         sink.reset()
         forgetLocally()

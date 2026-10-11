@@ -478,7 +478,12 @@ private final class SwitchingCloudStore: CloudBackupStore {
         if let deleteError { throw deleteError }
         saved = nil
     }
-    func accountID() async -> String? { account }
+    func accountID() async -> String? { staleAccount ?? account }
+    /// What a cached `accountID` still says after iCloud switched account
+    /// (`CKAccountChanged` not seen yet). Nil: no cache, `account` is read.
+    var staleAccount: String?
+    var tracksAccounts: Bool { true }
+    func freshAccountID() async -> String? { account }
 }
 
 /// The traced and Sentry items fixed on 10 Oct 2026: the pending iCloud
@@ -744,6 +749,84 @@ struct BugHuntDataFixesOct10Tests {
         cloudStore.deleteError = URLError(.notConnectedToInternet)
         await cloud.deleteCloudCopyAfterReset()
         #expect(d.string(forKey: CloudBackup.deleteAccountKey) == "account-A")
+    }
+
+    // MARK: Security review, 11 Oct: pending delete with the account unreadable
+
+    /// Queued for account A; right after a switch to B, iCloud can't say
+    /// which account is signed in. The delete used to run against whatever
+    /// was there. Now it stays pending, quietly.
+    @Test(.bug("a pending delete for iCloud account A runs when the current account can't be read"))
+    func aPendingDeleteWaitsWhenTheAccountCantBeRead() async throws {
+        let d = scratch()
+        let queued = Date(timeIntervalSince1970: 1_790_500_000)
+        d.set(true, forKey: CloudBackup.deletePendingKey)
+        d.set(queued, forKey: CloudBackup.deleteQueuedAtKey)
+        d.set("account-A", forKey: CloudBackup.deleteAccountKey)
+        let theirs = Data("B's backup".utf8)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = nil
+        cloudStore.saved = (theirs, queued.addingTimeInterval(-86_400))
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.deleteTries == 0, "deleted with no account to check against")
+        #expect(cloudStore.saved?.blob == theirs)
+        #expect(cloud.isDeletePending)
+        #expect(reports(d, "CloudBackup.retryPendingDelete") == 0)
+        #expect(cloud.status == .idle)
+    }
+
+    /// The same with the "unknown" marker: no account now, nothing deleted.
+    @Test func anUnknownAccountDeleteWaitsWhenTheAccountCantBeRead() async throws {
+        let d = scratch()
+        let queued = Date(timeIntervalSince1970: 1_790_500_000)
+        d.set(true, forKey: CloudBackup.deletePendingKey)
+        d.set(queued, forKey: CloudBackup.deleteQueuedAtKey)
+        d.set(CloudBackup.unknownAccount, forKey: CloudBackup.deleteAccountKey)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = nil
+        cloudStore.saved = (Data("a backup".utf8), queued.addingTimeInterval(-60))
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.deleteTries == 0)
+        #expect(cloud.isDeletePending)
+    }
+
+    /// A cached account from before the switch is not trusted: the retry
+    /// asks iCloud afresh.
+    @Test(.bug("a pending delete trusts the cached iCloud account after a switch"))
+    func aPendingDeleteAsksForTheAccountAfresh() async throws {
+        let d = scratch()
+        let queued = Date(timeIntervalSince1970: 1_790_500_000)
+        d.set(true, forKey: CloudBackup.deletePendingKey)
+        d.set(queued, forKey: CloudBackup.deleteQueuedAtKey)
+        d.set("account-A", forKey: CloudBackup.deleteAccountKey)
+        let theirs = Data("B's backup".utf8)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.staleAccount = "account-A"
+        for now in ["account-B", nil] as [String?] {
+            cloudStore.account = now
+            cloudStore.saved = (theirs, queued.addingTimeInterval(-86_400))
+            let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d)
+            await cloud.retryPendingDelete()
+            #expect(cloudStore.saved?.blob == theirs, "the stale cached account let A's delete take \(now ?? "an unread account")'s backup")
+            #expect(cloud.isDeletePending)
+        }
+        #expect(cloudStore.deleteTries == 0)
+    }
+
+    /// A delete queued by an older build (no account recorded) deletes as
+    /// before, even when the account can't be read.
+    @Test func aLegacyPendingDeleteStillDeletesWithNoAccount() async throws {
+        let d = scratch()
+        d.set(true, forKey: CloudBackup.deletePendingKey)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = nil
+        cloudStore.saved = (Data("old copy".utf8), Date(timeIntervalSince1970: 1))
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved == nil)
+        #expect(!cloud.isDeletePending)
     }
 
     // MARK: D7: the store set aside by the recovery screen

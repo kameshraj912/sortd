@@ -24,10 +24,18 @@ protocol CloudBackupStore: AnyObject {
     /// when it can't be told (offline, no account). Optional: a fake leaves
     /// it out, and then no account switch is ever seen.
     func accountID() async -> String?
+    /// `accountID` asked of iCloud now, past any cached answer: the cache
+    /// can still name the old account just after a switch.
+    func freshAccountID() async -> String?
+    /// Whether this store reads iCloud accounts at all. True: a nil
+    /// `accountID` means "can't tell right now", not "no accounts here".
+    var tracksAccounts: Bool { get }
 }
 
 extension CloudBackupStore {
     func accountID() async -> String? { nil }
+    func freshAccountID() async -> String? { await accountID() }
+    var tracksAccounts: Bool { false }
 }
 
 /// Where the encryption key lives. The real one is a synchronizable Keychain
@@ -537,11 +545,15 @@ final class CloudBackup {
     }
 
     /// Whether the pending delete is for the iCloud account signed in now.
-    /// No account to compare (a store that can't tell, or a delete queued by
-    /// an older build): yes, as before. Queued with the account unknown: only
-    /// the account this iPhone last backed up to.
+    /// A delete queued by an older build (no account recorded), or a store
+    /// that never reads accounts: yes, as before. An account recorded (or
+    /// the unknown marker) but the one signed in now can't be read (right
+    /// after a switch, offline): no, it stays pending; it might be another
+    /// account's backup. Queued with the account unknown: only the account
+    /// this iPhone last backed up to.
     private func pendingDeleteMatches(_ current: String?) -> Bool {
-        guard let current, let meant = defaults.string(forKey: Self.deleteAccountKey) else { return true }
+        guard let meant = defaults.string(forKey: Self.deleteAccountKey) else { return true }
+        guard let current else { return !store.tracksAccounts }
         if meant == Self.unknownAccount {
             return backedUpFromThisPhone && defaults.string(forKey: Self.accountKey) == current
         }
@@ -601,8 +613,9 @@ final class CloudBackup {
         do {
             // Another iCloud account now: the copy Delete All meant is out of
             // reach, and this account's backup is not it. Still pending: it
-            // goes when that account is back.
-            guard pendingDeleteMatches(await store.accountID()) else { return }
+            // goes when that account is back. Asked afresh: a cached account
+            // can be the old one just after a switch.
+            guard pendingDeleteMatches(await store.freshAccountID()) else { return }
             // A copy saved after the delete was queued is a new backup the
             // person wanted (made from this iPhone or another), not the one
             // Delete All Data meant to remove: leave it. A delete queued
