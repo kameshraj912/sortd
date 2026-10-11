@@ -48,6 +48,13 @@ final class CloudKitBackupStore: CloudBackupStore {
     /// The signed-in iCloud account, as CloudKit's user record name for this
     /// container. Nil when unknown (no entitlement, no account, offline).
     func accountID() async -> String? {
+        if let cachedAccount { return cachedAccount }
+        return await freshAccountID()
+    }
+
+    /// Asks iCloud now and refreshes the cache. The pending delete uses this:
+    /// a cached id can outlive a switch until `CKAccountChanged` arrives.
+    func freshAccountID() async -> String? {
         guard let container = try? self.container else { return nil }
         if !watchingAccount {
             watchingAccount = true
@@ -55,11 +62,12 @@ final class CloudKitBackupStore: CloudBackupStore {
                 MainActor.assumeIsolated { self?.cachedAccount = nil }
             }
         }
-        if let cachedAccount { return cachedAccount }
         let id = try? await container.userRecordID().recordName
         cachedAccount = id
         return id
     }
+
+    var tracksAccounts: Bool { true }
 
     func save(_ blob: Data, modified: Date) async throws {
         let database = try self.database
