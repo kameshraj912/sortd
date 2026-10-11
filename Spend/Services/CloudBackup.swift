@@ -103,8 +103,12 @@ final class CloudBackup {
     /// backed up to or restored from. Another one now means the account was
     /// switched: what this iPhone knew about the copy is about the old one.
     nonisolated static let accountKey = "cloudBackupAccount"
-    /// The iCloud account a pending delete was meant for.
+    /// The iCloud account a pending delete was meant for, or `unknownAccount`.
     nonisolated static let deleteAccountKey = "cloudBackupDeleteAccount"
+    /// A delete queued with no account known (offline, and this iPhone had
+    /// never noted one). It only deletes from the account this iPhone last
+    /// backed up to (`pendingDeleteMatches`).
+    nonisolated static let unknownAccount = "unknown"
     /// This iPhone wrote the iCloud copy (a backup, not only a restore), so
     /// Delete All Data deletes it even with the switch off. Cleared when the
     /// copy is deleted.
@@ -177,6 +181,9 @@ final class CloudBackup {
     @ObservationIgnored private var pausedUntil: Date?
     /// The launch's one try at a pending delete has run (`retryPendingDeleteAtLaunch`).
     @ObservationIgnored private var triedPendingDeleteThisLaunch = false
+    /// `accountKey`, kept in memory too: Delete All Data wipes the defaults
+    /// before it queues its delete, and the delete must still know the account.
+    @ObservationIgnored private var knownAccount: String?
     /// A failed pending delete was reported this launch: once is enough.
     @ObservationIgnored private var reportedPendingDeleteFailure = false
     /// The store changed since the last backup, so a catch-up is worth it.
@@ -205,6 +212,7 @@ final class CloudBackup {
         isEnabled = defaults.bool(forKey: Self.enabledKey)
         lastBackup = defaults.object(forKey: Self.lastKey) as? Date
         behind = defaults.bool(forKey: Self.behindKey)
+        knownAccount = defaults.string(forKey: Self.accountKey)
     }
 
     // MARK: - Backing up
@@ -337,6 +345,9 @@ final class CloudBackup {
             }
             let now = clock()
             try await store.save(blob, modified: now)
+            // Asked before the check below: no wait may come between it and
+            // the pending delete being cleared.
+            let account = await store.accountID()
             // Delete All Data started while this was uploading, and its delete
             // may already have run: take this copy out again (or leave the
             // delete pending for the next launch). Nothing here counts as
@@ -349,8 +360,9 @@ final class CloudBackup {
             }
             // This upload took the place of the copy an earlier Delete All
             // Data was still waiting to delete: nothing is left to delete,
-            // and the next launch must not delete this new one.
-            clearPendingDelete()
+            // and the next launch must not delete this new one. Not when that
+            // copy is in another iCloud account: it is still there.
+            if pendingDeleteMatches(account) { clearPendingDelete() }
             defaults.set(true, forKey: Self.backedUpHereKey)
             lastBackup = now
             dirty = false
@@ -520,9 +532,20 @@ final class CloudBackup {
     private func queuePendingDelete() {
         defaults.set(true, forKey: Self.deletePendingKey)
         defaults.set(clock(), forKey: Self.deleteQueuedAtKey)
-        if let account = defaults.string(forKey: Self.accountKey) {
-            defaults.set(account, forKey: Self.deleteAccountKey)
+        let account = defaults.string(forKey: Self.accountKey) ?? knownAccount ?? Self.unknownAccount
+        defaults.set(account, forKey: Self.deleteAccountKey)
+    }
+
+    /// Whether the pending delete is for the iCloud account signed in now.
+    /// No account to compare (a store that can't tell, or a delete queued by
+    /// an older build): yes, as before. Queued with the account unknown: only
+    /// the account this iPhone last backed up to.
+    private func pendingDeleteMatches(_ current: String?) -> Bool {
+        guard let current, let meant = defaults.string(forKey: Self.deleteAccountKey) else { return true }
+        if meant == Self.unknownAccount {
+            return backedUpFromThisPhone && defaults.string(forKey: Self.accountKey) == current
         }
+        return meant == current
     }
 
     private func clearPendingDelete() {
@@ -543,6 +566,7 @@ final class CloudBackup {
             defaults.removeObject(forKey: Self.backedUpHereKey)
         }
         defaults.set(account, forKey: Self.accountKey)
+        knownAccount = account
     }
 
     /// Whether Delete All Data must delete the iCloud copy: whenever this
@@ -576,12 +600,9 @@ final class CloudBackup {
         guard isDeletePending else { return }
         do {
             // Another iCloud account now: the copy Delete All meant is out of
-            // reach, and this account's backup is not it.
-            if let meant = defaults.string(forKey: Self.deleteAccountKey),
-               let account = await store.accountID(), account != meant {
-                clearPendingDelete()
-                return
-            }
+            // reach, and this account's backup is not it. Still pending: it
+            // goes when that account is back.
+            guard pendingDeleteMatches(await store.accountID()) else { return }
             // A copy saved after the delete was queued is a new backup the
             // person wanted (made from this iPhone or another), not the one
             // Delete All Data meant to remove: leave it. A delete queued

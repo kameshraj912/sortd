@@ -639,7 +639,111 @@ struct BugHuntDataFixesOct10Tests {
         await cloud.retryPendingDelete()
 
         #expect(cloudStore.saved?.blob == theirs, "the old account's delete took the new account's backup")
+        #expect(cloud.isDeletePending, "the old account's copy would survive for ever")
+
+        // Back on the old account: its copy goes now.
+        cloudStore.account = "account-A"
+        cloudStore.saved = (Data("old copy".utf8), now.addingTimeInterval(-60))
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved == nil)
         #expect(!cloud.isDeletePending)
+    }
+
+    // MARK: Review, 11 Oct: pending deletes and iCloud accounts
+
+    /// A backup to account B used to clear a delete still pending for A.
+    @Test func aBackupToAnotherAccountKeepsTheOldAccountsPendingDelete() async throws {
+        let ctx = try store()
+        try logCoffee(ctx)
+        var now = Date(timeIntervalSince1970: 1_790_500_000)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = "account-A"
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: scratch(), clock: { now })
+        cloud.sleep = { _ in }
+        cloud.isEnabled = true
+        try await cloud.backUpNow(from: ctx)
+
+        now = now.addingTimeInterval(60)
+        cloudStore.deleteError = URLError(.notConnectedToInternet)
+        await cloud.deleteCloudCopyAfterReset()
+        let queued = now
+
+        // Account B, empty: a backup there works and leaves A's delete pending.
+        cloudStore.account = "account-B"
+        cloudStore.saved = nil
+        cloudStore.deleteError = nil
+        now = now.addingTimeInterval(60)
+        try await cloud.backUpNow(from: ctx)
+        #expect(cloud.isDeletePending, "a backup to B cleared A's pending delete")
+
+        cloudStore.account = "account-A"
+        cloudStore.saved = (Data("A's copy".utf8), queued.addingTimeInterval(-60))
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved == nil, "A's copy survived Delete All Data")
+        #expect(!cloud.isDeletePending)
+    }
+
+    /// Delete All with no account known (offline, none noted before):
+    /// recorded as unknown, and a later account B's backup is left alone.
+    @Test func aDeleteQueuedWithNoAccountKnownLeavesAnotherAccountsBackup() async throws {
+        let d = scratch()
+        let now = Date(timeIntervalSince1970: 1_790_500_000)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = nil
+        cloudStore.deleteError = URLError(.notConnectedToInternet)
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d, clock: { now })
+        await cloud.deleteCloudCopyAfterReset()
+        #expect(d.string(forKey: CloudBackup.deleteAccountKey) == CloudBackup.unknownAccount)
+        #expect(cloud.isDeletePending)
+
+        let theirs = Data("their backup".utf8)
+        cloudStore.account = "account-B"
+        cloudStore.saved = (theirs, now.addingTimeInterval(-86_400))
+        cloudStore.deleteError = nil
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved?.blob == theirs, "an unknown-account delete took another account's backup")
+        #expect(cloud.isDeletePending)
+    }
+
+    /// An unknown-account delete still goes from the account this iPhone
+    /// last backed up to.
+    @Test func aDeleteQueuedWithNoAccountKnownDeletesThisPhonesAccount() async throws {
+        let d = scratch()
+        let queued = Date(timeIntervalSince1970: 1_790_500_000)
+        d.set(true, forKey: CloudBackup.deletePendingKey)
+        d.set(queued, forKey: CloudBackup.deleteQueuedAtKey)
+        d.set(CloudBackup.unknownAccount, forKey: CloudBackup.deleteAccountKey)
+        d.set("account-A", forKey: CloudBackup.accountKey)
+        d.set(true, forKey: CloudBackup.backedUpHereKey)
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = "account-A"
+        cloudStore.saved = (Data("A's copy".utf8), queued.addingTimeInterval(-60))
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d)
+        await cloud.retryPendingDelete()
+        #expect(cloudStore.saved == nil)
+        #expect(!cloud.isDeletePending)
+    }
+
+    /// Delete All Data wipes the defaults before it queues the delete; the
+    /// account this iPhone backed up to is still recorded with it.
+    @Test func deleteAllAfterTheWipeStillRecordsTheAccount() async throws {
+        let ctx = try store()
+        try logCoffee(ctx)
+        let d = scratch()
+        let cloudStore = SwitchingCloudStore()
+        cloudStore.account = "account-A"
+        let cloud = CloudBackup(store: cloudStore, keys: FakeBackupKeyStore(), defaults: d,
+                                clock: { Date(timeIntervalSince1970: 1_790_500_000) })
+        cloud.sleep = { _ in }
+        try await cloud.backUpNow(from: ctx)
+
+        for key in [CloudBackup.accountKey, CloudBackup.backedUpHereKey, CloudBackup.lastKey, CloudBackup.enabledKey] {
+            d.removeObject(forKey: key)
+        }
+        cloudStore.account = nil   // offline
+        cloudStore.deleteError = URLError(.notConnectedToInternet)
+        await cloud.deleteCloudCopyAfterReset()
+        #expect(d.string(forKey: CloudBackup.deleteAccountKey) == "account-A")
     }
 
     // MARK: D7: the store set aside by the recovery screen
