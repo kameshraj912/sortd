@@ -10,6 +10,7 @@ struct AnalyticsScreenTests {
     final class RegisterSpy: Analytics.Sink {
         private(set) var captured: [(name: String, properties: [String: Any])] = []
         private(set) var registered: [String] = []
+        private(set) var unregistered: [String] = []
         func capture(_ name: String, properties: [String: Any]) { captured.append((name, properties)) }
         func identify(_ id: String) {}
         func reset() {}
@@ -17,6 +18,7 @@ struct AnalyticsScreenTests {
         func register(_ properties: [String: Any]) {
             if let s = properties["screen"] as? String { registered.append(s) }
         }
+        func unregister(_ key: String) { unregistered.append(key) }
     }
 
     private func make(_ suite: String) -> (Analytics, RegisterSpy) {
@@ -56,6 +58,17 @@ struct AnalyticsScreenTests {
         a.screenDisappeared(home)
         #expect(a.currentScreen == "activity")
         #expect(spy.registered.last == "activity")
+    }
+
+    /// The last screen went (the app is in the background, or an intent
+    /// runs with no screen): `screen` is dropped, not left on later events.
+    @Test func noScreenLeftDropsTheSuperProperty() {
+        let (a, spy) = make(#function)
+        let home = a.showScreen(.home)
+        #expect(spy.unregistered.isEmpty)
+        a.screenDisappeared(home)
+        #expect(a.currentScreen == nil)
+        #expect(spy.unregistered == ["screen"])
     }
 
     @Test func screenNamesAreFixedWords() {

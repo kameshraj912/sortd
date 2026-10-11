@@ -118,6 +118,9 @@ final class Analytics {
         /// PostHog super properties: sent with every later event, the SDK's
         /// own included. Optional; a spy leaves it out.
         func register(_ properties: [String: Any])
+        /// Drops one super property. PostHog keeps them on disk, so one
+        /// left set rides on later events, even next launch. Optional.
+        func unregister(_ key: String)
     }
 
     /// A screen's name for `screen_viewed` and the `screen` super property.
@@ -409,9 +412,16 @@ final class Analytics {
         if wasTop { registerScreen() }
     }
 
+    /// No screen on show (the last one went, or a background intent run):
+    /// drop `screen`, since PostHog keeps it and it would ride on events
+    /// that no screen sent.
     private func registerScreen() {
-        guard enabled, let name = currentScreen else { return }
-        sink.register(["screen": name])
+        guard enabled else { return }
+        if let name = currentScreen {
+            sink.register(["screen": name])
+        } else {
+            sink.unregister("screen")
+        }
     }
 
     /// Once per install, with how long after install it happened
@@ -522,6 +532,7 @@ extension Analytics.Sink {
     func isFeatureEnabled(_ key: String) -> Bool { false }
     func setOptedOut(_ out: Bool, identity: String?) {}
     func register(_ properties: [String: Any]) {}
+    func unregister(_ key: String) {}
 }
 
 /// No key in this build: nothing is sent anywhere.
@@ -545,10 +556,12 @@ protocol PostHogClient: AnyObject {
     func optIn()
     func optOut()
     func register(_ properties: [String: Any])
+    func unregister(_ key: String)
 }
 
 extension PostHogClient {
     func register(_ properties: [String: Any]) {}
+    func unregister(_ key: String) {}
 }
 
 /// The real thing. Session replay on only in a `SORTD_REPLAY` build (the
@@ -589,6 +602,10 @@ final class PostHogSink: Analytics.Sink {
         if !isSetUp {
             isSetUp = true
             client.setup(apiKey: apiKey, host: host)
+            // PostHog kept the last session's `screen` on disk. Drop it
+            // before anything is sent, so a launch with no screen yet (a
+            // background intent run) does not carry it.
+            client.unregister("screen")
         }
         client.optIn()
         Self.reconcile(client, identity: identity)
@@ -645,6 +662,11 @@ final class PostHogSink: Analytics.Sink {
         client.register(properties)
     }
 
+    func unregister(_ key: String) {
+        guard isSetUp else { return }
+        client.unregister(key)
+    }
+
     func setOptedOut(_ out: Bool, identity: String?) {
         if out {
             guard isSetUp else { return }
@@ -699,4 +721,5 @@ final class LivePostHogClient: PostHogClient {
     func optIn() { PostHogSDK.shared.optIn() }
     func optOut() { PostHogSDK.shared.optOut() }
     func register(_ properties: [String: Any]) { PostHogSDK.shared.register(properties) }
+    func unregister(_ key: String) { PostHogSDK.shared.unregister(key) }
 }

@@ -32,6 +32,7 @@ struct AnalyticsConsentTests {
         private(set) var optIns = 0
         private(set) var optOuts = 0
         private(set) var captured: [String] = []
+        private(set) var unregistered: [String] = []
         var distinctId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 
         func setup(apiKey: String, host: URL) { setupCount += 1 }
@@ -42,6 +43,7 @@ struct AnalyticsConsentTests {
         func isFeatureEnabled(_ key: String) -> Bool { true }
         func optIn() { optIns += 1 }
         func optOut() { optOuts += 1 }
+        func unregister(_ key: String) { unregistered.append(key) }
     }
 
     private let host = URL(string: "https://eu.i.posthog.com")!
@@ -230,6 +232,15 @@ struct AnalyticsConsentTests {
         let client = FakePostHogClient()
         _ = PostHogSink(apiKey: "phc_test", host: host, enabled: true, identity: nil, client: client)
         #expect(client.setupCount == 1)
+    }
+
+    /// PostHog keeps super properties on disk: last session's `screen` is
+    /// dropped at set-up, before any screen registers or a background
+    /// intent run sends an event.
+    @Test func setUpDropsTheScreenKeptFromLastSession() {
+        let client = FakePostHogClient()
+        _ = PostHogSink(apiKey: "phc_test", host: host, enabled: true, identity: nil, client: client)
+        #expect(client.unregistered == ["screen"])
     }
 
     /// Signed in while sharing was off: turning it on identifies as the hash.
